@@ -392,7 +392,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
 	}
-	defer httpBodyBufferPool.Put(bodyBuffer)
+	defer recycleHTTPBodyBuffer(bodyBuffer)
 
 	ev, err := r.requestToEvent(ctx, req, bodyBuffer.Bytes())
 	if err != nil {
@@ -463,7 +463,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
 	}
-	defer httpBodyBufferPool.Put(bodyBuffer)
+	defer recycleHTTPBodyBuffer(bodyBuffer)
 
 	batchedEvents := newBatchedEvents(r.Config)
 	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
@@ -697,7 +697,15 @@ var httpBodyBufferPool = sync.Pool{
 	},
 }
 
-// When finished with the returned buffer, callers should return it to httpBodyBufferPool.
+func recycleHTTPBodyBuffer(b *bytes.Buffer) {
+	if b != nil {
+		b.Reset()
+		httpBodyBufferPool.Put(b)
+	}
+}
+
+// When finished with the returned buffer, callers should return it to the pool
+// by calling recycleHTTPBodyBuffer.
 // Reads the body and immediately closes it, releasing resources as soon as possible.
 func (r *Router) readAndCloseMaybeCompressedBody(req *http.Request) (*bytes.Buffer, error) {
 	defer req.Body.Close()
@@ -728,9 +736,8 @@ func (r *Router) readAndCloseMaybeCompressedBody(req *http.Request) (*bytes.Buff
 	}
 
 	buf := httpBodyBufferPool.Get().(*bytes.Buffer)
-	buf.Reset()
 	if _, err := io.Copy(buf, io.LimitReader(reader, HTTPMessageSizeMax)); err != nil {
-		httpBodyBufferPool.Put(buf)
+		recycleHTTPBodyBuffer(buf)
 		return nil, err
 	}
 
