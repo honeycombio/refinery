@@ -24,8 +24,8 @@ type TotalThroughputSampler struct {
 	maxKeys              int
 	prefix               string
 
-	key       *traceKey
-	keyFields []string
+	key                      *traceKey
+	keyFields, nonRootFields []string
 
 	dynsampler      *dynsampler.TotalThroughput
 	metricsRecorder *dynsamplerMetricsRecorder
@@ -53,7 +53,7 @@ func (d *TotalThroughputSampler) Start() error {
 		d.maxKeys = 500
 	}
 	d.prefix = "totalthroughput"
-	d.keyFields = d.Config.GetSamplingFields()
+	d.keyFields, d.nonRootFields = getKeyFields(d.Config.GetSamplingFields())
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.TotalThroughput{
@@ -106,6 +106,6 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, k
 	return rate, shouldKeep, d.prefix, key
 }
 
-func (d *TotalThroughputSampler) GetKeyFields() []string {
-	return d.keyFields
+func (d *TotalThroughputSampler) GetKeyFields() ([]string, []string) {
+	return d.keyFields, d.nonRootFields
 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/honeycombio/refinery/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,10 +34,11 @@ func TestSpan_GetDataSize(t *testing.T) {
 			for i := 0; i < tt.numStrings; i++ {
 				data[tt.name+"str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 			}
+			payload := NewPayload(&config.MockConfig{}, data)
 			sp := &Span{
 				TraceID: tt.name,
 				Event: Event{
-					Data: NewPayload(data),
+					Data: payload,
 				},
 			}
 			if got := sp.GetDataSize(); got != tt.want {
@@ -63,9 +65,10 @@ func TestSpan_GetDataSizeSlice(t *testing.T) {
 			for i := range tt.num {
 				sliceData[i] = i
 			}
+			payload := NewPayload(&config.MockConfig{}, map[string]any{"data": sliceData})
 			sp := &Span{
 				Event: Event{
-					Data: NewPayload(map[string]any{"data": sliceData}),
+					Data: payload,
 				},
 			}
 			if got := sp.GetDataSize(); got != tt.want {
@@ -92,9 +95,10 @@ func TestSpan_GetDataSizeMap(t *testing.T) {
 			for i := range tt.num {
 				mapData[strconv.Itoa(i)] = i
 			}
+			payload := NewPayload(&config.MockConfig{}, map[string]any{"data": mapData})
 			sp := &Span{
 				Event: Event{
-					Data: NewPayload(map[string]any{"data": mapData}),
+					Data: payload,
 				},
 			}
 			if got := sp.GetDataSize(); got != tt.want {
@@ -116,9 +120,11 @@ func TestSpan_AnnotationType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			payload := NewPayload(&config.MockConfig{}, tt.data)
+			payload.ExtractMetadata()
 			sp := &Span{
 				Event: Event{
-					Data: NewPayload(tt.data),
+					Data: payload,
 				},
 			}
 			if got := sp.AnnotationType(); got != tt.want {
@@ -129,6 +135,14 @@ func TestSpan_AnnotationType(t *testing.T) {
 }
 
 func TestSpan_ExtractDecisionContext(t *testing.T) {
+	cfg := &config.MockConfig{
+		TraceIdFieldNames: []string{"trace.trace_id"},
+	}
+	payload := NewPayload(cfg, map[string]interface{}{
+		"test":                 "test",
+		"meta.annotation_type": "span_event",
+	})
+	payload.ExtractMetadata()
 	ev := Event{
 		APIHost:     "test.api.com",
 		APIKey:      "test-api-key",
@@ -136,10 +150,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 		Environment: "test-environment",
 		SampleRate:  5,
 		Timestamp:   time.Now(),
-		Data: NewPayload(map[string]interface{}{
-			"test":                 "test",
-			"meta.annotation_type": "span_event",
-		}),
+		Data:        payload,
 	}
 	sp := &Span{
 		Event:       ev,
@@ -148,7 +159,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 		IsRoot:      true,
 	}
 
-	got := sp.ExtractDecisionContext()
+	got := sp.ExtractDecisionContext(cfg)
 	assert.Equal(t, ev.APIHost, got.APIHost)
 	assert.Equal(t, ev.APIKey, got.APIKey)
 	assert.Equal(t, ev.Dataset, got.Dataset)
@@ -156,11 +167,11 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 	assert.Equal(t, ev.SampleRate, got.SampleRate)
 	assert.Equal(t, ev.Timestamp, got.Timestamp)
 	expectedData := map[string]interface{}{
-		"meta.trace_id":                sp.TraceID,
+		"trace.trace_id":               sp.TraceID,
 		"meta.refinery.root":           true,
 		"meta.refinery.min_span":       true,
-		"meta.annotation_type":         int(SpanAnnotationTypeSpanEvent),
-		"meta.refinery.span_data_size": 38,
+		"meta.annotation_type":         SpanAnnotationTypeSpanEvent.String(),
+		"meta.refinery.span_data_size": int64(38),
 	}
 	actualData := maps.Collect(got.Data.All())
 	assert.Equal(t, expectedData, actualData)
@@ -182,9 +193,11 @@ func TestSpan_IsDecisionSpan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			payload := NewPayload(&config.MockConfig{}, tt.data)
+			payload.ExtractMetadata()
 			sp := &Span{
 				Event: Event{
-					Data: NewPayload(tt.data),
+					Data: payload,
 				},
 			}
 			got := sp.IsDecisionSpan()
@@ -206,9 +219,10 @@ func BenchmarkSpan_CalculateSizeSmall(b *testing.B) {
 	for i := 0; i < 10; i++ {
 		data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 	}
+	payload := NewPayload(&config.MockConfig{}, data)
 	sp := &Span{
 		Event: Event{
-			Data: NewPayload(data),
+			Data: payload,
 		},
 	}
 	b.ResetTimer()
@@ -225,9 +239,10 @@ func BenchmarkSpan_CalculateSizeLarge(b *testing.B) {
 	for i := 0; i < 500; i++ {
 		data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 	}
+	payload := NewPayload(&config.MockConfig{}, data)
 	sp := &Span{
 		Event: Event{
-			Data: NewPayload(data),
+			Data: payload,
 		},
 	}
 	b.ResetTimer()

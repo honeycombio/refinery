@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -96,8 +97,9 @@ func TestKeyGeneration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			config := &config.MockConfig{}
 			generator := newTraceKey(tt.fields, tt.useTraceLength)
-			trace := createTestTrace(t, tt.spans)
+			trace := createTestTrace(t, tt.spans, config)
 
 			key, n := generator.build(trace)
 
@@ -115,11 +117,13 @@ func TestKeyLimits(t *testing.T) {
 
 	trace := &types.Trace{}
 
+	config := &config.MockConfig{}
+
 	// generate too many spans with different unique values
 	for i := 0; i < 160; i++ {
 		trace.AddSpan(&types.Span{
 			Event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{
+				Data: types.NewPayload(config, map[string]interface{}{
 					"fieldA": fmt.Sprintf("value%d", i),
 					"fieldB": i,
 				}),
@@ -129,7 +133,7 @@ func TestKeyLimits(t *testing.T) {
 
 	trace.RootSpan = &types.Span{
 		Event: types.Event{
-			Data: types.NewPayload(map[string]interface{}{
+			Data: types.NewPayload(config, map[string]interface{}{
 				"service_name": "test",
 			}),
 		},
@@ -413,6 +417,7 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 			generator := newTraceKey(scenario.fields, scenario.useTraceLength)
 
 			trace := &types.Trace{}
+			config := &config.MockConfig{}
 
 			for i := 0; i < scenario.spanCount; i++ {
 				spanData := make(map[string]interface{})
@@ -444,7 +449,7 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 
 				span := &types.Span{
 					Event: types.Event{
-						Data: types.NewPayload(spanData),
+						Data: types.NewPayload(config, spanData),
 					},
 				}
 
@@ -480,13 +485,13 @@ type testSpan struct {
 }
 
 // Helper function to create test traces with specified data
-func createTestTrace(t *testing.T, spans []testSpan) *types.Trace {
+func createTestTrace(t *testing.T, spans []testSpan, config *config.MockConfig) *types.Trace {
 	trace := &types.Trace{}
 
 	for _, s := range spans {
 		span := &types.Span{
 			Event: types.Event{
-				Data: types.NewPayload(s.data),
+				Data: types.NewPayload(config, s.data),
 			},
 		}
 		if s.isRoot {

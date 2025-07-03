@@ -153,7 +153,7 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, hex.EncodeToString(spanID), spanEvent.Data.Get("trace.span_id"))
 		assert.Equal(t, "span_link", spanEvent.Data.Get("span.name"))
 		assert.Equal(t, "span_with_event", spanEvent.Data.Get("parent.name"))
-		assert.Equal(t, "span_event", spanEvent.Data.Get("meta.annotation_type"))
+		assert.Equal(t, "span_event", spanEvent.Data.MetaAnnotationType)
 		assert.Equal(t, "event_attr_key", spanEvent.Data.Get("event_attr_val"))
 	})
 
@@ -198,7 +198,7 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, hex.EncodeToString(spanID), spanLink.Data.Get("trace.span_id"))
 		assert.Equal(t, huskyotlp.BytesToTraceID(linkTraceID), spanLink.Data.Get("trace.link.trace_id"))
 		assert.Equal(t, hex.EncodeToString(linkSpanID), spanLink.Data.Get("trace.link.span_id"))
-		assert.Equal(t, "link", spanLink.Data.Get("meta.annotation_type"))
+		assert.Equal(t, "link", spanLink.Data.MetaAnnotationType)
 		assert.Equal(t, "link_attr_val", spanLink.Data.Get("link_attr_key"))
 	})
 
@@ -552,7 +552,7 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
+		assert.Equal(t, "my-user-agent", event.Data.MetaRefineryIncomingUserAgent)
 	})
 
 	t.Run("spans record incoming user agent - HTTP", func(t *testing.T) {
@@ -582,7 +582,7 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
+		assert.Equal(t, "my-user-agent", event.Data.MetaRefineryIncomingUserAgent)
 	})
 
 	t.Run("use SendKeyMode override", func(t *testing.T) {

@@ -63,8 +63,8 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 	return uint(d.sampleRate), shouldKeep, "deterministic/chance", ""
 }
 
-func (d *DeterministicSampler) GetKeyFields() []string {
-	return d.Config.GetSamplingFields()
+func (d *DeterministicSampler) GetKeyFields() ([]string, []string) {
+	return d.Config.GetSamplingFields(), nil
 }
 
 func (d *DeterministicSampler) Stop() {}

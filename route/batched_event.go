@@ -2,8 +2,10 @@ package route
 
 import (
 	"bytes"
+	"encoding/json"
 	"time"
 
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -13,6 +15,7 @@ type batchedEvent struct {
 	MsgPackTimestamp *time.Time    `msgpack:"time,omitempty"`
 	SampleRate       int64         `json:"samplerate" msgpack:"samplerate"`
 	Data             types.Payload `json:"data" msgpack:"data"`
+	cfg              config.Config `json:"-" msgpack:"-"`
 }
 
 func (b *batchedEvent) getEventTime() time.Time {
@@ -28,6 +31,33 @@ func (b *batchedEvent) getSampleRate() uint {
 		return defaultSampleRate
 	}
 	return uint(b.SampleRate)
+}
+
+func (b *batchedEvent) UnmarshalJSON(data []byte) error {
+	type tempEvent struct {
+		Timestamp  string          `json:"time"`
+		SampleRate int64           `json:"samplerate"`
+		Data       json.RawMessage `json:"data"`
+	}
+
+	var temp tempEvent
+	err := json.Unmarshal(data, &temp)
+	if err != nil {
+		return err
+	}
+
+	// Copy the simple fields
+	b.Timestamp = temp.Timestamp
+	b.SampleRate = temp.SampleRate
+
+	// Initialize Data with config and then unmarshal the raw JSON into it
+	b.Data = types.NewPayload(b.cfg, nil)
+	err = json.Unmarshal(temp.Data, &b.Data)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -54,9 +84,6 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		case bytes.Equal(field, []byte("time")):
 			if msgp.IsNil(bts) {
 				bts, err = msgp.ReadNilBytes(bts)
-				if err != nil {
-					return
-				}
 				b.MsgPackTimestamp = nil
 			} else {
 				if b.MsgPackTimestamp == nil {
@@ -75,6 +102,7 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case bytes.Equal(field, []byte("data")):
+			b.Data = types.NewPayload(b.cfg, nil)
 			bts, err = b.Data.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Data")
@@ -93,7 +121,17 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 }
 
 // Create a type for []batchedEvent so we can give it an unmarshaler.
-type batchedEvents []batchedEvent
+type batchedEvents struct {
+	events []batchedEvent
+	cfg    config.Config
+}
+
+func newBatchedEvents(cfg config.Config) *batchedEvents {
+	return &batchedEvents{
+		events: make([]batchedEvent, 0),
+		cfg:    cfg,
+	}
+}
 
 // UnmarshalMsg implements msgp.Unmarshaler
 func (b *batchedEvents) UnmarshalMsg(bts []byte) (o []byte, err error) {
@@ -103,13 +141,10 @@ func (b *batchedEvents) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	if cap(*b) >= int(totalValues) {
-		*b = (*b)[:totalValues]
-	} else {
-		*b = make(batchedEvents, totalValues)
-	}
-	for i := range *b {
-		bts, err = (*b)[i].UnmarshalMsg(bts)
+	b.events = make([]batchedEvent, totalValues)
+	for i := range b.events {
+		b.events[i].cfg = b.cfg
+		bts, err = b.events[i].UnmarshalMsg(bts)
 		if err != nil {
 			err = msgp.WrapError(err, i)
 			return
@@ -117,4 +152,28 @@ func (b *batchedEvents) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	}
 	o = bts
 	return
+}
+
+func (b *batchedEvents) MarshalJSON() ([]byte, error) {
+	return json.Marshal(b.events)
+}
+
+func (b *batchedEvents) UnmarshalJSON(data []byte) error {
+	var rawEvents []json.RawMessage
+	err := json.Unmarshal(data, &rawEvents)
+	if err != nil {
+		return err
+	}
+
+	b.events = make([]batchedEvent, len(rawEvents))
+	for i := range b.events {
+		b.events[i].cfg = b.cfg
+
+		err = json.Unmarshal(rawEvents[i], &b.events[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
