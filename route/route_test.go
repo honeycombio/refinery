@@ -1212,7 +1212,7 @@ func createBatchEventsWithLargeAttributes(numEvents int, cfg config.Config) *bat
 func BenchmarkRouterBatch(b *testing.B) {
 	router := newBatchRouter(b)
 	batchEvents := createBatchEventsWithLargeAttributes(3, router.Config)
-	batchMsgpack, err := msgpack.Marshal(batchEvents)
+	batchMsgpack, err := msgpack.Marshal(batchEvents.events)
 	require.NoError(b, err)
 
 	mockCollector := router.Collector.(*collect.MockCollector)
