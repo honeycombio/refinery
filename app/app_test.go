@@ -137,6 +137,7 @@ func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
 		}
 		if dataMap, ok := eventData["data"].(map[string]interface{}); ok {
 			event.Data = types.NewPayload(dataMap)
+			event.Data.ExtractMetadata([]string{"trace.trace_id"}, []string{"trace.parent_id"})
 		}
 
 		t.events = append(t.events, event)
@@ -390,7 +391,7 @@ func TestAppIntegration(t *testing.T) {
 		assert.Equal(collect, "dataset", events[0].Dataset)
 		assert.Equal(collect, "bar", events[0].Data.Get("foo"))
 		assert.Equal(collect, "1", events[0].Data.Get("trace.trace_id"))
-		assert.Equal(collect, int64(1), events[0].Data.Get("meta.refinery.original_sample_rate"))
+		assert.Equal(collect, int64(1), events[0].Data.Get(types.MetaRefineryOriginalSampleRate))
 	}, 2*time.Second, 10*time.Millisecond)
 
 	err = startstop.Stop(graph.Objects(), nil)
@@ -433,7 +434,7 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, "dataset", events[0].Dataset)
 	assert.Equal(t, "bar", events[0].Data.Get("foo"))
 	assert.Equal(t, "1", events[0].Data.Get("trace.trace_id"))
-	assert.Equal(t, int64(1), events[0].Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, int64(1), events[0].Data.Get(types.MetaRefineryOriginalSampleRate))
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
@@ -530,7 +531,7 @@ func TestPeerRouting(t *testing.T) {
 	assert.Equal(t, "0000000000", event.Data.Get("trace.parent_id"))
 	assert.Equal(t, "value", event.Data.Get("key"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
-	assert.Equal(t, uint(2), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, int64(2), event.Data.Get(types.MetaRefineryOriginalSampleRate))
 	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0 since that's who the trace belongs to.
@@ -593,9 +594,9 @@ func TestHostMetadataSpanAdditions(t *testing.T) {
 	assert.Equal(t, "dataset", events[0].Dataset)
 	assert.Equal(t, "bar", events[0].Data.Get("foo"))
 	assert.Equal(t, "1", events[0].Data.Get("trace.trace_id"))
-	assert.Equal(t, int64(1), events[0].Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, int64(1), events[0].Data.Get(types.MetaRefineryOriginalSampleRate))
 	hostname, _ := os.Hostname()
-	assert.Equal(t, hostname, events[0].Data.Get("meta.refinery.local_hostname"))
+	assert.Equal(t, hostname, events[0].Data.Get(types.MetaRefineryLocalHostname))
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
@@ -656,7 +657,7 @@ func TestEventsEndpoint(t *testing.T) {
 	assert.Equal(t, now, event.Timestamp)
 	assert.Equal(t, "1", event.Data.Get("trace.trace_id"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
-	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, int64(10), event.Data.Get(types.MetaRefineryOriginalSampleRate))
 	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0 since that's the host this trace belongs to.
@@ -694,7 +695,7 @@ func TestEventsEndpoint(t *testing.T) {
 	assert.Equal(t, now, event.Timestamp)
 	assert.Equal(t, "1", event.Data.Get("trace.trace_id"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
-	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, int64(10), event.Data.Get(types.MetaRefineryOriginalSampleRate))
 	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 }
 
@@ -760,7 +761,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, now, event.Timestamp)
 	assert.Equal(t, traceID, event.Data.Get("trace.trace_id"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
-	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, int64(10), event.Data.Get(types.MetaRefineryOriginalSampleRate))
 	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0.
@@ -798,7 +799,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, now, event.Timestamp)
 	assert.Equal(t, traceID, event.Data.Get("trace.trace_id"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
-	assert.Equal(t, uint(10), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, int64(10), event.Data.Get(types.MetaRefineryOriginalSampleRate))
 	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 }
 
@@ -860,7 +861,7 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 	assert.Equal(t, "0000000000", event.Data.Get("trace.parent_id"))
 	assert.Equal(t, "value", event.Data.Get("key"))
 	assert.Equal(t, "bar", event.Data.Get("foo"))
-	assert.Equal(t, uint(2), event.Data.Get("meta.refinery.original_sample_rate"))
+	assert.Equal(t, int64(2), event.Data.Get(types.MetaRefineryOriginalSampleRate))
 	assert.Equal(t, "Test-Client", event.Data.MetaRefineryIncomingUserAgent)
 	// Repeat, but deliver to host 1 on the peer channel, it should be
 	// passed to host 0 since that's who the trace belongs to.
