@@ -1316,7 +1316,7 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 		i.datasetSamplers[selector] = sampler
 	}
 
-	dc := sp.ExtractDecisionContext()
+	dc := sp.ExtractDecisionContext(i.Config)
 	// extract all key fields from the span
 	keyFields, nonRootFields := sampler.GetKeyFields()
 	if sp.IsRoot {

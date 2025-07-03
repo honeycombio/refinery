@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,62 +15,81 @@ import (
 
 func TestBatchedEventRoundTrip(t *testing.T) {
 	timestamp := time.Now()
+	mockCfg := &config.MockConfig{}
 
-	events := batchedEvents{
+	// Create events slice
+	events := []batchedEvent{
 		{
 			MsgPackTimestamp: &timestamp,
+			cfg:              mockCfg,
 			Data: types.NewPayload(map[string]any{
 				"string_field": "test_value",
 				"int_field":    int64(42),
 				"float_field":  3.14159,
 				"bool_field":   true,
 				"nil_field":    nil,
-			}),
+			}, mockCfg),
 		},
 		{
 			MsgPackTimestamp: &timestamp,
 			SampleRate:       200,
+			cfg:              mockCfg,
 			Data: types.NewPayload(map[string]any{
 				"another_string": "hello world",
 				"negative_int":   int64(-123),
 				"large_float":    1234.5678,
 				"false_bool":     false,
 				"nil_value":      nil,
-			}),
+			}, mockCfg),
 		},
 	}
 
-	serialized, err := msgpack.Marshal(events)
+	// Create batchedEvents struct and set events
+	batchStruct := newBatchedEvents(mockCfg)
+	batchStruct.events = events
+
+	serialized, err := msgpack.Marshal(batchStruct.events) // Marshal the slice directly
 	require.NoError(t, err)
 
-	var deserialized batchedEvents
+	// Create new batchedEvents for unmarshaling
+	deserialized := newBatchedEvents(mockCfg)
 	_, err = deserialized.UnmarshalMsg(serialized)
 	require.NoError(t, err)
 
-	require.Len(t, deserialized, 2)
-	for i := range deserialized {
-		assert.WithinDuration(t, timestamp, *deserialized[i].MsgPackTimestamp, 0)
-		assert.Equal(t, events[i].SampleRate, deserialized[i].SampleRate)
-		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(deserialized[i].Data.All()))
+	require.Len(t, deserialized.events, 2)
+	deserializedEvents := deserialized.events
+	for i := range deserializedEvents {
+		assert.WithinDuration(t, timestamp, *deserializedEvents[i].MsgPackTimestamp, 0)
+		assert.Equal(t, events[i].SampleRate, deserializedEvents[i].SampleRate)
+		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(deserializedEvents[i].Data.All()))
 	}
 
 	// Test overwriting with another unmarshal, with swapped events order.
 	events[0], events[1] = events[1], events[0]
-	serialized, err = msgpack.Marshal(events)
+	batchStruct.events = events
+	serialized, err = msgpack.Marshal(batchStruct.events)
 	require.NoError(t, err)
 
-	deserialized = deserialized[:0]
+	// Reset the deserialized batch
+	deserialized = newBatchedEvents(mockCfg)
 	_, err = deserialized.UnmarshalMsg(serialized)
 	require.NoError(t, err)
-	require.Len(t, deserialized, 2)
-	for i := range deserialized {
-		assert.WithinDuration(t, timestamp, *deserialized[i].MsgPackTimestamp, 0)
-		assert.Equal(t, events[i].SampleRate, deserialized[i].SampleRate)
-		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(deserialized[i].Data.All()))
+
+	require.Len(t, deserialized.events, 2)
+	deserializedEvents = deserialized.events
+	for i := range deserializedEvents {
+		assert.WithinDuration(t, timestamp, *deserializedEvents[i].MsgPackTimestamp, 0)
+		assert.Equal(t, events[i].SampleRate, deserializedEvents[i].SampleRate)
+		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(deserializedEvents[i].Data.All()))
 	}
 }
 
 func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
+	mockCfg := &config.MockConfig{
+		TraceIdFieldNames:  []string{"trace.trace_id"},
+		ParentIdFieldNames: []string{"trace.parent_id"},
+	}
+
 	// Create multiple test events
 	events := []struct {
 		traceID    string
@@ -114,30 +134,29 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 	}
 
 	// Test the optimized unmarshal
-	var batch batchedEvents
-	traceIdFields := []string{"trace.trace_id"}
-	parentIdFields := []string{"trace.parent_id"}
+	batch := newBatchedEvents(mockCfg)
 
-	remaining, err := batch.UnmarshalMsgWithMetadata(buf, traceIdFields, parentIdFields)
+	remaining, err := batch.UnmarshalMsg(buf)
 	require.NoError(t, err)
 	assert.Empty(t, remaining)
 
 	// Verify all events were unmarshaled with metadata
-	require.Len(t, batch, 3)
+	batchEvents := batch.events
+	require.Len(t, batchEvents, 3)
 
 	// Event 0: root span (no parent)
-	assert.Equal(t, "trace-1", batch[0].Data.MetaTraceID)
-	assert.True(t, batch[0].Data.MetaRefineryRoot.HasValue)
-	assert.True(t, batch[0].Data.MetaRefineryRoot.Value)
+	assert.Equal(t, "trace-1", batchEvents[0].Data.MetaTraceID)
+	assert.True(t, batchEvents[0].Data.MetaRefineryRoot.HasValue)
+	assert.True(t, batchEvents[0].Data.MetaRefineryRoot.Value)
 
 	// Event 1: non-root span (has parent)
-	assert.Equal(t, "trace-2", batch[1].Data.MetaTraceID)
-	assert.True(t, batch[1].Data.MetaRefineryRoot.HasValue)
-	assert.False(t, batch[1].Data.MetaRefineryRoot.Value)
+	assert.Equal(t, "trace-2", batchEvents[1].Data.MetaTraceID)
+	assert.True(t, batchEvents[1].Data.MetaRefineryRoot.HasValue)
+	assert.False(t, batchEvents[1].Data.MetaRefineryRoot.Value)
 
 	// Event 2: log (never root)
-	assert.Equal(t, "trace-3", batch[2].Data.MetaTraceID)
-	assert.Equal(t, "log", batch[2].Data.MetaSignalType)
-	assert.False(t, batch[2].Data.MetaRefineryRoot.HasValue)
-	assert.False(t, batch[2].Data.MetaRefineryRoot.Value)
+	assert.Equal(t, "trace-3", batchEvents[2].Data.MetaTraceID)
+	assert.Equal(t, "log", batchEvents[2].Data.MetaSignalType)
+	assert.True(t, batchEvents[2].Data.MetaRefineryRoot.HasValue)
+	assert.False(t, batchEvents[2].Data.MetaRefineryRoot.Value)
 }

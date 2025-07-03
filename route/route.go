@@ -453,7 +453,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 		Environment: environment,
 		SampleRate:  uint(sampleRate),
 		Timestamp:   eventTime,
-		Data:        types.NewPayload(data),
+		Data:        types.NewPayload(data, r.Config),
 	}, nil
 }
 
@@ -477,24 +477,16 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	batchedEvents := make(batchedEvents, 0)
+	batchedEvents := newBatchedEvents(r.Config)
 
-	// Use optimized unmarshal for msgpack that extracts metadata in one pass
-	contentType := req.Header.Get("Content-Type")
-	if contentType == "application/x-msgpack" || contentType == "application/msgpack" {
-		traceIdFieldNames := r.Config.GetTraceIdFieldNames()
-		parentIdFieldNames := r.Config.GetParentIdFieldNames()
-		_, err = batchedEvents.UnmarshalMsgWithMetadata(reqBod, traceIdFieldNames, parentIdFieldNames)
-	} else {
-		err = unmarshal(req, reqBod, &batchedEvents)
-	}
+	err = unmarshal(req, reqBod, batchedEvents)
 
 	if err != nil {
 		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Logf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
-	r.Metrics.Count(r.incomingOrPeer+"_router_batch_events", int64(len(batchedEvents)))
+	r.Metrics.Count(r.incomingOrPeer+"_router_batch_events", int64(len(batchedEvents.events)))
 
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
@@ -514,8 +506,8 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	}
 
 	userAgent := getUserAgentFromRequest(req)
-	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
-	for _, bev := range batchedEvents {
+	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
+	for _, bev := range batchedEvents.events {
 		ev := &types.Event{
 			Context:     ctx,
 			APIHost:     apiHost,
@@ -581,7 +573,7 @@ func (router *Router) processOTLPRequest(
 				Environment: environment,
 				SampleRate:  uint(ev.SampleRate),
 				Timestamp:   ev.Timestamp,
-				Data:        types.NewPayload(ev.Attributes),
+				Data:        types.NewPayload(ev.Attributes, router.Config),
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
 			if err = router.processEvent(event, requestID); err != nil {
@@ -606,13 +598,12 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	r.Metrics.Histogram(r.incomingOrPeer+"_router_event_bytes", float64(ev.GetDataSize()))
 
 	// An error here is effectively a parsing error, so return it up the stack.
-	err := ev.Data.ExtractMetadata(r.Config.GetTraceIdFieldNames(), r.Config.GetParentIdFieldNames())
-	if err != nil {
+	if err := ev.Data.ExtractMetadata(); err != nil {
 		return err
 	}
 
 	// check if this is a probe from another refinery; if so, we should drop it
-	if ev.Data.MetaRefineryProbe.Value {
+	if ev.Data.MetaRefineryProbe.HasValue && ev.Data.MetaRefineryProbe.Value {
 		debugLog.Logf("dropping probe")
 		return nil
 	}
@@ -692,6 +683,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		return nil
 	}
 
+	var err error
 	// we're supposed to handle it normally
 	if r.incomingOrPeer == "incoming" {
 		err = r.Collector.AddSpan(span)

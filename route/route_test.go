@@ -121,6 +121,10 @@ func TestDecompression(t *testing.T) {
 
 func TestUnmarshal(t *testing.T) {
 	now := time.Now().UTC()
+	mockCfg := &config.MockConfig{
+		TraceIdFieldNames:  []string{"trace.trace_id"},
+		ParentIdFieldNames: []string{"trace.span_id"},
+	}
 
 	// Common test data - using only floats to avoid JSON type conversion issues
 	testData := map[string]interface{}{
@@ -190,19 +194,22 @@ func TestUnmarshal(t *testing.T) {
 	// Test batchedEvents unmarshaling (used in batch)
 	t.Run("batchedEvents", func(t *testing.T) {
 		t.Run("json", func(t *testing.T) {
-			batchEvents := batchedEvents{
+			batch := newBatchedEvents(mockCfg)
+			batch.events = []batchedEvent{
 				{
 					Timestamp:  now.Format(time.RFC3339Nano),
 					SampleRate: 2,
-					Data:       types.NewPayload(testData),
+					Data:       types.NewPayload(testData, mockCfg),
+					cfg:        mockCfg,
 				},
 				{
 					Timestamp:  now.Add(time.Second).Format(time.RFC3339Nano),
 					SampleRate: 4,
-					Data:       types.NewPayload(testData),
+					Data:       types.NewPayload(testData, mockCfg),
+					cfg:        mockCfg,
 				},
 			}
-			jsonData, err := json.Marshal(batchEvents)
+			jsonData, err := json.Marshal(batch)
 			require.NoError(t, err)
 
 			for _, contentType := range []string{"application/json", "application/json; charset=utf-8"} {
@@ -210,18 +217,18 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
 					req.Header.Set("Content-Type", contentType)
 
-					var result batchedEvents
-					err = unmarshal(req, readAll(t, req.Body), &result)
+					result := newBatchedEvents(mockCfg)
+					err = unmarshal(req, readAll(t, req.Body), result)
 					require.NoError(t, err)
-					require.Len(t, result, 2)
+					require.Len(t, result.events, 2)
 
-					assert.Equal(t, now.UTC(), result[0].getEventTime())
-					assert.Equal(t, uint(2), result[0].getSampleRate())
-					assert.Equal(t, testData, maps.Collect(result[0].Data.All()))
+					assert.Equal(t, now.UTC(), result.events[0].getEventTime())
+					assert.Equal(t, uint(2), result.events[0].getSampleRate())
+					assert.Equal(t, testData, maps.Collect(result.events[0].Data.All()))
 
-					assert.Equal(t, now.Add(time.Second).UTC(), result[1].getEventTime())
-					assert.Equal(t, uint(4), result[1].getSampleRate())
-					assert.Equal(t, testData, maps.Collect(result[1].Data.All()))
+					assert.Equal(t, now.Add(time.Second).UTC(), result.events[1].getEventTime())
+					assert.Equal(t, uint(4), result.events[1].getSampleRate())
+					assert.Equal(t, testData, maps.Collect(result.events[1].Data.All()))
 				})
 			}
 		})
@@ -258,18 +265,18 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", buf)
 					req.Header.Set("Content-Type", contentType)
 
-					var result batchedEvents
-					err = unmarshal(req, readAll(t, req.Body), &result)
+					result := newBatchedEvents(mockCfg)
+					err = unmarshal(req, readAll(t, req.Body), result)
 					require.NoError(t, err)
-					require.Len(t, result, 2)
+					require.Len(t, result.events, 2)
 
-					assert.Equal(t, now.UTC(), result[0].getEventTime())
-					assert.Equal(t, uint(3), result[0].getSampleRate())
-					assert.Equal(t, testData, maps.Collect(result[0].Data.All()))
+					assert.Equal(t, now.UTC(), result.events[0].getEventTime())
+					assert.Equal(t, uint(3), result.events[0].getSampleRate())
+					assert.Equal(t, testData, maps.Collect(result.events[0].Data.All()))
 
-					assert.Equal(t, now.Add(time.Second).UTC(), result[1].getEventTime())
-					assert.Equal(t, uint(6), result[1].getSampleRate())
-					assert.Equal(t, testData, maps.Collect(result[1].Data.All()))
+					assert.Equal(t, now.Add(time.Second).UTC(), result.events[1].getEventTime())
+					assert.Equal(t, uint(6), result.events[1].getSampleRate())
+					assert.Equal(t, testData, maps.Collect(result.events[1].Data.All()))
 
 				})
 			}
@@ -747,6 +754,9 @@ func TestGetDatasetFromRequest(t *testing.T) {
 	}
 }
 func TestExtractMetadataTraceID(t *testing.T) {
+	mockCfg := &config.MockConfig{
+		TraceIdFieldNames: []string{"trace.trace_id", "traceId"},
+	}
 	testCases := []struct {
 		name     string
 		event    types.Event
@@ -757,7 +767,7 @@ func TestExtractMetadataTraceID(t *testing.T) {
 			event: types.Event{
 				Data: types.NewPayload(map[string]interface{}{
 					"meta.trace_id": "trace123",
-				}),
+				}, mockCfg),
 			},
 			expected: "trace123",
 		},
@@ -766,7 +776,7 @@ func TestExtractMetadataTraceID(t *testing.T) {
 			event: types.Event{
 				Data: types.NewPayload(map[string]interface{}{
 					"trace.trace_id": "trace456",
-				}),
+				}, mockCfg),
 			},
 			expected: "trace456",
 		},
@@ -775,14 +785,14 @@ func TestExtractMetadataTraceID(t *testing.T) {
 			event: types.Event{
 				Data: types.NewPayload(map[string]interface{}{
 					"traceId": "trace789",
-				}),
+				}, mockCfg),
 			},
 			expected: "trace789",
 		},
 		{
 			name: "no trace id",
 			event: types.Event{
-				Data: types.NewPayload(map[string]interface{}{}),
+				Data: types.NewPayload(map[string]interface{}{}, mockCfg),
 			},
 			expected: "",
 		},
@@ -792,17 +802,15 @@ func TestExtractMetadataTraceID(t *testing.T) {
 				Data: types.NewPayload(map[string]interface{}{
 					"meta.trace_id":  "meta-trace",
 					"trace.trace_id": "field-trace",
-				}),
+				}, mockCfg),
 			},
 			expected: "meta-trace",
 		},
 	}
 
-	traceIdFieldNames := []string{"trace.trace_id", "traceId"}
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			tc.event.Data.ExtractMetadata(traceIdFieldNames, nil)
+			tc.event.Data.ExtractMetadata()
 			assert.Equal(t, tc.expected, tc.event.Data.MetaTraceID)
 		})
 	}
@@ -810,7 +818,7 @@ func TestExtractMetadataTraceID(t *testing.T) {
 
 func TestAddIncomingUserAgent(t *testing.T) {
 	t.Run("no incoming user agent", func(t *testing.T) {
-		payload := types.NewPayload(map[string]interface{}{})
+		payload := types.NewEmptyPayload(&config.MockConfig{})
 		event := &types.Event{
 			Data: payload,
 		}
@@ -822,8 +830,8 @@ func TestAddIncomingUserAgent(t *testing.T) {
 	t.Run("existing incoming user agent", func(t *testing.T) {
 		payload := types.NewPayload(map[string]interface{}{
 			"meta.refinery.incoming_user_agent": "test-agent",
-		})
-		payload.ExtractMetadata(nil, nil)
+		}, &config.MockConfig{})
+		payload.ExtractMetadata()
 		event := &types.Event{
 			Data: payload,
 		}
@@ -834,7 +842,6 @@ func TestAddIncomingUserAgent(t *testing.T) {
 }
 
 func TestProcessEventMetrics(t *testing.T) {
-
 	tests := []struct {
 		name           string
 		incomingOrPeer string
@@ -889,7 +896,7 @@ func TestProcessEventMetrics(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		t.Run(tt.name+"/"+tt.signalType, func(t *testing.T) {
 			mockMetrics := &metrics.MockMetrics{}
 			mockMetrics.Start()
 
@@ -936,8 +943,9 @@ func TestProcessEventMetrics(t *testing.T) {
 					"meta.signal_type":  tt.signalType,
 					"test_attribute":    "test_value",
 					"another_attribute": 123,
-				}),
+				}, mockConfig),
 			}
+			event.Data.ExtractMetadata()
 			span := &types.Span{
 				Event:   *event,
 				TraceID: "trace-123",
@@ -995,9 +1003,10 @@ func newBatchRouter(t testing.TB) *Router {
 	}
 }
 
-func createBatchEvents() batchedEvents {
+func createBatchEvents(mockCfg config.Config) *batchedEvents {
 	now := time.Now().UTC()
-	batchEvents := batchedEvents{
+	batch := newBatchedEvents(mockCfg)
+	batch.events = []batchedEvent{
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 2,
@@ -1010,7 +1019,7 @@ func createBatchEvents() batchedEvents {
 				"duration_ms":     100.0,
 				"int.field":       int64(1),
 				"bool.field":      true,
-			}),
+			}, mockCfg),
 		},
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
@@ -1024,7 +1033,7 @@ func createBatchEvents() batchedEvents {
 				"duration_ms":     50.0,
 				"int.field":       int64(2),
 				"bool.field":      false,
-			}),
+			}, mockCfg),
 		},
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
@@ -1037,18 +1046,18 @@ func createBatchEvents() batchedEvents {
 				"operation.name":  "another-operation",
 				"duration_ms":     200.0,
 				"int.field":       int64(3),
-			}),
+			}, mockCfg),
 		},
 	}
-	return batchEvents
+	return batch
 }
 
 func TestRouterBatch(t *testing.T) {
 	t.Parallel()
 
 	router := newBatchRouter(t)
-	batchEvents := createBatchEvents()
-	batchMsgpack, err := msgpack.Marshal(batchEvents)
+	batch := createBatchEvents(router.Config)
+	batchMsgpack, err := msgpack.Marshal(batch.events)
 	require.NoError(t, err)
 
 	// Create HTTP request directly without server
@@ -1068,7 +1077,7 @@ func TestRouterBatch(t *testing.T) {
 	var responses []*BatchResponse
 	err = json.Unmarshal(w.Body.Bytes(), &responses)
 	require.NoError(t, err)
-	assert.Len(t, responses, len(batchEvents))
+	assert.Len(t, responses, len(batch.events))
 
 	// Verify all responses are successful
 	for i, resp := range responses {
@@ -1081,7 +1090,7 @@ func TestRouterBatch(t *testing.T) {
 	assert.Equal(t, int64(3), mockMetrics.CounterIncrements["incoming_router_batch_events"])
 
 	var spans []*types.Span
-	for len(spans) < len(batchEvents) {
+	for len(spans) < len(batch.events) {
 		select {
 		case span := <-router.Collector.(*collect.MockCollector).Spans:
 			spans = append(spans, span)
@@ -1091,12 +1100,12 @@ func TestRouterBatch(t *testing.T) {
 		}
 	}
 
-	assert.Len(t, spans, len(batchEvents))
+	assert.Len(t, spans, len(batch.events))
 	for i, span := range spans {
-		assert.Equal(t, batchEvents[i].Data.Get("trace.trace_id"), span.TraceID)
-		assert.Equal(t, uint(batchEvents[i].SampleRate), span.SampleRate)
+		assert.Equal(t, batch.events[i].Data.Get("trace.trace_id"), span.TraceID)
+		assert.Equal(t, uint(batch.events[i].SampleRate), span.SampleRate)
 		// Compare data values
-		for k, v := range batchEvents[i].Data.All() {
+		for k, v := range batch.events[i].Data.All() {
 			assert.Equal(t, v, span.Data.Get(k), "Data field %s should match", k)
 		}
 	}
@@ -1122,7 +1131,7 @@ func (d *discardResponseWriter) WriteHeader(statusCode int) {
 	// Discard status code
 }
 
-func createBatchEventsWithLargeAttributes(numEvents int) batchedEvents {
+func createBatchEventsWithLargeAttributes(numEvents int, cfg config.Config) *batchedEvents {
 	now := time.Now().UTC()
 
 	// Large text values for testing
@@ -1130,7 +1139,8 @@ func createBatchEventsWithLargeAttributes(numEvents int) batchedEvents {
 	mediumText := strings.Repeat("y", 500)
 	smallText := strings.Repeat("z", 100)
 
-	batchEvents := make(batchedEvents, numEvents)
+	batchEvents := newBatchedEvents(cfg)
+	batchEvents.events = make([]batchedEvent, numEvents)
 
 	for i := 0; i < numEvents; i++ {
 		data := make(map[string]interface{})
@@ -1188,10 +1198,11 @@ func createBatchEventsWithLargeAttributes(numEvents int) batchedEvents {
 		}
 
 		ts := now.Add(time.Duration(i*100) * time.Millisecond)
-		batchEvents[i] = batchedEvent{
+		batchEvents.events[i] = batchedEvent{
 			MsgPackTimestamp: &ts,
 			SampleRate:       2,
-			Data:             types.NewPayload(data),
+			Data:             types.NewPayload(data, cfg),
+			cfg:              cfg,
 		}
 	}
 
@@ -1200,7 +1211,7 @@ func createBatchEventsWithLargeAttributes(numEvents int) batchedEvents {
 
 func BenchmarkRouterBatch(b *testing.B) {
 	router := newBatchRouter(b)
-	batchEvents := createBatchEventsWithLargeAttributes(3)
+	batchEvents := createBatchEventsWithLargeAttributes(3, router.Config)
 	batchMsgpack, err := msgpack.Marshal(batchEvents)
 	require.NoError(b, err)
 

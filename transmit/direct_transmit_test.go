@@ -161,8 +161,8 @@ func sendTestEvents(dt *DirectTransmission, serverURL string, count int, apiKey 
 	for i := range count {
 		eventData := types.NewPayload(map[string]any{
 			"event_id": i,
-		})
-		eventData.ExtractMetadata(nil, nil)
+		}, &config.MockConfig{})
+		eventData.ExtractMetadata()
 
 		event := &types.Event{
 			Context:     context.Background(),
@@ -406,8 +406,8 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		eventData := types.NewPayload(map[string]any{
 			"large_field": strings.Repeat("a", 1024*1024+1000),
 			"event_id":    1,
-		})
-		eventData.ExtractMetadata(nil, nil)
+		}, &config.MockConfig{})
+		eventData.ExtractMetadata()
 
 		event := &types.Event{
 			Context:     context.Background(),
@@ -460,6 +460,9 @@ func TestDirectTransmission(t *testing.T) {
 	defer dt.Stop()
 
 	now := time.Now().UTC()
+	cfg := &config.MockConfig{
+		TraceIdFieldNames: []string{"trace.trace_id"},
+	}
 
 	// Create events for multiple datasets and scenarios
 	var allEvents []*types.Event
@@ -470,8 +473,8 @@ func TestDirectTransmission(t *testing.T) {
 			"trace.trace_id": fmt.Sprintf("trace-a-%d", i),
 			"dataset":        "A",
 			"event_id":       i,
-		})
-		eventData.ExtractMetadata([]string{"trace.trace_id"}, nil)
+		}, cfg)
+		eventData.ExtractMetadata()
 
 		event := &types.Event{
 			Context:     context.Background(),
@@ -506,8 +509,8 @@ func TestDirectTransmission(t *testing.T) {
 			"trace.trace_id": fmt.Sprintf("trace-b-%d", i),
 			"dataset":        "B",
 			"event_id":       i,
-		})
-		eventData.ExtractMetadata([]string{"trace.trace_id"}, nil)
+		}, cfg)
+		eventData.ExtractMetadata()
 
 		if i == 0 {
 			eventData.Set("huge", strings.Repeat("a", 1024*1024))
@@ -532,8 +535,10 @@ func TestDirectTransmission(t *testing.T) {
 			"trace.trace_id": fmt.Sprintf("trace-c-%d", i),
 			"dataset":        "C",
 			"event_id":       i,
+		}, &config.MockConfig{
+			TraceIdFieldNames: []string{"trace.trace_id"},
 		})
-		eventData.ExtractMetadata([]string{"trace.trace_id"}, nil)
+		eventData.ExtractMetadata()
 
 		event := &types.Event{
 			Context:     context.Background(),
@@ -603,7 +608,6 @@ func TestDirectTransmission(t *testing.T) {
 		assert.Equal(t, expectedTraceID, event.Data["trace.trace_id"])
 
 		assert.Equal(t, "trace", event.Data[types.MetaSignalType])
-		assert.Equal(t, expectedTraceID, event.Data[types.MetaTraceID])
 		assert.Equal(t, "span_event", event.Data[types.MetaAnnotationType])
 		assert.Equal(t, true, event.Data[types.MetaRefineryProbe])
 		assert.Equal(t, true, event.Data[types.MetaRefineryRoot])
@@ -692,8 +696,10 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 			"dataset":        "A",
 			"event_id":       i,
 			"big":            bigString,
+		}, &config.MockConfig{
+			TraceIdFieldNames: []string{"trace.trace_id"},
 		})
-		eventData.ExtractMetadata([]string{"trace.trace_id"}, nil)
+		eventData.ExtractMetadata()
 
 		// Some events are too big to send at all, that shouldn't foul up the logic here.
 		if i == 0 || i == 9 || i == 10 || i == 49 {
@@ -761,7 +767,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 		Dataset:    "test-dataset",
 		SampleRate: 1,
 		Timestamp:  fakeClock.Now(),
-		Data:       types.NewPayload(map[string]any{"event": "first", "time": 0}),
+		Data:       types.NewPayload(map[string]any{"event": "first", "time": 0}, &config.MockConfig{}),
 	}
 	dt.EnqueueEvent(event1)
 
@@ -779,7 +785,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 		Dataset:    "test-dataset",
 		SampleRate: 1,
 		Timestamp:  fakeClock.Now(),
-		Data:       types.NewPayload(map[string]any{"event": "second", "time": 100}),
+		Data:       types.NewPayload(map[string]any{"event": "second", "time": 100}, &config.MockConfig{}),
 	}
 	dt.EnqueueEvent(event2)
 
@@ -822,7 +828,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 		Dataset:    "test-dataset",
 		SampleRate: 1,
 		Timestamp:  fakeClock.Now(),
-		Data:       types.NewPayload(map[string]any{"event": "third", "time": 400}),
+		Data:       types.NewPayload(map[string]any{"event": "third", "time": 400}, &config.MockConfig{}),
 	}
 	dt.EnqueueEvent(event3)
 
@@ -1011,12 +1017,13 @@ func createBenchmarkEvents(t testing.TB, serverURL string, numEvents, datasets, 
 			SampleRate:        uint(1 + (i % 100)),
 			Timestamp:         time.Now().Add(time.Duration(i) * time.Microsecond),
 			EnqueuedUnixMicro: time.Now().UnixMicro(),
+			Data:              types.NewEmptyPayload(&config.MockConfig{}),
 		}
 		err := events[i].Data.UnmarshalMsgpack(msgpackPayloads[i%len(msgpackPayloads)])
 		if err != nil {
 			t.Fatalf("failed to unmarshal payload: %v", err)
 		}
-		events[i].Data.ExtractMetadata(nil, nil)
+		events[i].Data.ExtractMetadata()
 	}
 
 	return events

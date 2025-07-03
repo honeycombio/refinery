@@ -25,6 +25,7 @@ func TestEMAThroughputAddSampleRateKeyToTrace(t *testing.T) {
 		Metrics: &metrics,
 	}
 
+	mockCfg := &config.MockConfig{}
 	trace := &types.Trace{}
 	for i := 0; i < spanCount; i++ {
 		trace.AddSpan(&types.Span{
@@ -34,7 +35,7 @@ func TestEMAThroughputAddSampleRateKeyToTrace(t *testing.T) {
 					"app.team.id":      float64(4),
 					"important_field":  true,
 					"request.path":     "/{slug}/fun",
-				}),
+				}, mockCfg),
 			},
 		})
 	}

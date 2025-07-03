@@ -34,7 +34,7 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 					"app.team.id":      float64(4),
 					"important_field":  true,
 					"request.path":     "/{slug}/fun",
-				}),
+				}, &config.MockConfig{}),
 			},
 		})
 	}

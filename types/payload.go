@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/honeycombio/refinery/config"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -116,11 +117,6 @@ var metadataFields = []metadataField{
 			}
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
-			if p.MetaTraceID != "" {
-				out = msgp.AppendString(in, MetaTraceID)
-				out = msgp.AppendString(out, p.MetaTraceID)
-				return out, true
-			}
 			return in, false
 		},
 		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
@@ -201,7 +197,7 @@ var metadataFields = []metadataField{
 			}
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
-			if p.MetaRefineryRoot.HasValue {
+			if p.MetaRefineryRoot.HasValue && p.MetaRefineryRoot.Value {
 				out = msgp.AppendString(in, MetaRefineryRoot)
 				out = msgp.AppendBool(out, p.MetaRefineryRoot.Value)
 				return out, true
@@ -736,6 +732,8 @@ type Payload struct {
 
 	hasExtractedMetadata bool
 
+	config config.Config
+
 	// Cached metadata fields for efficient access
 	MetaSignalType                string       // meta.signal_type
 	MetaTraceID                   string       // meta.trace_id
@@ -764,10 +762,13 @@ type Payload struct {
 
 // extractMetadataFromBytes extracts metadata from msgpack data.
 // If consumed is non-nil, it will be set to the number of bytes consumed from the data.
-func (p *Payload) extractMetadataFromBytes(data []byte, traceIdFieldNames, parentIdFieldNames []string) (int, error) {
+func (p *Payload) extractMetadataFromBytes(data []byte) (int, error) {
 	if !p.MetaRefineryRoot.HasValue {
 		p.MetaRefineryRoot.Set(true)
 	}
+
+	traceIdFieldNames := p.config.GetTraceIdFieldNames()
+	parentIdFieldNames := p.config.GetParentIdFieldNames()
 
 	// Read the map header
 	mapSize, remaining, err := msgp.ReadMapHeaderBytes(data)
@@ -862,13 +863,19 @@ func (p *Payload) extractMetadataFromBytes(data []byte, traceIdFieldNames, paren
 // This MUST be called manually after creating or unmarshaling a non-empty Payload
 // to populate the metadata fields. The traceIdFieldNames and parentIdFieldNames parameters
 // are optional and used to extract trace ID and determine if the span is a root span.
-func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string) error {
+func (p *Payload) ExtractMetadata() error {
 	if p.hasExtractedMetadata {
 		return nil
 	}
 
 	if !p.MetaRefineryRoot.HasValue {
 		p.MetaRefineryRoot.Set(true)
+	}
+
+	var traceIdFieldNames, parentIdFieldNames []string
+	if p.config != nil {
+		traceIdFieldNames = p.config.GetTraceIdFieldNames()
+		parentIdFieldNames = p.config.GetParentIdFieldNames()
 	}
 
 	// For memoized fields, directly access the map
@@ -915,7 +922,7 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 
 	// For msgpMap fields, extract from the raw bytes
 	if p.msgpMap.Size() > 0 {
-		_, err := p.extractMetadataFromBytes(p.msgpMap.rawData, traceIdFieldNames, parentIdFieldNames)
+		_, err := p.extractMetadataFromBytes(p.msgpMap.rawData)
 		if err != nil {
 			return err
 		}
@@ -931,41 +938,35 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 }
 
 // NewPayload creates a new Payload from a map of fields. This is not populate
-// metadata fields; to do this, you MUST call ExtractMetadata.
-func NewPayload(data map[string]any) Payload {
+// metadata fields
+func NewPayload(data map[string]any, config config.Config) Payload {
 	p := Payload{
 		memoizedFields: data,
 	}
+
+	p.config = config
 	return p
+}
+
+func NewEmptyPayload(config config.Config) Payload {
+	return Payload{
+		config: config,
+	}
 }
 
 // UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal. Instead it
 // keep a reference to serialized data.
 func (p *Payload) UnmarshalMsgpack(data []byte) error {
 	p.msgpMap = MsgpPayloadMap{rawData: data}
+	p.ExtractMetadata()
 	return nil
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler, similar to above but expects to be
 // part of a larger message.
 func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	// Oddly the msgp library doesn't export the internal size method it uses
-	// to skip data. So we will derived it from the returned slice.
-	remainder, err := msgp.Skip(bts)
-	if err != nil {
-		return nil, err
-	}
-	ourData := bts[:len(bts)-len(remainder)]
-	p.msgpMap = MsgpPayloadMap{rawData: ourData}
-	return remainder, err
-}
-
-// UnmarshalMsgWithMetadata unmarshals the payload and extracts metadata in a single pass.
-// This is more efficient than calling UnmarshalMsg followed by ExtractMetadata separately.
-// It returns the remaining bytes after unmarshaling.
-func (p *Payload) UnmarshalMsgWithMetadata(bts []byte, traceIdFieldNames, parentIdFieldNames []string) (o []byte, err error) {
 	// Extract metadata and get consumed bytes
-	consumed, err := p.extractMetadataFromBytes(bts, traceIdFieldNames, parentIdFieldNames)
+	consumed, err := p.extractMetadataFromBytes(bts)
 	if err != nil {
 		return nil, err
 	}
@@ -984,6 +985,7 @@ func (p *Payload) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	p.memoizedFields = fields
+	p.ExtractMetadata()
 	return nil
 }
 
@@ -1043,6 +1045,53 @@ func (p *Payload) MemoizeFields(keys ...string) {
 }
 
 func (p *Payload) Exists(key string) bool {
+	// if the key is a metadata field, check the dedicated field
+	switch key {
+	case MetaSignalType:
+		return p.MetaSignalType != ""
+	case MetaTraceID:
+		return p.MetaTraceID != ""
+	case MetaAnnotationType:
+		return p.MetaAnnotationType != ""
+	case MetaRefineryProbe:
+		return p.MetaRefineryProbe.HasValue
+	case MetaRefineryRoot:
+		return p.MetaRefineryRoot.HasValue
+	case MetaRefineryIncomingUserAgent:
+		return p.MetaRefineryIncomingUserAgent != ""
+	case MetaRefinerySendBy:
+		return p.MetaRefinerySendBy != 0
+	case MetaRefinerySpanDataSize:
+		return p.MetaRefinerySpanDataSize != 0
+	case MetaRefineryMinSpan:
+		return p.MetaRefineryMinSpan.HasValue
+	case MetaRefineryForwarded:
+		return p.MetaRefineryForwarded != ""
+	case MetaRefineryExpiredTrace:
+		return p.MetaRefineryExpiredTrace.HasValue
+	case MetaRefineryLocalHostname:
+		return p.MetaRefineryLocalHostname != ""
+	case MetaStressed:
+		return p.MetaStressed.HasValue
+	case MetaRefineryReason:
+		return p.MetaRefineryReason != ""
+	case MetaRefinerySendReason:
+		return p.MetaRefinerySendReason != ""
+	case MetaSpanEventCount:
+		return p.MetaSpanEventCount != 0
+	case MetaSpanLinkCount:
+		return p.MetaSpanLinkCount != 0
+	case MetaSpanCount:
+		return p.MetaSpanCount != 0
+	case MetaEventCount:
+		return p.MetaEventCount != 0
+	case MetaRefineryOriginalSampleRate:
+		return p.MetaRefineryOriginalSampleRate != 0
+	case MetaRefineryShutdownSend:
+		return p.MetaRefineryShutdownSend.HasValue
+	case MetaRefinerySampleKey:
+		return p.MetaRefinerySampleKey != ""
+	}
 	if p.memoizedFields != nil {
 		if _, ok := p.memoizedFields[key]; ok {
 			return true
@@ -1132,6 +1181,7 @@ func (p *Payload) Set(key string, value any) {
 			field.set(p, value)
 			break
 		}
+		return
 	}
 
 	if p.memoizedFields == nil {
@@ -1247,7 +1297,12 @@ func getByteSize(val any) int {
 // containing all fields from both memoizedFields and msgpMap. This is incredibly
 // inefficient and is only here (for now) to support our legacy nested field implementation.
 func (p Payload) MarshalJSON() ([]byte, error) {
-	return json.Marshal(maps.Collect(p.All()))
+	data := maps.Collect(p.All())
+	maps.DeleteFunc(data, func(k string, v any) bool {
+		return k == MetaTraceID
+	})
+
+	return json.Marshal(data)
 }
 
 // Implements msgpack.Marshaler.

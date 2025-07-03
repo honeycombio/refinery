@@ -15,7 +15,6 @@ import (
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/vmihailenco/msgpack/v5"
 	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/honeycombio/refinery/collect/cache"
@@ -125,6 +124,7 @@ func TestAddRootSpan(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
@@ -207,11 +207,11 @@ func TestAddRootSpan(t *testing.T) {
 			APIKey:  legacyAPIKey,
 			Data: types.NewPayload(map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}),
+			}, coll.Config),
 		},
 		IsRoot: true,
 	}
-	span.Event.Data.ExtractMetadata(nil, nil)
+	span.Event.Data.ExtractMetadata()
 
 	coll.AddSpanFromPeer(span)
 	// adding one root decision span with no parent ID should:
@@ -266,6 +266,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: expectedDeterministicSampleRate},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
@@ -294,7 +295,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 				Dataset:    "aoeu",
 				APIKey:     legacyAPIKey,
 				SampleRate: originalSampleRate,
-				Data:       types.NewPayload(make(map[string]interface{})),
+				Data:       types.NewPayload(make(map[string]interface{}), coll.Config),
 			},
 			IsRoot: true,
 		}
@@ -320,7 +321,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 			Dataset:    "no-upstream-sampling",
 			APIKey:     legacyAPIKey,
 			SampleRate: 0, // no upstream sampling
-			Data:       types.NewPayload(make(map[string]interface{})),
+			Data:       types.NewPayload(make(map[string]interface{}), coll.Config),
 		},
 		IsRoot: true,
 	})
@@ -361,6 +362,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
@@ -385,7 +387,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 			Dataset:    "aoeu",
 			APIKey:     legacyAPIKey,
 			SampleRate: 0, // This should get lifted to 1
-			Data:       types.NewPayload(make(map[string]interface{})),
+			Data:       types.NewPayload(make(map[string]interface{}), coll.Config),
 		},
 		IsRoot: true,
 	}
@@ -413,6 +415,7 @@ func TestAddSpan(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
@@ -439,11 +442,11 @@ func TestAddSpan(t *testing.T) {
 			Dataset: "aoeu",
 			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
-	span.Event.Data.ExtractMetadata(nil, nil)
+	span.Event.Data.ExtractMetadata()
 	coll.AddSpanFromPeer(span)
 
 	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
@@ -462,11 +465,11 @@ func TestAddSpan(t *testing.T) {
 				"trace.parent_id":        "unused",
 				"meta.refinery.min_span": true,
 				"meta.refinery.send_by":  sendBy,
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
-	spanFromPeer.Event.Data.ExtractMetadata(nil, nil)
+	spanFromPeer.Event.Data.ExtractMetadata()
 
 	coll.AddSpanFromPeer(spanFromPeer)
 	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
@@ -483,12 +486,12 @@ func TestAddSpan(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}),
+			Data:    types.NewPayload(map[string]interface{}{}, coll.Config),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
 	}
-	rootSpan.Event.Data.ExtractMetadata(nil, nil)
+	rootSpan.Event.Data.ExtractMetadata()
 	coll.AddSpan(rootSpan)
 
 	assert.Equal(t, 2, len(transmission.GetBlock(2)), "adding a root span should send all spans in the trace")
@@ -514,6 +517,7 @@ func TestDryRunMode(t *testing.T) {
 			SampleRate: 10,
 		},
 		DryRun:             true,
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
@@ -559,7 +563,7 @@ func TestDryRunMode(t *testing.T) {
 	span := &types.Span{
 		TraceID: traceID1,
 		Event: types.Event{
-			Data:   types.NewPayload(map[string]interface{}{}),
+			Data:   types.NewPayload(map[string]interface{}{}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 		IsRoot: true,
@@ -582,7 +586,7 @@ func TestDryRunMode(t *testing.T) {
 			Dataset: "aoeu",
 			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -595,7 +599,7 @@ func TestDryRunMode(t *testing.T) {
 	span = &types.Span{
 		TraceID: traceID2,
 		Event: types.Event{
-			Data:   types.NewPayload(map[string]interface{}{}),
+			Data:   types.NewEmptyPayload(coll.Config),
 			APIKey: legacyAPIKey,
 		},
 		IsRoot: true,
@@ -617,7 +621,7 @@ func TestDryRunMode(t *testing.T) {
 	span = &types.Span{
 		TraceID: traceID3,
 		Event: types.Event{
-			Data:   types.NewPayload(map[string]interface{}{}),
+			Data:   types.NewEmptyPayload(coll.Config),
 			APIKey: legacyAPIKey,
 		},
 		IsRoot: true,
@@ -644,6 +648,7 @@ func TestSampleConfigReload(t *testing.T) {
 			MaxBatchSize: 500,
 		},
 		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:      []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10, ShutdownDelay: config.Duration(1 * time.Millisecond)},
 		SampleCache: config.SampleCacheConfig{
@@ -728,6 +733,7 @@ func TestStableMaxAlloc(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
@@ -766,7 +772,7 @@ func TestStableMaxAlloc(t *testing.T) {
 			TraceID: strconv.Itoa(i),
 			Event: types.Event{
 				Dataset: "aoeu",
-				Data:    types.NewPayload(spandata[i]),
+				Data:    types.NewPayload(spandata[i], coll.Config),
 				APIKey:  legacyAPIKey,
 			},
 		}
@@ -849,6 +855,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 			MaxBatchSize: 500,
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -942,6 +949,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot: true,
 		AddCountsToRoot:    true,
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -968,7 +976,7 @@ func TestAddCountsToRoot(t *testing.T) {
 				Dataset: "aoeu",
 				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "unused",
-				}),
+				}, coll.Config),
 				APIKey: legacyAPIKey,
 			},
 		}
@@ -990,7 +998,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}),
+			Data:    types.NewEmptyPayload(coll.Config),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1051,6 +1059,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot:   true,
 		AddCountsToRoot:      true,
+		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
@@ -1080,7 +1089,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 				Dataset: "aoeu",
 				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "unused",
-				}),
+				}, coll.Config),
 				APIKey: legacyAPIKey,
 			},
 		}
@@ -1110,7 +1119,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}),
+			Data:    types.NewEmptyPayload(coll.Config),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1144,6 +1153,7 @@ func TestAddSpanCount(t *testing.T) {
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot: true,
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
@@ -1170,11 +1180,11 @@ func TestAddSpanCount(t *testing.T) {
 			Dataset: "aoeu",
 			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
-	span.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
+	span.Data.ExtractMetadata()
 	decisionSpan := &types.Span{
 		TraceID: traceID,
 		Event: types.Event{
@@ -1182,11 +1192,11 @@ func TestAddSpanCount(t *testing.T) {
 			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id":        "unused",
 				"meta.refinery.min_span": true,
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
-	decisionSpan.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
+	decisionSpan.Data.ExtractMetadata()
 
 	coll.AddSpanFromPeer(span)
 	coll.AddSpanFromPeer(decisionSpan)
@@ -1201,12 +1211,12 @@ func TestAddSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}),
+			Data:    types.NewEmptyPayload(coll.Config),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
 	}
-	rootSpan.Data.ExtractMetadata(nil, nil)
+	rootSpan.Data.ExtractMetadata()
 	coll.AddSpan(rootSpan)
 
 	events := transmission.GetBlock(2)
@@ -1234,6 +1244,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot:   true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
@@ -1260,7 +1271,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 			Dataset: "aoeu",
 			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1275,7 +1286,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}),
+			Data:    types.NewEmptyPayload(coll.Config),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1307,6 +1318,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
@@ -1333,7 +1345,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 			Dataset: "aoeu",
 			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1343,7 +1355,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}),
+			Data:    types.NewEmptyPayload(coll.Config),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1370,7 +1382,9 @@ func TestAddAdditionalAttributes(t *testing.T) {
 			DroppedSize:       100,
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
-		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		AdditionalAttributes: map[string]string{
 			"name":  "foo",
 			"other": "bar",
@@ -1401,7 +1415,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 			Dataset: "aoeu",
 			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1412,7 +1426,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}),
+			Data:    types.NewEmptyPayload(coll.Config),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1434,6 +1448,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 			MaxBatchSize: 500,
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -1460,7 +1475,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 			Dataset: "aoeu",
 			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1487,7 +1502,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset:    "aoeu",
-			Data:       types.NewPayload(map[string]interface{}{}),
+			Data:       types.NewEmptyPayload(coll.Config),
 			APIKey:     legacyAPIKey,
 			SampleRate: 10,
 		},
@@ -1523,6 +1538,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		StressRelief: config.StressReliefConfig{
 			Mode:              "monitor",
@@ -1559,7 +1575,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			Dataset: "aoeu",
 			Data: types.NewPayload(map[string]interface{}{
 				"trace.parent_id": "unused",
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -1569,7 +1585,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}),
+			Data:    types.NewEmptyPayload(coll.Config),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -1633,6 +1649,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 					},
 				},
 			}},
+		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
@@ -1663,7 +1680,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id":  "unused",
 					"http.status_code": 200,
-				}),
+				}, coll.Config),
 				APIKey: legacyAPIKey,
 			},
 		}
@@ -1697,7 +1714,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 				Dataset: "aoeu",
 				Data: types.NewPayload(map[string]interface{}{
 					"http.status_code": 200,
-				}),
+				}, coll.Config),
 				APIKey: legacyAPIKey,
 			},
 			IsRoot: true,
@@ -1733,6 +1750,7 @@ func TestRedistributeTraces(t *testing.T) {
 			SendTicker:   config.Duration(2 * time.Millisecond),
 		},
 		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:      []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10},
 		SampleCache: config.SampleCacheConfig{
@@ -1775,7 +1793,7 @@ func TestRedistributeTraces(t *testing.T) {
 		Event: types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
-			Data:    types.NewPayload(make(map[string]interface{})),
+			Data:    types.NewEmptyPayload(coll.Config),
 		},
 	}
 
@@ -1814,11 +1832,11 @@ func TestRedistributeTraces(t *testing.T) {
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 			APIHost: "api1",
-			Data:    types.NewPayload(make(map[string]interface{})),
+			Data:    types.NewEmptyPayload(coll.Config),
 		},
 		IsRoot: true,
 	}
-	span.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
+	span.Data.ExtractMetadata()
 	decisionSpan := &types.Span{
 		TraceID: myTraceID,
 		Event: types.Event{
@@ -1826,10 +1844,10 @@ func TestRedistributeTraces(t *testing.T) {
 			APIKey:  legacyAPIKey,
 			Data: types.NewPayload(map[string]interface{}{
 				"meta.refinery.min_span": true,
-			}),
+			}, coll.Config),
 		},
 	}
-	decisionSpan.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
+	decisionSpan.Data.ExtractMetadata()
 
 	myTrace := &types.Trace{
 		TraceID:          myTraceID,
@@ -1932,6 +1950,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			MaxBatchSize: 500,
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(100 * time.Millisecond),
@@ -1984,7 +2003,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:                 "Trace already has decision, should be sent",
 			traceID:              "traceID1",
-			span:                 &types.Span{TraceID: "traceID1", Event: types.Event{Dataset: "aoeu", Data: types.NewPayload(make(map[string]interface{}))}},
+			span:                 &types.Span{TraceID: "traceID1", Event: types.Event{Dataset: "aoeu", Data: types.NewEmptyPayload(coll.Config)}},
 			preRecordTrace:       true,
 			expectedSent:         1,
 			expectedForwarded:    0,
@@ -1993,7 +2012,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:                 "Trace cannot be decided yet, should be forwarded",
 			traceID:              "traceID2",
-			span:                 &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test2", Data: types.NewPayload(make(map[string]interface{}))}},
+			span:                 &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test2", Data: types.NewEmptyPayload(coll.Config)}},
 			preRecordTrace:       false,
 			expectedSent:         0,
 			expectedForwarded:    1,
@@ -2006,7 +2025,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			traceID: "traceID3",
 			span: &types.Span{TraceID: "traceID3", Event: types.Event{Dataset: "test3", Data: types.NewPayload(map[string]interface{}{
 				"meta.refinery.min_span": true,
-			})}},
+			}, coll.Config)}},
 			preRecordTrace:       true,
 			expectedSent:         0,
 			expectedForwarded:    0,
@@ -2017,7 +2036,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 			traceID: "traceID2",
 			span: &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test4", Data: types.NewPayload(map[string]interface{}{
 				"meta.refinery.min_span": true,
-			})}},
+			}, coll.Config)}},
 			preRecordTrace:       false,
 			expectedSent:         0,
 			expectedForwarded:    0,
@@ -2028,7 +2047,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 	// Run test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.span.Data.ExtractMetadata(conf.GetTraceIdFieldNames(), conf.GetParentIdFieldNames())
+			tt.span.Data.ExtractMetadata()
 
 			// Optionally record the trace decision beforehand
 			if tt.preRecordTrace {
@@ -2093,6 +2112,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 		AddSpanCountToRoot:   true,
 		AddCountsToRoot:      true,
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
+		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
 			IncomingQueueSize: 500,
@@ -2123,7 +2143,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "unused",
 					"index":           i,
-				}),
+				}, coll.Config),
 				APIKey: legacyAPIKey,
 			},
 		}
@@ -2139,7 +2159,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 		TraceID: traceID,
 		Event: types.Event{
 			Dataset: "aoeu",
-			Data:    types.NewPayload(map[string]interface{}{}),
+			Data:    types.NewEmptyPayload(coll.Config),
 			APIKey:  legacyAPIKey,
 		},
 		IsRoot: true,
@@ -2166,6 +2186,8 @@ func TestCreateDecisionSpan(t *testing.T) {
 			TraceTimeout: config.Duration(5 * time.Millisecond),
 			MaxBatchSize: 500,
 		},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 
 	transmission := &transmit.MockTransmission{}
@@ -2200,7 +2222,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 				"http.status_code":       200,
 				"test":                   1,
 				"should-not-be-included": 123,
-			}),
+			}, coll.Config),
 			APIKey: legacyAPIKey,
 		},
 	}
@@ -2218,15 +2240,15 @@ func TestCreateDecisionSpan(t *testing.T) {
 		APIKey:  legacyAPIKey,
 		Data: types.NewPayload(map[string]interface{}{
 			"http.status_code": 200,
+			"trace.trace_id":   traceID1,
 			"test":             1,
-		}),
+		}, coll.Config),
 	}
 	// Set metadata fields directly
 	expected.Data.MetaAnnotationType = types.SpanAnnotationTypeUnknown.String()
 	expected.Data.MetaRefineryMinSpan.Set(true)
 	expected.Data.MetaRefineryRoot.Set(false)
 	expected.Data.MetaRefinerySpanDataSize = 87
-	expected.Data.MetaTraceID = traceID1
 
 	assert.Equal(t, expected.APIHost, ds.APIHost)
 	assert.Equal(t, expected.APIKey, ds.APIKey)
@@ -2261,6 +2283,7 @@ func TestSendDropDecisions(t *testing.T) {
 			MaxBatchSize: 500,
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
@@ -2355,6 +2378,7 @@ func TestExpiredTracesCleanup(t *testing.T) {
 		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
 		AddSpanCountToRoot:   true,
 		AddCountsToRoot:      true,
+		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 	}
@@ -2430,6 +2454,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 			MaxBatchSize: 500,
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay: config.Duration(1 * time.Millisecond),
@@ -2477,7 +2502,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 				Dataset: "test-dataset",
 				Data: types.NewPayload(map[string]interface{}{
 					"trace.parent_id": "unused",
-				}),
+				}, coll.Config),
 				APIKey: legacyAPIKey,
 			},
 		})
@@ -2606,7 +2631,7 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 							Event: types.Event{
 								Dataset: "benchmark-dataset",
 								APIKey:  "test-api-key",
-								Data:    createBenchmarkSpansWithLargeAttributes(traceID, spanIdx),
+								Data:    createBenchmarkSpansWithLargeAttributes(traceID, spanIdx, collector.Config),
 							},
 						}
 
@@ -2632,7 +2657,7 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 	}
 }
 
-func createBenchmarkSpansWithLargeAttributes(traceID string, spanIdx int) types.Payload {
+func createBenchmarkSpansWithLargeAttributes(traceID string, spanIdx int, cfg config.Config) types.Payload {
 	// Large text values for testing
 	largeText := strings.Repeat("x", 1000)
 	mediumText := strings.Repeat("y", 500)
@@ -2695,15 +2720,8 @@ func createBenchmarkSpansWithLargeAttributes(traceID string, spanIdx int) types.
 			"key3": spanIdx + 100,
 		},
 	}
-	dataMsgpack, err := msgpack.Marshal(data)
-	if err != nil {
-		panic(err)
-	}
-	payload := types.Payload{}
-	_, err = payload.UnmarshalMsgWithMetadata(dataMsgpack, []string{"trace.trace_id"}, []string{"trace.parent_id"})
-	if err != nil {
-		panic(err)
-	}
+	payload := types.NewPayload(data, cfg)
+	payload.ExtractMetadata()
 	return payload
 }
 
@@ -2722,6 +2740,7 @@ func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mo
 			SizeCheckInterval: config.Duration(1 * time.Second),
 		},
 		GetSamplerTypeVal:  samplerConfig,
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:      config.Duration(1 * time.Millisecond),

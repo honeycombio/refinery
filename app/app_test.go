@@ -50,10 +50,16 @@ type testAPIServer struct {
 	server *httptest.Server
 	events []*types.Event
 	mutex  sync.RWMutex
+	cfg    *config.MockConfig
 }
 
 func newTestAPIServer(t testing.TB) *testAPIServer {
-	server := &testAPIServer{}
+	server := &testAPIServer{
+		cfg: &config.MockConfig{
+			TraceIdFieldNames:  []string{"trace.trace_id"},
+			ParentIdFieldNames: []string{"trace.parent_id"},
+		},
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/1/batch/", server.handleBatch)
@@ -136,8 +142,8 @@ func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
 			Timestamp:  timestamp,
 		}
 		if dataMap, ok := eventData["data"].(map[string]interface{}); ok {
-			event.Data = types.NewPayload(dataMap)
-			event.Data.ExtractMetadata([]string{"trace.trace_id"}, []string{"trace.parent_id"})
+			event.Data = types.NewPayload(dataMap, t.cfg)
+			event.Data.ExtractMetadata()
 		}
 
 		t.events = append(t.events, event)
