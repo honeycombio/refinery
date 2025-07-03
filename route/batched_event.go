@@ -90,6 +90,10 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 					b.MsgPackTimestamp = new(time.Time)
 				}
 				*b.MsgPackTimestamp, bts, err = msgp.ReadTimeBytes(bts)
+				if err != nil {
+					err = msgp.WrapError(err, "MsgPackTimestamp")
+					return
+				}
 			}
 		case bytes.Equal(field, []byte("samplerate")):
 			b.SampleRate, bts, err = msgp.ReadInt64Bytes(bts)
