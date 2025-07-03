@@ -15,8 +15,8 @@ import (
 )
 
 func TestMetadataFieldsHaveMetaPrefix(t *testing.T) {
-	for _, field := range metadataFields {
-		assert.True(t, strings.HasPrefix(field.key, "meta."))
+	for key := range metadataFields {
+		assert.True(t, strings.HasPrefix(key, "meta."))
 	}
 }
 
@@ -273,6 +273,9 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 			"meta.refinery.probe":  false,
 			"trace.trace_id":       "custom-trace-456", // Custom trace ID field
 			"span.parent_id":       "",                 // Empty parent ID should make it root
+
+			// Incorrect type for a meta field, this field should just be ignored.
+			MetaRefineryIncomingUserAgent: 4,
 		}
 
 		// Marshal to msgpack
@@ -334,6 +337,7 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 		assert.Empty(t, remainder2)
 	})
 }
+
 func TestPayloadGetSetExistMetadataSync(t *testing.T) {
 	t.Run("Set updates metadata fields", func(t *testing.T) {
 		ph := NewPayload(&config.MockConfig{}, nil)
