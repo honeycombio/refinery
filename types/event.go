@@ -6,6 +6,7 @@ import (
 	"time"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
+	"github.com/honeycombio/refinery/config"
 )
 
 const (
@@ -245,13 +246,14 @@ func (sp *Span) IsDecisionSpan() bool {
 
 // ExtractDecisionContext returns a new Event that contains only the data that is
 // relevant to the decision-making process.
-func (sp *Span) ExtractDecisionContext() *Event {
+func (sp *Span) ExtractDecisionContext(config config.Config) *Event {
 	decisionCtx := sp.Event
 	dataSize := sp.Event.GetDataSize()
 
 	// Create a new empty payload and set metadata fields directly
-	decisionCtx.Data = NewPayload(map[string]interface{}{})
-	decisionCtx.Data.MetaTraceID = sp.TraceID
+	decisionCtx.Data = NewPayload(config, nil)
+	// use the configured trace ID field name to set the trace ID
+	decisionCtx.Data.Set(config.GetTraceIdFieldNames()[0], sp.TraceID)
 	decisionCtx.Data.MetaRefineryRoot.Set(sp.IsRoot)
 	decisionCtx.Data.MetaRefineryMinSpan.Set(true)
 	decisionCtx.Data.MetaAnnotationType = sp.AnnotationType().String()

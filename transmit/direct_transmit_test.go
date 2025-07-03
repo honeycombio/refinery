@@ -158,11 +158,12 @@ func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batch
 // sendTestEvents sends n events to the DirectTransmission with the given server URL
 func sendTestEvents(dt *DirectTransmission, serverURL string, count int, apiKey string) {
 	now := time.Now().UTC()
+	mockCfg := &config.MockConfig{}
 	for i := range count {
-		eventData := types.NewPayload(map[string]any{
+		eventData := types.NewPayload(mockCfg, map[string]any{
 			"event_id": i,
 		})
-		eventData.ExtractMetadata(nil, nil)
+		eventData.ExtractMetadata()
 
 		event := &types.Event{
 			Context:     context.Background(),
@@ -403,11 +404,11 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
 
 		// Create an event with data over 1M
-		eventData := types.NewPayload(map[string]any{
+		eventData := types.NewPayload(&config.MockConfig{}, map[string]any{
 			"large_field": strings.Repeat("a", 1024*1024+1000),
 			"event_id":    1,
 		})
-		eventData.ExtractMetadata(nil, nil)
+		eventData.ExtractMetadata()
 
 		event := &types.Event{
 			Context:     context.Background(),
@@ -460,18 +461,21 @@ func TestDirectTransmission(t *testing.T) {
 	defer dt.Stop()
 
 	now := time.Now().UTC()
+	cfg := &config.MockConfig{
+		TraceIdFieldNames: []string{"trace.trace_id"},
+	}
 
 	// Create events for multiple datasets and scenarios
 	var allEvents []*types.Event
 
 	// Dataset A: 5 events (should create 2 batches: 3 + 2)
 	for i := range 5 {
-		eventData := types.NewPayload(map[string]any{
+		eventData := types.NewPayload(cfg, map[string]any{
 			"trace.trace_id": fmt.Sprintf("trace-a-%d", i),
 			"dataset":        "A",
 			"event_id":       i,
 		})
-		eventData.ExtractMetadata([]string{"trace.trace_id"}, nil)
+		eventData.ExtractMetadata()
 
 		event := &types.Event{
 			Context:     context.Background(),
@@ -502,12 +506,12 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Dataset B: 7 events, one too large (should create 3 batches: 2 + 3 + 1)
 	for i := range 7 {
-		eventData := types.NewPayload(map[string]any{
+		eventData := types.NewPayload(cfg, map[string]any{
 			"trace.trace_id": fmt.Sprintf("trace-b-%d", i),
 			"dataset":        "B",
 			"event_id":       i,
 		})
-		eventData.ExtractMetadata([]string{"trace.trace_id"}, nil)
+		eventData.ExtractMetadata()
 
 		if i == 0 {
 			eventData.Set("huge", strings.Repeat("a", 1024*1024))
@@ -527,13 +531,16 @@ func TestDirectTransmission(t *testing.T) {
 	}
 
 	// Dataset C: 2 events (1 batch via timeout, 1 via stop)
+	mockCfg := &config.MockConfig{
+		TraceIdFieldNames: []string{"trace.trace_id"},
+	}
 	for i := range 2 {
-		eventData := types.NewPayload(map[string]any{
+		eventData := types.NewPayload(mockCfg, map[string]any{
 			"trace.trace_id": fmt.Sprintf("trace-c-%d", i),
 			"dataset":        "C",
 			"event_id":       i,
 		})
-		eventData.ExtractMetadata([]string{"trace.trace_id"}, nil)
+		eventData.ExtractMetadata()
 
 		event := &types.Event{
 			Context:     context.Background(),
@@ -603,7 +610,6 @@ func TestDirectTransmission(t *testing.T) {
 		assert.Equal(t, expectedTraceID, event.Data["trace.trace_id"])
 
 		assert.Equal(t, "trace", event.Data[types.MetaSignalType])
-		assert.Equal(t, expectedTraceID, event.Data[types.MetaTraceID])
 		assert.Equal(t, "span_event", event.Data[types.MetaAnnotationType])
 		assert.Equal(t, true, event.Data[types.MetaRefineryProbe])
 		assert.Equal(t, true, event.Data[types.MetaRefineryRoot])
@@ -686,14 +692,17 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	var allEvents []*types.Event
 
 	bigString := strings.Repeat("a", 700_000)
+	mockCfg := &config.MockConfig{
+		TraceIdFieldNames: []string{"trace.trace_id"},
+	}
 	for i := range 50 {
-		eventData := types.NewPayload(map[string]any{
+		eventData := types.NewPayload(mockCfg, map[string]any{
 			"trace.trace_id": fmt.Sprintf("trace-a-%d", i),
 			"dataset":        "A",
 			"event_id":       i,
 			"big":            bigString,
 		})
-		eventData.ExtractMetadata([]string{"trace.trace_id"}, nil)
+		eventData.ExtractMetadata()
 
 		// Some events are too big to send at all, that shouldn't foul up the logic here.
 		if i == 0 || i == 9 || i == 10 || i == 49 {
@@ -752,6 +761,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 
 	err := dt.Start()
 	require.NoError(t, err)
+	mockCfg := &config.MockConfig{}
 
 	// Send first event at time 0
 	event1 := &types.Event{
@@ -761,7 +771,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 		Dataset:    "test-dataset",
 		SampleRate: 1,
 		Timestamp:  fakeClock.Now(),
-		Data:       types.NewPayload(map[string]any{"event": "first", "time": 0}),
+		Data:       types.NewPayload(mockCfg, map[string]any{"event": "first", "time": 0}),
 	}
 	dt.EnqueueEvent(event1)
 
@@ -779,7 +789,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 		Dataset:    "test-dataset",
 		SampleRate: 1,
 		Timestamp:  fakeClock.Now(),
-		Data:       types.NewPayload(map[string]any{"event": "second", "time": 100}),
+		Data:       types.NewPayload(mockCfg, map[string]any{"event": "second", "time": 100}),
 	}
 	dt.EnqueueEvent(event2)
 
@@ -822,7 +832,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 		Dataset:    "test-dataset",
 		SampleRate: 1,
 		Timestamp:  fakeClock.Now(),
-		Data:       types.NewPayload(map[string]any{"event": "third", "time": 400}),
+		Data:       types.NewPayload(mockCfg, map[string]any{"event": "third", "time": 400}),
 	}
 	dt.EnqueueEvent(event3)
 
@@ -1011,12 +1021,13 @@ func createBenchmarkEvents(t testing.TB, serverURL string, numEvents, datasets, 
 			SampleRate:        uint(1 + (i % 100)),
 			Timestamp:         time.Now().Add(time.Duration(i) * time.Microsecond),
 			EnqueuedUnixMicro: time.Now().UnixMicro(),
+			Data:              types.NewPayload(&config.MockConfig{}, nil),
 		}
 		err := events[i].Data.UnmarshalMsgpack(msgpackPayloads[i%len(msgpackPayloads)])
 		if err != nil {
 			t.Fatalf("failed to unmarshal payload: %v", err)
 		}
-		events[i].Data.ExtractMetadata(nil, nil)
+		events[i].Data.ExtractMetadata()
 	}
 
 	return events

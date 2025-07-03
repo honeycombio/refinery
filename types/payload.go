@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/honeycombio/refinery/config"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/tinylib/msgp/msgp"
 )
@@ -69,6 +70,7 @@ type metadataField struct {
 	expectedType  FieldType
 	get           func(p *Payload) (value any, ok bool)               // Payload.Get, Payload.All
 	set           func(p *Payload, value any)                         // Payload.Set
+	exist         func(p *Payload) bool                               // Payload.Exists
 	appendMsgp    func(p *Payload, in []byte) (out []byte, ok bool)   // Payload.MarshalMsg
 	unmarshalMsgp func(p *Payload, in []byte) (out []byte, err error) // Payload.extractMetadataFromBytes
 }
@@ -87,6 +89,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(string); ok {
 				p.MetaSignalType = v
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaSignalType != ""
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaSignalType != "" {
@@ -115,12 +120,10 @@ var metadataFields = []metadataField{
 				p.MetaTraceID = v
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaTraceID != ""
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
-			if p.MetaTraceID != "" {
-				out = msgp.AppendString(in, MetaTraceID)
-				out = msgp.AppendString(out, p.MetaTraceID)
-				return out, true
-			}
 			return in, false
 		},
 		unmarshalMsgp: func(p *Payload, in []byte) (out []byte, err error) {
@@ -141,6 +144,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(string); ok {
 				p.MetaAnnotationType = v
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaAnnotationType != ""
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaAnnotationType != "" {
@@ -168,6 +174,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(bool); ok {
 				p.MetaRefineryProbe.Set(v)
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryProbe.HasValue
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefineryProbe.HasValue {
@@ -200,8 +209,11 @@ var metadataFields = []metadataField{
 				p.MetaRefineryRoot.Set(v)
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryRoot.HasValue
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
-			if p.MetaRefineryRoot.HasValue {
+			if p.MetaRefineryRoot.HasValue && p.MetaRefineryRoot.Value {
 				out = msgp.AppendString(in, MetaRefineryRoot)
 				out = msgp.AppendBool(out, p.MetaRefineryRoot.Value)
 				return out, true
@@ -231,6 +243,9 @@ var metadataFields = []metadataField{
 				p.MetaRefineryIncomingUserAgent = v
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryIncomingUserAgent != ""
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefineryIncomingUserAgent != "" {
 				out = msgp.AppendString(in, MetaRefineryIncomingUserAgent)
@@ -257,6 +272,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(int64); ok {
 				p.MetaRefinerySendBy = v
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefinerySendBy != 0
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefinerySendBy != 0 {
@@ -285,6 +303,9 @@ var metadataFields = []metadataField{
 				p.MetaRefinerySpanDataSize = v
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefinerySpanDataSize != 0
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefinerySpanDataSize != 0 {
 				out = msgp.AppendString(in, MetaRefinerySpanDataSize)
@@ -311,6 +332,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(bool); ok {
 				p.MetaRefineryMinSpan.Set(v)
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryMinSpan.HasValue
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefineryMinSpan.HasValue {
@@ -343,6 +367,9 @@ var metadataFields = []metadataField{
 				p.MetaRefineryForwarded = v
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryForwarded != ""
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefineryForwarded != "" {
 				out = msgp.AppendString(in, MetaRefineryForwarded)
@@ -369,6 +396,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(bool); ok {
 				p.MetaRefineryExpiredTrace.Set(v)
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryExpiredTrace.HasValue
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefineryExpiredTrace.HasValue {
@@ -401,6 +431,9 @@ var metadataFields = []metadataField{
 				p.MetaRefineryLocalHostname = v
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryLocalHostname != ""
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefineryLocalHostname != "" {
 				out = msgp.AppendString(in, MetaRefineryLocalHostname)
@@ -427,6 +460,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(bool); ok {
 				p.MetaStressed.Set(v)
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaStressed.HasValue
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaStressed.HasValue {
@@ -459,6 +495,9 @@ var metadataFields = []metadataField{
 				p.MetaRefineryReason = v
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryReason != ""
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefineryReason != "" {
 				out = msgp.AppendString(in, MetaRefineryReason)
@@ -485,6 +524,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(string); ok {
 				p.MetaRefinerySendReason = v
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefinerySendReason != ""
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefinerySendReason != "" {
@@ -513,6 +555,9 @@ var metadataFields = []metadataField{
 				p.MetaSpanEventCount = v
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaSpanEventCount != 0
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaSpanEventCount != 0 {
 				out = msgp.AppendString(in, MetaSpanEventCount)
@@ -539,6 +584,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(int64); ok {
 				p.MetaSpanLinkCount = v
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaSpanLinkCount != 0
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaSpanLinkCount != 0 {
@@ -567,6 +615,9 @@ var metadataFields = []metadataField{
 				p.MetaSpanCount = v
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaSpanCount != 0
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaSpanCount != 0 {
 				out = msgp.AppendString(in, MetaSpanCount)
@@ -593,6 +644,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(int64); ok {
 				p.MetaEventCount = v
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaEventCount != 0
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaEventCount != 0 {
@@ -621,6 +675,9 @@ var metadataFields = []metadataField{
 				p.MetaRefineryOriginalSampleRate = v
 			}
 		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryOriginalSampleRate != 0
+		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefineryOriginalSampleRate != 0 {
 				out = msgp.AppendString(in, MetaRefineryOriginalSampleRate)
@@ -647,6 +704,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(bool); ok {
 				p.MetaRefineryShutdownSend.Set(v)
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefineryShutdownSend.HasValue
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefineryShutdownSend.HasValue {
@@ -678,6 +738,9 @@ var metadataFields = []metadataField{
 			if v, ok := value.(string); ok {
 				p.MetaRefinerySampleKey = v
 			}
+		},
+		exist: func(p *Payload) bool {
+			return p.MetaRefinerySampleKey != ""
 		},
 		appendMsgp: func(p *Payload, in []byte) (out []byte, ok bool) {
 			if p.MetaRefinerySampleKey != "" {
@@ -736,6 +799,8 @@ type Payload struct {
 
 	hasExtractedMetadata bool
 
+	config config.Config
+
 	// Cached metadata fields for efficient access
 	MetaSignalType                string       // meta.signal_type
 	MetaTraceID                   string       // meta.trace_id
@@ -764,10 +829,13 @@ type Payload struct {
 
 // extractMetadataFromBytes extracts metadata from msgpack data.
 // If consumed is non-nil, it will be set to the number of bytes consumed from the data.
-func (p *Payload) extractMetadataFromBytes(data []byte, traceIdFieldNames, parentIdFieldNames []string) (int, error) {
+func (p *Payload) extractMetadataFromBytes(data []byte) (int, error) {
 	if !p.MetaRefineryRoot.HasValue {
 		p.MetaRefineryRoot.Set(true)
 	}
+
+	traceIdFieldNames := p.config.GetTraceIdFieldNames()
+	parentIdFieldNames := p.config.GetParentIdFieldNames()
 
 	// Read the map header
 	mapSize, remaining, err := msgp.ReadMapHeaderBytes(data)
@@ -859,16 +927,21 @@ func (p *Payload) extractMetadataFromBytes(data []byte, traceIdFieldNames, paren
 }
 
 // ExtractMetadata populates the cached metadata fields from the payload data.
-// This MUST be called manually after creating or unmarshaling a non-empty Payload
-// to populate the metadata fields. The traceIdFieldNames and parentIdFieldNames parameters
-// are optional and used to extract trace ID and determine if the span is a root span.
-func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string) error {
+// This MUST be called manually after creating a non-empty Payload
+// to populate the metadata fields.
+func (p *Payload) ExtractMetadata() error {
 	if p.hasExtractedMetadata {
 		return nil
 	}
 
 	if !p.MetaRefineryRoot.HasValue {
 		p.MetaRefineryRoot.Set(true)
+	}
+
+	var traceIdFieldNames, parentIdFieldNames []string
+	if p.config != nil {
+		traceIdFieldNames = p.config.GetTraceIdFieldNames()
+		parentIdFieldNames = p.config.GetParentIdFieldNames()
 	}
 
 	// For memoized fields, directly access the map
@@ -915,7 +988,7 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 
 	// For msgpMap fields, extract from the raw bytes
 	if p.msgpMap.Size() > 0 {
-		_, err := p.extractMetadataFromBytes(p.msgpMap.rawData, traceIdFieldNames, parentIdFieldNames)
+		_, err := p.extractMetadataFromBytes(p.msgpMap.rawData)
 		if err != nil {
 			return err
 		}
@@ -931,11 +1004,13 @@ func (p *Payload) ExtractMetadata(traceIdFieldNames, parentIdFieldNames []string
 }
 
 // NewPayload creates a new Payload from a map of fields. This is not populate
-// metadata fields; to do this, you MUST call ExtractMetadata.
-func NewPayload(data map[string]any) Payload {
+// metadata fields
+func NewPayload(config config.Config, data map[string]any) Payload {
 	p := Payload{
 		memoizedFields: data,
 	}
+
+	p.config = config
 	return p
 }
 
@@ -943,29 +1018,15 @@ func NewPayload(data map[string]any) Payload {
 // keep a reference to serialized data.
 func (p *Payload) UnmarshalMsgpack(data []byte) error {
 	p.msgpMap = MsgpPayloadMap{rawData: data}
+	p.ExtractMetadata()
 	return nil
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler, similar to above but expects to be
 // part of a larger message.
 func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
-	// Oddly the msgp library doesn't export the internal size method it uses
-	// to skip data. So we will derived it from the returned slice.
-	remainder, err := msgp.Skip(bts)
-	if err != nil {
-		return nil, err
-	}
-	ourData := bts[:len(bts)-len(remainder)]
-	p.msgpMap = MsgpPayloadMap{rawData: ourData}
-	return remainder, err
-}
-
-// UnmarshalMsgWithMetadata unmarshals the payload and extracts metadata in a single pass.
-// This is more efficient than calling UnmarshalMsg followed by ExtractMetadata separately.
-// It returns the remaining bytes after unmarshaling.
-func (p *Payload) UnmarshalMsgWithMetadata(bts []byte, traceIdFieldNames, parentIdFieldNames []string) (o []byte, err error) {
 	// Extract metadata and get consumed bytes
-	consumed, err := p.extractMetadataFromBytes(bts, traceIdFieldNames, parentIdFieldNames)
+	consumed, err := p.extractMetadataFromBytes(bts)
 	if err != nil {
 		return nil, err
 	}
@@ -984,6 +1045,7 @@ func (p *Payload) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	p.memoizedFields = fields
+	p.ExtractMetadata()
 	return nil
 }
 
@@ -1043,6 +1105,13 @@ func (p *Payload) MemoizeFields(keys ...string) {
 }
 
 func (p *Payload) Exists(key string) bool {
+	// if the key is a metadata field, check the dedicated field
+	for _, field := range metadataFields {
+		if field.key == key {
+			return field.exist(p)
+		}
+	}
+
 	if p.memoizedFields != nil {
 		if _, ok := p.memoizedFields[key]; ok {
 			return true
@@ -1152,6 +1221,13 @@ func (p *Payload) All() iter.Seq2[string, any] {
 	return func(yield func(string, any) bool) {
 		// First yield metadata fields with non-default values
 		for _, field := range metadataFields {
+			if field.key == MetaTraceID {
+				continue
+			}
+			if field.key == MetaRefineryRoot && !p.MetaRefineryRoot.Value {
+				// Skip the root field if it's false, as it doesn't need to be yielded
+				continue
+			}
 			if value, ok := field.get(p); ok {
 				if !yield(field.key, value) {
 					return
@@ -1247,7 +1323,12 @@ func getByteSize(val any) int {
 // containing all fields from both memoizedFields and msgpMap. This is incredibly
 // inefficient and is only here (for now) to support our legacy nested field implementation.
 func (p Payload) MarshalJSON() ([]byte, error) {
-	return json.Marshal(maps.Collect(p.All()))
+	data := maps.Collect(p.All())
+	maps.DeleteFunc(data, func(k string, v any) bool {
+		return k == MetaTraceID
+	})
+
+	return json.Marshal(data)
 }
 
 // Implements msgpack.Marshaler.
