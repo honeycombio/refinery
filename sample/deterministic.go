@@ -20,22 +20,24 @@ type DeterministicSampler struct {
 	Logger  logger.Logger
 	Metrics metrics.Metrics
 
-	sampleRate int
-	upperBound uint32
-	prefix     string
+	sampleRate  int
+	upperBound  uint32
+	metricNames map[string]string
 }
 
 func (d *DeterministicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DeterministicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DeterministicSampler") }()
 	d.sampleRate = d.Config.SampleRate
-	d.prefix = "deterministic"
+	prefix := "deterministic"
 	if d.Metrics == nil {
 		d.Metrics = &metrics.NullMetrics{}
 	}
 
 	for _, metric := range samplerMetrics {
-		metric.Name = d.prefix + metric.Name
+		fullname := prefix + metric.Name
+		d.metricNames[metric.Name] = fullname
+		metric.Name = fullname
 		d.Metrics.Register(metric)
 	}
 
@@ -55,9 +57,9 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 	v := binary.BigEndian.Uint32(sum[:4])
 	shouldKeep := v <= d.upperBound
 	if shouldKeep {
-		d.Metrics.Increment(d.prefix + "_num_kept")
+		d.Metrics.Increment(d.metricNames["_num_kept"])
 	} else {
-		d.Metrics.Increment(d.prefix + "_num_dropped")
+		d.Metrics.Increment(d.metricNames["_num_dropped"])
 	}
 
 	return uint(d.sampleRate), shouldKeep, "deterministic/chance", ""

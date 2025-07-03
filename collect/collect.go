@@ -119,6 +119,8 @@ type InMemCollector struct {
 	dropDecisionBuffer chan TraceDecision
 	keptDecisionBuffer chan TraceDecision
 	hostname           string
+
+	routerPeerMetricNames map[string]string
 }
 
 var inMemCollectorMetrics = []metrics.Metadata{
@@ -186,6 +188,8 @@ func (i *InMemCollector) Start() error {
 	for _, metric := range inMemCollectorMetrics {
 		i.Metrics.Register(metric)
 	}
+
+	i.routerPeerMetricNames = map[string]string{"peer": "peer_router_peer", "incoming": "incoming_router_peer"}
 
 	sampleCacheConfig := i.Config.GetSampleCacheConfig()
 	var err error
@@ -789,7 +793,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	var spanForwarded bool
 	// if this trace doesn't belong to us and it's not in sent state, we should forward a decision span to its decider
 	if !trace.Sent && !isMyTrace {
-		i.Metrics.Increment(source + "_router_peer")
+		i.Metrics.Increment(i.routerPeerMetricNames[source])
 		i.Logger.Debug().
 			WithString("peer", targetShard.GetAddress()).
 			Logf("Sending span to peer")

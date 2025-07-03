@@ -19,9 +19,10 @@ type RulesBasedSampler struct {
 	Logger        logger.Logger
 	Metrics       metrics.Metrics
 	samplers      map[string]Sampler
-	prefix        string
 	keyFields     []string
 	nonRootFields []string
+
+	metricNames map[string]string
 }
 
 const RootPrefix = "root."
@@ -33,11 +34,13 @@ var ruleBasedSamplerMetrics = []metrics.Metadata{
 func (s *RulesBasedSampler) Start() error {
 	s.Logger.Debug().Logf("Starting RulesBasedSampler")
 	defer func() { s.Logger.Debug().Logf("Finished starting RulesBasedSampler") }()
-	s.prefix = "rulesbased"
+	prefix := "rulesbased"
 
 	ruleBasedSamplerMetrics = append(ruleBasedSamplerMetrics, samplerMetrics...)
 	for _, metric := range ruleBasedSamplerMetrics {
-		metric.Name = s.prefix + metric.Name
+		fullname := prefix + metric.Name
+		s.metricNames[metric.Name] = fullname
+		metric.Name = fullname
 		s.Metrics.Register(metric)
 	}
 
@@ -151,16 +154,16 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				rate = uint(rule.SampleRate)
 				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
 				reason += rule.Name
-				s.Metrics.Histogram(s.prefix+"_sample_rate", float64(rate))
+				s.Metrics.Histogram(s.metricNames["_sample_rate"], float64(rate))
 			}
 
 			if keep {
-				s.Metrics.Increment(s.prefix + "_num_kept")
+				s.Metrics.Increment(s.metricNames["_num_kept"])
 			} else {
-				s.Metrics.Increment(s.prefix + "_num_dropped")
+				s.Metrics.Increment(s.metricNames["_num_dropped"])
 				if rule.Drop {
 					// If we dropped because of an explicit drop rule, then increment that too.
-					s.Metrics.Increment(s.prefix + "_num_dropped_by_drop_rule")
+					s.Metrics.Increment(s.metricNames["_num_dropped_by_drop_rule"])
 				}
 			}
 			logger.WithFields(map[string]interface{}{

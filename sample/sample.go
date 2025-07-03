@@ -122,48 +122,71 @@ func getMetricType(name string) metrics.MetricType {
 	return metrics.Gauge
 }
 
-type dynsamplerMetricsRecorder struct {
-	prefix      string
-	lastMetrics map[string]int64
-	met         metrics.Metrics
+type internalDysamplerMetric struct {
+	metricType metrics.MetricType
+	val        int64 // Value for counters, or gauge value
 }
 
+type dynsamplerMetricsRecorder struct {
+	prefix    string
+	dynPrefix string // Used for accessing metrics from dynsampler-go
+	// Stores the last recorded internal metrics produced by dynsampler-go
+	lastMetrics map[string]internalDysamplerMetric
+	met         metrics.Metrics
+	metricNames map[string]string
+}
+
+// RegisterMetrics registers the metrics that will be recorded by this package.
+// It initializes the necessary metrics and prepares them for recording.
+// It MUST be called before any calls to RecordMetrics.
 func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) {
 	// Register statistics this package will produce
-	d.lastMetrics = sampler.GetMetrics(d.prefix + "_")
-	for name := range d.lastMetrics {
+	d.dynPrefix = d.prefix + "_"
+	d.metricNames = make(map[string]string)
+	d.lastMetrics = make(map[string]internalDysamplerMetric)
+	dynInternalMetrics := sampler.GetMetrics(d.dynPrefix)
+	for name, val := range dynInternalMetrics {
+		metricType := getMetricType(name)
 		d.met.Register(metrics.Metadata{
 			Name: name,
-			Type: getMetricType(name),
+			Type: metricType,
 		})
+		d.lastMetrics[name] = internalDysamplerMetric{
+			metricType: metricType,
+			val:        val,
+		}
 	}
 
 	for _, metric := range samplerMetrics {
-		metric.Name = d.prefix + metric.Name
+		fullname := d.prefix + metric.Name
+		d.metricNames[metric.Name] = fullname
+		metric.Name = fullname
 		d.met.Register(metric)
 	}
 
 }
 
 func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint, numTraceKey int) {
-	for name, val := range sampler.GetMetrics(d.prefix + "_") {
-		switch getMetricType(name) {
+	for name, val := range sampler.GetMetrics(d.dynPrefix) {
+		m := d.lastMetrics[name]
+		switch m.metricType {
 		case metrics.Counter:
-			delta := val - d.lastMetrics[name]
+			delta := val - m.val
 			d.met.Count(name, delta)
-			d.lastMetrics[name] = val
+			m.val = val
+			d.lastMetrics[name] = m
 		case metrics.Gauge:
 			d.met.Gauge(name, float64(val))
 		}
 	}
 
 	if kept {
-		d.met.Increment(d.prefix + "_num_kept")
+		d.met.Increment(d.metricNames["_num_kept"])
 	} else {
-		d.met.Increment(d.prefix + "_num_dropped")
+		d.met.Increment(d.metricNames["_num_dropped"])
 	}
-	d.met.Histogram(d.prefix+"_sampler_key_cardinality", float64(numTraceKey))
-	d.met.Histogram(d.prefix+"_sample_rate", float64(rate))
+	d.met.Histogram(d.metricNames["_sampler_key_cardinality"], float64(numTraceKey))
+	d.met.Histogram(d.metricNames["_sample_rate"], float64(rate))
 }
 
 // getKeyFields returns the fields that should be used as keys for the sampler.

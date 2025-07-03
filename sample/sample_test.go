@@ -8,11 +8,13 @@ import (
 	"testing"
 
 	"github.com/facebookgo/inject"
+	dynsampler "github.com/honeycombio/dynsampler-go"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v3"
 )
 
@@ -363,4 +365,183 @@ func TestRulesBasedSamplerGetKeyFields(t *testing.T) {
 			assert.Equal(t, tt.expectedNonRootFields, sortedFields, "non-root fields should match expected")
 		})
 	}
+}
+
+func TestDynsamplerMetricsRecorder_RegisterMetrics(t *testing.T) {
+	t.Run("registers internal dynsampler metrics", func(t *testing.T) {
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		defer mockMetrics.Stop()
+		mockSampler := &MockSampler{}
+
+		internalMetrics := map[string]int64{
+			"test_gauge_metric":  100,
+			"test_counter_count": 50,
+			"test_another_gauge": 200,
+		}
+		mockSampler.On("GetMetrics", "test_").Return(internalMetrics)
+
+		recorder := &dynsamplerMetricsRecorder{
+			prefix: "test",
+			met:    mockMetrics,
+		}
+
+		recorder.RegisterMetrics(mockSampler)
+
+		// Verify internal state
+		assert.Equal(t, "test_", recorder.dynPrefix)
+		assert.Len(t, recorder.lastMetrics, 3)
+		assert.Len(t, recorder.metricNames, 4)
+
+		assert.Equal(t, internalDysamplerMetric{
+			metricType: metrics.Gauge,
+			val:        100,
+		}, recorder.lastMetrics["test_gauge_metric"])
+
+		assert.Equal(t, internalDysamplerMetric{
+			metricType: metrics.Counter,
+			val:        50,
+		}, recorder.lastMetrics["test_counter_count"])
+
+		// Check metric names mapping
+		assert.Equal(t, "test_num_dropped", recorder.metricNames["_num_dropped"])
+		assert.Equal(t, "test_num_kept", recorder.metricNames["_num_kept"])
+		assert.Equal(t, "test_sample_rate", recorder.metricNames["_sample_rate"])
+		assert.Equal(t, "test_sampler_key_cardinality", recorder.metricNames["_sampler_key_cardinality"])
+
+		// Verify metrics were registered
+		assert.Contains(t, mockMetrics.Registrations, "test_gauge_metric")
+		assert.Equal(t, "gauge", mockMetrics.Registrations["test_gauge_metric"])
+		assert.Contains(t, mockMetrics.Registrations, "test_counter_count")
+		assert.Equal(t, "counter", mockMetrics.Registrations["test_counter_count"])
+
+		mockSampler.AssertExpectations(t)
+	})
+
+	t.Run("handles empty metrics from sampler", func(t *testing.T) {
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		mockSampler := &MockSampler{}
+
+		mockSampler.On("GetMetrics", "empty_").Return(map[string]int64{})
+
+		recorder := &dynsamplerMetricsRecorder{
+			prefix:      "empty",
+			lastMetrics: make(map[string]internalDysamplerMetric),
+			met:         mockMetrics,
+			metricNames: make(map[string]string),
+		}
+
+		recorder.RegisterMetrics(mockSampler)
+
+		assert.Equal(t, "empty_", recorder.dynPrefix)
+		assert.Len(t, recorder.lastMetrics, 0)
+		assert.Len(t, recorder.metricNames, 4)
+
+		// Should still register the 4 standard sampler metrics
+		assert.Len(t, mockMetrics.Registrations, 4)
+
+		mockSampler.AssertExpectations(t)
+	})
+}
+
+func TestDynsamplerMetricsRecorder_RecordMetrics(t *testing.T) {
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+	mockSampler := &MockSampler{}
+
+	recorder := &dynsamplerMetricsRecorder{
+		prefix: "test",
+		met:    mockMetrics,
+	}
+
+	initialMetrics := map[string]int64{
+		"test_requests_count":     100,
+		"test_errors_count":       10,
+		"test_active_connections": 25,
+		"test_memory_usage":       1024,
+	}
+	mockSampler.On("GetMetrics", "test_").Return(initialMetrics).Once()
+	recorder.RegisterMetrics(mockSampler)
+
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_requests_count"])
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_errors_count"])
+
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_num_kept"])
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_num_dropped"])
+	assert.Len(t, mockMetrics.Histograms["test_sampler_key_cardinality"], 0)
+	assert.Len(t, mockMetrics.Histograms["test_sample_rate"], 0)
+	assert.Equal(t, float64(0), mockMetrics.GaugeRecords["test_active_connections"])
+	assert.Equal(t, float64(0), mockMetrics.GaugeRecords["test_memory_usage"])
+
+	mockSampler.AssertExpectations(t)
+
+	updatedMetrics := map[string]int64{
+		"test_requests_count":     150,
+		"test_errors_count":       15,
+		"test_active_connections": 55,
+		"test_memory_usage":       2048,
+	}
+
+	mockSampler.On("GetMetrics", "test_").Return(updatedMetrics).Once()
+
+	recorder.RecordMetrics(mockSampler, true, 20, 30)
+
+	// Verify delta counts were recorded
+	assert.Equal(t, int64(50), mockMetrics.CounterIncrements["test_requests_count"]) // 150 - 100
+	assert.Equal(t, int64(5), mockMetrics.CounterIncrements["test_errors_count"])    // 15 - 10
+
+	// Verify sampler metrics
+	assert.Equal(t, int64(1), mockMetrics.CounterIncrements["test_num_kept"])
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_num_dropped"])
+	assert.Len(t, mockMetrics.Histograms["test_sampler_key_cardinality"], 1)
+	assert.Equal(t, mockMetrics.Histograms["test_sampler_key_cardinality"][0], float64(30))
+	assert.Len(t, mockMetrics.Histograms["test_sample_rate"], 1)
+	assert.Equal(t, mockMetrics.Histograms["test_sample_rate"][0], float64(20))
+
+	// Verify direct gauge values (not deltas)
+	assert.Equal(t, float64(55), mockMetrics.GaugeRecords["test_active_connections"])
+	assert.Equal(t, float64(2048), mockMetrics.GaugeRecords["test_memory_usage"])
+
+	mockSampler.AssertExpectations(t)
+}
+
+var _ dynsampler.Sampler = (*MockSampler)(nil)
+
+// MockSampler implements dynsampler.Sampler for testing
+type MockSampler struct {
+	mock.Mock
+}
+
+func (m *MockSampler) GetMetrics(prefix string) map[string]int64 {
+	args := m.Called(prefix)
+	return args.Get(0).(map[string]int64)
+}
+
+func (m *MockSampler) GetSampleRate(key string) int {
+	args := m.Called(key)
+	return args.Get(0).(int)
+}
+
+func (m *MockSampler) GetSampleRateMulti(key string, val int) int {
+	args := m.Called(key, val)
+	return args.Get(0).(int)
+}
+
+func (m *MockSampler) Start() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockSampler) Stop() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockSampler) LoadState(state []byte) error {
+	return nil
+}
+
+func (m *MockSampler) SaveState() ([]byte, error) {
+	return nil, nil
 }
