@@ -428,7 +428,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		assert.Equal(t, 1, len(events))
 
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
+		assert.Equal(t, "my-user-agent", event.Data.MetaRefineryIncomingUserAgent)
 
 		assert.Equal(t, 0, len(router.Collector.(*collect.MockCollector).Spans))
 		mockCollector.Flush()
@@ -461,7 +461,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		events := mockTransmission.GetBlock(1)
 		assert.Equal(t, 1, len(events))
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data.Get("meta.refinery.incoming_user_agent"))
+		assert.Equal(t, "my-user-agent", event.Data.MetaRefineryIncomingUserAgent)
 
 		assert.Equal(t, 0, len(router.Collector.(*collect.MockCollector).Spans))
 		mockCollector.Flush()

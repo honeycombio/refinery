@@ -240,12 +240,7 @@ type Span struct {
 // IsDecicionSpan returns true if the span is a decision span based on
 // a flag set in the span's metadata.
 func (sp *Span) IsDecisionSpan() bool {
-	isDecisionSpan, ok := sp.Data.Get("meta.refinery.min_span").(bool)
-	if !ok {
-		return false
-	}
-
-	return isDecisionSpan
+	return sp.Data.MetaRefineryMinSpan.Value
 }
 
 // ExtractDecisionContext returns a new Event that contains only the data that is
@@ -253,35 +248,31 @@ func (sp *Span) IsDecisionSpan() bool {
 func (sp *Span) ExtractDecisionContext() *Event {
 	decisionCtx := sp.Event
 	dataSize := sp.Event.GetDataSize()
-	decisionData := map[string]interface{}{
-		"meta.trace_id":                sp.TraceID,
-		"meta.refinery.root":           sp.IsRoot,
-		"meta.refinery.min_span":       true,
-		"meta.annotation_type":         int(sp.AnnotationType()),
-		"meta.refinery.span_data_size": dataSize,
+
+	// Create a new empty payload and set metadata fields directly
+	decisionCtx.Data = NewPayload(map[string]interface{}{})
+	decisionCtx.Data.MetaTraceID = sp.TraceID
+	decisionCtx.Data.MetaRefineryRoot.Set(sp.IsRoot)
+	decisionCtx.Data.MetaRefineryMinSpan.Set(true)
+	decisionCtx.Data.MetaAnnotationType = sp.AnnotationType().String()
+	decisionCtx.Data.MetaRefinerySpanDataSize = int64(dataSize)
+
+	if sp.Data.MetaRefinerySendBy > 0 {
+		decisionCtx.Data.MetaRefinerySendBy = sp.Data.MetaRefinerySendBy
 	}
 
-	if v, ok := sp.GetSendBy(); ok {
-		decisionData["meta.refinery.send_by"] = v
-	}
-	decisionCtx.Data = NewPayload(decisionData)
 	return &decisionCtx
 }
 
 func (sp *Span) SetSendBy(sendBy time.Time) {
-	sp.Data.Set("meta.refinery.send_by", sendBy.Unix())
+	sp.Data.MetaRefinerySendBy = sendBy.Unix()
 }
 
 func (sp *Span) GetSendBy() (time.Time, bool) {
-	value := sp.Data.Get("meta.refinery.send_by")
-	switch v := value.(type) {
-	case int64:
-		return time.Unix(v, 0), true
-	case uint64:
-		return time.Unix(int64(v), 0), true
+	if sp.Data.MetaRefinerySendBy == 0 {
+		return time.Time{}, false
 	}
-
-	return time.Time{}, false
+	return time.Unix(sp.Data.MetaRefinerySendBy, 0), true
 }
 
 // GetDataSize computes the size of the Data element of the Span.
@@ -289,14 +280,7 @@ func (sp *Span) GetSendBy() (time.Time, bool) {
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
 	if sp.IsDecisionSpan() {
-		v := sp.Data.Get("meta.refinery.span_data_size")
-		switch value := v.(type) {
-		case int64:
-			return int(value)
-		case uint64:
-			return int(value)
-		}
-		return 0
+		return int(sp.Data.MetaRefinerySpanDataSize)
 	}
 
 	return sp.Event.GetDataSize()
@@ -316,13 +300,28 @@ const (
 	SpanAnnotationTypeLink
 )
 
+func (sat SpanAnnotationType) String() string {
+	switch sat {
+	case SpanAnnotationTypeUnSet:
+		return ""
+	case SpanAnnotationTypeUnknown:
+		return "unknown"
+	case SpanAnnotationTypeSpanEvent:
+		return "span_event"
+	case SpanAnnotationTypeLink:
+		return "link"
+	default:
+		return ""
+	}
+}
+
 // GetSpanAnnotationType returns the type of annotation this span is.
 func (sp *Span) AnnotationType() SpanAnnotationType {
 	if sp.annotationType != SpanAnnotationTypeUnSet {
 		return sp.annotationType
 	}
-	t := sp.Data.Get("meta.annotation_type")
-	switch t {
+
+	switch sp.Data.MetaAnnotationType {
 	case "span_event":
 		sp.annotationType = SpanAnnotationTypeSpanEvent
 	case "link":

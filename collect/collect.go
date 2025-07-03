@@ -554,10 +554,10 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 			sp.APIHost = newTarget.GetAddress()
 
-			if v := sp.Data.Get("meta.refinery.forwarded"); v != nil {
-				sp.Data.Set("meta.refinery.forwarded", fmt.Sprintf("%s,%s", v, i.hostname))
+			if sp.Data.MetaRefineryForwarded != "" {
+				sp.Data.MetaRefineryForwarded = fmt.Sprintf("%s,%s", sp.Data.MetaRefineryForwarded, i.hostname)
 			} else {
-				sp.Data.Set("meta.refinery.forwarded", i.hostname)
+				sp.Data.MetaRefineryForwarded = i.hostname
 			}
 
 			i.PeerTransmission.EnqueueSpan(sp)
@@ -675,7 +675,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 				Dataset: trace.Dataset,
 			},
 		}, trace, i.Sharder.WhichShard(trace.ID()))
-		dc.Data.Set("meta.refinery.expired_trace", true)
+		dc.Data.MetaRefineryExpiredTrace.Set(true)
 		i.PeerTransmission.EnqueueEvent(dc)
 	}
 	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
@@ -729,7 +729,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 		// if the span is sent for signaling expired traces,
 		// we should not add it to the cache
-		if sp.Data.Exists("meta.refinery.expired_trace") {
+		if sp.Data.MetaRefineryExpiredTrace.Value {
 			return
 		}
 
@@ -779,7 +779,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 	// if the span is sent for signaling expired traces,
 	// we should not add it to the cache
-	if sp.Data.Exists("meta.refinery.expired_trace") {
+	if sp.Data.MetaRefineryExpiredTrace.Value {
 		return
 	}
 
@@ -1271,10 +1271,10 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 
 			sp.APIHost = url
 
-			if v := sp.Data.Get("meta.refinery.forwarded"); v != nil {
-				sp.Data.Set("meta.refinery.forwarded", fmt.Sprintf("%s,%s", v, i.hostname))
+			if sp.Data.MetaRefineryForwarded != "" {
+				sp.Data.MetaRefineryForwarded = fmt.Sprintf("%s,%s", sp.Data.MetaRefineryForwarded, i.hostname)
 			} else {
-				sp.Data.Set("meta.refinery.forwarded", i.hostname)
+				sp.Data.MetaRefineryForwarded = i.hostname
 			}
 
 			i.PeerTransmission.EnqueueSpan(sp)
@@ -1318,8 +1318,12 @@ func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, 
 
 	dc := sp.ExtractDecisionContext()
 	// extract all key fields from the span
-	keyFields := sampler.GetKeyFields()
-	sp.Data.MemoizeFields(keyFields...)
+	keyFields, nonRootFields := sampler.GetKeyFields()
+	if sp.IsRoot {
+		sp.Data.MemoizeFields(keyFields...)
+	} else {
+		sp.Data.MemoizeFields(nonRootFields...)
+	}
 	for _, keyField := range keyFields {
 		// Less efficient than a two-return version of Get(), so consider adding
 		// that to the Payload interface if these becomes a hotspot.
@@ -1529,6 +1533,16 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	if sampler, found = i.datasetSamplers[samplerSelector]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector, isLegacyKey)
 		i.datasetSamplers[samplerSelector] = sampler
+	}
+
+	// prepopulate spans with key fields
+	allFields, nonRootFields := sampler.GetKeyFields()
+	for _, sp := range trace.GetSpans() {
+		if sp.IsRoot {
+			sp.Data.MemoizeFields(allFields...)
+		} else {
+			sp.Data.MemoizeFields(nonRootFields...)
+		}
 	}
 
 	startGetSampleRate := i.Clock.Now()
