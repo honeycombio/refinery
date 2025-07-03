@@ -32,7 +32,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	common "go.opentelemetry.io/proto/otlp/common/v1"
+	resource "go.opentelemetry.io/proto/otlp/resource/v1"
 	trace "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zstd"
@@ -1000,6 +1003,7 @@ func newBatchRouter(t testing.TB) *Router {
 		incomingOrPeer:       "incoming",
 		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: "incoming"},
 		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
+		Tracer:               noop.Tracer{},
 	}
 }
 
@@ -1209,39 +1213,172 @@ func createBatchEventsWithLargeAttributes(numEvents int, cfg config.Config) *bat
 	return batchEvents
 }
 
+// convertBatchedEventsToOTLP converts batchedEvents to OTLP ExportTraceServiceRequest
+func convertBatchedEventsToOTLP(events *batchedEvents) (*collectortrace.ExportTraceServiceRequest, error) {
+	spans := make([]*trace.Span, len(events.events))
+
+	for i, event := range events.events {
+		// Convert the event data to OTLP span
+		span := &trace.Span{
+			Name:              "benchmark_span",
+			StartTimeUnixNano: uint64(event.getEventTime().UnixNano()),
+			EndTimeUnixNano:   uint64(event.getEventTime().Add(100 * time.Millisecond).UnixNano()),
+			Kind:              trace.Span_SPAN_KIND_INTERNAL,
+		}
+
+		// Extract trace and span IDs from the payload
+		if traceIDStr := event.Data.Get("trace.trace_id"); traceIDStr != nil {
+			if traceID, ok := traceIDStr.(string); ok && traceID != "" {
+				// Convert trace ID string to bytes (simplified for benchmark)
+				span.TraceId = []byte(fmt.Sprintf("%-16s", traceID)[:16])
+			}
+		}
+
+		if spanIDStr := event.Data.Get("trace.span_id"); spanIDStr != nil {
+			if spanID, ok := spanIDStr.(string); ok && spanID != "" {
+				// Convert span ID string to bytes (simplified for benchmark)
+				span.SpanId = []byte(fmt.Sprintf("%-8s", spanID)[:8])
+			}
+		}
+
+		if parentIDStr := event.Data.Get("trace.parent_id"); parentIDStr != nil {
+			if parentID, ok := parentIDStr.(string); ok && parentID != "" {
+				// Convert parent ID string to bytes (simplified for benchmark)
+				span.ParentSpanId = []byte(fmt.Sprintf("%-8s", parentID)[:8])
+			}
+		}
+
+		// Convert all data fields to OTLP attributes
+		var attributes []*common.KeyValue
+		for key, value := range event.Data.All() {
+			// Skip trace fields as they're handled separately
+			if strings.HasPrefix(key, "trace.") {
+				continue
+			}
+
+			attr := &common.KeyValue{Key: key}
+
+			// Convert value to appropriate OTLP type
+			switch v := value.(type) {
+			case string:
+				attr.Value = &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: v}}
+			case int64:
+				attr.Value = &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: v}}
+			case float64:
+				attr.Value = &common.AnyValue{Value: &common.AnyValue_DoubleValue{DoubleValue: v}}
+			case bool:
+				attr.Value = &common.AnyValue{Value: &common.AnyValue_BoolValue{BoolValue: v}}
+			case []string:
+				arrayValues := make([]*common.AnyValue, len(v))
+				for j, str := range v {
+					arrayValues[j] = &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: str}}
+				}
+				attr.Value = &common.AnyValue{
+					Value: &common.AnyValue_ArrayValue{
+						ArrayValue: &common.ArrayValue{Values: arrayValues},
+					},
+				}
+			default:
+				// Convert anything else to string
+				attr.Value = &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: fmt.Sprintf("%v", v)}}
+			}
+
+			attributes = append(attributes, attr)
+		}
+
+		span.Attributes = attributes
+		spans[i] = span
+	}
+
+	// Create the OTLP request structure
+	req := &collectortrace.ExportTraceServiceRequest{
+		ResourceSpans: []*trace.ResourceSpans{{
+			Resource: &resource.Resource{
+				Attributes: []*common.KeyValue{
+					{
+						Key:   "service.name",
+						Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "benchmark-service"}},
+					},
+				},
+			},
+			ScopeSpans: []*trace.ScopeSpans{{
+				Spans: spans,
+			}},
+		}},
+	}
+
+	return req, nil
+}
+
 func BenchmarkRouterBatch(b *testing.B) {
 	router := newBatchRouter(b)
 	batchEvents := createBatchEventsWithLargeAttributes(3, router.Config)
-	batchMsgpack, err := msgpack.Marshal(batchEvents.events)
-	require.NoError(b, err)
-
 	mockCollector := router.Collector.(*collect.MockCollector)
 
-	// Create HTTP request directly without server
-	req, err := http.NewRequest("POST", "/1/batch/test-dataset", nil)
-	if err != nil {
-		b.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/x-msgpack")
-	req.Header.Set("X-Honeycomb-Team", "test-api-key")
+	b.Run("msgpack", func(b *testing.B) {
+		batchMsgpack, err := msgpack.Marshal(batchEvents.events)
+		require.NoError(b, err)
 
-	// Set up mux variables for dataset extraction
-	req = mux.SetURLVars(req, map[string]string{"datasetName": "test-dataset"})
-
-	// Create reusable discard response writer
-	w := &discardResponseWriter{}
-
-	b.ResetTimer()
-	for b.Loop() {
-		req.Body = io.NopCloser(bytes.NewReader(batchMsgpack))
-
-		router.batch(w, req)
-
-		// Drain spans to prevent channel from filling up
-		for len(mockCollector.Spans) > 0 {
-			<-mockCollector.Spans
+		// Create HTTP request directly without server
+		req, err := http.NewRequest("POST", "/1/batch/test-dataset", nil)
+		if err != nil {
+			b.Fatal(err)
 		}
-	}
+		req.Header.Set("Content-Type", "application/x-msgpack")
+		req.Header.Set("X-Honeycomb-Team", "test-api-key")
+
+		// Set up mux variables for dataset extraction
+		req = mux.SetURLVars(req, map[string]string{"datasetName": "test-dataset"})
+
+		// Create reusable discard response writer
+		w := &discardResponseWriter{}
+
+		b.ResetTimer()
+		for b.Loop() {
+			req.Body = io.NopCloser(bytes.NewReader(batchMsgpack))
+
+			router.batch(w, req)
+
+			// Drain spans to prevent channel from filling up
+			for len(mockCollector.Spans) > 0 {
+				<-mockCollector.Spans
+			}
+		}
+	})
+
+	b.Run("otlp", func(b *testing.B) {
+		// Convert batchedEvents to OTLP format
+		otlpReq, err := convertBatchedEventsToOTLP(batchEvents)
+		require.NoError(b, err)
+
+		// Serialize to protobuf
+		otlpData, err := proto.Marshal(otlpReq)
+		require.NoError(b, err)
+
+		// Create HTTP request for OTLP endpoint
+		req, err := http.NewRequest("POST", "/v1/traces", nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/x-protobuf")
+		req.Header.Set("X-Honeycomb-Team", "test-api-key")
+		req.Header.Set("X-Honeycomb-Dataset", "test-dataset")
+
+		// Create reusable discard response writer
+		w := &discardResponseWriter{}
+
+		b.ResetTimer()
+		for b.Loop() {
+			req.Body = io.NopCloser(bytes.NewReader(otlpData))
+
+			router.postOTLPTrace(w, req)
+
+			// Drain spans to prevent channel from filling up
+			for len(mockCollector.Spans) > 0 {
+				<-mockCollector.Spans
+			}
+		}
+	})
 }
 
 func readAll(t testing.TB, r io.Reader) []byte {
