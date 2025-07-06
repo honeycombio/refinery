@@ -151,7 +151,7 @@ func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) 
 			val:        val,
 		}
 	}
-	d.computeMetricsNames()
+	d.metricNames = newSamplerMetricNames(d.prefix)
 }
 
 func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint, numTraceKey int) {
@@ -175,13 +175,6 @@ func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, ke
 	}
 	d.met.Histogram(d.metricNames.samplerKeyCardinality, float64(numTraceKey))
 	d.met.Histogram(d.metricNames.sampleRate, float64(rate))
-}
-
-func (d *dynsamplerMetricsRecorder) computeMetricsNames() {
-	d.metricNames.numDropped = d.prefix + "_num_dropped"
-	d.metricNames.numKept = d.prefix + "_num_kept"
-	d.metricNames.sampleRate = d.prefix + "_sample_rate"
-	d.metricNames.samplerKeyCardinality = d.prefix + "_sampler_key_cardinality"
 }
 
 // getKeyFields returns the fields that should be used as keys for the sampler.
@@ -214,9 +207,21 @@ func getKeyFields(fields []string) ([]string, []string) {
 // sampler implementations. This is used to avoid allocation from string concatenation
 // in the hot path of sampling.
 type samplerMetricNames struct {
+	prefix                string
 	numKept               string
 	numDropped            string
 	sampleRate            string
 	samplerKeyCardinality string
 	numDroppedByDropRule  string
+}
+
+func newSamplerMetricNames(prefix string) samplerMetricNames {
+	return samplerMetricNames{
+		prefix:                prefix,
+		numKept:               prefix + "_num_kept",
+		numDropped:            prefix + "_num_dropped",
+		sampleRate:            prefix + "_sample_rate",
+		samplerKeyCardinality: prefix + "_sampler_key_cardinality",
+		numDroppedByDropRule:  prefix + "_num_dropped_by_drop_rule",
+	}
 }

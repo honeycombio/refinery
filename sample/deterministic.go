@@ -32,11 +32,7 @@ func (d *DeterministicSampler) Start() error {
 	if d.Metrics == nil {
 		d.Metrics = &metrics.NullMetrics{}
 	}
-	d.metricNames = samplerMetricNames{
-		numDropped: "deterministic_num_dropped",
-		numKept:    "deterministic_num_kept",
-	}
-
+	d.metricNames = newSamplerMetricNames("deterministic")
 	// Get the actual upper bound - the largest possible value divided by
 	// the sample rate. In the case where the sample rate is 1, this should
 	// sample every value.

@@ -28,7 +28,7 @@ type RulesBasedSampler struct {
 const RootPrefix = "root."
 
 var ruleBasedSamplerMetrics = []metrics.Metadata{
-	{Name: "_num_dropped_by_drop_rule", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by the drop rule"},
+	{Name: "rulebased_num_dropped_by_drop_rule", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by the drop rule"},
 }
 
 func (s *RulesBasedSampler) Start() error {
@@ -36,13 +36,7 @@ func (s *RulesBasedSampler) Start() error {
 	defer func() { s.Logger.Debug().Logf("Finished starting RulesBasedSampler") }()
 
 	ruleBasedSamplerMetrics = append(ruleBasedSamplerMetrics, samplerMetrics...)
-	s.metricNames = samplerMetricNames{
-		numDropped:            "rulesbased_num_dropped",
-		numKept:               "rulesbased_num_kept",
-		sampleRate:            "rulesbased_sample_rate",
-		samplerKeyCardinality: "rulesbased_sampler_key_cardinality",
-		numDroppedByDropRule:  "rulesbased_num_dropped_by_drop_rule",
-	}
+	s.metricNames = newSamplerMetricNames("rulesbased")
 
 	s.samplers = make(map[string]Sampler)
 	s.keyFields, s.nonRootFields = getKeyFields(s.Config.GetSamplingFields())
