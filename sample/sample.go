@@ -133,7 +133,7 @@ type dynsamplerMetricsRecorder struct {
 	// Stores the last recorded internal metrics produced by dynsampler-go
 	lastMetrics map[string]internalDysamplerMetric
 	met         metrics.Metrics
-	metricNames metrics.ComputedMetricNames
+	metricNames dynsamplerMetrics
 }
 
 // RegisterMetrics registers the metrics that will be recorded by this package.
@@ -142,7 +142,6 @@ type dynsamplerMetricsRecorder struct {
 func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) {
 	// Register statistics this package will produce
 	d.dynPrefix = d.prefix + "_"
-	d.metricNames = metrics.NewComputedMetricNames(d.prefix, samplerMetrics)
 	d.lastMetrics = make(map[string]internalDysamplerMetric)
 	dynInternalMetrics := sampler.GetMetrics(d.dynPrefix)
 	for name, val := range dynInternalMetrics {
@@ -152,6 +151,7 @@ func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) 
 			val:        val,
 		}
 	}
+	d.computeMetricsNames()
 }
 
 func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint, numTraceKey int) {
@@ -169,12 +169,19 @@ func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, ke
 	}
 
 	if kept {
-		d.met.Increment(d.metricNames.Get("_num_kept"))
+		d.met.Increment(d.metricNames.numKept)
 	} else {
-		d.met.Increment(d.metricNames.Get("_num_dropped"))
+		d.met.Increment(d.metricNames.numDropped)
 	}
-	d.met.Histogram(d.metricNames.Get("_sampler_key_cardinality"), float64(numTraceKey))
-	d.met.Histogram(d.metricNames.Get("_sample_rate"), float64(rate))
+	d.met.Histogram(d.metricNames.samplerKeyCardinality, float64(numTraceKey))
+	d.met.Histogram(d.metricNames.sampleRate, float64(rate))
+}
+
+func (d *dynsamplerMetricsRecorder) computeMetricsNames() {
+	d.metricNames.numDropped = d.prefix + "_num_dropped"
+	d.metricNames.numKept = d.prefix + "_num_kept"
+	d.metricNames.sampleRate = d.prefix + "_sample_rate"
+	d.metricNames.samplerKeyCardinality = d.prefix + "_sampler_key_cardinality"
 }
 
 // getKeyFields returns the fields that should be used as keys for the sampler.
@@ -201,4 +208,11 @@ func getKeyFields(fields []string) ([]string, []string) {
 	}
 
 	return append(new, nonRootFields...), nonRootFields
+}
+
+type dynsamplerMetrics struct {
+	numKept               string
+	numDropped            string
+	sampleRate            string
+	samplerKeyCardinality string
 }

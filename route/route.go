@@ -98,7 +98,8 @@ type Router struct {
 
 	environmentCache *environmentCache
 	hsrv             *healthserver.Server
-	metricsMap       metrics.ComputedMetricNames
+
+	metricsNames routerMetricKeys
 }
 
 type BatchResponse struct {
@@ -143,6 +144,51 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
 }
 
+func (r *Router) computeMetricsNames() {
+	for _, metric := range routerMetrics {
+		fullname := r.incomingOrPeer + metric.Name
+		switch metric.Name {
+		case "_router_proxied":
+			r.metricsNames.routerProxied = fullname
+		case "_router_event":
+			r.metricsNames.routerEvent = fullname
+		case "_router_event_bytes":
+			r.metricsNames.routerEventBytes = fullname
+		case "_router_span":
+			r.metricsNames.routerSpan = fullname
+		case "_router_dropped":
+			r.metricsNames.routerDropped = fullname
+		case "_router_nonspan":
+			r.metricsNames.routerNonspan = fullname
+		case "_router_peer":
+			r.metricsNames.routerPeer = fullname
+		case "_router_batch":
+			r.metricsNames.routerBatch = fullname
+		case "_router_batch_events":
+			r.metricsNames.routerBatchEvents = fullname
+		case "_router_otlp":
+			r.metricsNames.routerOtlp = fullname
+		case "_router_otlp_events":
+			r.metricsNames.routerOtlpEvents = fullname
+		}
+
+	}
+}
+
+type routerMetricKeys struct {
+	routerProxied     string
+	routerEvent       string
+	routerEventBytes  string
+	routerSpan        string
+	routerDropped     string
+	routerNonspan     string
+	routerPeer        string
+	routerBatch       string
+	routerBatchEvents string
+	routerOtlp        string
+	routerOtlpEvents  string
+}
+
 // LnS spins up the Listen and Serve portion of the router. A router is
 // initialized as being for either incoming traffic from clients or traffic from
 // a peer. They listen on different addresses so peer traffic can be
@@ -167,7 +213,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		return
 	}
 
-	r.metricsMap = metrics.NewComputedMetricNames(r.incomingOrPeer, routerMetrics)
+	r.computeMetricsNames()
 
 	muxxer := mux.NewRouter()
 
@@ -380,7 +426,7 @@ func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format 
 
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.Increment(r.metricsMap.Get("_router_event"))
+	r.Metrics.Increment(r.metricsNames.routerEvent)
 
 	ctx := req.Context()
 	bodyBuffer, err := r.readAndCloseMaybeCompressedBody(req)
@@ -448,7 +494,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 }
 
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.Increment(r.metricsMap.Get("_router_batch"))
+	r.Metrics.Increment(r.metricsNames.routerBatch)
 
 	ctx := req.Context()
 	reqID := ctx.Value(types.RequestIDContextKey{})
@@ -468,7 +514,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
-	r.Metrics.Count(r.metricsMap.Get("_router_batch_events"), int64(len(batchedEvents.events)))
+	r.Metrics.Count(r.metricsNames.routerBatchEvents, int64(len(batchedEvents.events)))
 
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
@@ -535,7 +581,7 @@ func (router *Router) processOTLPRequest(
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
 
-	router.Metrics.Increment(router.metricsMap.Get("_router_otlp"))
+	router.Metrics.Increment(router.metricsNames.routerOtlp)
 
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
@@ -563,7 +609,7 @@ func (router *Router) processOTLPRequest(
 			}
 		}
 	}
-	router.Metrics.Count(router.metricsMap.Get("_router_otlp_events"), int64(totalEvents))
+	router.Metrics.Count(router.metricsNames.routerOtlpEvents, int64(totalEvents))
 
 	return nil
 }
@@ -577,7 +623,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	// record the event bytes size
 	// we do this early so can include all event types (span, event, log, etc)
-	r.Metrics.Histogram(r.metricsMap.Get("_router_event_bytes"), float64(ev.GetDataSize()))
+	r.Metrics.Histogram(r.metricsNames.routerEventBytes, float64(ev.GetDataSize()))
 
 	// An error here is effectively a parsing error, so return it up the stack.
 	if err := ev.Data.ExtractMetadata(); err != nil {
@@ -592,7 +638,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	if ev.Data.MetaTraceID == "" {
 		// not part of a trace. send along upstream
-		r.Metrics.Increment(r.metricsMap.Get("_router_nonspan"))
+		r.Metrics.Increment(r.metricsNames.routerNonspan)
 		debugLog.WithString("api_host", ev.APIHost).
 			WithString("dataset", ev.Dataset).
 			Logf("sending non-trace event from batch")
@@ -643,7 +689,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		// Figure out if we should handle this span locally or pass on to a peer
 		targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
 		if !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Metrics.Increment(r.metricsMap.Get("_router_peer"))
+			r.Metrics.Increment(r.metricsNames.routerPeer)
 			debugLog.
 				WithString("peer", targetShard.GetAddress()).
 				WithField("isprobe", isProbe).
@@ -673,12 +719,12 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
-		r.Metrics.Increment(r.metricsMap.Get("_router_dropped"))
+		r.Metrics.Increment(r.metricsNames.routerDropped)
 		debugLog.Logf("Dropping span from batch, channel full")
 		return err
 	}
 
-	r.Metrics.Increment(r.metricsMap.Get("_router_span"))
+	r.Metrics.Increment(r.metricsNames.routerSpan)
 
 	debugLog.WithField("source", r.incomingOrPeer).Logf("Accepting span from batch for collection into a trace")
 	return nil

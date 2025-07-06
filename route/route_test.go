@@ -924,7 +924,6 @@ func TestProcessEventMetrics(t *testing.T) {
 				Config:               mockConfig,
 				Logger:               &logger.NullLogger{},
 				Metrics:              mockMetrics,
-				metricsMap:           metrics.NewComputedMetricNames(tt.incomingOrPeer, routerMetrics),
 				UpstreamTransmission: mockUpstream,
 				PeerTransmission:     mockPeer,
 				Collector:            collect.NewMockCollector(),
@@ -932,6 +931,7 @@ func TestProcessEventMetrics(t *testing.T) {
 				incomingOrPeer:       tt.incomingOrPeer,
 				iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: tt.incomingOrPeer},
 			}
+			router.computeMetricsNames()
 
 			// Create test event with traceID and signal type
 			event := &types.Event{
@@ -992,10 +992,9 @@ func newBatchRouter(t testing.TB) *Router {
 		Self: &sharder.TestShard{Addr: "http://localhost:8080"},
 	}
 
-	return &Router{
+	r := &Router{
 		Config:               mockConfig,
 		Metrics:              &mockMetrics,
-		metricsMap:           metrics.NewComputedMetricNames("incoming", routerMetrics),
 		UpstreamTransmission: mockTransmission,
 		Collector:            mockCollector,
 		Sharder:              mockSharder,
@@ -1003,6 +1002,8 @@ func newBatchRouter(t testing.TB) *Router {
 		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: "incoming"},
 		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
 	}
+	r.computeMetricsNames()
+	return r
 }
 
 func createBatchEvents(mockCfg config.Config) *batchedEvents {

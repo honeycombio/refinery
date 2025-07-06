@@ -119,9 +119,14 @@ type InMemCollector struct {
 	dropDecisionBuffer chan TraceDecision
 	keptDecisionBuffer chan TraceDecision
 	hostname           string
-
-	routerPeerMetricNames map[string]string
 }
+
+// These are the names of the metrics we use to track the number of events sent to peers through the router.
+// Defining them here to avoid computing the names in the hot path of the collector.
+const (
+	peerRouterPeerMetricName     = "peer_router_peer"
+	incomingRouterPeerMetricName = "incoming_router_peer"
+)
 
 var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "trace_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "time taken to process a trace from arrival to send"},
@@ -188,8 +193,6 @@ func (i *InMemCollector) Start() error {
 	for _, metric := range inMemCollectorMetrics {
 		i.Metrics.Register(metric)
 	}
-
-	i.routerPeerMetricNames = map[string]string{"peer": "peer_router_peer", "incoming": "incoming_router_peer"}
 
 	sampleCacheConfig := i.Config.GetSampleCacheConfig()
 	var err error
@@ -793,7 +796,12 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	var spanForwarded bool
 	// if this trace doesn't belong to us and it's not in sent state, we should forward a decision span to its decider
 	if !trace.Sent && !isMyTrace {
-		i.Metrics.Increment(i.routerPeerMetricNames[source])
+		switch source {
+		case "peer":
+			i.Metrics.Increment(peerRouterPeerMetricName)
+		case "incoming":
+			i.Metrics.Increment(incomingRouterPeerMetricName)
+		}
 		i.Logger.Debug().
 			WithString("peer", targetShard.GetAddress()).
 			Logf("Sending span to peer")

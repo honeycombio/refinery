@@ -391,7 +391,6 @@ func TestDynsamplerMetricsRecorder_RegisterMetrics(t *testing.T) {
 		// Verify internal state
 		assert.Equal(t, "test_", recorder.dynPrefix)
 		assert.Len(t, recorder.lastMetrics, 3)
-		assert.Equal(t, 4, recorder.metricNames.Len())
 
 		assert.Equal(t, internalDysamplerMetric{
 			metricType: metrics.Gauge,
@@ -404,10 +403,10 @@ func TestDynsamplerMetricsRecorder_RegisterMetrics(t *testing.T) {
 		}, recorder.lastMetrics["test_counter_count"])
 
 		// Check metric names mapping
-		assert.Equal(t, "test_num_dropped", recorder.metricNames.Get("_num_dropped"))
-		assert.Equal(t, "test_num_kept", recorder.metricNames.Get("_num_kept"))
-		assert.Equal(t, "test_sample_rate", recorder.metricNames.Get("_sample_rate"))
-		assert.Equal(t, "test_sampler_key_cardinality", recorder.metricNames.Get("_sampler_key_cardinality"))
+		assert.Equal(t, "test_num_dropped", recorder.metricNames.numDropped)
+		assert.Equal(t, "test_num_kept", recorder.metricNames.numKept)
+		assert.Equal(t, "test_sample_rate", recorder.metricNames.sampleRate)
+		assert.Equal(t, "test_sampler_key_cardinality", recorder.metricNames.samplerKeyCardinality)
 
 		mockSampler.AssertExpectations(t)
 	})
@@ -423,14 +422,12 @@ func TestDynsamplerMetricsRecorder_RegisterMetrics(t *testing.T) {
 			prefix:      "empty",
 			lastMetrics: make(map[string]internalDysamplerMetric),
 			met:         mockMetrics,
-			metricNames: metrics.NewComputedMetricNames("empty_", samplerMetrics),
 		}
 
 		recorder.RegisterMetrics(mockSampler)
 
 		assert.Equal(t, "empty_", recorder.dynPrefix)
 		assert.Len(t, recorder.lastMetrics, 0)
-		assert.Equal(t, recorder.metricNames.Len(), 4)
 
 		mockSampler.AssertExpectations(t)
 	})
