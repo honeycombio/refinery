@@ -133,7 +133,7 @@ type dynsamplerMetricsRecorder struct {
 	// Stores the last recorded internal metrics produced by dynsampler-go
 	lastMetrics map[string]internalDysamplerMetric
 	met         metrics.Metrics
-	metricNames dynsamplerMetrics
+	metricNames samplerMetricNames
 }
 
 // RegisterMetrics registers the metrics that will be recorded by this package.
@@ -210,9 +210,13 @@ func getKeyFields(fields []string) ([]string, []string) {
 	return append(new, nonRootFields...), nonRootFields
 }
 
-type dynsamplerMetrics struct {
+// samplerMetricNames is a struct that holds the names of metrics used by the
+// sampler implementations. This is used to avoid allocation from string concatenation
+// in the hot path of sampling.
+type samplerMetricNames struct {
 	numKept               string
 	numDropped            string
 	sampleRate            string
 	samplerKeyCardinality string
+	numDroppedByDropRule  string
 }

@@ -22,19 +22,20 @@ type DeterministicSampler struct {
 
 	sampleRate  int
 	upperBound  uint32
-	metricNames metrics.ComputedMetricNames
+	metricNames samplerMetricNames
 }
 
 func (d *DeterministicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DeterministicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DeterministicSampler") }()
 	d.sampleRate = d.Config.SampleRate
-	prefix := "deterministic"
 	if d.Metrics == nil {
 		d.Metrics = &metrics.NullMetrics{}
 	}
-
-	d.metricNames = metrics.NewComputedMetricNames(prefix, samplerMetrics)
+	d.metricNames = samplerMetricNames{
+		numDropped: "deterministic_num_dropped",
+		numKept:    "deterministic_num_kept",
+	}
 
 	// Get the actual upper bound - the largest possible value divided by
 	// the sample rate. In the case where the sample rate is 1, this should
@@ -52,9 +53,9 @@ func (d *DeterministicSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 	v := binary.BigEndian.Uint32(sum[:4])
 	shouldKeep := v <= d.upperBound
 	if shouldKeep {
-		d.Metrics.Increment(d.metricNames.Get("_num_kept"))
+		d.Metrics.Increment(d.metricNames.numKept)
 	} else {
-		d.Metrics.Increment(d.metricNames.Get("_num_dropped"))
+		d.Metrics.Increment(d.metricNames.numDropped)
 	}
 
 	return uint(d.sampleRate), shouldKeep, "deterministic/chance", ""
