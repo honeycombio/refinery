@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/honeycombio/refinery/config"
 )
@@ -107,36 +106,3 @@ const (
 	Microseconds  Unit = "us"
 	Percent       Unit = "%"
 )
-
-type ComputedMetricNames struct {
-	names       map[string]string
-	defaultName string
-}
-
-func NewComputedMetricNames(prefix string, metrics []Metadata) ComputedMetricNames {
-	names := make(map[string]string)
-	for _, metric := range metrics {
-		if strings.HasPrefix(metric.Name, "_") {
-			names[metric.Name] = prefix + metric.Name
-		}
-	}
-	return ComputedMetricNames{
-		names:       names,
-		defaultName: prefix + "_unknown",
-	}
-}
-
-func (cmn *ComputedMetricNames) Get(name string) string {
-	if name == "" {
-		return cmn.defaultName
-	}
-	if fullName, ok := cmn.names[name]; ok && fullName != "" {
-		return fullName
-	}
-
-	return cmn.defaultName
-}
-
-func (cmn *ComputedMetricNames) Len() int {
-	return len(cmn.names)
-}
