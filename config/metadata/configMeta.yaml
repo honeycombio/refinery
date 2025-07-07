@@ -646,6 +646,23 @@ groups:
           unique logs arrive at Honeycomb at least once per sampling
           period.
 
+      - name: AdditionalAttributes
+        type: map
+        valuetype: map
+        example: "pipeline.id:12345,rollout.id:67890"
+        reload: false
+        validations:
+          - type: elementType
+            arg: string
+        summary: Additional attributes to add to all logs written by the Honeycomb logger.
+        envvar: REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES
+        commandline: logger-additional-attributes
+        description: >
+           When supplying via a environment variable, the value should be a string of comma-separated key-value pairs. 
+           When supplying via the command line, the value should be a key value pair. 
+           If multiple key-value pairs are needed, each should be supplied via its own command line flag.
+           The key-value pairs must use ':' as the separator.
+
   - name: StdoutLogger
     title: "Stdout Logger"
     description: contains configuration for logging to `stdout`. Only used if `Logger.Type` is "stdout".

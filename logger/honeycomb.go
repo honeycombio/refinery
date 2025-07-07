@@ -3,9 +3,7 @@ package logger
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/honeycombio/dynsampler-go"
@@ -110,24 +108,9 @@ func (h *HoneycombLogger) Start() error {
 // The key value pairs must be separated by `=`.
 // Credit to https://github.com/open-telemetry/opentelemetry-go/blob/553779c161e9bb7bbc1670b3a92a1bf3ceefb859/sdk/resource/env.go#L67-L95
 func (h *HoneycombLogger) addResourceAttributes() {
-	attrs := strings.TrimSpace(os.Getenv("REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_FIELDS"))
-	if attrs == "" {
-		return
-	}
-	pairs := strings.Split(attrs, ",")
-	for _, p := range pairs {
-		k, v, found := strings.Cut(p, "=")
-		if !found {
-			continue
-		}
-		key := strings.TrimSpace(k)
-		val, err := url.PathUnescape(strings.TrimSpace(v))
-		if err != nil {
-			// Retain original value if decoding fails, otherwise it will be
-			// an empty string.
-			val = v
-		}
-		h.libhClient.AddField(key, val)
+	attrs := h.Config.GetHoneycombLoggerConfig().AdditionalAttributes
+	for k, v := range attrs {
+		h.libhClient.AddField(k, v)
 	}
 }
 

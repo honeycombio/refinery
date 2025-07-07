@@ -239,11 +239,12 @@ type LoggerConfig struct {
 }
 
 type HoneycombLoggerConfig struct {
-	APIHost           string       `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
-	APIKey            string       `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
-	Dataset           string       `yaml:"Dataset" default:"Refinery Logs"`
-	SamplerEnabled    *DefaultTrue `yaml:"SamplerEnabled" default:"true"` // Avoid pointer woe on access, use GetSamplerEnabled() instead.
-	SamplerThroughput int          `yaml:"SamplerThroughput" default:"10"`
+	APIHost              string            `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
+	APIKey               string            `yaml:"APIKey" cmdenv:"HoneycombLoggerAPIKey,HoneycombAPIKey"`
+	Dataset              string            `yaml:"Dataset" default:"Refinery Logs"`
+	SamplerEnabled       *DefaultTrue      `yaml:"SamplerEnabled" default:"true"` // Avoid pointer woe on access, use GetSamplerEnabled() instead.
+	SamplerThroughput    int               `yaml:"SamplerThroughput" default:"10"`
+	AdditionalAttributes map[string]string `yaml:"AdditionalAttributes" default:"" cmdenv:"HoneycombLoggerAdditionalAttributes"`
 }
 
 // GetSamplerEnabled returns whether configuration has enabled sampling of
