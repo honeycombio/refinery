@@ -931,7 +931,7 @@ func TestProcessEventMetrics(t *testing.T) {
 				routerType:           tt.routerType,
 				iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: tt.routerType.String()},
 			}
-			router.computeMetricsNames()
+			router.registerMetricNames()
 
 			// Create test event with traceID and signal type
 			event := &types.Event{
@@ -1002,7 +1002,7 @@ func newBatchRouter(t testing.TB) *Router {
 		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: RouterTypeIncoming.String()},
 		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
 	}
-	r.computeMetricsNames()
+	r.registerMetricNames()
 	return r
 }
 

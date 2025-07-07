@@ -174,7 +174,7 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
 }
 
-func (r *Router) computeMetricsNames() {
+func (r *Router) registerMetricNames() {
 	for _, metric := range routerMetrics {
 		fullname := r.routerType.String() + metric.Name
 		switch metric.Name {
@@ -202,6 +202,8 @@ func (r *Router) computeMetricsNames() {
 			r.metricsNames.routerOtlpEvents = fullname
 		}
 
+		metric.Name = fullname
+		r.Metrics.Register(metric)
 	}
 }
 
@@ -242,7 +244,7 @@ func (r *Router) LnS() {
 		return
 	}
 
-	r.computeMetricsNames()
+	r.registerMetricNames()
 
 	muxxer := mux.NewRouter()
 

@@ -113,6 +113,7 @@ var samplerMetrics = []metrics.Metadata{
 	{Name: "_num_kept", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces kept by configured sampler"},
 	{Name: "_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Sample rate for traces"},
 	{Name: "_sampler_key_cardinality", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Number of unique keys being tracked by the sampler"},
+	{Name: "rulebased_num_dropped_by_drop_rule", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by the drop rule"},
 }
 
 func getMetricType(name string) metrics.MetricType {
@@ -151,7 +152,7 @@ func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) 
 			val:        val,
 		}
 	}
-	d.metricNames = newSamplerMetricNames(d.prefix)
+	d.metricNames = newSamplerMetricNames(d.prefix, d.met)
 }
 
 func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint, numTraceKey int) {
@@ -215,13 +216,26 @@ type samplerMetricNames struct {
 	numDroppedByDropRule  string
 }
 
-func newSamplerMetricNames(prefix string) samplerMetricNames {
-	return samplerMetricNames{
-		prefix:                prefix,
-		numKept:               prefix + "_num_kept",
-		numDropped:            prefix + "_num_dropped",
-		sampleRate:            prefix + "_sample_rate",
-		samplerKeyCardinality: prefix + "_sampler_key_cardinality",
-		numDroppedByDropRule:  prefix + "_num_dropped_by_drop_rule",
+func newSamplerMetricNames(prefix string, met metrics.Metrics) samplerMetricNames {
+	sm := samplerMetricNames{}
+	for _, metric := range samplerMetrics {
+		fullname := prefix + metric.Name
+		switch metric.Name {
+		case "_num_kept":
+			sm.numKept = fullname
+		case "_num_dropped":
+			sm.numDropped = fullname
+		case "_sample_rate":
+			sm.sampleRate = fullname
+		case "_sampler_key_cardinality":
+			sm.samplerKeyCardinality = fullname
+		case "rulebased_num_dropped_by_drop_rule":
+			sm.numDroppedByDropRule = metric.Name
+		}
+
+		metric.Name = fullname
+		met.Register(metric)
 	}
+
+	return sm
 }
