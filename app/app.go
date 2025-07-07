@@ -54,6 +54,8 @@ func (a *App) Start() error {
 	}
 	a.IncomingRouter.SetVersion(a.Version)
 	a.PeerRouter.SetVersion(a.Version)
+	a.IncomingRouter.SetType(route.RouterTypeIncoming)
+	a.PeerRouter.SetType(route.RouterTypePeer)
 
 	record_hashes("loaded configuration at startup")
 	a.Config.RegisterReloadCallback(func(configHash, rulesHash string) {
@@ -62,8 +64,8 @@ func (a *App) Start() error {
 
 	// launch our main routers to listen for incoming event traffic from both peers
 	// and external sources
-	a.IncomingRouter.LnS("incoming")
-	a.PeerRouter.LnS("peer")
+	a.IncomingRouter.LnS()
+	a.PeerRouter.LnS()
 
 	// only enable the opamp agent if it's configured
 	if a.Config.GetOpAMPConfig().Enabled {

@@ -843,55 +843,55 @@ func TestAddIncomingUserAgent(t *testing.T) {
 
 func TestProcessEventMetrics(t *testing.T) {
 	tests := []struct {
-		name           string
-		incomingOrPeer string
-		opampEnabled   bool
-		recordUsage    config.DefaultTrue
-		signalType     string
-		expectedCount  int64
-		metricName     string
+		name          string
+		routerType    RouterType
+		opampEnabled  bool
+		recordUsage   config.DefaultTrue
+		signalType    string
+		expectedCount int64
+		metricName    string
 	}{
 		{
-			name:           "log event with opamp enabled and record usage",
-			incomingOrPeer: "incoming",
-			opampEnabled:   true,
-			recordUsage:    config.DefaultTrue(true),
-			signalType:     "log",
-			expectedCount:  91,
-			metricName:     "bytes_received_logs",
+			name:          "log event with opamp enabled and record usage",
+			routerType:    RouterTypeIncoming,
+			opampEnabled:  true,
+			recordUsage:   config.DefaultTrue(true),
+			signalType:    "log",
+			expectedCount: 91,
+			metricName:    "bytes_received_logs",
 		},
 		{
-			name:           "trace event with opamp enabled and record usage",
-			incomingOrPeer: "incoming",
-			opampEnabled:   true,
-			recordUsage:    config.DefaultTrue(true),
-			signalType:     "trace",
-			expectedCount:  93,
-			metricName:     "bytes_received_traces",
+			name:          "trace event with opamp enabled and record usage",
+			routerType:    RouterTypeIncoming,
+			opampEnabled:  true,
+			recordUsage:   config.DefaultTrue(true),
+			signalType:    "trace",
+			expectedCount: 93,
+			metricName:    "bytes_received_traces",
 		},
 		{
-			name:           "log event with opamp disabled",
-			incomingOrPeer: "incoming",
-			opampEnabled:   false,
-			recordUsage:    config.DefaultTrue(true),
-			signalType:     "log",
-			expectedCount:  0,
+			name:          "log event with opamp disabled",
+			routerType:    RouterTypeIncoming,
+			opampEnabled:  false,
+			recordUsage:   config.DefaultTrue(true),
+			signalType:    "log",
+			expectedCount: 0,
 		},
 		{
-			name:           "log event with record usage disabled",
-			incomingOrPeer: "incoming",
-			opampEnabled:   true,
-			recordUsage:    config.DefaultTrue(false),
-			signalType:     "log",
-			expectedCount:  0,
+			name:          "log event with record usage disabled",
+			routerType:    RouterTypeIncoming,
+			opampEnabled:  true,
+			recordUsage:   config.DefaultTrue(false),
+			signalType:    "log",
+			expectedCount: 0,
 		},
 		{
-			name:           "log event from peer",
-			incomingOrPeer: "peer",
-			opampEnabled:   true,
-			recordUsage:    config.DefaultTrue(true),
-			signalType:     "log",
-			expectedCount:  0,
+			name:          "log event from peer",
+			routerType:    RouterTypePeer,
+			opampEnabled:  true,
+			recordUsage:   config.DefaultTrue(true),
+			signalType:    "log",
+			expectedCount: 0,
 		},
 	}
 
@@ -928,8 +928,8 @@ func TestProcessEventMetrics(t *testing.T) {
 				PeerTransmission:     mockPeer,
 				Collector:            collect.NewMockCollector(),
 				Sharder:              mockSharder,
-				incomingOrPeer:       tt.incomingOrPeer,
-				iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: tt.incomingOrPeer},
+				routerType:           tt.routerType,
+				iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: tt.routerType.String()},
 			}
 			router.computeMetricsNames()
 
@@ -998,8 +998,8 @@ func newBatchRouter(t testing.TB) *Router {
 		UpstreamTransmission: mockTransmission,
 		Collector:            mockCollector,
 		Sharder:              mockSharder,
-		incomingOrPeer:       "incoming",
-		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: "incoming"},
+		routerType:           RouterTypeIncoming,
+		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: RouterTypeIncoming.String()},
 		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
 	}
 	r.computeMetricsNames()

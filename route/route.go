@@ -64,6 +64,32 @@ const (
 	defaultSampleRate      = 1
 )
 
+type RouterType int
+
+const (
+	RouterTypeIncoming RouterType = iota
+	RouterTypePeer
+)
+
+func (rt RouterType) String() string {
+	switch rt {
+	case RouterTypeIncoming:
+		return "incoming"
+	case RouterTypePeer:
+		return "peer"
+	default:
+		return "unknown"
+	}
+}
+
+func (rt RouterType) isIncoming() bool {
+	return rt == RouterTypeIncoming
+}
+
+func (rt RouterType) isPeer() bool {
+	return rt == RouterTypePeer
+}
+
 type Router struct {
 	Config               config.Config         `inject:""`
 	Logger               logger.Logger         `inject:""`
@@ -84,7 +110,7 @@ type Router struct {
 
 	// type indicates whether this should listen for incoming events or content
 	// redirected from a peer
-	incomingOrPeer string
+	routerType RouterType
 
 	// iopLogger is a logger that knows whether it's incoming or peer
 	iopLogger iopLogger
@@ -128,6 +154,10 @@ func (r *Router) SetVersion(ver string) {
 	r.versionStr = ver
 }
 
+func (r *Router) SetType(rt RouterType) {
+	r.routerType = rt
+}
+
 var routerMetrics = []metrics.Metadata{
 	{Name: "_router_proxied", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events proxied to another refinery"},
 	{Name: "_router_event", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received"},
@@ -146,7 +176,7 @@ var routerMetrics = []metrics.Metadata{
 
 func (r *Router) computeMetricsNames() {
 	for _, metric := range routerMetrics {
-		fullname := r.incomingOrPeer + metric.Name
+		fullname := r.routerType.String() + metric.Name
 		switch metric.Name {
 		case "_router_proxied":
 			r.metricsNames.routerProxied = fullname
@@ -193,11 +223,10 @@ type routerMetricKeys struct {
 // initialized as being for either incoming traffic from clients or traffic from
 // a peer. They listen on different addresses so peer traffic can be
 // prioritized.
-func (r *Router) LnS(incomingOrPeer string) {
-	r.incomingOrPeer = incomingOrPeer
+func (r *Router) LnS() {
 	r.iopLogger = iopLogger{
 		Logger:         r.Logger,
-		incomingOrPeer: incomingOrPeer,
+		incomingOrPeer: r.routerType.String(),
 	}
 
 	r.proxyClient = &http.Client{
@@ -252,7 +281,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
 	var listenAddr, grpcAddr string
-	if r.incomingOrPeer == "incoming" {
+	if r.routerType.isIncoming() {
 		listenAddr = r.Config.GetListenAddr()
 		// GRPC listen addr is optional
 		grpcAddr = r.Config.GetGRPCListenAddr()
@@ -654,7 +683,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
-	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
+	if r.routerType.isIncoming() && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
 		if span.Data.MetaSignalType == "log" {
 			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
 		} else {
@@ -713,7 +742,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	var err error
 	// we're supposed to handle it normally
-	if r.incomingOrPeer == "incoming" {
+	if r.routerType.isIncoming() {
 		err = r.Collector.AddSpan(span)
 	} else {
 		err = r.Collector.AddSpanFromPeer(span)
@@ -726,7 +755,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	r.Metrics.Increment(r.metricsNames.routerSpan)
 
-	debugLog.WithField("source", r.incomingOrPeer).Logf("Accepting span from batch for collection into a trace")
+	debugLog.WithField("source", r.routerType.String()).Logf("Accepting span from batch for collection into a trace")
 	return nil
 }
 

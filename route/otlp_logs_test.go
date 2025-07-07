@@ -66,9 +66,9 @@ func TestLogsOTLPHandler(t *testing.T) {
 		Sharder: &sharder.SingleServerSharder{
 			Logger: logger,
 		},
-		Collector:      mockCollector,
-		incomingOrPeer: "incoming",
-		Tracer:         noop.Tracer{},
+		Collector:  mockCollector,
+		routerType: RouterTypeIncoming,
+		Tracer:     noop.Tracer{},
 	}
 	logsServer := NewLogsServer(router)
 
