@@ -1,22 +1,15 @@
 package types
 
 // RouterType defines which type of traffic a component is handling.
-type RouterType int
+type RouterType string
 
 const (
-	RouterTypeIncoming RouterType = iota
-	RouterTypePeer
+	RouterTypeIncoming RouterType = "incoming"
+	RouterTypePeer     RouterType = "peer"
 )
 
 func (rt RouterType) String() string {
-	switch rt {
-	case RouterTypeIncoming:
-		return "incoming"
-	case RouterTypePeer:
-		return "peer"
-	default:
-		return "unknown"
-	}
+	return string(rt)
 }
 
 func (rt RouterType) IsIncoming() bool {
