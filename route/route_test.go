@@ -846,55 +846,55 @@ func TestAddIncomingUserAgent(t *testing.T) {
 
 func TestProcessEventMetrics(t *testing.T) {
 	tests := []struct {
-		name           string
-		incomingOrPeer string
-		opampEnabled   bool
-		recordUsage    config.DefaultTrue
-		signalType     string
-		expectedCount  int64
-		metricName     string
+		name          string
+		routerType    types.RouterType
+		opampEnabled  bool
+		recordUsage   config.DefaultTrue
+		signalType    string
+		expectedCount int64
+		metricName    string
 	}{
 		{
-			name:           "log event with opamp enabled and record usage",
-			incomingOrPeer: "incoming",
-			opampEnabled:   true,
-			recordUsage:    config.DefaultTrue(true),
-			signalType:     "log",
-			expectedCount:  91,
-			metricName:     "bytes_received_logs",
+			name:          "log event with opamp enabled and record usage",
+			routerType:    types.RouterTypeIncoming,
+			opampEnabled:  true,
+			recordUsage:   config.DefaultTrue(true),
+			signalType:    "log",
+			expectedCount: 91,
+			metricName:    "bytes_received_logs",
 		},
 		{
-			name:           "trace event with opamp enabled and record usage",
-			incomingOrPeer: "incoming",
-			opampEnabled:   true,
-			recordUsage:    config.DefaultTrue(true),
-			signalType:     "trace",
-			expectedCount:  93,
-			metricName:     "bytes_received_traces",
+			name:          "trace event with opamp enabled and record usage",
+			routerType:    types.RouterTypeIncoming,
+			opampEnabled:  true,
+			recordUsage:   config.DefaultTrue(true),
+			signalType:    "trace",
+			expectedCount: 93,
+			metricName:    "bytes_received_traces",
 		},
 		{
-			name:           "log event with opamp disabled",
-			incomingOrPeer: "incoming",
-			opampEnabled:   false,
-			recordUsage:    config.DefaultTrue(true),
-			signalType:     "log",
-			expectedCount:  0,
+			name:          "log event with opamp disabled",
+			routerType:    types.RouterTypeIncoming,
+			opampEnabled:  false,
+			recordUsage:   config.DefaultTrue(true),
+			signalType:    "log",
+			expectedCount: 0,
 		},
 		{
-			name:           "log event with record usage disabled",
-			incomingOrPeer: "incoming",
-			opampEnabled:   true,
-			recordUsage:    config.DefaultTrue(false),
-			signalType:     "log",
-			expectedCount:  0,
+			name:          "log event with record usage disabled",
+			routerType:    types.RouterTypeIncoming,
+			opampEnabled:  true,
+			recordUsage:   config.DefaultTrue(false),
+			signalType:    "log",
+			expectedCount: 0,
 		},
 		{
-			name:           "log event from peer",
-			incomingOrPeer: "peer",
-			opampEnabled:   true,
-			recordUsage:    config.DefaultTrue(true),
-			signalType:     "log",
-			expectedCount:  0,
+			name:          "log event from peer",
+			routerType:    types.RouterTypePeer,
+			opampEnabled:  true,
+			recordUsage:   config.DefaultTrue(true),
+			signalType:    "log",
+			expectedCount: 0,
 		},
 	}
 
@@ -931,9 +931,10 @@ func TestProcessEventMetrics(t *testing.T) {
 				PeerTransmission:     mockPeer,
 				Collector:            collect.NewMockCollector(),
 				Sharder:              mockSharder,
-				incomingOrPeer:       tt.incomingOrPeer,
-				iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: tt.incomingOrPeer},
+				routerType:           tt.routerType,
+				iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: tt.routerType.String()},
 			}
+			router.registerMetricNames()
 
 			// Create test event with traceID and signal type
 			event := &types.Event{
@@ -994,17 +995,19 @@ func newBatchRouter(t testing.TB) *Router {
 		Self: &sharder.TestShard{Addr: "http://localhost:8080"},
 	}
 
-	return &Router{
+	r := &Router{
 		Config:               mockConfig,
 		Metrics:              &mockMetrics,
 		UpstreamTransmission: mockTransmission,
 		Collector:            mockCollector,
 		Sharder:              mockSharder,
-		incomingOrPeer:       "incoming",
-		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: "incoming"},
+		routerType:           types.RouterTypeIncoming,
+		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: types.RouterTypeIncoming.String()},
 		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
 		Tracer:               noop.Tracer{},
 	}
+	r.registerMetricNames()
+	return r
 }
 
 func createBatchEvents(mockCfg config.Config) *batchedEvents {

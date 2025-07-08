@@ -113,6 +113,7 @@ var samplerMetrics = []metrics.Metadata{
 	{Name: "_num_kept", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces kept by configured sampler"},
 	{Name: "_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Sample rate for traces"},
 	{Name: "_sampler_key_cardinality", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Number of unique keys being tracked by the sampler"},
+	{Name: "rulebased_num_dropped_by_drop_rule", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by the drop rule"},
 }
 
 func getMetricType(name string) metrics.MetricType {
@@ -122,48 +123,59 @@ func getMetricType(name string) metrics.MetricType {
 	return metrics.Gauge
 }
 
-type dynsamplerMetricsRecorder struct {
-	prefix      string
-	lastMetrics map[string]int64
-	met         metrics.Metrics
+type internalDysamplerMetric struct {
+	metricType metrics.MetricType
+	val        int64 // Value for counters, or gauge value
 }
 
+type dynsamplerMetricsRecorder struct {
+	prefix    string
+	dynPrefix string // Used for accessing metrics from dynsampler-go
+	// Stores the last recorded internal metrics produced by dynsampler-go
+	lastMetrics map[string]internalDysamplerMetric
+	met         metrics.Metrics
+	metricNames samplerMetricNames
+}
+
+// RegisterMetrics registers the metrics that will be recorded by this package.
+// It initializes the necessary metrics and prepares them for recording.
+// It MUST be called before any calls to RecordMetrics.
 func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) {
 	// Register statistics this package will produce
-	d.lastMetrics = sampler.GetMetrics(d.prefix + "_")
-	for name := range d.lastMetrics {
-		d.met.Register(metrics.Metadata{
-			Name: name,
-			Type: getMetricType(name),
-		})
+	d.dynPrefix = d.prefix + "_"
+	d.lastMetrics = make(map[string]internalDysamplerMetric)
+	dynInternalMetrics := sampler.GetMetrics(d.dynPrefix)
+	for name, val := range dynInternalMetrics {
+		metricType := getMetricType(name)
+		d.lastMetrics[name] = internalDysamplerMetric{
+			metricType: metricType,
+			val:        val,
+		}
 	}
-
-	for _, metric := range samplerMetrics {
-		metric.Name = d.prefix + metric.Name
-		d.met.Register(metric)
-	}
-
+	d.metricNames = newSamplerMetricNames(d.prefix, d.met)
 }
 
 func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint, numTraceKey int) {
-	for name, val := range sampler.GetMetrics(d.prefix + "_") {
-		switch getMetricType(name) {
+	for name, val := range sampler.GetMetrics(d.dynPrefix) {
+		m := d.lastMetrics[name]
+		switch m.metricType {
 		case metrics.Counter:
-			delta := val - d.lastMetrics[name]
+			delta := val - m.val
 			d.met.Count(name, delta)
-			d.lastMetrics[name] = val
+			m.val = val
+			d.lastMetrics[name] = m
 		case metrics.Gauge:
 			d.met.Gauge(name, float64(val))
 		}
 	}
 
 	if kept {
-		d.met.Increment(d.prefix + "_num_kept")
+		d.met.Increment(d.metricNames.numKept)
 	} else {
-		d.met.Increment(d.prefix + "_num_dropped")
+		d.met.Increment(d.metricNames.numDropped)
 	}
-	d.met.Histogram(d.prefix+"_sampler_key_cardinality", float64(numTraceKey))
-	d.met.Histogram(d.prefix+"_sample_rate", float64(rate))
+	d.met.Histogram(d.metricNames.samplerKeyCardinality, float64(numTraceKey))
+	d.met.Histogram(d.metricNames.sampleRate, float64(rate))
 }
 
 // getKeyFields returns the fields that should be used as keys for the sampler.
@@ -190,4 +202,40 @@ func getKeyFields(fields []string) ([]string, []string) {
 	}
 
 	return append(new, nonRootFields...), nonRootFields
+}
+
+// samplerMetricNames is a struct that holds the names of metrics used by the
+// sampler implementations. This is used to avoid allocation from string concatenation
+// in the hot path of sampling.
+type samplerMetricNames struct {
+	prefix                string
+	numKept               string
+	numDropped            string
+	sampleRate            string
+	samplerKeyCardinality string
+	numDroppedByDropRule  string
+}
+
+func newSamplerMetricNames(prefix string, met metrics.Metrics) samplerMetricNames {
+	sm := samplerMetricNames{}
+	for _, metric := range samplerMetrics {
+		fullname := prefix + metric.Name
+		switch metric.Name {
+		case "_num_kept":
+			sm.numKept = fullname
+		case "_num_dropped":
+			sm.numDropped = fullname
+		case "_sample_rate":
+			sm.sampleRate = fullname
+		case "_sampler_key_cardinality":
+			sm.samplerKeyCardinality = fullname
+		case "rulebased_num_dropped_by_drop_rule":
+			sm.numDroppedByDropRule = metric.Name
+		}
+
+		metric.Name = fullname
+		met.Register(metric)
+	}
+
+	return sm
 }

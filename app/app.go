@@ -9,6 +9,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/route"
+	"github.com/honeycombio/refinery/types"
 )
 
 type App struct {
@@ -54,6 +55,8 @@ func (a *App) Start() error {
 	}
 	a.IncomingRouter.SetVersion(a.Version)
 	a.PeerRouter.SetVersion(a.Version)
+	a.IncomingRouter.SetType(types.RouterTypeIncoming)
+	a.PeerRouter.SetType(types.RouterTypePeer)
 
 	record_hashes("loaded configuration at startup")
 	a.Config.RegisterReloadCallback(func(configHash, rulesHash string) {
@@ -62,8 +65,8 @@ func (a *App) Start() error {
 
 	// launch our main routers to listen for incoming event traffic from both peers
 	// and external sources
-	a.IncomingRouter.LnS("incoming")
-	a.PeerRouter.LnS("peer")
+	a.IncomingRouter.LnS()
+	a.PeerRouter.LnS()
 
 	// only enable the opamp agent if it's configured
 	if a.Config.GetOpAMPConfig().Enabled {

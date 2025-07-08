@@ -121,6 +121,13 @@ type InMemCollector struct {
 	hostname           string
 }
 
+// These are the names of the metrics we use to track the number of events sent to peers through the router.
+// Defining them here to avoid computing the names in the hot path of the collector.
+const (
+	peerRouterPeerMetricName     = "peer_router_peer"
+	incomingRouterPeerMetricName = "incoming_router_peer"
+)
+
 var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "trace_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "time taken to process a trace from arrival to send"},
 	{Name: "trace_span_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans in a trace"},
@@ -427,7 +434,7 @@ func (i *InMemCollector) collect() {
 				span.End()
 				return
 			}
-			i.processSpan(ctx, sp, "peer")
+			i.processSpan(ctx, sp, types.RouterTypeIncoming)
 		default:
 			select {
 			case msg, ok := <-i.dropDecisionMessages:
@@ -465,14 +472,14 @@ func (i *InMemCollector) collect() {
 					span.End()
 					return
 				}
-				i.processSpan(ctx, sp, "incoming")
+				i.processSpan(ctx, sp, types.RouterTypeIncoming)
 			case sp, ok := <-i.fromPeer:
 				if !ok {
 					// channel's been closed; we should shut down.
 					span.End()
 					return
 				}
-				i.processSpan(ctx, sp, "peer")
+				i.processSpan(ctx, sp, types.RouterTypePeer)
 			case <-i.reload:
 				i.reloadConfigs()
 			}
@@ -683,7 +690,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
-func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source string) {
+func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source types.RouterType) {
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "processSpan")
 	defer func() {
 		i.Metrics.Increment("span_processed")
@@ -789,7 +796,11 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	var spanForwarded bool
 	// if this trace doesn't belong to us and it's not in sent state, we should forward a decision span to its decider
 	if !trace.Sent && !isMyTrace {
-		i.Metrics.Increment(source + "_router_peer")
+		if source.IsIncoming() {
+			i.Metrics.Increment(incomingRouterPeerMetricName)
+		} else {
+			i.Metrics.Increment(peerRouterPeerMetricName)
+		}
 		i.Logger.Debug().
 			WithString("peer", targetShard.GetAddress()).
 			Logf("Sending span to peer")

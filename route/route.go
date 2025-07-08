@@ -84,7 +84,7 @@ type Router struct {
 
 	// type indicates whether this should listen for incoming events or content
 	// redirected from a peer
-	incomingOrPeer string
+	routerType types.RouterType
 
 	// iopLogger is a logger that knows whether it's incoming or peer
 	iopLogger iopLogger
@@ -98,6 +98,8 @@ type Router struct {
 
 	environmentCache *environmentCache
 	hsrv             *healthserver.Server
+
+	metricsNames routerMetricKeys
 }
 
 type BatchResponse struct {
@@ -126,6 +128,10 @@ func (r *Router) SetVersion(ver string) {
 	r.versionStr = ver
 }
 
+func (r *Router) SetType(rt types.RouterType) {
+	r.routerType = rt
+}
+
 var routerMetrics = []metrics.Metadata{
 	{Name: "_router_proxied", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events proxied to another refinery"},
 	{Name: "_router_event", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received"},
@@ -142,15 +148,61 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
 }
 
+func (r *Router) registerMetricNames() {
+	for _, metric := range routerMetrics {
+		fullname := r.routerType.String() + metric.Name
+		switch metric.Name {
+		case "_router_proxied":
+			r.metricsNames.routerProxied = fullname
+		case "_router_event":
+			r.metricsNames.routerEvent = fullname
+		case "_router_event_bytes":
+			r.metricsNames.routerEventBytes = fullname
+		case "_router_span":
+			r.metricsNames.routerSpan = fullname
+		case "_router_dropped":
+			r.metricsNames.routerDropped = fullname
+		case "_router_nonspan":
+			r.metricsNames.routerNonspan = fullname
+		case "_router_peer":
+			r.metricsNames.routerPeer = fullname
+		case "_router_batch":
+			r.metricsNames.routerBatch = fullname
+		case "_router_batch_events":
+			r.metricsNames.routerBatchEvents = fullname
+		case "_router_otlp":
+			r.metricsNames.routerOtlp = fullname
+		case "_router_otlp_events":
+			r.metricsNames.routerOtlpEvents = fullname
+		}
+
+		metric.Name = fullname
+		r.Metrics.Register(metric)
+	}
+}
+
+type routerMetricKeys struct {
+	routerProxied     string
+	routerEvent       string
+	routerEventBytes  string
+	routerSpan        string
+	routerDropped     string
+	routerNonspan     string
+	routerPeer        string
+	routerBatch       string
+	routerBatchEvents string
+	routerOtlp        string
+	routerOtlpEvents  string
+}
+
 // LnS spins up the Listen and Serve portion of the router. A router is
 // initialized as being for either incoming traffic from clients or traffic from
 // a peer. They listen on different addresses so peer traffic can be
 // prioritized.
-func (r *Router) LnS(incomingOrPeer string) {
-	r.incomingOrPeer = incomingOrPeer
+func (r *Router) LnS() {
 	r.iopLogger = iopLogger{
 		Logger:         r.Logger,
-		incomingOrPeer: incomingOrPeer,
+		incomingOrPeer: r.routerType.String(),
 	}
 
 	r.proxyClient = &http.Client{
@@ -166,12 +218,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		return
 	}
 
-	for _, metric := range routerMetrics {
-		if strings.HasPrefix(metric.Name, "_") {
-			metric.Name = r.incomingOrPeer + metric.Name
-		}
-		r.Metrics.Register(metric)
-	}
+	r.registerMetricNames()
 
 	muxxer := mux.NewRouter()
 
@@ -210,7 +257,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
 	var listenAddr, grpcAddr string
-	if r.incomingOrPeer == "incoming" {
+	if r.routerType.IsIncoming() {
 		listenAddr = r.Config.GetListenAddr()
 		// GRPC listen addr is optional
 		grpcAddr = r.Config.GetGRPCListenAddr()
@@ -384,7 +431,7 @@ func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format 
 
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
+	r.Metrics.Increment(r.metricsNames.routerEvent)
 
 	ctx := req.Context()
 	bodyBuffer, err := r.readAndCloseMaybeCompressedBody(req)
@@ -452,7 +499,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 }
 
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
+	r.Metrics.Increment(r.metricsNames.routerBatch)
 
 	ctx := req.Context()
 	reqID := ctx.Value(types.RequestIDContextKey{})
@@ -472,7 +519,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
 		return
 	}
-	r.Metrics.Count(r.incomingOrPeer+"_router_batch_events", int64(len(batchedEvents.events)))
+	r.Metrics.Count(r.metricsNames.routerBatchEvents, int64(len(batchedEvents.events)))
 
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
@@ -539,7 +586,7 @@ func (router *Router) processOTLPRequest(
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
 
-	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
+	router.Metrics.Increment(router.metricsNames.routerOtlp)
 
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
@@ -567,7 +614,7 @@ func (router *Router) processOTLPRequest(
 			}
 		}
 	}
-	router.Metrics.Count(router.incomingOrPeer+"_router_otlp_events", int64(totalEvents))
+	router.Metrics.Count(router.metricsNames.routerOtlpEvents, int64(totalEvents))
 
 	return nil
 }
@@ -581,7 +628,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	// record the event bytes size
 	// we do this early so can include all event types (span, event, log, etc)
-	r.Metrics.Histogram(r.incomingOrPeer+"_router_event_bytes", float64(ev.GetDataSize()))
+	r.Metrics.Histogram(r.metricsNames.routerEventBytes, float64(ev.GetDataSize()))
 
 	// An error here is effectively a parsing error, so return it up the stack.
 	if err := ev.Data.ExtractMetadata(); err != nil {
@@ -596,7 +643,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	if ev.Data.MetaTraceID == "" {
 		// not part of a trace. send along upstream
-		r.Metrics.Increment(r.incomingOrPeer + "_router_nonspan")
+		r.Metrics.Increment(r.metricsNames.routerNonspan)
 		debugLog.WithString("api_host", ev.APIHost).
 			WithString("dataset", ev.Dataset).
 			Logf("sending non-trace event from batch")
@@ -612,7 +659,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
-	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
+	if r.routerType.IsIncoming() && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
 		if span.Data.MetaSignalType == "log" {
 			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
 		} else {
@@ -647,7 +694,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		// Figure out if we should handle this span locally or pass on to a peer
 		targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
 		if !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
+			r.Metrics.Increment(r.metricsNames.routerPeer)
 			debugLog.
 				WithString("peer", targetShard.GetAddress()).
 				WithField("isprobe", isProbe).
@@ -671,20 +718,20 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	var err error
 	// we're supposed to handle it normally
-	if r.incomingOrPeer == "incoming" {
+	if r.routerType.IsIncoming() {
 		err = r.Collector.AddSpan(span)
 	} else {
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
-		r.Metrics.Increment(r.incomingOrPeer + "_router_dropped")
+		r.Metrics.Increment(r.metricsNames.routerDropped)
 		debugLog.Logf("Dropping span from batch, channel full")
 		return err
 	}
 
-	r.Metrics.Increment(r.incomingOrPeer + "_router_span")
+	r.Metrics.Increment(r.metricsNames.routerSpan)
 
-	debugLog.WithField("source", r.incomingOrPeer).Logf("Accepting span from batch for collection into a trace")
+	debugLog.WithField("source", r.routerType.String()).Logf("Accepting span from batch for collection into a trace")
 	return nil
 }
 
