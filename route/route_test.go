@@ -844,7 +844,7 @@ func TestAddIncomingUserAgent(t *testing.T) {
 func TestProcessEventMetrics(t *testing.T) {
 	tests := []struct {
 		name          string
-		routerType    RouterType
+		routerType    types.RouterType
 		opampEnabled  bool
 		recordUsage   config.DefaultTrue
 		signalType    string
@@ -853,7 +853,7 @@ func TestProcessEventMetrics(t *testing.T) {
 	}{
 		{
 			name:          "log event with opamp enabled and record usage",
-			routerType:    RouterTypeIncoming,
+			routerType:    types.RouterTypeIncoming,
 			opampEnabled:  true,
 			recordUsage:   config.DefaultTrue(true),
 			signalType:    "log",
@@ -862,7 +862,7 @@ func TestProcessEventMetrics(t *testing.T) {
 		},
 		{
 			name:          "trace event with opamp enabled and record usage",
-			routerType:    RouterTypeIncoming,
+			routerType:    types.RouterTypeIncoming,
 			opampEnabled:  true,
 			recordUsage:   config.DefaultTrue(true),
 			signalType:    "trace",
@@ -871,7 +871,7 @@ func TestProcessEventMetrics(t *testing.T) {
 		},
 		{
 			name:          "log event with opamp disabled",
-			routerType:    RouterTypeIncoming,
+			routerType:    types.RouterTypeIncoming,
 			opampEnabled:  false,
 			recordUsage:   config.DefaultTrue(true),
 			signalType:    "log",
@@ -879,7 +879,7 @@ func TestProcessEventMetrics(t *testing.T) {
 		},
 		{
 			name:          "log event with record usage disabled",
-			routerType:    RouterTypeIncoming,
+			routerType:    types.RouterTypeIncoming,
 			opampEnabled:  true,
 			recordUsage:   config.DefaultTrue(false),
 			signalType:    "log",
@@ -887,7 +887,7 @@ func TestProcessEventMetrics(t *testing.T) {
 		},
 		{
 			name:          "log event from peer",
-			routerType:    RouterTypePeer,
+			routerType:    types.RouterTypePeer,
 			opampEnabled:  true,
 			recordUsage:   config.DefaultTrue(true),
 			signalType:    "log",
@@ -998,8 +998,8 @@ func newBatchRouter(t testing.TB) *Router {
 		UpstreamTransmission: mockTransmission,
 		Collector:            mockCollector,
 		Sharder:              mockSharder,
-		routerType:           RouterTypeIncoming,
-		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: RouterTypeIncoming.String()},
+		routerType:           types.RouterTypeIncoming,
+		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: types.RouterTypeIncoming.String()},
 		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
 	}
 	r.registerMetricNames()

@@ -434,7 +434,7 @@ func (i *InMemCollector) collect() {
 				span.End()
 				return
 			}
-			i.processSpan(ctx, sp, "peer")
+			i.processSpan(ctx, sp, types.RouterTypeIncoming)
 		default:
 			select {
 			case msg, ok := <-i.dropDecisionMessages:
@@ -472,14 +472,14 @@ func (i *InMemCollector) collect() {
 					span.End()
 					return
 				}
-				i.processSpan(ctx, sp, "incoming")
+				i.processSpan(ctx, sp, types.RouterTypeIncoming)
 			case sp, ok := <-i.fromPeer:
 				if !ok {
 					// channel's been closed; we should shut down.
 					span.End()
 					return
 				}
-				i.processSpan(ctx, sp, "peer")
+				i.processSpan(ctx, sp, types.RouterTypePeer)
 			case <-i.reload:
 				i.reloadConfigs()
 			}
@@ -690,7 +690,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
-func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source string) {
+func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source types.RouterType) {
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "processSpan")
 	defer func() {
 		i.Metrics.Increment("span_processed")
@@ -796,10 +796,9 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	var spanForwarded bool
 	// if this trace doesn't belong to us and it's not in sent state, we should forward a decision span to its decider
 	if !trace.Sent && !isMyTrace {
-		switch source {
-		case "peer":
+		if source.IsPeer() {
 			i.Metrics.Increment(peerRouterPeerMetricName)
-		case "incoming":
+		} else {
 			i.Metrics.Increment(incomingRouterPeerMetricName)
 		}
 		i.Logger.Debug().

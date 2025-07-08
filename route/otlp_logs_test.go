@@ -20,6 +20,7 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/honeycombio/refinery/types"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,7 +68,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 			Logger: logger,
 		},
 		Collector:  mockCollector,
-		routerType: RouterTypeIncoming,
+		routerType: types.RouterTypeIncoming,
 		Tracer:     noop.Tracer{},
 	}
 	logsServer := NewLogsServer(router)

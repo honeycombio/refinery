@@ -2518,7 +2518,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 			APIKey:  legacyAPIKey,
 		},
 	}
-	coll.processSpan(context.Background(), lateSpan, "incoming")
+	coll.processSpan(context.Background(), lateSpan, types.RouterTypeIncoming)
 
 	updatedTrace := coll.cache.Get(traceID)
 	require.Equal(t, trace.SendBy.Unix(), updatedTrace.SendBy.Unix())

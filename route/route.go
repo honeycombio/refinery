@@ -64,32 +64,6 @@ const (
 	defaultSampleRate      = 1
 )
 
-type RouterType int
-
-const (
-	RouterTypeIncoming RouterType = iota
-	RouterTypePeer
-)
-
-func (rt RouterType) String() string {
-	switch rt {
-	case RouterTypeIncoming:
-		return "incoming"
-	case RouterTypePeer:
-		return "peer"
-	default:
-		return "unknown"
-	}
-}
-
-func (rt RouterType) isIncoming() bool {
-	return rt == RouterTypeIncoming
-}
-
-func (rt RouterType) isPeer() bool {
-	return rt == RouterTypePeer
-}
-
 type Router struct {
 	Config               config.Config         `inject:""`
 	Logger               logger.Logger         `inject:""`
@@ -110,7 +84,7 @@ type Router struct {
 
 	// type indicates whether this should listen for incoming events or content
 	// redirected from a peer
-	routerType RouterType
+	routerType types.RouterType
 
 	// iopLogger is a logger that knows whether it's incoming or peer
 	iopLogger iopLogger
@@ -154,7 +128,7 @@ func (r *Router) SetVersion(ver string) {
 	r.versionStr = ver
 }
 
-func (r *Router) SetType(rt RouterType) {
+func (r *Router) SetType(rt types.RouterType) {
 	r.routerType = rt
 }
 
@@ -283,7 +257,7 @@ func (r *Router) LnS() {
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
 	var listenAddr, grpcAddr string
-	if r.routerType.isIncoming() {
+	if r.routerType.IsIncoming() {
 		listenAddr = r.Config.GetListenAddr()
 		// GRPC listen addr is optional
 		grpcAddr = r.Config.GetGRPCListenAddr()
@@ -685,7 +659,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	}
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
-	if r.routerType.isIncoming() && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
+	if r.routerType.IsIncoming() && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
 		if span.Data.MetaSignalType == "log" {
 			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
 		} else {
@@ -744,7 +718,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	var err error
 	// we're supposed to handle it normally
-	if r.routerType.isIncoming() {
+	if r.routerType.IsIncoming() {
 		err = r.Collector.AddSpan(span)
 	} else {
 		err = r.Collector.AddSpanFromPeer(span)

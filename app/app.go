@@ -9,6 +9,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/route"
+	"github.com/honeycombio/refinery/types"
 )
 
 type App struct {
@@ -54,8 +55,8 @@ func (a *App) Start() error {
 	}
 	a.IncomingRouter.SetVersion(a.Version)
 	a.PeerRouter.SetVersion(a.Version)
-	a.IncomingRouter.SetType(route.RouterTypeIncoming)
-	a.PeerRouter.SetType(route.RouterTypePeer)
+	a.IncomingRouter.SetType(types.RouterTypeIncoming)
+	a.PeerRouter.SetType(types.RouterTypePeer)
 
 	record_hashes("loaded configuration at startup")
 	a.Config.RegisterReloadCallback(func(configHash, rulesHash string) {
