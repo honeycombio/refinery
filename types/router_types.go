@@ -1,21 +1,20 @@
 package types
 
-// RouterType defines which type of traffic a component is handling.
-type RouterType string
+// RouterType is a type that represents whether an event is incoming or from a peer.
+type RouterType bool
 
 const (
-	RouterTypeIncoming RouterType = "incoming"
-	RouterTypePeer     RouterType = "peer"
+	RouterTypeIncoming RouterType = true
+	RouterTypePeer     RouterType = false
 )
 
 func (rt RouterType) String() string {
-	return string(rt)
+	if rt {
+		return "incoming"
+	}
+	return "peer"
 }
 
 func (rt RouterType) IsIncoming() bool {
 	return rt == RouterTypeIncoming
-}
-
-func (rt RouterType) IsPeer() bool {
-	return rt == RouterTypePeer
 }

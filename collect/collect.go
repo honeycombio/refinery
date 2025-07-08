@@ -796,10 +796,10 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	var spanForwarded bool
 	// if this trace doesn't belong to us and it's not in sent state, we should forward a decision span to its decider
 	if !trace.Sent && !isMyTrace {
-		if source.IsPeer() {
-			i.Metrics.Increment(peerRouterPeerMetricName)
-		} else {
+		if source.IsIncoming() {
 			i.Metrics.Increment(incomingRouterPeerMetricName)
+		} else {
+			i.Metrics.Increment(peerRouterPeerMetricName)
 		}
 		i.Logger.Debug().
 			WithString("peer", targetShard.GetAddress()).
