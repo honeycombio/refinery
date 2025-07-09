@@ -9,7 +9,6 @@ import (
 	"github.com/honeycombio/dynsampler-go"
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
-
 	"github.com/honeycombio/refinery/config"
 )
 
@@ -80,6 +79,7 @@ func (h *HoneycombLogger) Start() error {
 	}
 	h.libhClient = libhClient
 
+	h.addResourceAttributes()
 	h.libhClient.AddField("refinery_version", h.Version)
 	if hostname, err := os.Hostname(); err == nil {
 		h.libhClient.AddField("hostname", hostname)
@@ -101,6 +101,17 @@ func (h *HoneycombLogger) Start() error {
 	fmt.Printf("Starting Honeycomb Logger - see Honeycomb %s dataset for service logs\n", h.loggerConfig.Dataset)
 
 	return nil
+}
+
+// Add support for the REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_FIELDS env var which allows
+// specifying comma-separated key-value pairs to be added to outgoing logs as fields.
+// The key value pairs must be separated by `=`.
+// Credit to https://github.com/open-telemetry/opentelemetry-go/blob/553779c161e9bb7bbc1670b3a92a1bf3ceefb859/sdk/resource/env.go#L67-L95
+func (h *HoneycombLogger) addResourceAttributes() {
+	attrs := h.Config.GetHoneycombLoggerConfig().AdditionalAttributes
+	for k, v := range attrs {
+		h.libhClient.AddField(k, v)
+	}
 }
 
 func (h *HoneycombLogger) readResponses() {
