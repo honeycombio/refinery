@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-var _ Metrics = (*OTelMetrics)(nil)
+var _ MetricsBackend = (*OTelMetrics)(nil)
 
 // OTelMetrics sends metrics to Honeycomb using the OpenTelemetry protocol. One
 // particular thing to note is that OTel metrics treats histograms very
@@ -35,15 +35,12 @@ type OTelMetrics struct {
 	meter        metric.Meter
 	shutdownFunc func(ctx context.Context) error
 
-	counters   map[string]metric.Int64Counter
-	gauges     map[string]metric.Float64ObservableGauge
-	histograms map[string]metric.Float64Histogram
-	updowns    map[string]metric.Int64UpDownCounter
-
-	// values keeps a map of all the non-histogram metrics and their current value
-	// so that we can retrieve them with Get()
-	values map[string]float64
-	lock   sync.RWMutex
+	lock             sync.RWMutex
+	counters         map[string]metric.Int64Counter
+	gauges           map[string]metric.Float64Gauge
+	histograms       map[string]metric.Float64Histogram
+	updowns          map[string]metric.Int64UpDownCounter
+	observableGauges map[string]metric.Float64ObservableGauge
 }
 
 // Start initializes all metrics or resets all metrics to zero
@@ -54,11 +51,10 @@ func (o *OTelMetrics) Start() error {
 	defer o.lock.Unlock()
 
 	o.counters = make(map[string]metric.Int64Counter)
-	o.gauges = make(map[string]metric.Float64ObservableGauge)
+	o.gauges = make(map[string]metric.Float64Gauge)
 	o.histograms = make(map[string]metric.Float64Histogram)
 	o.updowns = make(map[string]metric.Int64UpDownCounter)
-
-	o.values = make(map[string]float64)
+	o.observableGauges = make(map[string]metric.Float64ObservableGauge)
 
 	ctx := context.Background()
 
@@ -155,21 +151,21 @@ func (o *OTelMetrics) Start() error {
 		return err
 	}
 
-	o.gauges[name] = g
+	o.observableGauges[name] = g
 
 	name = "memory_inuse"
 	// This is just reporting the gauge we already track under a different name.
 	var fmem metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
-		// this is an 'ok' value, not an error, so it's safe to ignore it.
-		v, _ := o.Get("memory_heap_allocation")
-		result.Observe(v)
+		stats := &runtime.MemStats{}
+		runtime.ReadMemStats(stats)
+		result.Observe(float64(stats.HeapAlloc))
 		return nil
 	}
 	g, err = o.meter.Float64ObservableGauge(name, metric.WithFloat64Callback(fmem))
 	if err != nil {
 		return err
 	}
-	o.gauges[name] = g
+	o.observableGauges[name] = g
 
 	startTime := time.Now()
 	name = "process_uptime_seconds"
@@ -181,7 +177,7 @@ func (o *OTelMetrics) Start() error {
 	if err != nil {
 		return err
 	}
-	o.gauges[name] = g
+	o.observableGauges[name] = g
 
 	return nil
 }
@@ -230,117 +226,114 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 }
 
 func (o *OTelMetrics) Increment(name string) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	ctr, ok := o.counters[name]
+	o.lock.RUnlock()
 
 	var err error
-	ctr, ok := o.counters[name]
 	if !ok {
+		o.lock.Lock()
 		ctr, err = o.initCounter(Metadata{
 			Name: name,
 		})
+		o.lock.Unlock()
 
 		if err != nil {
 			return
 		}
 	}
+
 	ctr.Add(context.Background(), 1)
-	o.values[name]++
 }
 
 func (o *OTelMetrics) Gauge(name string, val float64) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	g, ok := o.gauges[name]
+	o.lock.RUnlock()
 
-	if _, ok := o.gauges[name]; !ok {
-		_, err := o.initGauge(Metadata{
+	var err error
+	if !ok {
+		o.lock.Lock()
+		g, err = o.initGauge(Metadata{
 			Name: name,
 		})
+		o.lock.Unlock()
 
 		if err != nil {
 			return
 		}
 	}
-	o.values[name] = val
+
+	g.Record(context.Background(), val)
 }
 
 func (o *OTelMetrics) Count(name string, val int64) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	ctr, ok := o.counters[name]
+	o.lock.RUnlock()
 
 	var err error
-	ctr, ok := o.counters[name]
 	if !ok {
+		o.lock.Lock()
 		ctr, err = o.initCounter(Metadata{Name: name})
+		o.lock.Unlock()
 		if err != nil {
 			return
 		}
 	}
 	ctr.Add(context.Background(), val)
-	o.values[name] += float64(val)
 }
 
 func (o *OTelMetrics) Histogram(name string, val float64) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	h, ok := o.histograms[name]
+	o.lock.RUnlock()
 
 	var err error
-	h, ok := o.histograms[name]
 	if !ok {
+		o.lock.Lock()
 		h, err = o.initHistogram(Metadata{Name: name})
+		o.lock.Unlock()
 		if err != nil {
 			return
 		}
 	}
 	h.Record(context.Background(), val)
-	o.values[name] += val
 }
 
 func (o *OTelMetrics) Up(name string) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	ud, ok := o.updowns[name]
+	o.lock.RUnlock()
 
 	var err error
-	ud, ok := o.updowns[name]
 	if !ok {
+		o.lock.Lock()
 		ud, err = o.initUpDown(Metadata{Name: name})
+		o.lock.Unlock()
 		if err != nil {
 			return
 		}
 	}
 	ud.Add(context.Background(), 1)
-	o.values[name]++
 }
 
 func (o *OTelMetrics) Down(name string) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	ud, ok := o.updowns[name]
+	o.lock.RUnlock()
 
 	var err error
-	ud, ok := o.updowns[name]
 	if !ok {
+		o.lock.Lock()
 		ud, err = o.initUpDown(Metadata{Name: name})
+		o.lock.Unlock()
 		if err != nil {
 			return
 		}
 	}
+
 	ud.Add(context.Background(), -1)
-	o.values[name]--
-}
-
-func (o *OTelMetrics) Store(name string, value float64) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
-	o.values[name] = value
-}
-
-func (o *OTelMetrics) Get(name string) (float64, bool) {
-	o.lock.RLock()
-	defer o.lock.RUnlock()
-
-	val, ok := o.values[name]
-	return val, ok
 }
 
 // initCounter initializes a new counter metric with the given metadata
@@ -364,24 +357,11 @@ func (o *OTelMetrics) initCounter(metadata Metadata) (metric.Int64Counter, error
 
 // initGauge initializes a new gauge metric with the given metadata
 // It should be used while holding the metrics lock.
-func (o *OTelMetrics) initGauge(metadata Metadata) (metric.Float64ObservableGauge, error) {
+func (o *OTelMetrics) initGauge(metadata Metadata) (metric.Float64Gauge, error) {
 	unit := string(metadata.Unit)
-	var f metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
-		// this callback is invoked from outside this function call, so we
-		// need to Rlock when we read the values map. We don't know how long
-		// Observe() takes, so we make a copy of the value and unlock before
-		// calling Observe.
-		o.lock.RLock()
-		v := o.values[metadata.Name]
-		o.lock.RUnlock()
-
-		result.Observe(v)
-		return nil
-	}
-	g, err := o.meter.Float64ObservableGauge(metadata.Name,
+	g, err := o.meter.Float64Gauge(metadata.Name,
 		metric.WithUnit(unit),
 		metric.WithDescription(metadata.Description),
-		metric.WithFloat64Callback(f),
 	)
 	if err != nil {
 		return nil, err
