@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	libhoney "github.com/honeycombio/libhoney-go"
@@ -43,15 +44,22 @@ type LegacyMetrics struct {
 }
 
 type counter struct {
-	lock sync.Mutex
 	name string
 	val  int64
 }
 
-type gauge struct {
-	lock sync.Mutex
-	name string
-	val  float64
+func (c *counter) add(delta int64) {
+	atomic.AddInt64(&c.val, delta)
+}
+
+// get atomically loads the value of the counter.
+func (c *counter) get() int64 {
+	return atomic.LoadInt64(&c.val)
+}
+
+// report atomically swaps the value of the counter to 0 and returns the previous value.
+func (c *counter) report() int64 {
+	return atomic.SwapInt64(&c.val, 0)
 }
 
 type histogram struct {
@@ -61,9 +69,41 @@ type histogram struct {
 }
 
 type updown struct {
-	lock sync.Mutex
 	name string
-	val  int
+	val  int64
+}
+
+// report atomically swaps the value of the updown to 0 and returns the previous value.
+func (u *updown) report() int64 {
+	return atomic.SwapInt64(&u.val, 0)
+}
+
+// get atomically loads the value of the updown.
+func (u *updown) get() int64 {
+	return atomic.LoadInt64(&u.val)
+}
+
+func (u *updown) add(n int64) {
+	atomic.AddInt64(&u.val, n)
+}
+
+type gauge struct {
+	name string
+	val  uint64
+}
+
+// report atomically swaps the value of the gauge to 0 and returns the previous value.
+func (g *gauge) report() float64 {
+	return math.Float64frombits(atomic.SwapUint64(&g.val, 0))
+}
+
+// get atomically loads the value of the gauge.
+func (g *gauge) get() float64 {
+	return math.Float64frombits(atomic.LoadUint64(&g.val))
+}
+
+func (g *gauge) store(val float64) {
+	atomic.StoreUint64(&g.val, math.Float64bits(val))
 }
 
 func (h *LegacyMetrics) Start() error {
@@ -115,10 +155,11 @@ func (h *LegacyMetrics) reloadBuilder(cfgHash, ruleHash string) {
 func (h *LegacyMetrics) initLibhoney(mc config.LegacyMetricsConfig) error {
 	metricsTx := &transmission.Honeycomb{
 		// metrics are always sent as a single event, so don't wait for the timeout
-		MaxBatchSize:      1,
-		BlockOnSend:       true,
-		UserAgentAddition: "refinery/" + h.Version + " (metrics)",
-		Transport:         h.UpstreamTransport,
+		MaxBatchSize:          1,
+		BlockOnSend:           true,
+		UserAgentAddition:     "refinery/" + h.Version + " (metrics)",
+		Transport:             h.UpstreamTransport,
+		EnableMsgpackEncoding: true,
 	}
 	libhClientConfig := libhoney.ClientConfig{
 		APIHost:      mc.APIHost,
@@ -242,25 +283,15 @@ func (h *LegacyMetrics) reportToHoneycomb(ctx context.Context) {
 
 			h.lock.RLock()
 			for _, count := range h.counters {
-				count.lock.Lock()
-				ev.AddField(count.name, count.val)
-				count.val = 0
-				count.lock.Unlock()
+				ev.AddField(count.name, count.report())
 			}
 
 			for _, updown := range h.updowns {
-				updown.lock.Lock()
-				ev.AddField(updown.name, updown.val)
-				// updown.val = 0   // updowns are never reset to 0
-				updown.lock.Unlock()
+				ev.AddField(updown.name, updown.report())
 			}
 
 			for _, gauge := range h.gauges {
-				gauge.lock.Lock()
-				ev.AddField(gauge.name, gauge.val)
-				// gauges should remain where they are until changed
-				// gauge.val = 0
-				gauge.lock.Unlock()
+				ev.AddField(gauge.name, gauge.report())
 			}
 
 			for _, histogram := range h.histograms {
@@ -292,17 +323,18 @@ func (h *LegacyMetrics) reportToHoneycomb(ctx context.Context) {
 func (h *LegacyMetrics) Get(name string) (float64, bool) {
 	h.lock.RLock()
 	defer h.lock.RUnlock()
+
 	if m, ok := h.counters[name]; ok {
-		return float64(m.val), true
+		return float64(m.get()), true
 	}
 	if m, ok := h.updowns[name]; ok {
-		return float64(m.val), true
+		return float64(m.get()), true
 	}
 	if m, ok := h.gauges[name]; ok {
-		return m.val, true
+		return float64(m.get()), true
 	}
 	if m, ok := h.constants[name]; ok {
-		return m.val, true
+		return float64(m.get()), true
 	}
 	return 0, false
 }
@@ -385,11 +417,7 @@ func createUpdown(name string) *updown {
 
 func (h *LegacyMetrics) Count(name string, n int64) {
 	counter := getOrAdd(&h.lock, name, h.counters, createCounter)
-
-	// update value, using counter's lock
-	counter.lock.Lock()
-	counter.val = counter.val + n
-	counter.lock.Unlock()
+	counter.add(n)
 }
 
 func (h *LegacyMetrics) Increment(name string) {
@@ -399,10 +427,7 @@ func (h *LegacyMetrics) Increment(name string) {
 func (h *LegacyMetrics) Gauge(name string, val float64) {
 	gauge := getOrAdd(&h.lock, name, h.gauges, createGauge)
 
-	// update value, using gauge's lock
-	gauge.lock.Lock()
-	gauge.val = val
-	gauge.lock.Unlock()
+	gauge.store(val)
 }
 
 func (h *LegacyMetrics) Histogram(name string, obs float64) {
@@ -417,26 +442,17 @@ func (h *LegacyMetrics) Histogram(name string, obs float64) {
 func (h *LegacyMetrics) Up(name string) {
 	counter := getOrAdd(&h.lock, name, h.updowns, createUpdown)
 
-	// update value, using counter's lock
-	counter.lock.Lock()
-	counter.val++
-	counter.lock.Unlock()
+	counter.add(1)
 }
 
 func (h *LegacyMetrics) Down(name string) {
 	counter := getOrAdd(&h.lock, name, h.updowns, createUpdown)
 
-	// update value, using counter's lock
-	counter.lock.Lock()
-	counter.val--
-	counter.lock.Unlock()
+	counter.add(-1)
 }
 
 func (h *LegacyMetrics) Store(name string, val float64) {
 	constant := getOrAdd(&h.lock, name, h.constants, createGauge)
 
-	// update value, using constant's lock
-	constant.lock.Lock()
-	constant.val = val
-	constant.lock.Unlock()
+	constant.store(val)
 }

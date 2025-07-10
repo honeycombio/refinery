@@ -21,10 +21,7 @@ type PromMetrics struct {
 	// metrics keeps a record of all the registered metrics so we can increment
 	// them by name
 	metrics map[string]interface{}
-	// values keeps a map of all the non-histogram metrics and their current value
-	// so that we can retrieve them with Get()
-	values map[string]float64
-	lock   sync.RWMutex
+	lock    sync.RWMutex
 }
 
 func (p *PromMetrics) Start() error {
@@ -36,7 +33,6 @@ func (p *PromMetrics) Start() error {
 	defer p.lock.Unlock()
 
 	p.metrics = make(map[string]interface{})
-	p.values = make(map[string]float64)
 
 	muxxer := mux.NewRouter()
 
@@ -84,85 +80,81 @@ func (p *PromMetrics) Register(metadata Metadata) {
 	}
 
 	p.metrics[metadata.Name] = newmet
-	p.values[metadata.Name] = 0
 }
 
 func (p *PromMetrics) Get(name string) (float64, bool) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-	v, ok := p.values[name]
-	return v, ok
+	return 0, false
 }
 
 func (p *PromMetrics) Increment(name string) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	counterIface, ok := p.metrics[name]
+	p.lock.RUnlock()
 
-	if counterIface, ok := p.metrics[name]; ok {
+	if ok {
+
 		if counter, ok := counterIface.(prometheus.Counter); ok {
 			counter.Inc()
-			p.values[name]++
 		}
 	}
 }
 func (p *PromMetrics) Count(name string, n int64) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	counterIface, ok := p.metrics[name]
+	p.lock.RUnlock()
 
-	if counterIface, ok := p.metrics[name]; ok {
+	if ok {
 		if counter, ok := counterIface.(prometheus.Counter); ok {
 			counter.Add(float64(n))
-			p.values[name] += float64(n)
 		}
 	}
 }
 func (p *PromMetrics) Gauge(name string, val float64) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	gaugeIface, ok := p.metrics[name]
+	p.lock.RUnlock()
 
-	if gaugeIface, ok := p.metrics[name]; ok {
+	if ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
 			gauge.Set(val)
-			p.values[name] = val
 		}
 	}
 }
 func (p *PromMetrics) Histogram(name string, obs float64) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	histIface, ok := p.metrics[name]
+	p.lock.RUnlock()
 
-	if histIface, ok := p.metrics[name]; ok {
+	if ok {
 		if hist, ok := histIface.(prometheus.Histogram); ok {
 			hist.Observe(obs)
 		}
 	}
 }
 func (p *PromMetrics) Up(name string) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
+	p.lock.RLock()
+	gaugeIface, ok := p.metrics[name]
+	p.lock.RUnlock()
 
-	if gaugeIface, ok := p.metrics[name]; ok {
+	if ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
 			gauge.Inc()
-			p.values[name]++
 		}
 	}
 }
+
 func (p *PromMetrics) Down(name string) {
 	p.lock.Lock()
-	defer p.lock.Unlock()
+	gaugeIface, ok := p.metrics[name]
+	p.lock.Unlock()
 
-	if gaugeIface, ok := p.metrics[name]; ok {
+	if ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {
 			gauge.Dec()
-			p.values[name]--
 		}
 	}
 }
 
 func (p *PromMetrics) Store(name string, val float64) {
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
-	p.values[name] = val
+	return
 }

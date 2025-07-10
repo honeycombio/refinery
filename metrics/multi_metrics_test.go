@@ -111,6 +111,50 @@ func TestMultiMetrics_Register(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestMultiMetrics_Get(t *testing.T) {
+	// This shows that a standalone metrics with no children can register and store values
+	// that are important to StressRelief.
+	mm, err := getAndStartMultiMetrics()
+	assert.NoError(t, err)
+	mm.Register(Metadata{
+		Name: "test_store",
+		Type: Gauge,
+	})
+
+	mm.Count("test_counter", 1)
+	val, ok := mm.Get("test_counter")
+	assert.True(t, ok)
+	assert.Equal(t, float64(1), val)
+	mm.Count("test_counter", 2)
+	val, ok = mm.Get("test_counter")
+	assert.True(t, ok)
+	assert.Equal(t, float64(3), val)
+
+	mm.Gauge("test_gauge", 42.0)
+	val, ok = mm.Get("test_gauge")
+	assert.True(t, ok)
+	assert.Equal(t, 42.0, val)
+
+	mm.Up("test_updown")
+	val, ok = mm.Get("test_updown")
+	assert.True(t, ok)
+	assert.Equal(t, 1.0, val)
+	mm.Down("test_updown")
+	val, ok = mm.Get("test_updown")
+	assert.True(t, ok)
+	assert.Equal(t, 0.0, val)
+
+	mm.Store("test_store", 100.0)
+	val, ok = mm.Get("test_store")
+	assert.True(t, ok)
+	assert.Equal(t, 100.0, val)
+
+	mm.Store("test_store", 200.0)
+	val, ok = mm.Get("test_store")
+	assert.True(t, ok)
+	assert.Equal(t, 200.0, val)
+}
+
 func BenchmarkConcurrentAccess(b *testing.B) {
 	legacyMetrics := &LegacyMetrics{
 		Logger: &logger.NullLogger{},
