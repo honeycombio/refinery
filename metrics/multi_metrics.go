@@ -16,18 +16,18 @@ var _ Metrics = (*MultiMetrics)(nil)
 // which can then be retrieved with Get(). This is for use with StressRelief and OpAMP agent. It
 // does not track histograms, which are reset after each scrape.
 type MultiMetrics struct {
-	Config        config.Config `inject:""`
-	LegacyMetrics Metrics       `inject:"legacyMetrics"`
-	PromMetrics   Metrics       `inject:"promMetrics"`
-	OTelMetrics   Metrics       `inject:"otelMetrics"`
-	children      []Metrics
+	Config        config.Config  `inject:""`
+	LegacyMetrics MetricsBackend `inject:"legacyMetrics"`
+	PromMetrics   MetricsBackend `inject:"promMetrics"`
+	OTelMetrics   MetricsBackend `inject:"otelMetrics"`
+	children      []MetricsBackend
 	values        map[string]float64
 	lock          sync.RWMutex
 }
 
 func NewMultiMetrics() *MultiMetrics {
 	return &MultiMetrics{
-		children: []Metrics{},
+		children: []MetricsBackend{},
 		values:   make(map[string]float64),
 	}
 }
@@ -52,14 +52,14 @@ func (m *MultiMetrics) Start() error {
 	return nil
 }
 
-func (m *MultiMetrics) AddChild(met Metrics) {
+func (m *MultiMetrics) AddChild(met MetricsBackend) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.children = append(m.children, met)
 }
 
 // This is not safe for concurrent use!
-func (m *MultiMetrics) Children() []Metrics {
+func (m *MultiMetrics) Children() []MetricsBackend {
 	return m.children
 }
 

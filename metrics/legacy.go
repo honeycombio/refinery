@@ -18,7 +18,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 )
 
-var _ Metrics = (*LegacyMetrics)(nil)
+var _ MetricsBackend = (*LegacyMetrics)(nil)
 
 type LegacyMetrics struct {
 	Config            config.Config   `inject:""`
@@ -45,21 +45,19 @@ type LegacyMetrics struct {
 
 type counter struct {
 	name string
-	val  int64
-}
-
-func (c *counter) add(delta int64) {
-	atomic.AddInt64(&c.val, delta)
-}
-
-// get atomically loads the value of the counter.
-func (c *counter) get() int64 {
-	return atomic.LoadInt64(&c.val)
+	val  atomic.Int64
 }
 
 // report atomically swaps the value of the counter to 0 and returns the previous value.
 func (c *counter) report() int64 {
-	return atomic.SwapInt64(&c.val, 0)
+	return c.val.Swap(0)
+}
+
+func (c *counter) get() int64 {
+	return c.val.Load()
+}
+func (c *counter) add(n int64) {
+	c.val.Add(n)
 }
 
 type histogram struct {
@@ -70,40 +68,35 @@ type histogram struct {
 
 type updown struct {
 	name string
-	val  int64
+	val  atomic.Int64
 }
 
-// report atomically swaps the value of the updown to 0 and returns the previous value.
-func (u *updown) report() int64 {
-	return atomic.SwapInt64(&u.val, 0)
-}
-
-// get atomically loads the value of the updown.
 func (u *updown) get() int64 {
-	return atomic.LoadInt64(&u.val)
+	return u.val.Load()
 }
 
 func (u *updown) add(n int64) {
-	atomic.AddInt64(&u.val, n)
+	u.val.Add(n)
 }
 
 type gauge struct {
 	name string
-	val  uint64
+	// stores the float64 value as a uint64 to allow atomic operations
+	val atomic.Uint64
 }
 
 // report atomically swaps the value of the gauge to 0 and returns the previous value.
 func (g *gauge) report() float64 {
-	return math.Float64frombits(atomic.SwapUint64(&g.val, 0))
+	return math.Float64frombits(g.val.Swap(0))
 }
 
 // get atomically loads the value of the gauge.
 func (g *gauge) get() float64 {
-	return math.Float64frombits(atomic.LoadUint64(&g.val))
+	return math.Float64frombits(g.val.Load())
 }
 
 func (g *gauge) store(val float64) {
-	atomic.StoreUint64(&g.val, math.Float64bits(val))
+	g.val.Store(math.Float64bits(val))
 }
 
 func (h *LegacyMetrics) Start() error {
@@ -275,68 +268,53 @@ func (h *LegacyMetrics) reportToHoneycomb(ctx context.Context) {
 			// context canceled? we're being asked to stop this so it can be restarted.
 			return
 		case <-tick.C:
-			ev := h.libhClient.NewEvent()
-			ev.Metadata = map[string]any{
-				"api_host": ev.APIHost,
-				"dataset":  ev.Dataset,
-			}
-
-			h.lock.RLock()
-			for _, count := range h.counters {
-				ev.AddField(count.name, count.report())
-			}
-
-			for _, updown := range h.updowns {
-				ev.AddField(updown.name, updown.report())
-			}
-
-			for _, gauge := range h.gauges {
-				ev.AddField(gauge.name, gauge.report())
-			}
-
-			for _, histogram := range h.histograms {
-				histogram.lock.Lock()
-				if len(histogram.vals) != 0 {
-					sort.Float64s(histogram.vals)
-					p50Index := int(math.Floor(float64(len(histogram.vals)) * 0.5))
-					p95Index := int(math.Floor(float64(len(histogram.vals)) * 0.95))
-					p99Index := int(math.Floor(float64(len(histogram.vals)) * 0.99))
-					ev.AddField(histogram.name+"_p50", histogram.vals[p50Index])
-					ev.AddField(histogram.name+"_p95", histogram.vals[p95Index])
-					ev.AddField(histogram.name+"_p99", histogram.vals[p99Index])
-					ev.AddField(histogram.name+"_min", histogram.vals[0])
-					ev.AddField(histogram.name+"_max", histogram.vals[len(histogram.vals)-1])
-					ev.AddField(histogram.name+"_avg", average(histogram.vals))
-					histogram.vals = histogram.vals[:0]
-				}
-				histogram.lock.Unlock()
-			}
-			h.lock.RUnlock()
-
+			ev := h.createReport()
 			ev.Send()
 		}
 	}
 }
 
-// Retrieves the current value of a gauge, constant, counter, or updown as a float64
-// (even if it's an integer value). Returns 0 if the name isn't found.
-func (h *LegacyMetrics) Get(name string) (float64, bool) {
-	h.lock.RLock()
-	defer h.lock.RUnlock()
+func (h *LegacyMetrics) createReport() *libhoney.Event {
+	ev := h.libhClient.NewEvent()
+	ev.Metadata = map[string]any{
+		"api_host": ev.APIHost,
+		"dataset":  ev.Dataset,
+	}
 
-	if m, ok := h.counters[name]; ok {
-		return float64(m.get()), true
+	h.lock.RLock()
+	for _, count := range h.counters {
+		ev.AddField(count.name, count.report())
 	}
-	if m, ok := h.updowns[name]; ok {
-		return float64(m.get()), true
+
+	for _, updown := range h.updowns {
+		// updown value are never reset to 0
+		ev.AddField(updown.name, updown.get())
 	}
-	if m, ok := h.gauges[name]; ok {
-		return float64(m.get()), true
+
+	for _, gauge := range h.gauges {
+		ev.AddField(gauge.name, gauge.report())
 	}
-	if m, ok := h.constants[name]; ok {
-		return float64(m.get()), true
+
+	for _, histogram := range h.histograms {
+		histogram.lock.Lock()
+		if len(histogram.vals) != 0 {
+			sort.Float64s(histogram.vals)
+			p50Index := int(math.Floor(float64(len(histogram.vals)) * 0.5))
+			p95Index := int(math.Floor(float64(len(histogram.vals)) * 0.95))
+			p99Index := int(math.Floor(float64(len(histogram.vals)) * 0.99))
+			ev.AddField(histogram.name+"_p50", histogram.vals[p50Index])
+			ev.AddField(histogram.name+"_p95", histogram.vals[p95Index])
+			ev.AddField(histogram.name+"_p99", histogram.vals[p99Index])
+			ev.AddField(histogram.name+"_min", histogram.vals[0])
+			ev.AddField(histogram.name+"_max", histogram.vals[len(histogram.vals)-1])
+			ev.AddField(histogram.name+"_avg", average(histogram.vals))
+			histogram.vals = histogram.vals[:0]
+		}
+		histogram.lock.Unlock()
 	}
-	return 0, false
+	h.lock.RUnlock()
+
+	return ev
 }
 
 func average(vals []float64) float64 {
@@ -449,10 +427,4 @@ func (h *LegacyMetrics) Down(name string) {
 	counter := getOrAdd(&h.lock, name, h.updowns, createUpdown)
 
 	counter.add(-1)
-}
-
-func (h *LegacyMetrics) Store(name string, val float64) {
-	constant := getOrAdd(&h.lock, name, h.constants, createGauge)
-
-	constant.store(val)
 }

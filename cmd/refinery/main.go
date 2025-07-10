@@ -188,9 +188,9 @@ func main() {
 
 	// we need to include all the metrics types so we can inject them in case they're needed
 	// but we only want to instantiate the ones that are enabled with non-null values
-	var legacyMetrics metrics.Metrics = &metrics.NullMetrics{}
-	var promMetrics metrics.Metrics = &metrics.NullMetrics{}
-	var oTelMetrics metrics.Metrics = &metrics.NullMetrics{}
+	var legacyMetrics metrics.MetricsBackend = &metrics.NullMetrics{}
+	var promMetrics metrics.MetricsBackend = &metrics.NullMetrics{}
+	var oTelMetrics metrics.MetricsBackend = &metrics.NullMetrics{}
 	if c.GetLegacyMetricsConfig().Enabled {
 		legacyMetrics = &metrics.LegacyMetrics{}
 	}

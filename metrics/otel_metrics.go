@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 )
 
-var _ Metrics = (*OTelMetrics)(nil)
+var _ MetricsBackend = (*OTelMetrics)(nil)
 
 // OTelMetrics sends metrics to Honeycomb using the OpenTelemetry protocol. One
 // particular thing to note is that OTel metrics treats histograms very
@@ -156,9 +156,9 @@ func (o *OTelMetrics) Start() error {
 	name = "memory_inuse"
 	// This is just reporting the gauge we already track under a different name.
 	var fmem metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
-		// this is an 'ok' value, not an error, so it's safe to ignore it.
-		v, _ := o.Get("memory_heap_allocation")
-		result.Observe(v)
+		stats := &runtime.MemStats{}
+		runtime.ReadMemStats(stats)
+		result.Observe(float64(stats.HeapAlloc))
 		return nil
 	}
 	g, err = o.meter.Float64ObservableGauge(name, metric.WithFloat64Callback(fmem))
@@ -316,14 +316,6 @@ func (o *OTelMetrics) Down(name string) {
 		}
 	}
 	ud.Add(context.Background(), -1)
-}
-
-func (o *OTelMetrics) Store(name string, value float64) {
-	return
-}
-
-func (o *OTelMetrics) Get(name string) (float64, bool) {
-	return 0, false
 }
 
 // initCounter initializes a new counter metric with the given metadata

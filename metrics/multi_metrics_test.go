@@ -25,7 +25,7 @@ func (d dummyLogger) Errorf(format string, v ...interface{}) {
 	fmt.Println()
 }
 
-func getAndStartMultiMetrics(children ...Metrics) (*MultiMetrics, error) {
+func getAndStartMultiMetrics(children ...MetricsBackend) (*MultiMetrics, error) {
 	mm := NewMultiMetrics()
 	for _, child := range children {
 		mm.AddChild(child)

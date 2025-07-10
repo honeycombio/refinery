@@ -13,7 +13,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 )
 
-var _ Metrics = (*PromMetrics)(nil)
+var _ MetricsBackend = (*PromMetrics)(nil)
 
 type PromMetrics struct {
 	Config config.Config `inject:""`
@@ -80,10 +80,6 @@ func (p *PromMetrics) Register(metadata Metadata) {
 	}
 
 	p.metrics[metadata.Name] = newmet
-}
-
-func (p *PromMetrics) Get(name string) (float64, bool) {
-	return 0, false
 }
 
 func (p *PromMetrics) Increment(name string) {
@@ -153,8 +149,4 @@ func (p *PromMetrics) Down(name string) {
 			gauge.Dec()
 		}
 	}
-}
-
-func (p *PromMetrics) Store(name string, val float64) {
-	return
 }

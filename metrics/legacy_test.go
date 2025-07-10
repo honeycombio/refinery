@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"sync"
-	"sync/atomic"
 	"testing"
 
 	"github.com/honeycombio/refinery/config"
@@ -26,7 +25,7 @@ func Test_getOrAdd_counter(t *testing.T) {
 			for j := 0; j < 1000; j++ {
 				name := "foo"
 				var ctr *counter = getOrAdd(lock, name, metrics, createCounter)
-				atomic.AddInt64(&ctr.val, 1)
+				ctr.add(1)
 			}
 			wg.Done()
 		}()
@@ -110,9 +109,9 @@ func Test_getOrAdd_updown(t *testing.T) {
 				name := "foo"
 				var ctr *updown = getOrAdd(lock, name, metrics, createUpdown)
 				if direction {
-					atomic.AddInt64(&ctr.val, 1)
+					ctr.add(1)
 				} else {
-					atomic.AddInt64(&ctr.val, -1)
+					ctr.add(-1)
 				}
 			}
 			wg.Done()
@@ -138,5 +137,55 @@ func TestMetricsUpdown(t *testing.T) {
 	m.Up("foo")
 	m.Up("foo")
 	m.Down("foo")
-	assert.Equal(t, int64(1), m.updowns["foo"].val)
+	assert.Equal(t, int64(1), m.updowns["foo"].get())
+}
+
+func TestCreateReport(t *testing.T) {
+	conf := &config.MockConfig{}
+	m := LegacyMetrics{
+		Config: conf,
+		Logger: &logger.NullLogger{},
+	}
+	m.Start()
+	m.Register(Metadata{
+		Name: "foo",
+		Type: Counter,
+	})
+	m.Register(Metadata{
+		Name: "bar",
+		Type: Gauge,
+	})
+	m.Register(Metadata{
+		Name: "baz",
+		Type: Histogram,
+	})
+	m.Register(Metadata{
+		Name: "qux",
+		Type: UpDown,
+	})
+
+	m.counters["foo"].add(10)
+	m.gauges["bar"].store(20.5)
+	m.histograms["baz"].vals = []float64{30.0, 40.0}
+	m.updowns["qux"].add(1)
+
+	ev := m.createReport()
+	result := ev.Fields()
+	assert.Equal(t, int64(10), result["foo"])
+	assert.Equal(t, float64(20.5), result["bar"])
+
+	assert.Equal(t, int64(1), result["qux"])
+
+	assert.Equal(t, 40.0, result["baz_p50"])
+	assert.Equal(t, 40.0, result["baz_p95"])
+	assert.Equal(t, 40.0, result["baz_p99"])
+	assert.Equal(t, 30.0, result["baz_min"])
+	assert.Equal(t, 40.0, result["baz_max"])
+	assert.Equal(t, 35.0, result["baz_avg"])
+
+	// check the internal metrics state after report creation
+	assert.Equal(t, int64(0), m.counters["foo"].get())
+	assert.Equal(t, float64(0), m.gauges["bar"].get())
+	assert.Len(t, m.histograms["baz"].vals, 0)
+	assert.Equal(t, int64(1), m.updowns["qux"].get())
 }
