@@ -110,3 +110,92 @@ func TestMultiMetrics_Register(t *testing.T) {
 	_, ok = mm.Get("non-existent")
 	assert.False(t, ok)
 }
+
+func BenchmarkConcurrentAccess(b *testing.B) {
+	legacyMetrics := &LegacyMetrics{
+		Logger: &logger.NullLogger{},
+		Config: &config.MockConfig{},
+	}
+	legacyMetrics.Start()
+	defer legacyMetrics.Stop()
+	promMetrics := &PromMetrics{
+		Logger: &logger.NullLogger{},
+		Config: &config.MockConfig{},
+	}
+	promMetrics.Start()
+	otelMetrics := &OTelMetrics{
+		Logger: &logger.NullLogger{},
+		Config: &config.MockConfig{},
+	}
+	otelMetrics.Start()
+	defer otelMetrics.Stop()
+
+	mm, err := getAndStartMultiMetrics(
+		legacyMetrics,
+		promMetrics,
+		otelMetrics,
+	)
+	if err != nil {
+		b.Fatalf("Failed to setup MultiMetrics: %v", err)
+	}
+
+	mm.Register(Metadata{Name: "test_counter", Type: Counter})
+	mm.Register(Metadata{Name: "test_gauge", Type: Gauge})
+	mm.Register(Metadata{Name: "test_histogram", Type: Histogram})
+	mm.Register(Metadata{Name: "test_updown", Type: UpDown})
+
+	b.Run("ConcurrentCounters", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				mm.Count("test_counter", 1)
+			}
+		})
+	})
+
+	b.Run("ConcurrentGauges", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			i := 0
+			for pb.Next() {
+				mm.Gauge("test_gauge", float64(i))
+				i++
+			}
+		})
+	})
+
+	b.Run("ConcurrentHistograms", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			i := 0
+			for pb.Next() {
+				mm.Histogram("test_histogram", float64(i))
+				i++
+			}
+		})
+	})
+
+	b.Run("ConcurrentMixed", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			i := 0
+			for pb.Next() {
+				switch i % 4 {
+				case 0:
+					mm.Count("test_counter", 1)
+				case 1:
+					mm.Gauge("test_gauge", float64(i))
+				case 2:
+					mm.Histogram("test_histogram", float64(i))
+				case 3:
+					if i%2 == 0 {
+						mm.Up("test_updown")
+					} else {
+						mm.Down("test_updown")
+					}
+				}
+				i++
+			}
+		})
+	})
+}
