@@ -226,32 +226,38 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 }
 
 func (o *OTelMetrics) Increment(name string) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	ctr, ok := o.counters[name]
+	o.lock.RUnlock()
 
 	var err error
-	ctr, ok := o.counters[name]
 	if !ok {
+		o.lock.Lock()
 		ctr, err = o.initCounter(Metadata{
 			Name: name,
 		})
+		o.lock.Unlock()
 
 		if err != nil {
 			return
 		}
 	}
+
 	ctr.Add(context.Background(), 1)
 }
 
 func (o *OTelMetrics) Gauge(name string, val float64) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
+	o.lock.RLock()
 	g, ok := o.gauges[name]
+	o.lock.RUnlock()
+
+	var err error
 	if !ok {
-		_, err := o.initGauge(Metadata{
+		o.lock.Lock()
+		g, err = o.initGauge(Metadata{
 			Name: name,
 		})
+		o.lock.Unlock()
 
 		if err != nil {
 			return
@@ -262,13 +268,15 @@ func (o *OTelMetrics) Gauge(name string, val float64) {
 }
 
 func (o *OTelMetrics) Count(name string, val int64) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	ctr, ok := o.counters[name]
+	o.lock.RUnlock()
 
 	var err error
-	ctr, ok := o.counters[name]
 	if !ok {
+		o.lock.Lock()
 		ctr, err = o.initCounter(Metadata{Name: name})
+		o.lock.Unlock()
 		if err != nil {
 			return
 		}
@@ -277,13 +285,15 @@ func (o *OTelMetrics) Count(name string, val int64) {
 }
 
 func (o *OTelMetrics) Histogram(name string, val float64) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	h, ok := o.histograms[name]
+	o.lock.RUnlock()
 
 	var err error
-	h, ok := o.histograms[name]
 	if !ok {
+		o.lock.Lock()
 		h, err = o.initHistogram(Metadata{Name: name})
+		o.lock.Unlock()
 		if err != nil {
 			return
 		}
@@ -292,13 +302,15 @@ func (o *OTelMetrics) Histogram(name string, val float64) {
 }
 
 func (o *OTelMetrics) Up(name string) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	ud, ok := o.updowns[name]
+	o.lock.RUnlock()
 
 	var err error
-	ud, ok := o.updowns[name]
 	if !ok {
+		o.lock.Lock()
 		ud, err = o.initUpDown(Metadata{Name: name})
+		o.lock.Unlock()
 		if err != nil {
 			return
 		}
@@ -307,17 +319,20 @@ func (o *OTelMetrics) Up(name string) {
 }
 
 func (o *OTelMetrics) Down(name string) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
+	o.lock.RLock()
+	ud, ok := o.updowns[name]
+	o.lock.RUnlock()
 
 	var err error
-	ud, ok := o.updowns[name]
 	if !ok {
+		o.lock.Lock()
 		ud, err = o.initUpDown(Metadata{Name: name})
+		o.lock.Unlock()
 		if err != nil {
 			return
 		}
 	}
+
 	ud.Add(context.Background(), -1)
 }
 
