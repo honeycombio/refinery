@@ -247,7 +247,8 @@ func (o *OTelMetrics) Gauge(name string, val float64) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
-	if _, ok := o.gauges[name]; !ok {
+	g, ok := o.gauges[name]
+	if !ok {
 		_, err := o.initGauge(Metadata{
 			Name: name,
 		})
@@ -256,6 +257,8 @@ func (o *OTelMetrics) Gauge(name string, val float64) {
 			return
 		}
 	}
+
+	g.Record(context.Background(), val)
 }
 
 func (o *OTelMetrics) Count(name string, val int64) {
