@@ -132,8 +132,8 @@ func BenchmarkConcurrentAccess(b *testing.B) {
 
 	mm, err := getAndStartMultiMetrics(
 		legacyMetrics,
-		//promMetrics,
-		//otelMetrics,
+		promMetrics,
+		otelMetrics,
 	)
 	if err != nil {
 		b.Fatalf("Failed to setup MultiMetrics: %v", err)
