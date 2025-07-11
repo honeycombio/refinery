@@ -1117,7 +1117,7 @@ func getUserAgentFromRequest(req *http.Request) string {
 }
 
 func addIncomingUserAgent(ev *types.Event, userAgent string) {
-	if userAgent != "" && ev.Data.Get(types.MetaRefineryIncomingUserAgent) == "" {
+	if userAgent != "" && ev.Data.Get(types.MetaRefineryIncomingUserAgent) == nil {
 		ev.Data.Set(types.MetaRefineryIncomingUserAgent, userAgent)
 	}
 }
