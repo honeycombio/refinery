@@ -43,7 +43,7 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if err := r.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
+	if err := r.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent, ri.ContentType); err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
@@ -84,7 +84,7 @@ func (t *TraceServer) Export(ctx context.Context, req *collectortrace.ExportTrac
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
-	if err := t.router.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
+	if err := t.router.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent, ri.ContentType); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 

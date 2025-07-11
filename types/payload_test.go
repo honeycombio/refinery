@@ -260,12 +260,13 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 			"meta.stressed":               true,
 
 			// Refinery string fields
-			"meta.refinery.incoming_user_agent": "test-agent/1.0",
-			"meta.refinery.forwarded":           "192.168.1.1",
-			"meta.refinery.local_hostname":      "test-host",
-			"meta.refinery.reason":              "deterministic",
-			"meta.refinery.send_reason":         "trace_timeout",
-			"meta.refinery.sample_key":          "sample-key-123",
+			"meta.refinery.incoming_user_agent":          "test-agent/1.0",
+			"meta.refinery.forwarded":                    "192.168.1.1",
+			"meta.refinery.local_hostname":               "test-host",
+			"meta.refinery.reason":                       "deterministic",
+			"meta.refinery.send_reason":                  "trace_timeout",
+			"meta.refinery.sample_key":                   "sample-key-123",
+			"meta.refinery.original_transmission_format": "application/json",
 
 			// Refinery int64 fields
 			"meta.refinery.send_by":              int64(1234567890),
@@ -321,6 +322,7 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 		assert.Equal(t, "deterministic", p.MetaRefineryReason)
 		assert.Equal(t, "trace_timeout", p.MetaRefinerySendReason)
 		assert.Equal(t, "sample-key-123", p.MetaRefinerySampleKey)
+		assert.Equal(t, "application/json", p.MetaRefineryOriginalTransmissionFormat)
 
 		// Verify int64 metadata fields
 		assert.Equal(t, int64(1234567890), p.MetaRefinerySendBy)

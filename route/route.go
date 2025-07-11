@@ -447,6 +447,7 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	addIncomingUserAgent(ev, getUserAgentFromRequest(req))
+	ev.Data.Set(types.MetaRefineryOriginalTransmissionFormat, req.Header.Get("Content-Type"))
 
 	reqID := ctx.Value(types.RequestIDContextKey{})
 	err = r.processEvent(ev, reqID)
@@ -485,6 +486,8 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 	if err != nil {
 		return nil, err
 	}
+	payload := types.NewPayload(r.Config, data)
+	payload.Set(types.MetaRefineryOriginalTransmissionFormat, req.Header.Get("Content-Type"))
 
 	return &types.Event{
 		Context:     ctx,
@@ -494,7 +497,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 		Environment: environment,
 		SampleRate:  uint(sampleRate),
 		Timestamp:   eventTime,
-		Data:        types.NewPayload(r.Config, data),
+		Data:        payload,
 	}, nil
 }
 
@@ -553,6 +556,8 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		}
 
 		addIncomingUserAgent(ev, userAgent)
+		ev.Data.Set(types.MetaRefineryOriginalTransmissionFormat, req.Header.Get("Content-Type"))
+
 		err = r.processEvent(ev, reqID)
 
 		var resp BatchResponse
@@ -581,6 +586,7 @@ func (router *Router) processOTLPRequest(
 	batches []huskyotlp.Batch,
 	apiKey string,
 	incomingUserAgent string,
+	contentType string,
 ) error {
 
 	var requestID types.RequestIDContextKey
@@ -609,6 +615,7 @@ func (router *Router) processOTLPRequest(
 				Data:        types.NewPayload(router.Config, ev.Attributes),
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
+			event.Data.Set(types.MetaRefineryOriginalTransmissionFormat, contentType)
 			if err = router.processEvent(event, requestID); err != nil {
 				router.Logger.Error().Logf("Error processing event: " + err.Error())
 			}
@@ -852,7 +859,7 @@ func makeDecoders(num int) (chan *zstd.Decoder, error) {
 	return zstdDecoders, nil
 }
 
-func unmarshal(r *http.Request, data []byte, v interface{}) error {
+func unmarshal(met metrics.Metrics, r *http.Request, data []byte, v interface{}) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
 		if unmarshaler, ok := v.(msgp.Unmarshaler); ok {
@@ -863,6 +870,7 @@ func unmarshal(r *http.Request, data []byte, v interface{}) error {
 		decoder.UseLooseInterfaceDecoding(true)
 		return decoder.Decode(v)
 	default:
+		met.Count("router_request_json_format", 1)
 		return jsoniter.Unmarshal(data, v)
 	}
 }
@@ -1109,7 +1117,7 @@ func getUserAgentFromRequest(req *http.Request) string {
 }
 
 func addIncomingUserAgent(ev *types.Event, userAgent string) {
-	if userAgent != "" && ev.Data.MetaRefineryIncomingUserAgent == "" {
-		ev.Data.MetaRefineryIncomingUserAgent = userAgent
+	if userAgent != "" && ev.Data.Get(types.MetaRefineryIncomingUserAgent) == "" {
+		ev.Data.Set(types.MetaRefineryIncomingUserAgent, userAgent)
 	}
 }

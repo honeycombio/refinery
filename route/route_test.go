@@ -124,6 +124,7 @@ func TestDecompression(t *testing.T) {
 
 func TestUnmarshal(t *testing.T) {
 	now := time.Now().UTC()
+	met := &metrics.NullMetrics{}
 	mockCfg := &config.MockConfig{
 		TraceIdFieldNames:  []string{"trace.trace_id"},
 		ParentIdFieldNames: []string{"trace.span_id"},
@@ -146,7 +147,7 @@ func TestUnmarshal(t *testing.T) {
 		req.Header.Set("Content-Type", "nope")
 
 		var data map[string]interface{}
-		err := unmarshal(req, readAll(t, req.Body), &data)
+		err := unmarshal(met, req, readAll(t, req.Body), &data)
 		// Should succeed because invalid content type defaults to JSON
 		assert.NoError(t, err)
 	})
@@ -163,7 +164,7 @@ func TestUnmarshal(t *testing.T) {
 					req.Header.Set("Content-Type", contentType)
 
 					var result map[string]interface{}
-					err = unmarshal(req, readAll(t, req.Body), &result)
+					err = unmarshal(met, req, readAll(t, req.Body), &result)
 					require.NoError(t, err)
 
 					// Compare directly to test data
@@ -184,7 +185,7 @@ func TestUnmarshal(t *testing.T) {
 					req.Header.Set("Content-Type", contentType)
 
 					var result map[string]interface{}
-					err = unmarshal(req, readAll(t, req.Body), &result)
+					err = unmarshal(met, req, readAll(t, req.Body), &result)
 					require.NoError(t, err)
 
 					// Compare directly to test data
@@ -221,7 +222,7 @@ func TestUnmarshal(t *testing.T) {
 					req.Header.Set("Content-Type", contentType)
 
 					result := newBatchedEvents(mockCfg)
-					err = unmarshal(req, readAll(t, req.Body), result)
+					err = unmarshal(met, req, readAll(t, req.Body), result)
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
 
@@ -269,7 +270,7 @@ func TestUnmarshal(t *testing.T) {
 					req.Header.Set("Content-Type", contentType)
 
 					result := newBatchedEvents(mockCfg)
-					err = unmarshal(req, readAll(t, req.Body), result)
+					err = unmarshal(met, req, readAll(t, req.Body), result)
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
 
