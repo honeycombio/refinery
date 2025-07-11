@@ -57,7 +57,7 @@ func (d *EMAThroughputSampler) Start() error {
 	}
 	d.prefix = "emathroughput"
 
-	d.keyFields, d.nonRootFields = getKeyFields(d.Config.GetSamplingFields())
+	d.keyFields, d.nonRootFields = GetKeyFields(d.Config.GetSamplingFields())
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMAThroughput{
 		GoalThroughputPerSec: d.goalThroughputPerSec / d.clusterSize,

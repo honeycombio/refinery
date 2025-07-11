@@ -1316,7 +1316,7 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 }
 
 func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, targetShard sharder.Shard) *types.Event {
-	selector, isLegacyKey := trace.GetSamplerKey()
+	selector, isLegacyKey := types.GetSamplerKey(trace.APIKey, trace.Dataset, trace.GetSpans()...)
 	if selector == "" {
 		i.Logger.Error().WithField("trace_id", trace.ID()).Logf("error getting sampler selection key for trace")
 	}
@@ -1538,7 +1538,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	var sampler sample.Sampler
 	var found bool
 	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerSelector, isLegacyKey := trace.GetSamplerKey()
+	samplerSelector, isLegacyKey := types.GetSamplerKey(trace.APIKey, trace.Dataset, trace.GetSpans()...)
 
 	// use sampler key to find sampler; create and cache if not found
 	if sampler, found = i.datasetSamplers[samplerSelector]; !found {

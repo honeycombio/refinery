@@ -61,6 +61,16 @@ func (s *SamplerFactory) Start() error {
 	return nil
 }
 
+func CalculateSamplerKey(cfg config.Config, apiKey string, isLegacyKey bool) string {
+	if isLegacyKey {
+		if prefix := cfg.GetDatasetPrefix(); prefix != "" {
+			return fmt.Sprintf("%s.%s", prefix, apiKey)
+		}
+	}
+
+	return apiKey
+}
+
 // GetSamplerImplementationForKey returns the sampler implementation for the given
 // samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined
 func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLegacyKey bool) Sampler {
@@ -178,10 +188,10 @@ func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, ke
 	d.met.Histogram(d.metricNames.sampleRate, float64(rate))
 }
 
-// getKeyFields returns the fields that should be used as keys for the sampler.
+// GetKeyFields returns the fields that should be used as keys for the sampler.
 // It returns two slices: the first contains fields with the root prefix removed,
 // and the second contains fields that do not have the root prefix.
-func getKeyFields(fields []string) ([]string, []string) {
+func GetKeyFields(fields []string) ([]string, []string) {
 	if len(fields) == 0 {
 		return nil, nil
 	}

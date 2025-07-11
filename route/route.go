@@ -41,6 +41,7 @@ import (
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
+	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
@@ -634,7 +635,6 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	if err := ev.Data.ExtractMetadata(); err != nil {
 		return err
 	}
-
 	// check if this is a probe from another refinery; if so, we should drop it
 	if ev.Data.MetaRefineryProbe.HasValue && ev.Data.MetaRefineryProbe.Value {
 		debugLog.Logf("dropping probe")
@@ -656,6 +656,13 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		Event:   *ev,
 		TraceID: ev.Data.MetaTraceID,
 		IsRoot:  ev.Data.MetaRefineryRoot.Value,
+	}
+
+	keyFields, nonRootFields := r.getSamplingKeyFields(span)
+	if span.IsRoot {
+		span.Data.MemoizeFields(keyFields...)
+	} else {
+		span.Data.MemoizeFields(nonRootFields...)
 	}
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
@@ -1112,4 +1119,18 @@ func addIncomingUserAgent(ev *types.Event, userAgent string) {
 	if userAgent != "" && ev.Data.MetaRefineryIncomingUserAgent == "" {
 		ev.Data.MetaRefineryIncomingUserAgent = userAgent
 	}
+}
+
+func (r *Router) getSamplingKeyFields(span *types.Span) (keyFields, nonRootFields []string) {
+	samplerKey, isLegacyKey := types.GetSamplerKey(span.APIKey, span.Dataset, span)
+	samplerKey = sample.CalculateSamplerKey(r.Config, samplerKey, isLegacyKey)
+	c, _ := r.Config.GetSamplerConfigForDestName(samplerKey)
+	if c != nil {
+		fielder, ok := c.(config.GetSamplingFielder)
+		if ok {
+			keyFields, nonRootFields := sample.GetKeyFields(fielder.GetSamplingFields())
+			return keyFields, nonRootFields
+		}
+	}
+	return nil, nil
 }

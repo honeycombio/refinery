@@ -34,7 +34,7 @@ func (s *RulesBasedSampler) Start() error {
 	s.metricNames = newSamplerMetricNames("rulesbased", s.Metrics)
 
 	s.samplers = make(map[string]Sampler)
-	s.keyFields, s.nonRootFields = getKeyFields(s.Config.GetSamplingFields())
+	s.keyFields, s.nonRootFields = GetKeyFields(s.Config.GetSamplingFields())
 
 	for _, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {

@@ -207,13 +207,13 @@ func (t *Trace) SpanEventCount() uint32 {
 	return t.spanEventCount
 }
 
-func (t *Trace) GetSamplerKey() (string, bool) {
-	if IsLegacyAPIKey(t.APIKey) {
-		return t.Dataset, true
+func GetSamplerKey(apiKey string, dataset string, spans ...*Span) (string, bool) {
+	if IsLegacyAPIKey(apiKey) {
+		return dataset, true
 	}
 
 	env := ""
-	for _, sp := range t.GetSpans() {
+	for _, sp := range spans {
 		if sp.Environment != "" {
 			env = sp.Environment
 			break
