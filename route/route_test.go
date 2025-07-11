@@ -124,7 +124,6 @@ func TestDecompression(t *testing.T) {
 
 func TestUnmarshal(t *testing.T) {
 	now := time.Now().UTC()
-	met := &metrics.NullMetrics{}
 	mockCfg := &config.MockConfig{
 		TraceIdFieldNames:  []string{"trace.trace_id"},
 		ParentIdFieldNames: []string{"trace.span_id"},
@@ -143,6 +142,9 @@ func TestUnmarshal(t *testing.T) {
 	}
 
 	t.Run("invalid content type defaults to JSON", func(t *testing.T) {
+		met := &metrics.MockMetrics{}
+		met.Start()
+		defer met.Stop()
 		req := httptest.NewRequest("POST", "/test", bytes.NewBufferString("{}"))
 		req.Header.Set("Content-Type", "nope")
 
@@ -150,6 +152,9 @@ func TestUnmarshal(t *testing.T) {
 		err := unmarshal(met, req, readAll(t, req.Body), &data)
 		// Should succeed because invalid content type defaults to JSON
 		assert.NoError(t, err)
+		v, ok := met.Get("router_request_json_format")
+		assert.True(t, ok)
+		assert.Equal(t, 1.0, v)
 	})
 
 	// Test map[string]interface{} unmarshaling (used in requestToEvent)
@@ -160,6 +165,9 @@ func TestUnmarshal(t *testing.T) {
 
 			for _, contentType := range []string{"application/json", "application/json; charset=utf-8"} {
 				t.Run(contentType, func(t *testing.T) {
+					met := &metrics.MockMetrics{}
+					met.Start()
+					defer met.Stop()
 					req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
 					req.Header.Set("Content-Type", contentType)
 
@@ -169,6 +177,9 @@ func TestUnmarshal(t *testing.T) {
 
 					// Compare directly to test data
 					assert.Equal(t, testData, result)
+					v, ok := met.Get("router_request_json_format")
+					assert.True(t, ok)
+					assert.Equal(t, 1.0, v)
 				})
 			}
 		})
@@ -176,6 +187,9 @@ func TestUnmarshal(t *testing.T) {
 		t.Run("msgpack", func(t *testing.T) {
 			for _, contentType := range []string{"application/msgpack", "application/x-msgpack"} {
 				t.Run(contentType, func(t *testing.T) {
+					met := &metrics.MockMetrics{}
+					met.Start()
+					defer met.Stop()
 					buf := &bytes.Buffer{}
 					encoder := msgpack.NewEncoder(buf)
 					err := encoder.Encode(testData)
@@ -190,6 +204,8 @@ func TestUnmarshal(t *testing.T) {
 
 					// Compare directly to test data
 					assert.Equal(t, testData, result)
+					_, ok := met.Get("router_request_json_format")
+					assert.False(t, ok)
 				})
 			}
 		})
@@ -218,6 +234,9 @@ func TestUnmarshal(t *testing.T) {
 
 			for _, contentType := range []string{"application/json", "application/json; charset=utf-8"} {
 				t.Run(contentType, func(t *testing.T) {
+					met := &metrics.MockMetrics{}
+					met.Start()
+					defer met.Stop()
 					req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
 					req.Header.Set("Content-Type", contentType)
 
@@ -233,6 +252,9 @@ func TestUnmarshal(t *testing.T) {
 					assert.Equal(t, now.Add(time.Second).UTC(), result.events[1].getEventTime())
 					assert.Equal(t, uint(4), result.events[1].getSampleRate())
 					assert.Equal(t, testData, maps.Collect(result.events[1].Data.All()))
+					v, ok := met.Get("router_request_json_format")
+					assert.True(t, ok)
+					assert.Equal(t, 1.0, v)
 				})
 			}
 		})
@@ -261,6 +283,9 @@ func TestUnmarshal(t *testing.T) {
 
 			for _, contentType := range []string{"application/msgpack", "application/x-msgpack"} {
 				t.Run(contentType, func(t *testing.T) {
+					met := &metrics.MockMetrics{}
+					met.Start()
+					defer met.Stop()
 					buf := &bytes.Buffer{}
 					encoder := msgpack.NewEncoder(buf)
 					err := encoder.Encode(testEvents)
@@ -281,7 +306,8 @@ func TestUnmarshal(t *testing.T) {
 					assert.Equal(t, now.Add(time.Second).UTC(), result.events[1].getEventTime())
 					assert.Equal(t, uint(6), result.events[1].getSampleRate())
 					assert.Equal(t, testData, maps.Collect(result.events[1].Data.All()))
-
+					_, ok := met.Get("router_request_json_format")
+					assert.False(t, ok)
 				})
 			}
 		})

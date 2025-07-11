@@ -482,7 +482,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 	}
 
 	data := map[string]interface{}{}
-	err = unmarshal(req, reqBod, &data)
+	err = unmarshal(r.Metrics, req, reqBod, &data)
 	if err != nil {
 		return nil, err
 	}
@@ -516,7 +516,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	defer recycleHTTPBodyBuffer(bodyBuffer)
 
 	batchedEvents := newBatchedEvents(r.Config)
-	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
+	err = unmarshal(r.Metrics, req, bodyBuffer.Bytes(), batchedEvents)
 	if err != nil {
 		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(bodyBuffer.Bytes())).Logf("error parsing json")
 		r.handlerReturnWithError(w, ErrJSONFailed, err)
