@@ -131,13 +131,12 @@ func (o *OTelMetrics) Start() error {
 	}
 
 	var reader sdkmetric.Reader
-
-	reader = sdkmetric.NewPeriodicReader(exporter,
-		sdkmetric.WithInterval(time.Duration(cfg.ReportingInterval)),
-	)
-
 	if o.testReader != nil {
 		reader = o.testReader
+	} else {
+		reader = sdkmetric.NewPeriodicReader(exporter,
+			sdkmetric.WithInterval(time.Duration(cfg.ReportingInterval)),
+		)
 	}
 
 	provider := sdkmetric.NewMeterProvider(
