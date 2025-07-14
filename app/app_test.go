@@ -369,40 +369,49 @@ func TestAppIntegrationEmptyEvent(t *testing.T) {
 	cfg := defaultConfig(port, redisDB)
 	_, graph := newStartedApp(t, sender, nil, nil, cfg)
 
-	// Send an empty event, it should return a 400 error but the batch request is processed with 200.
-	req := httptest.NewRequest(
-		"POST",
-		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
-		strings.NewReader(`[{"data":{}}]`), // Empty event data
-	)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
+	tt := []struct {
+		name                       string
+		data                       string
+		expectedResponseStatusCode int
+		expectedResponse           string
+	}{
+		{
+			name:                       "batch",
+			data:                       `[{"data":{}}]`, // Empty event data
+			expectedResponseStatusCode: http.StatusOK,
+			expectedResponse:           "status\":400,\"error\":\"empty event data\"",
+		},
+		{
+			name:                       "events",
+			data:                       `{}`,
+			expectedResponseStatusCode: http.StatusBadRequest,
+			expectedResponse:           "{\"source\":\"refinery\",\"error\":\"failed to parse event\"",
+		},
+	}
 
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	data, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err)
-	assert.Contains(t, string(data), "status\":400,\"error\":\"empty event data\"")
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			// Send an empty event, it should return a 400 error but the batch request is processed with 200.
+			req := httptest.NewRequest(
+				"POST",
+				fmt.Sprintf("http://localhost:%d/1/%s/dataset", port, tc.name),
+				strings.NewReader(tc.data),
+			)
+			req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+			req.Header.Set("Content-Type", "application/json")
 
-	// Send an empty event, it should return a 400 error
-	req = httptest.NewRequest(
-		"POST",
-		fmt.Sprintf("http://localhost:%d/1/events/dataset", port),
-		strings.NewReader(`{}`), // Empty event data
-	)
-	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
-	req.Header.Set("Content-Type", "application/json")
+			resp, err := http.DefaultTransport.RoundTrip(req)
+			assert.NoError(t, err)
 
-	resp, err = http.DefaultTransport.RoundTrip(req)
-	assert.NoError(t, err)
-	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
-	data, err = io.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err)
+			assert.Equal(t, tc.expectedResponseStatusCode, resp.StatusCode)
+			data, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			assert.NoError(t, err)
+			assert.Contains(t, string(data), tc.expectedResponse)
+		})
+	}
 
-	err = startstop.Stop(graph.Objects(), nil)
+	err := startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
 }
 
