@@ -35,6 +35,8 @@ func Test_OTelMetrics_MultipleRegistrations(t *testing.T) {
 		Name: "test",
 		Type: Counter,
 	})
+
+	assert.Contains(t, o.counters, "test")
 }
 
 func Test_OTelMetrics_Raciness(t *testing.T) {
