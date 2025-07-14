@@ -364,9 +364,13 @@ func IsLegacyAPIKey(key string) bool {
 		return true
 	} else if keyLen == 64 {
 		// Check the prefix pattern "hc[a-z]ic_"
-		if key[0] != 'h' || key[1] != 'c' ||
-			!(key[2] >= 'a' && key[2] <= 'z') ||
-			key[3] != 'i' || key[4] != 'c' || key[5] != '_' {
+		if key[:2] != "hc" || key[3:6] != "ic_" {
+			return false
+		}
+		if key[2] < 'a' || key[2] > 'z' {
+			return false
+		}
+		if key[3] != 'i' || key[4] != 'c' || key[5] != '_' {
 			return false
 		}
 
