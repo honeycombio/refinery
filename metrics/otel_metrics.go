@@ -326,7 +326,7 @@ func (o *OTelMetrics) getOrInitGauge(metadata Metadata) (g metric.Float64Gauge, 
 		return g, nil
 	}
 
-	// oh, so sad; gotta make the guage
+	// oh, so sad; gotta make the gauge
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
