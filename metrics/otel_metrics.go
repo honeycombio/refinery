@@ -34,6 +34,7 @@ type OTelMetrics struct {
 
 	meter        metric.Meter
 	shutdownFunc func(ctx context.Context) error
+	testReader   sdkmetric.Reader
 
 	lock             sync.RWMutex
 	counters         map[string]metric.Int64Counter
@@ -129,12 +130,18 @@ func (o *OTelMetrics) Start() error {
 		return err
 	}
 
+	var reader sdkmetric.Reader
+
+	reader = sdkmetric.NewPeriodicReader(exporter,
+		sdkmetric.WithInterval(time.Duration(cfg.ReportingInterval)),
+	)
+
+	if o.testReader != nil {
+		reader = o.testReader
+	}
+
 	provider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(
-			sdkmetric.NewPeriodicReader(exporter,
-				sdkmetric.WithInterval(time.Duration(cfg.ReportingInterval)),
-			),
-		),
+		sdkmetric.WithReader(reader),
 		sdkmetric.WithResource(res),
 	)
 	o.meter = provider.Meter("otelmetrics")

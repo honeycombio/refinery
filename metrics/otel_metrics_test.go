@@ -5,6 +5,10 @@ import (
 	"sync"
 	"testing"
 
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
+
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/stretchr/testify/assert"
@@ -34,9 +38,13 @@ func Test_OTelMetrics_MultipleRegistrations(t *testing.T) {
 }
 
 func Test_OTelMetrics_Raciness(t *testing.T) {
+
+	rdr := sdkmetric.NewManualReader()
+
 	o := &OTelMetrics{
-		Logger: &logger.MockLogger{},
-		Config: &config.MockConfig{},
+		Logger:     &logger.MockLogger{},
+		Config:     &config.MockConfig{},
+		testReader: rdr,
 	}
 
 	err := o.Start()
@@ -74,6 +82,35 @@ func Test_OTelMetrics_Raciness(t *testing.T) {
 
 	wg.Wait()
 	assert.Len(t, o.counters, loopLength+1)
+
+	rm := metricdata.ResourceMetrics{}
+	err = rdr.Collect(t.Context(), &rm)
+	require.NoError(t, err)
+	require.Len(t, rm.ScopeMetrics, 1, "We should have emitted at least one scope's worth of metrics.")
+	sm := rm.ScopeMetrics[0]
+	require.GreaterOrEqual(t, len(sm.Metrics), loopLength, "We should have created at least as many OTel metrics as we used in the loop.")
+
+	// confirm the counter we incremented in the loop got each increment
+	// and didn't get overwritten by concurrent use
+	want := metricdata.Metrics{
+		Name: "race",
+		Data: metricdata.Sum[int64]{
+			Temporality: metricdata.CumulativeTemporality,
+			IsMonotonic: true,
+			DataPoints: []metricdata.DataPoint[int64]{
+				{Value: int64(loopLength)},
+			},
+		},
+	}
+
+	var got metricdata.Metrics
+	for _, m := range sm.Metrics {
+		if m.Name == "race" {
+			got = m
+		}
+	}
+
+	metricdatatest.AssertEqual(t, want, got, metricdatatest.IgnoreTimestamp())
 }
 
 func Benchmark_OTelMetrics_ConcurrentAccess(b *testing.B) {
