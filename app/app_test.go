@@ -360,6 +360,52 @@ func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAppIntegrationEmptyEvent(t *testing.T) {
+	t.Parallel()
+	port := 11000
+	redisDB := 8
+
+	sender := &transmission.MockSender{}
+	cfg := defaultConfig(port, redisDB)
+	_, graph := newStartedApp(t, sender, nil, nil, cfg)
+
+	// Send an empty event, it should return a 400 error but the batch request is processed with 200.
+	req := httptest.NewRequest(
+		"POST",
+		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+		strings.NewReader(`[{"data":{}}]`), // Empty event data
+	)
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	data, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), "status\":400,\"error\":\"empty event data\"")
+
+	// Send an empty event, it should return a 400 error
+	req = httptest.NewRequest(
+		"POST",
+		fmt.Sprintf("http://localhost:%d/1/events/dataset", port),
+		strings.NewReader(`{}`), // Empty event data
+	)
+	req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err = http.DefaultTransport.RoundTrip(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	data, err = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err)
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
+}
+
 func TestPeerRouting(t *testing.T) {
 	// Parallel integration tests need different ports!
 	t.Parallel()
