@@ -654,7 +654,7 @@ groups:
         validations:
           - type: elementType
             arg: string
-        summary: Additional attributes to add to all logs written by the Honeycomb logger.
+        summary: adds the provided attributes to all logs written by the Honeycomb logger.
         envvar: REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES
         commandline: logger-additional-attributes
         description: >
