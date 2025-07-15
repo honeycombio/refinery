@@ -4,7 +4,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 2.9.7
 
-This release focuses on improving Refinery by fixing a bug with empty payloads. It also adds a new feature that allows you to add static fields to all logs.
+This release focuses on improving Refinery by fixing a bug with empty payloads. It also adds a new feature that allows you to add static fields to all internal refinery logs.
 
 ## Version 2.9.6
 
