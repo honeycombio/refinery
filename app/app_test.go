@@ -362,7 +362,7 @@ func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
 
 func TestAppIntegrationEmptyEvent(t *testing.T) {
 	t.Parallel()
-	port := 11000
+	port := 16000
 	redisDB := 8
 
 	sender := &transmission.MockSender{}
