@@ -522,7 +522,7 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 
 ### `AdditionalAttributes`
 
-`AdditionalAttributes` Additional attributes to add to all logs written by the Honeycomb logger.
+`AdditionalAttributes` adds the provided attributes to all logs written by the Honeycomb logger.
 
 When supplying via a environment variable, the value should be a string of comma-separated key-value pairs.
 When supplying via the command line, the value should be a key value pair.
