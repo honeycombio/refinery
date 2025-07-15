@@ -370,9 +370,6 @@ func IsLegacyAPIKey(key string) bool {
 		if key[2] < 'a' || key[2] > 'z' {
 			return false
 		}
-		if key[3] != 'i' || key[4] != 'c' || key[5] != '_' {
-			return false
-		}
 
 		// Check if the remaining characters are alphanumeric lowercase
 		for i := 6; i < keyLen; i++ {

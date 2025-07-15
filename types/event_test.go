@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/config"
 	"github.com/stretchr/testify/assert"
 )
@@ -298,6 +299,32 @@ func TestIsClassicKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := IsLegacyAPIKey(tc.key)
 			assert.Equal(t, tc.expected, result, "Expected IsClassicApiKey(%q) to return %v", tc.key, tc.expected)
+		})
+	}
+}
+
+func BenchmarkIsLegacyAPIKey(b *testing.B) {
+	tests := []struct {
+		name string
+		key  string
+	}{
+		{"Valid classic key", "a1b2c3d4e5f67890abcdef1234567890"},
+		{"Invalid classic key", "abcdef0123456789abcdef01234567zz"},
+		{"Valid ingest key", "hcaic_1234567890123456789012345678901234567890123456789012345678"},
+		{"Invalid ingest key", "hcaic_1234567890123456789012345678901234567890123456789012345678"},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_ = IsLegacyAPIKey(tt.key)
+			}
+		})
+
+		b.Run(tt.name+"/husky", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_ = otlp.IsClassicApiKey(tt.key)
+			}
 		})
 	}
 }
