@@ -649,12 +649,12 @@ groups:
       - name: AdditionalAttributes
         type: map
         valuetype: map
-        example: "pipeline.id:12345,rollout.id:67890"
+        example: "pipeline.id:'12345',rollout.id:'67890'"
         reload: false
         validations:
           - type: elementType
             arg: string
-        summary: Additional attributes to add to all logs written by the Honeycomb logger.
+        summary: adds the provided attributes to all logs written by the Honeycomb logger.
         envvar: REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES
         commandline: logger-additional-attributes
         description: >
