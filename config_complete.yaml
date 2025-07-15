@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-06-04 at 22:30:00 UTC from ../../config.yaml using a template generated on 2025-06-04 at 22:29:50 UTC
+# created on 2025-07-15 at 15:53:07 UTC from ../../config.yaml using a template generated on 2025-07-15 at 15:53:04 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -561,6 +561,20 @@ HoneycombLogger:
     ## default: 10
     ## Not eligible for live reload.
     # SamplerThroughput: 10
+
+    ## AdditionalAttributes Additional attributes to add to all logs written
+    ## by the Honeycomb logger.
+    ##
+    ## When supplying via a environment variable, the value should be a
+    ## string of comma-separated key-value pairs.  When supplying via the
+    ## command line, the value should be a key value pair.  If multiple
+    ## key-value pairs are needed, each should be supplied via its own
+    ## command line flag. The key-value pairs must use ':' as the separator.
+    ##
+    ## Not eligible for live reload.
+    # AdditionalAttributes:
+      #  pipeline.id: '12345'
+      #  rollout.id: '67890'
 
 ###################
 ## Stdout Logger ##

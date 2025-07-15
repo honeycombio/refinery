@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2025-06-03 at 21:32:30 UTC.
+# Automatically generated on 2025-07-15 at 15:53:05 UTC.
 
 General:
   - ConfigurationVersion
@@ -91,6 +91,8 @@ HoneycombLogger:
   - SamplerEnabled (originally HoneycombLogger.LoggerSamplerEnabled)
 
   - SamplerThroughput
+
+  - AdditionalAttributes
 
 
 StdoutLogger:

@@ -649,7 +649,7 @@ groups:
       - name: AdditionalAttributes
         type: map
         valuetype: map
-        example: "pipeline.id:12345,rollout.id:67890"
+        example: "pipeline.id:'12345',rollout.id:'67890'"
         reload: false
         validations:
           - type: elementType
