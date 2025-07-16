@@ -243,45 +243,7 @@ func TestPayloadExtractMetadataError(t *testing.T) {
 func TestPayloadUnmarshalMsg(t *testing.T) {
 	t.Run("extracts metadata during unmarshal", func(t *testing.T) {
 		// Create test data with all metadata fields
-		data := map[string]any{
-			// Regular fields
-			"regular_field": "value1",
-			"another_field": 42,
-
-			// Core metadata fields
-			"meta.signal_type":     "trace",
-			"meta.annotation_type": "span_event",
-
-			// Refinery boolean fields
-			"meta.refinery.probe":         true,
-			"meta.refinery.min_span":      true,
-			"meta.refinery.expired_trace": false,
-			"meta.refinery.shutdown_send": true,
-			"meta.stressed":               true,
-
-			// Refinery string fields
-			"meta.refinery.incoming_user_agent": "test-agent/1.0",
-			"meta.refinery.forwarded":           "192.168.1.1",
-			"meta.refinery.local_hostname":      "test-host",
-			"meta.refinery.reason":              "deterministic",
-			"meta.refinery.send_reason":         "trace_timeout",
-			"meta.refinery.sample_key":          "sample-key-123",
-
-			// Refinery int64 fields
-			"meta.refinery.send_by":              int64(1234567890),
-			"meta.refinery.span_data_size":       int64(2048),
-			"meta.span_event_count":              int64(5),
-			"meta.span_link_count":               int64(3),
-			"meta.span_count":                    int64(10),
-			"meta.event_count":                   int64(15),
-			"meta.refinery.original_sample_rate": int64(100),
-
-			// Custom trace/parent fields
-			"trace.trace_id": "custom-trace-456", // Custom trace ID field
-			"span.parent_id": "",                 // Empty parent ID should make it root
-
-			"sampling_key_field": "custom-sampling-key",
-		}
+		data := createTestDataForPayload()
 
 		msgpData, err := msgpack.Marshal(data)
 		require.NoError(t, err)
@@ -291,9 +253,6 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 			config: &config.MockConfig{
 				TraceIdFieldNames:  []string{"wrong", "trace.trace_id"},
 				ParentIdFieldNames: []string{"span.parent_id"},
-				GetSamplerTypeVal: &config.DynamicSamplerConfig{
-					FieldList: []string{"sampling_key_field", "missing_field"},
-				},
 			},
 		}
 		remainder, err := p.UnmarshalMsg(msgpData)
@@ -336,11 +295,6 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 		assert.Equal(t, int64(15), p.MetaEventCount)
 		assert.Equal(t, int64(100), p.MetaRefineryOriginalSampleRate)
 
-		// Verify sampling key extraction
-		assert.Equal(t, "custom-sampling-key", p.memoizedFields["sampling_key_field"])
-		_, ok := p.missingFields["missing_field"]
-		assert.True(t, ok)
-
 		// Verify regular fields are still accessible
 		assert.Equal(t, "value1", p.Get("regular_field"))
 		assert.Equal(t, int64(42), p.Get("another_field")) // should preserve int type
@@ -376,6 +330,156 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "trace2", p2.MetaTraceID)
 		assert.Empty(t, remainder2)
+	})
+}
+
+func TestCoreFieldsUnmarshaler(t *testing.T) {
+	t.Run("extracts core fields during unmarshal", func(t *testing.T) {
+		data := createTestDataForPayload()
+
+		msgpData, err := msgpack.Marshal(data)
+		require.NoError(t, err)
+
+		// Create CoreFieldsUnmarshaler with mock config
+		mockConfig := &config.MockConfig{
+			TraceIdFieldNames:  []string{"wrong", "trace.trace_id"},
+			ParentIdFieldNames: []string{"span.parent_id"},
+			GetSamplerTypeVal: &config.DynamicSamplerConfig{
+				FieldList: []string{"sampling_key_field", "missing_field"},
+			},
+		}
+
+		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-dataset", "test-env")
+
+		// Create payload and unmarshal
+		payload := &Payload{config: mockConfig}
+		remainder, err := unmarshaler.UnmarshalPayload(msgpData, payload)
+		require.NoError(t, err)
+		assert.Empty(t, remainder)
+
+		// Verify core metadata was extracted
+		assert.Equal(t, "trace", payload.MetaSignalType)
+		assert.Equal(t, "custom-trace-456", payload.MetaTraceID)
+		assert.Equal(t, "span_event", payload.MetaAnnotationType)
+
+		// Verify boolean metadata fields
+		assert.True(t, payload.MetaRefineryProbe.HasValue)
+		assert.True(t, payload.MetaRefineryProbe.Value)
+		assert.True(t, payload.MetaRefineryRoot.HasValue)
+		assert.True(t, payload.MetaRefineryRoot.Value) // Should be true because empty parent ID
+		assert.True(t, payload.MetaRefineryMinSpan.HasValue)
+		assert.True(t, payload.MetaRefineryMinSpan.Value)
+		assert.True(t, payload.MetaRefineryExpiredTrace.HasValue)
+		assert.False(t, payload.MetaRefineryExpiredTrace.Value)
+		assert.True(t, payload.MetaRefineryShutdownSend.HasValue)
+		assert.True(t, payload.MetaRefineryShutdownSend.Value)
+		assert.True(t, payload.MetaStressed.HasValue)
+		assert.True(t, payload.MetaStressed.Value)
+
+		// Verify string metadata fields
+		assert.Equal(t, "test-agent/1.0", payload.MetaRefineryIncomingUserAgent)
+		assert.Equal(t, "192.168.1.1", payload.MetaRefineryForwarded)
+		assert.Equal(t, "test-host", payload.MetaRefineryLocalHostname)
+		assert.Equal(t, "deterministic", payload.MetaRefineryReason)
+		assert.Equal(t, "trace_timeout", payload.MetaRefinerySendReason)
+		assert.Equal(t, "sample-key-123", payload.MetaRefinerySampleKey)
+
+		// Verify int64 metadata fields
+		assert.Equal(t, int64(1234567890), payload.MetaRefinerySendBy)
+		assert.Equal(t, int64(2048), payload.MetaRefinerySpanDataSize)
+		assert.Equal(t, int64(5), payload.MetaSpanEventCount)
+		assert.Equal(t, int64(3), payload.MetaSpanLinkCount)
+		assert.Equal(t, int64(10), payload.MetaSpanCount)
+		assert.Equal(t, int64(15), payload.MetaEventCount)
+		assert.Equal(t, int64(100), payload.MetaRefineryOriginalSampleRate)
+
+		// Verify sampling key extraction
+		assert.Equal(t, "custom-sampling-key", payload.memoizedFields["sampling_key_field"])
+
+		// Verify missing field is tracked
+		_, ok := payload.missingFields["missing_field"]
+		assert.True(t, ok)
+
+		// Verify field not in sampling config is NOT extracted
+		assert.Nil(t, payload.memoizedFields["missing_in_config"])
+
+		// Verify regular fields are still accessible through Get
+		assert.Equal(t, "value1", payload.Get("regular_field"))
+		assert.Equal(t, int64(42), payload.Get("another_field"))
+	})
+
+	t.Run("handles remainder correctly", func(t *testing.T) {
+		data1 := map[string]any{
+			"trace.trace_id": "trace1",
+			"sampling_field": "value1",
+		}
+		data2 := map[string]any{
+			"trace.trace_id": "trace2",
+			"sampling_field": "value2",
+		}
+
+		msgpData1, _ := msgpack.Marshal(data1)
+		msgpData2, _ := msgpack.Marshal(data2)
+		combined := append(msgpData1, msgpData2...)
+
+		mockConfig := &config.MockConfig{
+			TraceIdFieldNames:  []string{"trace.trace_id"},
+			ParentIdFieldNames: []string{"span.parent_id"},
+			GetSamplerTypeVal: &config.DynamicSamplerConfig{
+				FieldList: []string{"sampling_field"},
+			},
+		}
+
+		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-dataset", "test-env")
+
+		// Unmarshal first payload
+		payload1 := &Payload{config: mockConfig}
+		remainder, err := unmarshaler.UnmarshalPayload(combined, payload1)
+		require.NoError(t, err)
+		assert.Equal(t, "trace1", payload1.MetaTraceID)
+		assert.Equal(t, "value1", payload1.memoizedFields["sampling_field"])
+		assert.Equal(t, msgpData2, remainder)
+
+		// Verify we can unmarshal the remainder
+		payload2 := &Payload{config: mockConfig}
+		remainder2, err := unmarshaler.UnmarshalPayload(remainder, payload2)
+		require.NoError(t, err)
+		assert.Equal(t, "trace2", payload2.MetaTraceID)
+		assert.Equal(t, "value2", payload2.memoizedFields["sampling_field"])
+		assert.Empty(t, remainder2)
+	})
+
+	t.Run("handles empty sampling fields", func(t *testing.T) {
+		data := map[string]any{
+			"meta.signal_type": "trace",
+			"trace.trace_id":   "trace-123",
+			"regular_field":    "should-not-be-extracted",
+		}
+
+		msgpData, err := msgpack.Marshal(data)
+		require.NoError(t, err)
+
+		mockConfig := &config.MockConfig{
+			TraceIdFieldNames:  []string{"trace.trace_id"},
+			ParentIdFieldNames: []string{"span.parent_id"},
+			GetSamplerTypeVal: &config.DynamicSamplerConfig{
+				FieldList: []string{}, // No sampling fields
+			},
+		}
+
+		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-dataset", "test-env")
+		payload := &Payload{config: mockConfig}
+		_, err = unmarshaler.UnmarshalPayload(msgpData, payload)
+		require.NoError(t, err)
+
+		// Should extract metadata and trace ID but no sampling fields
+		assert.Equal(t, "trace", payload.MetaSignalType)
+		assert.Equal(t, "trace-123", payload.MetaTraceID)
+		assert.Empty(t, payload.memoizedFields)
+		assert.Empty(t, payload.missingFields)
+
+		// Regular field should still be accessible via Get
+		assert.Equal(t, "should-not-be-extracted", payload.Get("regular_field"))
 	})
 }
 
@@ -588,4 +692,53 @@ func BenchmarkPayload(b *testing.B) {
 			_ = phMsgp.Exists("exist-unknown")
 		}
 	})
+}
+
+func createTestDataForPayload() map[string]any {
+
+	return map[string]any{
+		// Regular fields
+		"regular_field": "value1",
+		"another_field": 42,
+
+		// Core metadata fields
+		"meta.signal_type":     "trace",
+		"meta.annotation_type": "span_event",
+
+		// Refinery boolean fields
+		"meta.refinery.probe":         true,
+		"meta.refinery.min_span":      true,
+		"meta.refinery.expired_trace": false,
+		"meta.refinery.shutdown_send": true,
+		"meta.stressed":               true,
+
+		// Refinery string fields
+		"meta.refinery.incoming_user_agent": "test-agent/1.0",
+		"meta.refinery.forwarded":           "192.168.1.1",
+		"meta.refinery.local_hostname":      "test-host",
+		"meta.refinery.reason":              "deterministic",
+		"meta.refinery.send_reason":         "trace_timeout",
+		"meta.refinery.sample_key":          "sample-key-123",
+
+		// Refinery int64 fields
+		"meta.refinery.send_by":              int64(1234567890),
+		"meta.refinery.span_data_size":       int64(2048),
+		"meta.span_event_count":              int64(5),
+		"meta.span_link_count":               int64(3),
+		"meta.span_count":                    int64(10),
+		"meta.event_count":                   int64(15),
+		"meta.refinery.original_sample_rate": int64(100),
+
+		// Custom trace/parent fields
+		"trace.trace_id": "custom-trace-456",
+		"span.parent_id": "",
+
+		// Sampling key fields
+		"sampling_key_field": "custom-sampling-key",
+		"another_key_field":  "another-value",
+		"numeric_key_field":  int64(999),
+		"boolean_key_field":  true,
+		"missing_in_config":  "this-should-not-be-extracted",
+	}
+
 }
