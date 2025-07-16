@@ -129,7 +129,7 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 			types.APIKeyHeader: cfg.APIKey,
 		}
 
-		if types.IsLegacyAPIKey(cfg.APIKey) {
+		if config.IsLegacyAPIKey(cfg.APIKey) {
 			headers[types.DatasetHeader] = cfg.Dataset
 		}
 	}

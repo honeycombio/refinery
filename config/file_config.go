@@ -850,6 +850,35 @@ func (f *fileConfig) GetAllSamplerRules() *V2SamplerConfig {
 	return f.rulesConfig
 }
 
+func (f *fileConfig) CalculateSamplerKey(apiKey, dataset, environment string) string {
+	var isLegacyKey bool
+	samplerKey := environment
+	if IsLegacyAPIKey(apiKey) {
+		samplerKey = dataset
+		isLegacyKey = true
+	}
+
+	if isLegacyKey {
+		if prefix := f.GetDatasetPrefix(); prefix != "" {
+			return fmt.Sprintf("%s.%s", prefix, samplerKey)
+		}
+	}
+
+	return samplerKey
+}
+
+func (f *fileConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string {
+	sampler, ok := f.rulesConfig.Samplers[samplerKey]
+	if !ok {
+		sampler, ok = f.rulesConfig.Samplers["__default__"]
+		if !ok {
+			return nil
+		}
+	}
+
+	return sampler.GetSamplingFields()
+}
+
 // GetSamplerConfigForDestName returns the sampler config for the given
 // destination (environment, or dataset in classic mode), as well as the name of
 // the sampler type. If the specific destination is not found, it returns the
@@ -858,11 +887,11 @@ func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string) 
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	nameToUse := "__default__"
-	if _, ok := f.rulesConfig.Samplers[destname]; ok {
-		nameToUse = destname
+	if sampler, ok := f.rulesConfig.Samplers[destname]; ok {
+		return sampler.Sampler()
 	}
 
+	nameToUse := "__default__"
 	name := "not found"
 	var cfg any
 	if sampler, ok := f.rulesConfig.Samplers[nameToUse]; ok {
@@ -1087,4 +1116,38 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Specialized.AdditionalAttributes
+}
+
+func IsLegacyAPIKey(key string) bool {
+	keyLen := len(key)
+
+	if keyLen == 32 {
+		// Check if all characters are hex digits (0-9, a-f)
+		for i := 0; i < keyLen; i++ {
+			c := key[i]
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				return false
+			}
+		}
+		return true
+	} else if keyLen == 64 {
+		// Check the prefix pattern "hc[a-z]ic_"
+		if key[:2] != "hc" || key[3:6] != "ic_" {
+			return false
+		}
+		if key[2] < 'a' || key[2] > 'z' {
+			return false
+		}
+
+		// Check if the remaining characters are alphanumeric lowercase
+		for i := 6; i < keyLen; i++ {
+			c := key[i]
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')) {
+				return false
+			}
+		}
+		return true
+	}
+
+	return false
 }

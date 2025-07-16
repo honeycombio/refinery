@@ -471,3 +471,19 @@ func (f *MockConfig) SetMaxAlloc(v MemorySize) {
 
 	f.GetCollectionConfigVal.MaxAlloc = v
 }
+
+func (f *MockConfig) CalculateSamplerKey(apiKey, dataset, environment string) string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return environment
+}
+
+func (f *MockConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	// For the mock, we return a fixed set of key fields and non-root fields
+	// In a real implementation, this would depend on the sampler configuration
+	return []string{"trace_id", "parent_id"}
+}

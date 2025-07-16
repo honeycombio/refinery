@@ -51,10 +51,11 @@ func (e *Event) GetDataSize() int {
 // Refinery. Traces are not thread-safe; only one goroutine should be working
 // with a trace object at a time.
 type Trace struct {
-	APIHost string
-	APIKey  string
-	Dataset string
-	TraceID string
+	APIHost     string
+	APIKey      string
+	Dataset     string
+	TraceID     string
+	Environment string
 
 	// SampleRate should only be changed if the changer holds the SendSampleLock
 	sampleRate uint
@@ -102,6 +103,9 @@ func (t *Trace) AddSpan(sp *Span) {
 	t.DataSize += sp.GetDataSize()
 	t.spans = append(t.spans, sp)
 	t.totalImpact = 0
+	if t.Environment == "" && sp.Environment != "" {
+		t.Environment = sp.Environment
+	}
 }
 
 // CacheImpact calculates an abstract value for something we're calling cache impact, which is
@@ -204,22 +208,6 @@ func (t *Trace) SpanEventCount() uint32 {
 		t.calculateSpanCounts()
 	}
 	return t.spanEventCount
-}
-
-func GetSamplerKey(apiKey string, dataset string, spans ...*Span) (string, bool) {
-	if IsLegacyAPIKey(apiKey) {
-		return dataset, true
-	}
-
-	env := ""
-	for _, sp := range spans {
-		if sp.Environment != "" {
-			env = sp.Environment
-			break
-		}
-	}
-
-	return env, false
 }
 
 // IsOrphan returns true if the trace is older than 4 times the traceTimeout
@@ -348,38 +336,4 @@ func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 	multiplier := int(cacheImpactFactor*time.Since(sp.ArrivalTime)/traceTimeout) + 1
 	// We can assume DataSize was set when the span was added.
 	return multiplier * sp.GetDataSize()
-}
-
-func IsLegacyAPIKey(key string) bool {
-	keyLen := len(key)
-
-	if keyLen == 32 {
-		// Check if all characters are hex digits (0-9, a-f)
-		for i := 0; i < keyLen; i++ {
-			c := key[i]
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
-				return false
-			}
-		}
-		return true
-	} else if keyLen == 64 {
-		// Check the prefix pattern "hc[a-z]ic_"
-		if key[:2] != "hc" || key[3:6] != "ic_" {
-			return false
-		}
-		if key[2] < 'a' || key[2] > 'z' {
-			return false
-		}
-
-		// Check if the remaining characters are alphanumeric lowercase
-		for i := 6; i < keyLen; i++ {
-			c := key[i]
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')) {
-				return false
-			}
-		}
-		return true
-	}
-
-	return false
 }

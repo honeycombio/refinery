@@ -982,7 +982,7 @@ type AuthInfo struct {
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
-	if apiKey == "" || types.IsLegacyAPIKey(apiKey) {
+	if apiKey == "" || config.IsLegacyAPIKey(apiKey) {
 		return "", nil
 	}
 
@@ -1122,15 +1122,7 @@ func addIncomingUserAgent(ev *types.Event, userAgent string) {
 }
 
 func (r *Router) getSamplingKeyFields(span *types.Span) (keyFields, nonRootFields []string) {
-	samplerKey, isLegacyKey := types.GetSamplerKey(span.APIKey, span.Dataset, span)
-	samplerKey = sample.CalculateSamplerKey(r.Config, samplerKey, isLegacyKey)
-	c, _ := r.Config.GetSamplerConfigForDestName(samplerKey)
-	if c != nil {
-		fielder, ok := c.(config.GetSamplingFielder)
-		if ok {
-			keyFields, nonRootFields := sample.GetKeyFields(fielder.GetSamplingFields())
-			return keyFields, nonRootFields
-		}
-	}
-	return nil, nil
+	samplerKey := r.Config.CalculateSamplerKey(span.APIKey, span.Dataset, span.Environment)
+	fields := r.Config.GetSamplingKeyFieldsForDestName(samplerKey)
+	return sample.GetKeyFields(fields)
 }

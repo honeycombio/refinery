@@ -91,50 +91,6 @@ func TestDependencyInjection(t *testing.T) {
 	}
 }
 
-func TestDatasetPrefix(t *testing.T) {
-	cm := makeYAML(
-		"General/ConfigurationVersion", 2,
-		"General/DatasetPrefix", "dataset",
-	)
-	rm := makeYAML(
-		"RulesVersion", 2,
-		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
-		"Samplers/production/DeterministicSampler/SampleRate", 10,
-		"Samplers/dataset.production/DeterministicSampler/SampleRate", 20,
-	)
-	cfg, rules := createTempConfigs(t, cm, rm)
-	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
-	assert.NoError(t, err)
-
-	assert.Equal(t, "dataset", c.GetDatasetPrefix())
-
-	factory := SamplerFactory{Config: c, Logger: &logger.NullLogger{}, Metrics: &metrics.NullMetrics{}}
-	factory.Start()
-
-	defaultSampler := &DeterministicSampler{
-		Config: &config.DeterministicSamplerConfig{SampleRate: 1},
-		Logger: &logger.NullLogger{},
-	}
-	defaultSampler.Start()
-
-	envSampler := &DeterministicSampler{
-		Config: &config.DeterministicSamplerConfig{SampleRate: 10},
-		Logger: &logger.NullLogger{},
-	}
-	envSampler.Start()
-
-	datasetSampler := &DeterministicSampler{
-		Config: &config.DeterministicSamplerConfig{SampleRate: 20},
-		Logger: &logger.NullLogger{},
-	}
-	datasetSampler.Start()
-
-	assert.Equal(t, defaultSampler, factory.GetSamplerImplementationForKey("unknown", false))
-	assert.Equal(t, defaultSampler, factory.GetSamplerImplementationForKey("unknown", true))
-	assert.Equal(t, envSampler, factory.GetSamplerImplementationForKey("production", false))
-	assert.Equal(t, datasetSampler, factory.GetSamplerImplementationForKey("production", true))
-}
-
 func TestTotalThroughputClusterSize(t *testing.T) {
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
@@ -156,7 +112,7 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*TotalThroughputSampler)
@@ -185,7 +141,7 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*EMAThroughputSampler)
@@ -214,7 +170,7 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*WindowedThroughputSampler)
@@ -575,7 +531,7 @@ func BenchmarkGetSamplerImplementation(b *testing.B) {
 			// Evenly distribute among the 6 keys
 			key := keys[i%len(keys)]
 
-			_ = factory.GetSamplerImplementationForKey(key, false)
+			_ = factory.GetSamplerImplementationForKey(key)
 			i++
 		}
 	})
