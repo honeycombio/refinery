@@ -127,7 +127,7 @@ func TestPayload(t *testing.T) {
 	}
 
 	ph = NewPayload(mockCfg, data)
-	ph.ExtractMetadata()
+	require.NoError(t, ph.ExtractMetadata())
 	t.Run("from_map", doTest)
 
 	ph = NewPayload(mockCfg, nil)
@@ -164,7 +164,7 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 		ph := NewPayload(&config.MockConfig{
 			TraceIdFieldNames: []string{"trace.trace_id"},
 		}, data)
-		ph.ExtractMetadata()
+		require.NoError(t, ph.ExtractMetadata())
 
 		assert.Equal(t, "custom-trace-123", ph.MetaTraceID, "Should extract trace ID from custom field")
 		assert.Equal(t, "custom-trace-123", ph.Get("trace.trace_id"))
@@ -180,7 +180,7 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 			TraceIdFieldNames:  []string{"trace.trace_id"},
 			ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		}, data)
-		ph.ExtractMetadata()
+		require.NoError(t, ph.ExtractMetadata())
 
 		assert.Equal(t, "trace-123", ph.MetaTraceID)
 		assert.True(t, ph.MetaRefineryRoot.HasValue, "Root flag should be set")
@@ -196,7 +196,7 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 			TraceIdFieldNames:  []string{"trace.trace_id"},
 			ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		}, data)
-		ph.ExtractMetadata()
+		require.NoError(t, ph.ExtractMetadata())
 
 		assert.Equal(t, "trace-789", ph.MetaTraceID)
 		assert.True(t, ph.MetaRefineryRoot.HasValue, "Root flag should be set")
@@ -213,7 +213,7 @@ func TestPayloadExtractMetadataWithFieldNames(t *testing.T) {
 			TraceIdFieldNames:  []string{"trace.trace_id"},
 			ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		}, data)
-		ph.ExtractMetadata()
+		require.NoError(t, ph.ExtractMetadata())
 
 		assert.Equal(t, "log", ph.MetaSignalType)
 		assert.False(t, ph.MetaRefineryRoot.HasValue, "Root flag should be set")
@@ -279,6 +279,8 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 			// Custom trace/parent fields
 			"trace.trace_id": "custom-trace-456", // Custom trace ID field
 			"span.parent_id": "",                 // Empty parent ID should make it root
+
+			"sampling_key_field": "custom-sampling-key",
 		}
 
 		msgpData, err := msgpack.Marshal(data)
@@ -289,6 +291,9 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 			config: &config.MockConfig{
 				TraceIdFieldNames:  []string{"wrong", "trace.trace_id"},
 				ParentIdFieldNames: []string{"span.parent_id"},
+				GetSamplerTypeVal: &config.DynamicSamplerConfig{
+					FieldList: []string{"sampling_key_field", "missing_field"},
+				},
 			},
 		}
 		remainder, err := p.UnmarshalMsg(msgpData)
@@ -331,6 +336,11 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 		assert.Equal(t, int64(15), p.MetaEventCount)
 		assert.Equal(t, int64(100), p.MetaRefineryOriginalSampleRate)
 
+		// Verify sampling key extraction
+		assert.Equal(t, "custom-sampling-key", p.memoizedFields["sampling_key_field"])
+		_, ok := p.missingFields["missing_field"]
+		assert.True(t, ok)
+
 		// Verify regular fields are still accessible
 		assert.Equal(t, "value1", p.Get("regular_field"))
 		assert.Equal(t, int64(42), p.Get("another_field")) // should preserve int type
@@ -351,6 +361,7 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 			},
 		}
 		remainder, err := p1.UnmarshalMsg(combined)
+		require.NoError(t, err)
 		assert.Equal(t, "trace1", p1.MetaTraceID)
 		assert.Equal(t, msgpData2, remainder)
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -473,17 +474,30 @@ func (f *MockConfig) SetMaxAlloc(v MemorySize) {
 }
 
 func (f *MockConfig) CalculateSamplerKey(apiKey, dataset, environment string) string {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
+	if IsLegacyAPIKey(apiKey) {
+		if f.DatasetPrefix != "" {
+			return fmt.Sprintf("%s.%s", f.DatasetPrefix, dataset)
+		}
+		return dataset
+	}
 
 	return environment
 }
 
 func (f *MockConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string {
-	f.Mux.RLock()
-	defer f.Mux.RUnlock()
+	switch sampler := f.GetSamplerTypeVal.(type) {
+	case *DeterministicSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *DynamicSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *EMADynamicSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *RulesBasedSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *TotalThroughputSamplerConfig:
+		return sampler.GetSamplingFields()
+	default:
+		return nil
+	}
 
-	// For the mock, we return a fixed set of key fields and non-root fields
-	// In a real implementation, this would depend on the sampler configuration
-	return []string{"trace_id", "parent_id"}
 }

@@ -249,7 +249,10 @@ type Payload struct {
 
 	hasExtractedMetadata bool
 
-	config config.Config
+	config  config.Config
+	apiKey  string // API key used for sampling decisions
+	env     string // Environment used for sampling decisions
+	dataset string // Dataset used for sampling decisions
 
 	// Cached metadata fields for efficient access
 	MetaSignalType                string       // meta.signal_type
@@ -277,15 +280,18 @@ type Payload struct {
 	MetaRefinerySampleKey          string       // meta.refinery.sample_key
 }
 
-// extractMetadataFromBytes extracts metadata from msgpack data.
+// extractCriticalFieldsFromBytes extracts metadata and sampling key fields from msgpack data.
 // If consumed is non-nil, it will be set to the number of bytes consumed from the data.
-func (p *Payload) extractMetadataFromBytes(data []byte) (int, error) {
+func (p *Payload) extractCriticalFieldsFromBytes(data []byte) (int, error) {
 	if !p.MetaRefineryRoot.HasValue {
 		p.MetaRefineryRoot.Set(true)
 	}
 
 	traceIdFieldNames := p.config.GetTraceIdFieldNames()
 	parentIdFieldNames := p.config.GetParentIdFieldNames()
+	samplerKey := p.config.CalculateSamplerKey(p.apiKey, p.dataset, p.env)
+	keyFields := p.config.GetSamplingKeyFieldsForDestName(samplerKey)
+	var keysFound int
 
 	// Read the map header
 	mapSize, remaining, err := msgp.ReadMapHeaderBytes(data)
@@ -350,11 +356,47 @@ func (p *Payload) extractMetadataFromBytes(data []byte) (int, error) {
 			return len(data) - len(remaining), fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
 		}
 
-		// If we didn't handle this field as metadata, skip it
+		// If not handled as metadata, check if this is a key field
+		// only check for key fields if we haven't found a match yet
+		if !handled && len(keyFields) > 0 && keysFound < len(keyFields) {
+			// Check if the key matches any of the key fields
+			var val any
+			for _, field := range keyFields {
+				if p.memoizedFields[field] != nil {
+					// If we already memoized this field, skip it
+					continue
+				}
+				if bytes.Equal(keyBytes, []byte(field)) {
+					keysFound++
+
+					val, remaining, err = msgp.ReadIntfBytes(remaining)
+					if err != nil {
+						return len(data) - len(remaining), fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
+					}
+
+					p.Set(field, val)
+					handled = true
+					break
+				}
+			}
+		}
+
 		if !handled {
 			remaining, err = msgp.Skip(remaining)
 			if err != nil {
 				return len(data) - len(remaining), fmt.Errorf("failed to skip value: %w", err)
+			}
+		}
+	}
+
+	if keysFound < len(keyFields) {
+		// If we didn't find all key fields, add them to missingFields
+		if p.missingFields == nil {
+			p.missingFields = make(map[string]struct{}, len(keyFields))
+		}
+		for _, field := range keyFields {
+			if _, found := p.memoizedFields[field]; !found {
+				p.missingFields[field] = struct{}{}
 			}
 		}
 	}
@@ -427,7 +469,7 @@ func (p *Payload) ExtractMetadata() error {
 
 	// For msgpMap fields, extract from the raw bytes
 	if p.msgpMap.Size() > 0 {
-		_, err := p.extractMetadataFromBytes(p.msgpMap.rawData)
+		_, err := p.extractCriticalFieldsFromBytes(p.msgpMap.rawData)
 		if err != nil {
 			return err
 		}
@@ -445,27 +487,33 @@ func (p *Payload) ExtractMetadata() error {
 // NewPayload creates a new Payload from a map of fields. This is not populate
 // metadata fields
 func NewPayload(config config.Config, data map[string]any) Payload {
-	p := Payload{
+	return Payload{
 		memoizedFields: data,
+		config:         config,
 	}
+}
 
-	p.config = config
-	return p
+func NewPayloadForUnmarshal(config config.Config, apiKey, env, dataset string) Payload {
+	return Payload{
+		config:  config,
+		apiKey:  apiKey,
+		env:     env,
+		dataset: dataset,
+	}
 }
 
 // UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal.
 // Instead it keeps a copy of the serialized data.
 func (p *Payload) UnmarshalMsgpack(data []byte) error {
 	p.msgpMap = MsgpPayloadMap{rawData: slices.Clone(data)}
-	p.ExtractMetadata()
-	return nil
+	return p.ExtractMetadata()
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler, similar to above but expects to be
 // part of a larger message. Makes a local copy of the bytes it's hanging onto.
 func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	// Extract metadata and get consumed bytes
-	consumed, err := p.extractMetadataFromBytes(bts)
+	consumed, err := p.extractCriticalFieldsFromBytes(bts)
 	if err != nil {
 		return nil, err
 	}
@@ -484,8 +532,7 @@ func (p *Payload) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	p.memoizedFields = fields
-	p.ExtractMetadata()
-	return nil
+	return p.ExtractMetadata()
 }
 
 func (p *Payload) MemoizeFields(keys ...string) {

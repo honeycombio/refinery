@@ -207,6 +207,40 @@ func TestCalculateSamplerKey(t *testing.T) {
 	}
 }
 
+func TestGetSamplingKeyFieldsForDestName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		destName string
+		expected []string
+	}{
+		{"empty dest name", "", nil},
+		{"valid dest name", "my-destination", []string{"sampling_key", "service.name"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &fileConfig{
+				rulesConfig: &V2SamplerConfig{
+					Samplers: map[string]*V2SamplerChoice{
+						"__default__": {
+							DeterministicSampler: &DeterministicSamplerConfig{SampleRate: 1},
+						},
+						"my-destination": {
+							DynamicSampler: &DynamicSamplerConfig{
+								FieldList: []string{"sampling_key", "service.name"},
+							},
+						},
+					},
+				},
+			}
+			result := config.GetSamplingKeyFieldsForDestName(tc.destName)
+			assert.Equal(t, tc.expected, result,
+				"getSamplingKeyFieldsForDestName(%q) = %v, want %v",
+				tc.destName, result, tc.expected)
+		})
+	}
+}
+
 func TestIsClassicKey(t *testing.T) {
 	testCases := []struct {
 		name     string

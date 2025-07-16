@@ -16,6 +16,9 @@ type batchedEvent struct {
 	SampleRate       int64         `json:"samplerate" msgpack:"samplerate"`
 	Data             types.Payload `json:"data" msgpack:"data"`
 	cfg              config.Config `json:"-" msgpack:"-"`
+	apiKey           string
+	env              string
+	dataset          string
 }
 
 func (b *batchedEvent) getEventTime() time.Time {
@@ -51,7 +54,7 @@ func (b *batchedEvent) UnmarshalJSON(data []byte) error {
 	b.SampleRate = temp.SampleRate
 
 	// Initialize Data with config and then unmarshal the raw JSON into it
-	b.Data = types.NewPayload(b.cfg, nil)
+	b.Data = types.NewPayloadForUnmarshal(b.cfg, b.apiKey, b.env, b.dataset)
 	err = json.Unmarshal(temp.Data, &b.Data)
 	if err != nil {
 		return err
@@ -102,7 +105,7 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case bytes.Equal(field, []byte("data")):
-			b.Data = types.NewPayload(b.cfg, nil)
+			b.Data = types.NewPayloadForUnmarshal(b.cfg, b.apiKey, b.env, b.dataset)
 			bts, err = b.Data.UnmarshalMsg(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Data")
@@ -122,14 +125,20 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Create a type for []batchedEvent so we can give it an unmarshaler.
 type batchedEvents struct {
-	events []batchedEvent
-	cfg    config.Config
+	apiKey  string
+	env     string
+	dataset string
+	events  []batchedEvent
+	cfg     config.Config
 }
 
-func newBatchedEvents(cfg config.Config) *batchedEvents {
+func newBatchedEvents(cfg config.Config, apiKey, env, dataset string) *batchedEvents {
 	return &batchedEvents{
-		events: make([]batchedEvent, 0),
-		cfg:    cfg,
+		apiKey:  apiKey,
+		env:     env,
+		dataset: dataset,
+		events:  make([]batchedEvent, 0),
+		cfg:     cfg,
 	}
 }
 
@@ -144,6 +153,9 @@ func (b *batchedEvents) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	b.events = make([]batchedEvent, totalValues)
 	for i := range b.events {
 		b.events[i].cfg = b.cfg
+		b.events[i].apiKey = b.apiKey
+		b.events[i].env = b.env
+		b.events[i].dataset = b.dataset
 		bts, err = b.events[i].UnmarshalMsg(bts)
 		if err != nil {
 			err = msgp.WrapError(err, i)
@@ -168,6 +180,9 @@ func (b *batchedEvents) UnmarshalJSON(data []byte) error {
 	b.events = make([]batchedEvent, len(rawEvents))
 	for i := range b.events {
 		b.events[i].cfg = b.cfg
+		b.events[i].apiKey = b.apiKey
+		b.events[i].env = b.env
+		b.events[i].dataset = b.dataset
 
 		err = json.Unmarshal(rawEvents[i], &b.events[i])
 		if err != nil {

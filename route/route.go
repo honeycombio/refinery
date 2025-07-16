@@ -41,7 +41,6 @@ import (
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
@@ -513,20 +512,10 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	}
 	defer recycleHTTPBodyBuffer(bodyBuffer)
 
-	batchedEvents := newBatchedEvents(r.Config)
-	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
-	if err != nil {
-		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(bodyBuffer.Bytes())).Logf("error parsing json")
-		r.handlerReturnWithError(w, ErrJSONFailed, err)
-		return
-	}
-	r.Metrics.Count(r.metricsNames.routerBatchEvents, int64(len(batchedEvents.events)))
-
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
-	apiHost := r.Config.GetHoneycombAPI()
 
 	apiKey := req.Header.Get(types.APIKeyHeader)
 	if apiKey == "" {
@@ -539,6 +528,16 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
 
+	batchedEvents := newBatchedEvents(r.Config, apiKey, environment, dataset)
+	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
+	if err != nil {
+		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(bodyBuffer.Bytes())).Logf("error parsing json")
+		r.handlerReturnWithError(w, ErrJSONFailed, err)
+		return
+	}
+	r.Metrics.Count(r.metricsNames.routerBatchEvents, int64(len(batchedEvents.events)))
+
+	apiHost := r.Config.GetHoneycombAPI()
 	userAgent := getUserAgentFromRequest(req)
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
 	for _, bev := range batchedEvents.events {
@@ -656,13 +655,6 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		Event:   *ev,
 		TraceID: ev.Data.MetaTraceID,
 		IsRoot:  ev.Data.MetaRefineryRoot.Value,
-	}
-
-	keyFields, nonRootFields := r.getSamplingKeyFields(span)
-	if span.IsRoot {
-		span.Data.MemoizeFields(keyFields...)
-	} else {
-		span.Data.MemoizeFields(nonRootFields...)
 	}
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
@@ -1119,10 +1111,4 @@ func addIncomingUserAgent(ev *types.Event, userAgent string) {
 	if userAgent != "" && ev.Data.MetaRefineryIncomingUserAgent == "" {
 		ev.Data.MetaRefineryIncomingUserAgent = userAgent
 	}
-}
-
-func (r *Router) getSamplingKeyFields(span *types.Span) (keyFields, nonRootFields []string) {
-	samplerKey := r.Config.CalculateSamplerKey(span.APIKey, span.Dataset, span.Environment)
-	fields := r.Config.GetSamplingKeyFieldsForDestName(samplerKey)
-	return sample.GetKeyFields(fields)
 }
