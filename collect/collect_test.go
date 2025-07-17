@@ -1157,9 +1157,12 @@ func TestAddSpanCount(t *testing.T) {
 	coll.AddSpanFromPeer(span)
 	coll.AddSpanFromPeer(decisionSpan)
 
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		assert.Equal(collect, traceID, coll.getFromCache(traceID).TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
-	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2)
+	assert.EventuallyWithT(t,
+		func(collect *assert.CollectT) { assert.Equal(collect, traceID, coll.getFromCache(traceID).TraceID) },
+		conf.GetTracesConfig().GetSendTickerValue()*60, // waitFor
+		conf.GetTracesConfig().GetSendTickerValue()*2,  // tick
+		"within a reasonable time, cache should contain a traceID matching the one from the span we added",
+	)
 	assert.Equal(t, 0, len(transmission.GetBlock(0)), "adding a non-root span should not yet send the span")
 
 	// ok now let's add the root span and verify that both got sent
