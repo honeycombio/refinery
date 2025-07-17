@@ -450,10 +450,10 @@ func TestPeerRouting(t *testing.T) {
 
 	// this span index was chosen because it hashes to the appropriate shard for this
 	// test. You can't change it and expect the test to pass.
-	blob := `[` + string(spans[10]) + `]`
+	blob := `[` + string(spans[30]) + `]`
 	req.Body = io.NopCloser(strings.NewReader(blob))
 	post(t, req)
-	assert.Eventually(t, func() bool {
+	require.Eventually(t, func() bool {
 		return len(senders[0].Events()) == 1
 	}, 5*time.Second, 2*time.Millisecond)
 
@@ -464,8 +464,8 @@ func TestPeerRouting(t *testing.T) {
 		APIHost:    "http://api.honeycomb.io",
 		Timestamp:  now,
 		Data: map[string]interface{}{
-			"trace.trace_id":                     "2",
-			"trace.span_id":                      "10",
+			"trace.trace_id":                     "4",
+			"trace.span_id":                      "30",
 			"trace.parent_id":                    "0000000000",
 			"key":                                "value",
 			"field0":                             float64(0),
@@ -685,7 +685,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	}
 	// this traceID was chosen because it hashes to the appropriate shard for this
 	// test. You can't change it or the number of peers and still expect the test to pass.
-	traceID := "4"
+	traceID := "3"
 
 	var apps [2]*App
 	var senders [2]*transmission.MockSender

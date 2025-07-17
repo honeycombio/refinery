@@ -296,6 +296,7 @@ type PeerManagementConfig struct {
 	IdentifierInterfaceName string   `yaml:"IdentifierInterfaceName"`
 	UseIPV6Identifier       bool     `yaml:"UseIPV6Identifier"`
 	Peers                   []string `yaml:"Peers"`
+	ShardingStrategy        string   `yaml:"ShardingStrategy" default:"highest_random_weight"`
 }
 
 type RedisPeerManagementConfig struct {
@@ -708,6 +709,12 @@ func (f *fileConfig) GetPeerManagementType() string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.PeerManagement.Type
+}
+func (f *fileConfig) GetPeerManagementShardingStrategy() string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.PeerManagement.ShardingStrategy
 }
 
 func (f *fileConfig) GetPeers() []string {
