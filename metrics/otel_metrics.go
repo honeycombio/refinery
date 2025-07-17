@@ -34,6 +34,7 @@ type OTelMetrics struct {
 
 	meter        metric.Meter
 	shutdownFunc func(ctx context.Context) error
+	testReader   sdkmetric.Reader
 
 	lock             sync.RWMutex
 	counters         map[string]metric.Int64Counter
@@ -129,12 +130,17 @@ func (o *OTelMetrics) Start() error {
 		return err
 	}
 
+	var reader sdkmetric.Reader
+	if o.testReader != nil {
+		reader = o.testReader
+	} else {
+		reader = sdkmetric.NewPeriodicReader(exporter,
+			sdkmetric.WithInterval(time.Duration(cfg.ReportingInterval)),
+		)
+	}
+
 	provider := sdkmetric.NewMeterProvider(
-		sdkmetric.WithReader(
-			sdkmetric.NewPeriodicReader(exporter,
-				sdkmetric.WithInterval(time.Duration(cfg.ReportingInterval)),
-			),
-		),
+		sdkmetric.WithReader(reader),
 		sdkmetric.WithResource(res),
 	)
 	o.meter = provider.Meter("otelmetrics")
@@ -191,30 +197,27 @@ func (o *OTelMetrics) Stop() {
 // Register creates a new metric with the given metadata
 // and initialize it with zero value.
 func (o *OTelMetrics) Register(metadata Metadata) {
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
 	switch metadata.Type {
 	case Counter:
-		_, err := o.initCounter(metadata)
+		_, err := o.getOrInitCounter(metadata)
 		if err != nil {
 			o.Logger.Error().WithString("name", metadata.Name).Logf("failed to create counter. %s", err.Error())
 			return
 		}
 	case Gauge:
-		_, err := o.initGauge(metadata)
+		_, err := o.getOrInitGauge(metadata)
 		if err != nil {
 			o.Logger.Error().WithString("name", metadata.Name).Logf("failed to create gauge. %s", err.Error())
 			return
 		}
 	case Histogram:
-		_, err := o.initHistogram(metadata)
+		_, err := o.getOrInitHistogram(metadata)
 		if err != nil {
 			o.Logger.Error().WithString("name", metadata.Name).Logf("failed to create histogram. %s", err.Error())
 			return
 		}
 	case UpDown:
-		_, err := o.initUpDown(metadata)
+		_, err := o.getOrInitUpDown(metadata)
 		if err != nil {
 			o.Logger.Error().WithString("name", metadata.Name).Logf("failed to create updown counter. %s", err.Error())
 			return
@@ -226,183 +229,180 @@ func (o *OTelMetrics) Register(metadata Metadata) {
 }
 
 func (o *OTelMetrics) Increment(name string) {
-	o.lock.RLock()
-	ctr, ok := o.counters[name]
-	o.lock.RUnlock()
+	ctr, err := o.getOrInitCounter(Metadata{
+		Name: name,
+	})
 
-	var err error
-	if !ok {
-		o.lock.Lock()
-		ctr, err = o.initCounter(Metadata{
-			Name: name,
-		})
-		o.lock.Unlock()
-
-		if err != nil {
-			return
-		}
+	if err != nil {
+		return
 	}
 
 	ctr.Add(context.Background(), 1)
 }
 
 func (o *OTelMetrics) Gauge(name string, val float64) {
-	o.lock.RLock()
-	g, ok := o.gauges[name]
-	o.lock.RUnlock()
-
-	var err error
-	if !ok {
-		o.lock.Lock()
-		g, err = o.initGauge(Metadata{
-			Name: name,
-		})
-		o.lock.Unlock()
-
-		if err != nil {
-			return
-		}
+	g, err := o.getOrInitGauge(Metadata{
+		Name: name,
+	})
+	if err != nil {
+		return
 	}
-
 	g.Record(context.Background(), val)
 }
 
 func (o *OTelMetrics) Count(name string, val int64) {
-	o.lock.RLock()
-	ctr, ok := o.counters[name]
-	o.lock.RUnlock()
-
-	var err error
-	if !ok {
-		o.lock.Lock()
-		ctr, err = o.initCounter(Metadata{Name: name})
-		o.lock.Unlock()
-		if err != nil {
-			return
-		}
+	ctr, err := o.getOrInitCounter(Metadata{Name: name})
+	if err != nil {
+		return
 	}
 	ctr.Add(context.Background(), val)
 }
 
 func (o *OTelMetrics) Histogram(name string, val float64) {
-	o.lock.RLock()
-	h, ok := o.histograms[name]
-	o.lock.RUnlock()
-
-	var err error
-	if !ok {
-		o.lock.Lock()
-		h, err = o.initHistogram(Metadata{Name: name})
-		o.lock.Unlock()
-		if err != nil {
-			return
-		}
+	h, err := o.getOrInitHistogram(Metadata{Name: name})
+	if err != nil {
+		return
 	}
 	h.Record(context.Background(), val)
 }
 
 func (o *OTelMetrics) Up(name string) {
-	o.lock.RLock()
-	ud, ok := o.updowns[name]
-	o.lock.RUnlock()
-
-	var err error
-	if !ok {
-		o.lock.Lock()
-		ud, err = o.initUpDown(Metadata{Name: name})
-		o.lock.Unlock()
-		if err != nil {
-			return
-		}
+	ud, err := o.getOrInitUpDown(Metadata{Name: name})
+	if err != nil {
+		return
 	}
 	ud.Add(context.Background(), 1)
 }
 
 func (o *OTelMetrics) Down(name string) {
-	o.lock.RLock()
-	ud, ok := o.updowns[name]
-	o.lock.RUnlock()
-
-	var err error
-	if !ok {
-		o.lock.Lock()
-		ud, err = o.initUpDown(Metadata{Name: name})
-		o.lock.Unlock()
-		if err != nil {
-			return
-		}
+	ud, err := o.getOrInitUpDown(Metadata{Name: name})
+	if err != nil {
+		return
 	}
-
 	ud.Add(context.Background(), -1)
 }
 
-// initCounter initializes a new counter metric with the given metadata
-// It should be used while holding the metrics lock.
-func (o *OTelMetrics) initCounter(metadata Metadata) (metric.Int64Counter, error) {
-	unit := string(metadata.Unit)
-	ctr, err := o.meter.Int64Counter(metadata.Name,
-		metric.WithUnit(unit),
-		metric.WithDescription(metadata.Description),
-	)
-	if err != nil {
-		return nil, err
+// getOrInitCounter returns a counter metric with the given metadata.
+// It manages the locks it needs; do not call inside a lock on o.lock.
+func (o *OTelMetrics) getOrInitCounter(metadata Metadata) (ctr metric.Int64Counter, err error) {
+	o.lock.RLock()
+	ctr, ok := o.counters[metadata.Name]
+	o.lock.RUnlock()
+
+	if ok { // yey, the counter exists; return it
+		return ctr, nil
 	}
 
-	// Give the counter an initial value of 0 so that OTel will send it
-	ctr.Add(context.Background(), 0)
-	o.counters[metadata.Name] = ctr
+	// oh, so sad; gotta make the counter
+	o.lock.Lock()
+	defer o.lock.Unlock()
 
+	ctr, ok = o.counters[metadata.Name] // confirm it wasn't created since we checked earlier
+	if !ok {
+		ctr, err = o.meter.Int64Counter(metadata.Name,
+			metric.WithUnit(string(metadata.Unit)),
+			metric.WithDescription(metadata.Description),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		// Give the counter an initial value of 0 so that OTel will send it
+		ctr.Add(context.Background(), 0)
+		o.counters[metadata.Name] = ctr
+	}
 	return ctr, nil
 }
 
-// initGauge initializes a new gauge metric with the given metadata
-// It should be used while holding the metrics lock.
-func (o *OTelMetrics) initGauge(metadata Metadata) (metric.Float64Gauge, error) {
-	unit := string(metadata.Unit)
-	g, err := o.meter.Float64Gauge(metadata.Name,
-		metric.WithUnit(unit),
-		metric.WithDescription(metadata.Description),
-	)
-	if err != nil {
-		return nil, err
+// getOrInitGauge returns a gauge metric with the given metadata.
+// It manages the locks it needs; do not call inside a lock on o.lock.
+func (o *OTelMetrics) getOrInitGauge(metadata Metadata) (g metric.Float64Gauge, err error) {
+	o.lock.RLock()
+	g, ok := o.gauges[metadata.Name]
+	o.lock.RUnlock()
+
+	if ok { // yey, the guage exists; return it
+		return g, nil
 	}
 
-	o.gauges[metadata.Name] = g
+	// oh, so sad; gotta make the gauge
+	o.lock.Lock()
+	defer o.lock.Unlock()
+
+	g, ok = o.gauges[metadata.Name] // confirm it wasn't created since we checked earlier
+	if !ok {
+		g, err = o.meter.Float64Gauge(metadata.Name,
+			metric.WithUnit(string(metadata.Unit)),
+			metric.WithDescription(metadata.Description),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		o.gauges[metadata.Name] = g
+	}
 	return g, nil
 }
 
-// initHistogram initializes a new histogram metric with the given metadata
-// It should be used while holding the metrics lock.
-func (o *OTelMetrics) initHistogram(metadata Metadata) (metric.Float64Histogram, error) {
-	unit := string(metadata.Unit)
-	h, err := o.meter.Float64Histogram(metadata.Name,
-		metric.WithUnit(unit),
-		metric.WithDescription(metadata.Description),
-	)
-	if err != nil {
-		return nil, err
-	}
-	h.Record(context.Background(), 0)
-	o.histograms[metadata.Name] = h
+// getOrInitHistogram initializes a new histogram metric with the given metadata
+// It manages the locks it needs; do not call inside a lock on o.lock.
+func (o *OTelMetrics) getOrInitHistogram(metadata Metadata) (h metric.Float64Histogram, err error) {
+	o.lock.RLock()
+	h, ok := o.histograms[metadata.Name]
+	o.lock.RUnlock()
 
+	if ok { // yey, the histogram exists; return it
+		return h, nil
+	}
+
+	// oh, so sad; gotta make the histogram
+	o.lock.Lock()
+	defer o.lock.Unlock()
+
+	h, ok = o.histograms[metadata.Name] // confirm it wasn't created since we checked earlier
+	if !ok {
+		unit := string(metadata.Unit)
+		h, err = o.meter.Float64Histogram(metadata.Name,
+			metric.WithUnit(unit),
+			metric.WithDescription(metadata.Description),
+		)
+		if err != nil {
+			return nil, err
+		}
+		h.Record(context.Background(), 0)
+		o.histograms[metadata.Name] = h
+	}
 	return h, nil
 
 }
 
-// initUpDown initializes a new updown counter metric with the given metadata
-// It should be used while holding the metrics lock.
-func (o *OTelMetrics) initUpDown(metadata Metadata) (metric.Int64UpDownCounter, error) {
-	unit := string(metadata.Unit)
-	ud, err := o.meter.Int64UpDownCounter(metadata.Name,
-		metric.WithUnit(unit),
-		metric.WithDescription(metadata.Description),
-	)
-	if err != nil {
-		return nil, err
+// getOrInitUpDown initializes a new updown counter metric with the given metadata
+// It manages the locks it needs; do not call inside a lock on o.lock.
+func (o *OTelMetrics) getOrInitUpDown(metadata Metadata) (ud metric.Int64UpDownCounter, err error) {
+	o.lock.RLock()
+	ud, ok := o.updowns[metadata.Name]
+	o.lock.RUnlock()
+
+	if ok { // yey, the updown counter exists; return it
+		return ud, nil
 	}
-	ud.Add(context.Background(), 0)
-	o.updowns[metadata.Name] = ud
 
+	// oh, so sad; gotta make the updown counter
+	o.lock.Lock()
+	defer o.lock.Unlock()
+
+	ud, ok = o.updowns[metadata.Name] // confirm it wasn't created since we checked earlier
+	if !ok {
+		unit := string(metadata.Unit)
+		ud, err = o.meter.Int64UpDownCounter(metadata.Name,
+			metric.WithUnit(unit),
+			metric.WithDescription(metadata.Description),
+		)
+		if err != nil {
+			return nil, err
+		}
+		ud.Add(context.Background(), 0)
+		o.updowns[metadata.Name] = ud
+	}
 	return ud, nil
-
 }
