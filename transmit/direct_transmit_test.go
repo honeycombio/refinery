@@ -143,7 +143,7 @@ func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batch
 
 	mockLogger := &logger.MockLogger{}
 
-	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", batchSize, batchTimeout, true)
+	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), batchSize, batchTimeout, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -448,7 +448,7 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Use max batch size of 3 for testing
 	testServer := newTestDirectAPIServer(t, 3)
-	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", 3, 50*time.Millisecond, true)
+	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 3, 50*time.Millisecond, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -678,7 +678,7 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	mockLogger := &logger.MockLogger{}
 
 	testServer := newTestDirectAPIServer(t, 50)
-	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", 50, 50*time.Millisecond, true)
+	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 50, 50*time.Millisecond, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -752,7 +752,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	fakeClock := clockwork.NewFakeClock()
 
 	// Use a 400ms batch timeout for testing
-	dt := NewDirectTransmission(metrics, http.DefaultTransport.(*http.Transport), "test", 100, 400*time.Millisecond, true)
+	dt := NewDirectTransmission(metrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 100, 400*time.Millisecond, true)
 	dt.Config = &config.MockConfig{}
 	dt.Logger = &logger.NullLogger{}
 	dt.Version = "test-version"
@@ -1070,8 +1070,8 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 
 				dt := NewDirectTransmission(
 					mockMetrics,
+					types.TransmitTypeUpstream,
 					httpTransport,
-					"benchmark",
 					libhoney.DefaultMaxBatchSize,
 					libhoney.DefaultBatchTimeout,
 					false,
