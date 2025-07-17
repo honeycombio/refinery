@@ -351,11 +351,11 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 
 		// If not handled as metadata, check if this is a key field
 		// only check for key fields if we haven't found a match yet
-		if !handled && len(samplingKeyFields) > 0 && keysFound < len(samplingKeyFields) {
+		if !handled && keysFound < len(samplingKeyFields) {
 			// Check if the key matches any of the key fields
 			var val any
 			for _, field := range samplingKeyFields {
-				if p.memoizedFields[field] != nil {
+				if _, ok := p.memoizedFields[field]; ok {
 					// If we already memoized this field, skip it
 					continue
 				}

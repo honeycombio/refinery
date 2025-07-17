@@ -851,23 +851,21 @@ func (f *fileConfig) GetAllSamplerRules() *V2SamplerConfig {
 }
 
 func (f *fileConfig) CalculateSamplerKey(apiKey, dataset, environment string) string {
-	var isLegacyKey bool
-	samplerKey := environment
-	if IsLegacyAPIKey(apiKey) {
-		samplerKey = dataset
-		isLegacyKey = true
+	if !IsLegacyAPIKey(apiKey) {
+		return environment
 	}
 
-	if isLegacyKey {
-		if prefix := f.GetDatasetPrefix(); prefix != "" {
-			return fmt.Sprintf("%s.%s", prefix, samplerKey)
-		}
+	if prefix := f.GetDatasetPrefix(); prefix != "" {
+		return fmt.Sprintf("%s.%s", prefix, dataset)
 	}
 
-	return samplerKey
+	return dataset
 }
 
 func (f *fileConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	sampler, ok := f.rulesConfig.Samplers[samplerKey]
 	if !ok {
 		sampler, ok = f.rulesConfig.Samplers["__default__"]
@@ -1121,7 +1119,8 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 func IsLegacyAPIKey(key string) bool {
 	keyLen := len(key)
 
-	if keyLen == 32 {
+	switch keyLen {
+	case 32:
 		// Check if all characters are hex digits (0-9, a-f)
 		for i := 0; i < keyLen; i++ {
 			c := key[i]
@@ -1130,7 +1129,7 @@ func IsLegacyAPIKey(key string) bool {
 			}
 		}
 		return true
-	} else if keyLen == 64 {
+	case 64:
 		// Check the prefix pattern "hc[a-z]ic_"
 		if key[:2] != "hc" || key[3:6] != "ic_" {
 			return false
@@ -1147,7 +1146,7 @@ func IsLegacyAPIKey(key string) bool {
 			}
 		}
 		return true
+	default:
+		return false
 	}
-
-	return false
 }

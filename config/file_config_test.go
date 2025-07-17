@@ -200,9 +200,16 @@ func TestCalculateSamplerKey(t *testing.T) {
 			}
 
 			result := config.CalculateSamplerKey(tc.apiKey, tc.dataset, tc.environment)
-			assert.Equal(t, tc.expected, result,
+			assert.Equal(
+				t,
+				tc.expected,
+				result,
 				"CalculateSamplerKey(%q, %q, %q) = %q, want %q",
-				tc.apiKey, tc.dataset, tc.environment, result, tc.expected)
+				tc.apiKey,
+				tc.dataset,
+				tc.environment,
+				result,
+				tc.expected)
 		})
 	}
 }
@@ -234,14 +241,16 @@ func TestGetSamplingKeyFieldsForDestName(t *testing.T) {
 				},
 			}
 			result := config.GetSamplingKeyFieldsForDestName(tc.destName)
-			assert.Equal(t, tc.expected, result,
+			assert.Equal(
+				t, tc.expected, result,
 				"getSamplingKeyFieldsForDestName(%q) = %v, want %v",
-				tc.destName, result, tc.expected)
+				tc.destName, result, tc.expected,
+			)
 		})
 	}
 }
 
-func TestIsClassicKey(t *testing.T) {
+func TestIsLegacyKey(t *testing.T) {
 	testCases := []struct {
 		name     string
 		key      string
