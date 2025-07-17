@@ -11,11 +11,12 @@ import (
 )
 
 type batchedEvent struct {
-	Timestamp        string        `json:"time"`
-	MsgPackTimestamp *time.Time    `msgpack:"time,omitempty"`
-	SampleRate       int64         `json:"samplerate" msgpack:"samplerate"`
-	Data             types.Payload `json:"data" msgpack:"data"`
-	cfg              config.Config `json:"-" msgpack:"-"`
+	Timestamp           string        `json:"time"`
+	MsgPackTimestamp    *time.Time    `msgpack:"time,omitempty"`
+	SampleRate          int64         `json:"samplerate" msgpack:"samplerate"`
+	Data                types.Payload `json:"data" msgpack:"data"`
+	cfg                 config.Config `json:"-" msgpack:"-"`
+	coreFieldsExtractor types.CoreFieldsUnmarshaler
 }
 
 func (b *batchedEvent) getEventTime() time.Time {
@@ -102,8 +103,8 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case bytes.Equal(field, []byte("data")):
-			b.Data = types.NewPayload(b.cfg, nil)
-			bts, err = b.Data.UnmarshalMsg(bts)
+			b.Data = types.NewPayload(b.cfg, nil) // Initialize with config
+			bts, err = b.coreFieldsExtractor.UnmarshalPayload(bts, &b.Data)
 			if err != nil {
 				err = msgp.WrapError(err, "Data")
 				return
@@ -122,14 +123,16 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Create a type for []batchedEvent so we can give it an unmarshaler.
 type batchedEvents struct {
-	events []batchedEvent
-	cfg    config.Config
+	events              []batchedEvent
+	cfg                 config.Config
+	coreFieldsExtractor types.CoreFieldsUnmarshaler
 }
 
-func newBatchedEvents(cfg config.Config) *batchedEvents {
+func newBatchedEvents(cfg config.Config, apiKey, env, dataset string) *batchedEvents {
 	return &batchedEvents{
-		events: make([]batchedEvent, 0),
-		cfg:    cfg,
+		events:              make([]batchedEvent, 0),
+		cfg:                 cfg,
+		coreFieldsExtractor: types.NewCoreFieldsUnmarshaler(cfg, apiKey, env, dataset),
 	}
 }
 
@@ -144,6 +147,7 @@ func (b *batchedEvents) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	b.events = make([]batchedEvent, totalValues)
 	for i := range b.events {
 		b.events[i].cfg = b.cfg
+		b.events[i].coreFieldsExtractor = b.coreFieldsExtractor
 		bts, err = b.events[i].UnmarshalMsg(bts)
 		if err != nil {
 			err = msgp.WrapError(err, i)
@@ -168,6 +172,7 @@ func (b *batchedEvents) UnmarshalJSON(data []byte) error {
 	b.events = make([]batchedEvent, len(rawEvents))
 	for i := range b.events {
 		b.events[i].cfg = b.cfg
+		b.events[i].coreFieldsExtractor = b.coreFieldsExtractor
 
 		err = json.Unmarshal(rawEvents[i], &b.events[i])
 		if err != nil {

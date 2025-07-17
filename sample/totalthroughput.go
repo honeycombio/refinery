@@ -53,7 +53,7 @@ func (d *TotalThroughputSampler) Start() error {
 		d.maxKeys = 500
 	}
 	d.prefix = "totalthroughput"
-	d.keyFields, d.nonRootFields = getKeyFields(d.Config.GetSamplingFields())
+	d.keyFields, d.nonRootFields = GetKeyFields(d.Config.GetSamplingFields())
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.TotalThroughput{

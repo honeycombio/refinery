@@ -1,7 +1,6 @@
 package sample
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
@@ -63,13 +62,7 @@ func (s *SamplerFactory) Start() error {
 
 // GetSamplerImplementationForKey returns the sampler implementation for the given
 // samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined
-func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, isLegacyKey bool) Sampler {
-	if isLegacyKey {
-		if prefix := s.Config.GetDatasetPrefix(); prefix != "" {
-			samplerKey = fmt.Sprintf("%s.%s", prefix, samplerKey)
-		}
-	}
-
+func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampler {
 	c, _ := s.Config.GetSamplerConfigForDestName(samplerKey)
 
 	var sampler Sampler
@@ -178,10 +171,10 @@ func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, ke
 	d.met.Histogram(d.metricNames.sampleRate, float64(rate))
 }
 
-// getKeyFields returns the fields that should be used as keys for the sampler.
+// GetKeyFields returns the fields that should be used as keys for the sampler.
 // It returns two slices: the first contains fields with the root prefix removed,
 // and the second contains fields that do not have the root prefix.
-func getKeyFields(fields []string) ([]string, []string) {
+func GetKeyFields(fields []string) ([]string, []string) {
 	if len(fields) == 0 {
 		return nil, nil
 	}

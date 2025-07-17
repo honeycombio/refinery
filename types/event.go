@@ -5,7 +5,6 @@ import (
 	"slices"
 	"time"
 
-	huskyotlp "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/config"
 )
 
@@ -52,10 +51,11 @@ func (e *Event) GetDataSize() int {
 // Refinery. Traces are not thread-safe; only one goroutine should be working
 // with a trace object at a time.
 type Trace struct {
-	APIHost string
-	APIKey  string
-	Dataset string
-	TraceID string
+	APIHost     string
+	APIKey      string
+	Dataset     string
+	TraceID     string
+	Environment string
 
 	// SampleRate should only be changed if the changer holds the SendSampleLock
 	sampleRate uint
@@ -103,6 +103,9 @@ func (t *Trace) AddSpan(sp *Span) {
 	t.DataSize += sp.GetDataSize()
 	t.spans = append(t.spans, sp)
 	t.totalImpact = 0
+	if t.Environment == "" && sp.Environment != "" {
+		t.Environment = sp.Environment
+	}
 }
 
 // CacheImpact calculates an abstract value for something we're calling cache impact, which is
@@ -205,22 +208,6 @@ func (t *Trace) SpanEventCount() uint32 {
 		t.calculateSpanCounts()
 	}
 	return t.spanEventCount
-}
-
-func (t *Trace) GetSamplerKey() (string, bool) {
-	if IsLegacyAPIKey(t.APIKey) {
-		return t.Dataset, true
-	}
-
-	env := ""
-	for _, sp := range t.GetSpans() {
-		if sp.Environment != "" {
-			env = sp.Environment
-			break
-		}
-	}
-
-	return env, false
 }
 
 // IsOrphan returns true if the trace is older than 4 times the traceTimeout
@@ -349,8 +336,4 @@ func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 	multiplier := int(cacheImpactFactor*time.Since(sp.ArrivalTime)/traceTimeout) + 1
 	// We can assume DataSize was set when the span was added.
 	return multiplier * sp.GetDataSize()
-}
-
-func IsLegacyAPIKey(apiKey string) bool {
-	return huskyotlp.IsClassicApiKey(apiKey)
 }

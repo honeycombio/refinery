@@ -56,6 +56,27 @@ type V2SamplerChoice struct {
 	TotalThroughputSampler    *TotalThroughputSamplerConfig    `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
 }
 
+func (v *V2SamplerChoice) GetSamplingFields() []string {
+	switch {
+	case v.DeterministicSampler != nil:
+		return v.DeterministicSampler.GetSamplingFields()
+	case v.RulesBasedSampler != nil:
+		return v.RulesBasedSampler.GetSamplingFields()
+	case v.DynamicSampler != nil:
+		return v.DynamicSampler.GetSamplingFields()
+	case v.EMADynamicSampler != nil:
+		return v.EMADynamicSampler.GetSamplingFields()
+	case v.EMAThroughputSampler != nil:
+		return v.EMAThroughputSampler.GetSamplingFields()
+	case v.WindowedThroughputSampler != nil:
+		return v.WindowedThroughputSampler.GetSamplingFields()
+	case v.TotalThroughputSampler != nil:
+		return v.TotalThroughputSampler.GetSamplingFields()
+	default:
+		return nil
+	}
+}
+
 func (v *V2SamplerChoice) Sampler() (any, string) {
 	switch {
 	case v.DeterministicSampler != nil:
