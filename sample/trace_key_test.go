@@ -415,7 +415,7 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 			fields:         []string{"empty-field", "http.status_code", "request.path"},
 			useTraceLength: true,
 			spanCount:      100,
-			uniqueValues:   10, // Will hit maxKeyLength
+			uniqueValues:   10,
 			rootFields:     false,
 		},
 	}
