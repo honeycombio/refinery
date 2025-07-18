@@ -434,7 +434,7 @@ func (i *InMemCollector) collect() {
 				span.End()
 				return
 			}
-			i.processSpan(ctx, sp, types.RouterTypeIncoming)
+			i.processSpan(ctx, sp, types.RouterTypePeer)
 		default:
 			select {
 			case msg, ok := <-i.dropDecisionMessages:
