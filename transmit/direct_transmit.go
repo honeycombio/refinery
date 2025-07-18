@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"runtime"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -37,20 +36,18 @@ const (
 	maxConcurrentBatches = 500
 )
 
-var libhoneyMetrics = []metrics.Metadata{}
-
 const (
-	counterEnqueueErrors        = "enqueue_errors"
-	counterResponse20x          = "response_20x"
-	counterResponseErrors       = "response_errors"
-	updownQueuedItems           = "queued_items"
-	histogramQueueTime          = "queue_time"
-	counterQueueLength          = "queue_length"
-	counterSendErrors           = "send_errors"
-	counterSendRetries          = "send_retries"
-	counterBatchesSent          = "batches_sent"
-	counterMessagesSent         = "messages_sent"
-	counterResponseDecodeErrors = "response_decode_errors"
+	counterEnqueueErrors        = "_enqueue_errors"
+	counterResponse20x          = "_response_20x"
+	counterResponseErrors       = "_response_errors"
+	updownQueuedItems           = "_queued_items"
+	histogramQueueTime          = "_queue_time"
+	counterQueueLength          = "_queue_length"
+	counterSendErrors           = "_send_errors"
+	counterSendRetries          = "_send_retries"
+	counterBatchesSent          = "_batches_sent"
+	counterMessagesSent         = "_messages_sent"
+	counterResponseDecodeErrors = "_response_decode_errors"
 )
 
 // Instantiating a new encoder is expensive, so use a global one.
@@ -249,7 +246,7 @@ func (d *DirectTransmission) EnqueueSpan(sp *types.Span) {
 // RegisterMetrics registers the metrics used by the DirectTransmission.
 // it should be called after the metrics object has been created.
 func (d *DirectTransmission) RegisterMetrics() {
-	for _, m := range slices.Concat(transmissionMetrics, libhoneyMetrics) {
+	for _, m := range transmissionMetrics {
 		fullName := d.transmitType.String() + m.Name
 		switch m.Name {
 		case updownQueuedItems:
