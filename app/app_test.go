@@ -281,7 +281,7 @@ func newStartedApp(
 	if mockTransmission != nil {
 		upstreamTransmission = mockTransmission
 	} else {
-		upstreamTransmission = transmit.NewDirectTransmission(metricsr, http.DefaultTransport.(*http.Transport), "upstream", 500, 100*time.Millisecond, true)
+		upstreamTransmission = transmit.NewDirectTransmission(metricsr, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 500, 100*time.Millisecond, true)
 	}
 
 	// Always create real peer transmission using DirectTransmission
@@ -291,7 +291,7 @@ func newStartedApp(
 			Timeout: 3 * time.Second,
 		}).Dial,
 	}
-	peerTransmissionWrapper := transmit.NewDirectTransmission(metricsr, peerTransport, "peer", int(cfg.GetTracesConfigVal.MaxBatchSize), 100*time.Millisecond, false)
+	peerTransmissionWrapper := transmit.NewDirectTransmission(metricsr, types.TransmitTypePeer, peerTransport, int(cfg.GetTracesConfigVal.MaxBatchSize), 100*time.Millisecond, false)
 
 	var g inject.Graph
 	err = g.Provide(
@@ -306,9 +306,6 @@ func newStartedApp(
 		&inject.Object{Value: collector},
 		&inject.Object{Value: &pubsub.GoRedisPubSub{}},
 		&inject.Object{Value: metricsr, Name: "metrics"},
-		&inject.Object{Value: metricsr, Name: "genericMetrics"},
-		&inject.Object{Value: metricsr, Name: "upstreamMetrics"},
-		&inject.Object{Value: metricsr, Name: "peerMetrics"},
 		&inject.Object{Value: "test", Name: "version"},
 		&inject.Object{Value: samplerFactory},
 		&inject.Object{Value: &health.Health{}},

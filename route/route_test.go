@@ -522,7 +522,6 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &sharder.MockSharder{}},
 		&inject.Object{Value: &collect.InMemCollector{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
-		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &collect.MockStressReliever{}, Name: "stressRelief"},
 		&inject.Object{Value: &peer.MockPeers{}},
 		&inject.Object{Value: &health.Health{}},

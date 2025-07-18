@@ -28,7 +28,7 @@ type ClusterSizer interface {
 type SamplerFactory struct {
 	Config    config.Config   `inject:""`
 	Logger    logger.Logger   `inject:""`
-	Metrics   metrics.Metrics `inject:"genericMetrics"`
+	Metrics   metrics.Metrics `inject:"metrics"`
 	Peers     peer.Peers      `inject:""`
 	peerCount int
 	samplers  []Sampler

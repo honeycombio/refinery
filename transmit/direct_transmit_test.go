@@ -143,13 +143,14 @@ func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batch
 
 	mockLogger := &logger.MockLogger{}
 
-	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", batchSize, batchTimeout, true)
+	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), batchSize, batchTimeout, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
 	err := dt.Start()
 	require.NoError(t, err)
 	t.Cleanup(func() { dt.Stop() })
+	dt.RegisterMetrics()
 
 	return dt, mockMetrics, mockLogger
 }
@@ -243,8 +244,8 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify metrics: 2 successes and 2 errors
-		success, _ := mockMetrics.Get(counterResponse20x)
-		errors, _ := mockMetrics.Get(counterResponseErrors)
+		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
+		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
 		assert.Equal(t, float64(2), success)
 		assert.Equal(t, float64(2), errors)
 
@@ -278,8 +279,8 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		// Both events should be errors, no successes
-		success, _ := mockMetrics.Get(counterResponse20x)
-		errors, _ := mockMetrics.Get(counterResponseErrors)
+		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
+		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
 		assert.Equal(t, float64(0), success)
 		assert.Equal(t, float64(2), errors)
 
@@ -309,8 +310,8 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should be an error
-		success, _ := mockMetrics.Get(counterResponse20x)
-		errors, _ := mockMetrics.Get(counterResponseErrors)
+		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
+		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
 		assert.Equal(t, float64(0), success)
 		assert.Equal(t, float64(1), errors)
 
@@ -354,8 +355,8 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		// One success (202) and one error (400)
-		success, _ := mockMetrics.Get(counterResponse20x)
-		errors, _ := mockMetrics.Get(counterResponseErrors)
+		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
+		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
 		assert.Equal(t, float64(1), success)
 		assert.Equal(t, float64(1), errors)
 	})
@@ -376,8 +377,8 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		// One success and one error (for missing response)
-		success, _ := mockMetrics.Get(counterResponse20x)
-		errors, _ := mockMetrics.Get(counterResponseErrors)
+		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
+		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
 		assert.Equal(t, float64(1), success)
 		assert.Equal(t, float64(1), errors)
 
@@ -424,8 +425,8 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		// Verify event was dropped due to size and metrics were updated
-		success, _ := mockMetrics.Get(counterResponse20x)
-		errors, _ := mockMetrics.Get(counterResponseErrors)
+		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
+		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
 		assert.Equal(t, float64(0), success)
 		assert.Equal(t, float64(1), errors)
 
@@ -448,7 +449,7 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Use max batch size of 3 for testing
 	testServer := newTestDirectAPIServer(t, 3)
-	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", 3, 50*time.Millisecond, true)
+	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 3, 50*time.Millisecond, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -458,6 +459,7 @@ func TestDirectTransmission(t *testing.T) {
 	err := dt.Start()
 	require.NoError(t, err)
 	defer dt.Stop()
+	dt.RegisterMetrics()
 
 	now := time.Now().UTC()
 	cfg := &config.MockConfig{
@@ -658,10 +660,10 @@ func TestDirectTransmission(t *testing.T) {
 	}
 
 	// Verify metrics for all events
-	success, _ := mockMetrics.Get(counterResponse20x)
-	errors, _ := mockMetrics.Get(counterResponseErrors)
-	enqueueErrors, _ := mockMetrics.Get(counterEnqueueErrors)
-	queuedItems, _ := mockMetrics.Get(updownQueuedItems)
+	success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
+	errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
+	enqueueErrors, _ := mockMetrics.Get(dt.metricKeys.counterEnqueueErrors)
+	queuedItems, _ := mockMetrics.Get(dt.metricKeys.updownQueuedItems)
 
 	assert.Equal(t, float64(expectedEvents), success)
 	assert.Equal(t, float64(len(allEvents)-expectedEvents), errors)
@@ -669,7 +671,7 @@ func TestDirectTransmission(t *testing.T) {
 	// Verify all events were queued and dequeued, net = 0
 	assert.Equal(t, float64(0), queuedItems)
 	// Verify queue time histogram was updated for all events
-	assert.Equal(t, expectedEvents, mockMetrics.GetHistogramCount(histogramQueueTime))
+	assert.Equal(t, expectedEvents, mockMetrics.GetHistogramCount(dt.metricKeys.histogramQueueTime))
 }
 
 func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
@@ -678,13 +680,14 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	mockLogger := &logger.MockLogger{}
 
 	testServer := newTestDirectAPIServer(t, 50)
-	dt := NewDirectTransmission(mockMetrics, http.DefaultTransport.(*http.Transport), "test", 50, 50*time.Millisecond, true)
+	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 50, 50*time.Millisecond, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
 	err := dt.Start()
 	require.NoError(t, err)
 	defer dt.Stop()
+	dt.RegisterMetrics()
 
 	now := time.Now().UTC()
 
@@ -733,14 +736,14 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	gotEvents := testServer.getEvents()
 	assert.Len(t, gotEvents, expectedEvents)
 
-	success, _ := mockMetrics.Get(counterResponse20x)
-	errors, _ := mockMetrics.Get(counterResponseErrors)
-	queuedItems, _ := mockMetrics.Get(updownQueuedItems)
+	success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
+	errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
+	queuedItems, _ := mockMetrics.Get(dt.metricKeys.updownQueuedItems)
 
 	assert.Equal(t, float64(expectedEvents), success)
 	assert.Equal(t, float64(len(allEvents)-expectedEvents), errors)
 	assert.Equal(t, float64(0), queuedItems)
-	assert.Equal(t, expectedEvents, mockMetrics.GetHistogramCount(histogramQueueTime))
+	assert.Equal(t, expectedEvents, mockMetrics.GetHistogramCount(dt.metricKeys.histogramQueueTime))
 }
 
 func TestDirectTransmissionBatchTiming(t *testing.T) {
@@ -752,7 +755,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	fakeClock := clockwork.NewFakeClock()
 
 	// Use a 400ms batch timeout for testing
-	dt := NewDirectTransmission(metrics, http.DefaultTransport.(*http.Transport), "test", 100, 400*time.Millisecond, true)
+	dt := NewDirectTransmission(metrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 100, 400*time.Millisecond, true)
 	dt.Config = &config.MockConfig{}
 	dt.Logger = &logger.NullLogger{}
 	dt.Version = "test-version"
@@ -1070,8 +1073,8 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 
 				dt := NewDirectTransmission(
 					mockMetrics,
+					types.TransmitTypeUpstream,
 					httpTransport,
-					"benchmark",
 					libhoney.DefaultMaxBatchSize,
 					libhoney.DefaultBatchTimeout,
 					false,

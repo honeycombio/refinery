@@ -22,14 +22,6 @@ type Transmission interface {
 	RegisterMetrics()
 }
 
-const (
-	counterEnqueueErrors  = "enqueue_errors"
-	counterResponse20x    = "response_20x"
-	counterResponseErrors = "response_errors"
-	updownQueuedItems     = "queued_items"
-	histogramQueueTime    = "queue_time"
-)
-
 type DefaultTransmission struct {
 	Config     config.Config   `inject:""`
 	Logger     logger.Logger   `inject:""`
@@ -48,14 +40,6 @@ var once sync.Once
 
 func NewDefaultTransmission(client *libhoney.Client, m metrics.Metrics, name string) *DefaultTransmission {
 	return &DefaultTransmission{LibhClient: client, Metrics: m, Name: name}
-}
-
-var transmissionMetrics = []metrics.Metadata{
-	{Name: counterEnqueueErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when enqueueing events"},
-	{Name: counterResponse20x, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of successful responses from Honeycomb"},
-	{Name: counterResponseErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when sending events to Honeycomb"},
-	{Name: updownQueuedItems, Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "The number of events queued for transmission to Honeycomb"},
-	{Name: histogramQueueTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent in the queue before being sent to Honeycomb"},
 }
 
 func (d *DefaultTransmission) Start() error {

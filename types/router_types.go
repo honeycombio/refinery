@@ -18,3 +18,17 @@ func (rt RouterType) String() string {
 func (rt RouterType) IsIncoming() bool {
 	return rt == RouterTypeIncoming
 }
+
+type TransmitType bool
+
+const (
+	TransmitTypeUpstream TransmitType = true
+	TransmitTypePeer     TransmitType = false
+)
+
+func (tt TransmitType) String() string {
+	if tt {
+		return "upstream"
+	}
+	return "peer"
+}

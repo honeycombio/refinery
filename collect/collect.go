@@ -87,7 +87,7 @@ type InMemCollector struct {
 	Transmission     transmit.Transmission  `inject:"upstreamTransmission"`
 	PeerTransmission transmit.Transmission  `inject:"peerTransmission"`
 	PubSub           pubsub.PubSub          `inject:""`
-	Metrics          metrics.Metrics        `inject:"genericMetrics"`
+	Metrics          metrics.Metrics        `inject:"metrics"`
 	SamplerFactory   *sample.SamplerFactory `inject:""`
 	StressRelief     StressReliever         `inject:"stressRelief"`
 	Peers            peer.Peers             `inject:""`
