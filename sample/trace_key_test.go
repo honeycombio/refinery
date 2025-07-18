@@ -410,6 +410,14 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 			uniqueValues:   200, // Will hit maxKeyLength
 			rootFields:     false,
 		},
+		{
+			name:           "empty_fields",
+			fields:         []string{"empty-field", "http.status_code", "request.path"},
+			useTraceLength: true,
+			spanCount:      100,
+			uniqueValues:   10, // Will hit maxKeyLength
+			rootFields:     false,
+		},
 	}
 
 	for _, scenario := range scenarios {
@@ -441,6 +449,9 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 						case "user.id", "session.id", "trace.id":
 							// High cardinality fields
 							spanData[field] = fmt.Sprintf("id-%d", valueIdx)
+						case "empty-field":
+							// Intentionally leave this field empty to simulate missing data
+							spanData[field] = nil
 						default:
 							spanData[field] = fmt.Sprintf("value-%d", valueIdx)
 						}
