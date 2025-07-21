@@ -1115,38 +1115,3 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 
 	return f.mainConfig.Specialized.AdditionalAttributes
 }
-
-func IsLegacyAPIKey(key string) bool {
-	keyLen := len(key)
-
-	switch keyLen {
-	case 32:
-		// Check if all characters are hex digits (0-9, a-f)
-		for i := 0; i < keyLen; i++ {
-			c := key[i]
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
-				return false
-			}
-		}
-		return true
-	case 64:
-		// Check the prefix pattern "hc[a-z]ic_"
-		if key[:2] != "hc" || key[3:6] != "ic_" {
-			return false
-		}
-		if key[2] < 'a' || key[2] > 'z' {
-			return false
-		}
-
-		// Check if the remaining characters are alphanumeric lowercase
-		for i := 6; i < keyLen; i++ {
-			c := key[i]
-			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')) {
-				return false
-			}
-		}
-		return true
-	default:
-		return false
-	}
-}
