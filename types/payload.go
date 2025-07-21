@@ -277,15 +277,14 @@ type Payload struct {
 	MetaRefinerySampleKey          string       // meta.refinery.sample_key
 }
 
-// extractMetadataFromBytes extracts metadata from msgpack data.
+// extractCriticalFieldsFromBytes extracts metadata and sampling key fields from msgpack data.
 // If consumed is non-nil, it will be set to the number of bytes consumed from the data.
-func (p *Payload) extractMetadataFromBytes(data []byte) (int, error) {
+func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames, parentIdFieldNames, samplingKeyFields []string) (int, error) {
 	if !p.MetaRefineryRoot.HasValue {
 		p.MetaRefineryRoot.Set(true)
 	}
 
-	traceIdFieldNames := p.config.GetTraceIdFieldNames()
-	parentIdFieldNames := p.config.GetParentIdFieldNames()
+	var keysFound int
 
 	// Read the map header
 	mapSize, remaining, err := msgp.ReadMapHeaderBytes(data)
@@ -350,11 +349,47 @@ func (p *Payload) extractMetadataFromBytes(data []byte) (int, error) {
 			return len(data) - len(remaining), fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
 		}
 
-		// If we didn't handle this field as metadata, skip it
+		// If not handled as metadata, check if this is a key field
+		// only check for key fields if we haven't found a match yet
+		if !handled && keysFound < len(samplingKeyFields) {
+			// Check if the key matches any of the key fields
+			var val any
+			for _, field := range samplingKeyFields {
+				if _, ok := p.memoizedFields[field]; ok {
+					// If we already memoized this field, skip it
+					continue
+				}
+				if bytes.Equal(keyBytes, []byte(field)) {
+					keysFound++
+
+					val, remaining, err = msgp.ReadIntfBytes(remaining)
+					if err != nil {
+						return len(data) - len(remaining), fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
+					}
+
+					p.Set(field, val)
+					handled = true
+					break
+				}
+			}
+		}
+
 		if !handled {
 			remaining, err = msgp.Skip(remaining)
 			if err != nil {
 				return len(data) - len(remaining), fmt.Errorf("failed to skip value: %w", err)
+			}
+		}
+	}
+
+	if keysFound < len(samplingKeyFields) {
+		// If we didn't find all key fields, add them to missingFields
+		if p.missingFields == nil {
+			p.missingFields = make(map[string]struct{}, len(samplingKeyFields))
+		}
+		for _, field := range samplingKeyFields {
+			if _, found := p.memoizedFields[field]; !found {
+				p.missingFields[field] = struct{}{}
 			}
 		}
 	}
@@ -427,7 +462,7 @@ func (p *Payload) ExtractMetadata() error {
 
 	// For msgpMap fields, extract from the raw bytes
 	if p.msgpMap.Size() > 0 {
-		_, err := p.extractMetadataFromBytes(p.msgpMap.rawData)
+		_, err := p.extractCriticalFieldsFromBytes(p.msgpMap.rawData, traceIdFieldNames, parentIdFieldNames, nil)
 		if err != nil {
 			return err
 		}
@@ -445,27 +480,63 @@ func (p *Payload) ExtractMetadata() error {
 // NewPayload creates a new Payload from a map of fields. This is not populate
 // metadata fields
 func NewPayload(config config.Config, data map[string]any) Payload {
-	p := Payload{
+	return Payload{
 		memoizedFields: data,
+		config:         config,
+	}
+}
+
+// CoreFieldsUnmarshaler is used to extract core fields from a byte slice
+// and populate a Payload. It is not a msgp.Unmarshaler, but rather
+// a utility to extract core fields like trace ID, parent ID, and sampling keys
+// from the raw byte slice. It is used to avoid walking the entire
+// Payload map multiple times, which is expensive.
+type CoreFieldsUnmarshaler struct {
+	traceIdFieldNames  []string
+	parentIdFieldNames []string
+	samplingKeyFields  []string
+}
+
+func NewCoreFieldsUnmarshaler(config config.Config, apiKey, dataset, environment string) CoreFieldsUnmarshaler {
+	samplerKey := config.CalculateSamplerKey(apiKey, dataset, environment)
+	keyFields := config.GetSamplingKeyFieldsForDestName(samplerKey)
+
+	return CoreFieldsUnmarshaler{
+		traceIdFieldNames:  config.GetTraceIdFieldNames(),
+		parentIdFieldNames: config.GetParentIdFieldNames(),
+		samplingKeyFields:  keyFields,
+	}
+}
+
+// UnmarshalPayload creates and unmarshals a new Payload (not implementing msgp.Unmarshaler)
+func (p CoreFieldsUnmarshaler) UnmarshalPayload(bts []byte, payload *Payload) ([]byte, error) {
+
+	consumed, err := payload.extractCriticalFieldsFromBytes(bts,
+		p.traceIdFieldNames, p.parentIdFieldNames, p.samplingKeyFields)
+	if err != nil {
+		return nil, err
 	}
 
-	p.config = config
-	return p
+	ourData := slices.Clone(bts[:consumed])
+	payload.msgpMap = MsgpPayloadMap{rawData: ourData}
+
+	return bts[consumed:], nil
 }
 
 // UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal.
 // Instead it keeps a copy of the serialized data.
 func (p *Payload) UnmarshalMsgpack(data []byte) error {
 	p.msgpMap = MsgpPayloadMap{rawData: slices.Clone(data)}
-	p.ExtractMetadata()
-	return nil
+	return p.ExtractMetadata()
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler, similar to above but expects to be
 // part of a larger message. Makes a local copy of the bytes it's hanging onto.
 func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	// Extract metadata and get consumed bytes
-	consumed, err := p.extractMetadataFromBytes(bts)
+	traceIdFieldNames := p.config.GetTraceIdFieldNames()
+	parentIdFieldNames := p.config.GetParentIdFieldNames()
+	consumed, err := p.extractCriticalFieldsFromBytes(bts, traceIdFieldNames, parentIdFieldNames, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -484,8 +555,7 @@ func (p *Payload) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	p.memoizedFields = fields
-	p.ExtractMetadata()
-	return nil
+	return p.ExtractMetadata()
 }
 
 func (p *Payload) MemoizeFields(keys ...string) {

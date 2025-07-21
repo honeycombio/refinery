@@ -28,7 +28,7 @@ func getConfig(args []string) (config.Config, error) {
 }
 
 // creates two temporary yaml files from the strings passed in and returns their filenames
-func createTempConfigs(t *testing.T, configBody, rulesBody string) (string, string) {
+func createTempConfigs(t testing.TB, configBody, rulesBody string) (string, string) {
 	tmpDir := t.TempDir()
 
 	configFile, err := os.CreateTemp(tmpDir, "cfg_*.yaml")
@@ -91,50 +91,6 @@ func TestDependencyInjection(t *testing.T) {
 	}
 }
 
-func TestDatasetPrefix(t *testing.T) {
-	cm := makeYAML(
-		"General/ConfigurationVersion", 2,
-		"General/DatasetPrefix", "dataset",
-	)
-	rm := makeYAML(
-		"RulesVersion", 2,
-		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
-		"Samplers/production/DeterministicSampler/SampleRate", 10,
-		"Samplers/dataset.production/DeterministicSampler/SampleRate", 20,
-	)
-	cfg, rules := createTempConfigs(t, cm, rm)
-	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
-	assert.NoError(t, err)
-
-	assert.Equal(t, "dataset", c.GetDatasetPrefix())
-
-	factory := SamplerFactory{Config: c, Logger: &logger.NullLogger{}, Metrics: &metrics.NullMetrics{}}
-	factory.Start()
-
-	defaultSampler := &DeterministicSampler{
-		Config: &config.DeterministicSamplerConfig{SampleRate: 1},
-		Logger: &logger.NullLogger{},
-	}
-	defaultSampler.Start()
-
-	envSampler := &DeterministicSampler{
-		Config: &config.DeterministicSamplerConfig{SampleRate: 10},
-		Logger: &logger.NullLogger{},
-	}
-	envSampler.Start()
-
-	datasetSampler := &DeterministicSampler{
-		Config: &config.DeterministicSamplerConfig{SampleRate: 20},
-		Logger: &logger.NullLogger{},
-	}
-	datasetSampler.Start()
-
-	assert.Equal(t, defaultSampler, factory.GetSamplerImplementationForKey("unknown", false))
-	assert.Equal(t, defaultSampler, factory.GetSamplerImplementationForKey("unknown", true))
-	assert.Equal(t, envSampler, factory.GetSamplerImplementationForKey("production", false))
-	assert.Equal(t, datasetSampler, factory.GetSamplerImplementationForKey("production", true))
-}
-
 func TestTotalThroughputClusterSize(t *testing.T) {
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
@@ -156,7 +112,7 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*TotalThroughputSampler)
@@ -185,7 +141,7 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*EMAThroughputSampler)
@@ -214,7 +170,7 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*WindowedThroughputSampler)
@@ -287,7 +243,7 @@ func TestGetKeyFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			allFields, nonrootFields := getKeyFields(tt.input)
+			allFields, nonrootFields := GetKeyFields(tt.input)
 
 			assert.Equal(t, tt.expectedAll, allFields, "All fields should have root prefix stripped and be combined")
 			assert.Equal(t, tt.expectedNonRootFields, nonrootFields, "Non-root fields should match expected non-root fields")
@@ -532,4 +488,51 @@ func (m *MockSampler) LoadState(state []byte) error {
 
 func (m *MockSampler) SaveState() ([]byte, error) {
 	return nil, nil
+}
+
+func BenchmarkGetSamplerImplementation(b *testing.B) {
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/test/DynamicSampler/SampleRate", 1,
+		"Samplers/test2/EMADynamicSampler/SampleRate", 1,
+		"Samplers/test3/WindowedThroughputSampler/SampleRate", 1,
+		"Samplers/test4/TotalThroughputSampler/SampleRate", 1,
+		"Samplers/test5/EMAThroughputSampler/SampleRate", 1,
+	)
+	cfg, rules := createTempConfigs(b, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(b, err)
+	mockPeers := &peer.MockPeers{Peers: []string{"foo", "bar"}}
+	mockPeers.Start()
+
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   mockPeers,
+	}
+	factory.Start()
+
+	// Define the keys to distribute evenly
+	keys := []string{"default", "test", "test2", "test3", "test4", "test5"}
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			if i%10 == 5 {
+				factory.updatePeerCounts()
+				i++
+				continue
+			}
+			// Evenly distribute among the 6 keys
+			key := keys[i%len(keys)]
+
+			_ = factory.GetSamplerImplementationForKey(key)
+			i++
+		}
+	})
 }
