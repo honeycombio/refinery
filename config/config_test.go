@@ -1251,6 +1251,8 @@ func TestIsLegacyKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := config.IsLegacyAPIKey(tc.key)
 			assert.Equal(t, tc.expected, result, "Expected IsLegacyApiKey(%q) to return %v", tc.key, tc.expected)
+			huskysResult := otlp.IsClassicApiKey(tc.key)
+			assert.Equal(t, huskysResult, result, "Expect IsLegacyApiKey() output to match husky's IsClassicApiKey()")
 		})
 	}
 }
