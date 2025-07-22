@@ -176,6 +176,8 @@ func (d *distinctValue) AddAsString(value any, fieldIdx int) bool {
 		d.buf = strconv.AppendFloat(d.buf, v, 'f', -1, 64)
 	case bool:
 		d.buf = strconv.AppendBool(d.buf, v)
+	case nil:
+		d.buf = append(d.buf, "<nil>"...)
 	default:
 		d.buf = append(d.buf, fmt.Sprintf("%v", v)...)
 	}
