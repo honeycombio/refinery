@@ -140,9 +140,9 @@ func (p *PromMetrics) Up(name string) {
 }
 
 func (p *PromMetrics) Down(name string) {
-	p.lock.Lock()
+	p.lock.RLock()
 	gaugeIface, ok := p.metrics[name]
-	p.lock.Unlock()
+	p.lock.RUnlock()
 
 	if ok {
 		if gauge, ok := gaugeIface.(prometheus.Gauge); ok {

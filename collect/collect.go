@@ -434,7 +434,7 @@ func (i *InMemCollector) collect() {
 				span.End()
 				return
 			}
-			i.processSpan(ctx, sp, types.RouterTypeIncoming)
+			i.processSpan(ctx, sp, types.RouterTypePeer)
 		default:
 			select {
 			case msg, ok := <-i.dropDecisionMessages:
@@ -760,6 +760,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 			APIHost:          sp.APIHost,
 			APIKey:           sp.APIKey,
 			Dataset:          sp.Dataset,
+			Environment:      sp.Environment,
 			TraceID:          sp.TraceID,
 			ArrivalTime:      now,
 			SendBy:           sendBy,
@@ -1065,7 +1066,7 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 	}
 
 	i.Metrics.Increment(td.SendReason)
-	if types.IsLegacyAPIKey(trace.APIKey) {
+	if config.IsLegacyAPIKey(trace.APIKey) {
 		logFields["dataset"] = td.SamplerSelector
 	} else {
 		logFields["environment"] = td.SamplerSelector
@@ -1316,14 +1317,11 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 }
 
 func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, targetShard sharder.Shard) *types.Event {
-	selector, isLegacyKey := trace.GetSamplerKey()
-	if selector == "" {
-		i.Logger.Error().WithField("trace_id", trace.ID()).Logf("error getting sampler selection key for trace")
-	}
+	selector := i.Config.CalculateSamplerKey(sp.APIKey, trace.Dataset, trace.Environment)
 
 	sampler, found := i.datasetSamplers[selector]
 	if !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForKey(selector, isLegacyKey)
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(selector)
 		i.datasetSamplers[selector] = sampler
 	}
 
@@ -1538,11 +1536,11 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	var sampler sample.Sampler
 	var found bool
 	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerSelector, isLegacyKey := trace.GetSamplerKey()
+	samplerSelector := i.Config.CalculateSamplerKey(trace.APIKey, trace.Dataset, trace.Environment)
 
 	// use sampler key to find sampler; create and cache if not found
 	if sampler, found = i.datasetSamplers[samplerSelector]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector, isLegacyKey)
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector)
 		i.datasetSamplers[samplerSelector] = sampler
 	}
 

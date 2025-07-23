@@ -512,20 +512,10 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	}
 	defer recycleHTTPBodyBuffer(bodyBuffer)
 
-	batchedEvents := newBatchedEvents(r.Config)
-	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
-	if err != nil {
-		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(bodyBuffer.Bytes())).Logf("error parsing json")
-		r.handlerReturnWithError(w, ErrJSONFailed, err)
-		return
-	}
-	r.Metrics.Count(r.metricsNames.routerBatchEvents, int64(len(batchedEvents.events)))
-
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
-	apiHost := r.Config.GetHoneycombAPI()
 
 	apiKey := req.Header.Get(types.APIKeyHeader)
 	if apiKey == "" {
@@ -538,6 +528,16 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
 
+	batchedEvents := newBatchedEvents(r.Config, apiKey, environment, dataset)
+	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
+	if err != nil {
+		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(bodyBuffer.Bytes())).Logf("error parsing json")
+		r.handlerReturnWithError(w, ErrJSONFailed, err)
+		return
+	}
+	r.Metrics.Count(r.metricsNames.routerBatchEvents, int64(len(batchedEvents.events)))
+
+	apiHost := r.Config.GetHoneycombAPI()
 	userAgent := getUserAgentFromRequest(req)
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
 	for _, bev := range batchedEvents.events {
@@ -634,7 +634,6 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	if err := ev.Data.ExtractMetadata(); err != nil {
 		return err
 	}
-
 	// check if this is a probe from another refinery; if so, we should drop it
 	if ev.Data.MetaRefineryProbe.HasValue && ev.Data.MetaRefineryProbe.Value {
 		debugLog.Logf("dropping probe")
@@ -975,7 +974,7 @@ type AuthInfo struct {
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
-	if apiKey == "" || types.IsLegacyAPIKey(apiKey) {
+	if apiKey == "" || config.IsLegacyAPIKey(apiKey) {
 		return "", nil
 	}
 

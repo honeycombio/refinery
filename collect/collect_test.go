@@ -538,7 +538,7 @@ func TestDryRunMode(t *testing.T) {
 		Config: conf,
 		Logger: &logger.NullLogger{},
 	}
-	sampler := samplerFactory.GetSamplerImplementationForKey("test", true)
+	sampler := samplerFactory.GetSamplerImplementationForKey("test")
 	coll.SamplerFactory = samplerFactory
 
 	coll.Start()

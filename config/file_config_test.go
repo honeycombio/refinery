@@ -112,3 +112,139 @@ func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateSamplerKey(t *testing.T) {
+	testCases := []struct {
+		name        string
+		apiKey      string
+		dataset     string
+		environment string
+		prefix      string
+		expected    string
+	}{
+		{
+			name:        "legacy key with dataset prefix",
+			apiKey:      "a1b2c3d4e5f67890abcdef1234567890",
+			dataset:     "my-dataset",
+			environment: "production",
+			prefix:      "test-prefix",
+			expected:    "test-prefix.my-dataset",
+		},
+		{
+			name:        "legacy key without dataset prefix",
+			apiKey:      "a1b2c3d4e5f67890abcdef1234567890",
+			dataset:     "my-dataset",
+			environment: "production",
+			prefix:      "",
+			expected:    "my-dataset",
+		},
+		{
+			name:        "legacy 64-char ingest key with prefix",
+			apiKey:      "hcaic_1234567890123456789012345678901234567890123456789012345678",
+			dataset:     "my-dataset",
+			environment: "production",
+			prefix:      "test-prefix",
+			expected:    "test-prefix.my-dataset",
+		},
+		{
+			name:        "E&S key returns environment",
+			apiKey:      "abc123DEF456ghi789jklm",
+			dataset:     "my-dataset",
+			environment: "production",
+			prefix:      "test-prefix",
+			expected:    "production",
+		},
+		{
+			name:        "E&S key with empty environment",
+			apiKey:      "abc123DEF456ghi789jklm",
+			dataset:     "my-dataset",
+			environment: "",
+			prefix:      "test-prefix",
+			expected:    "",
+		},
+		{
+			name:        "legacy key with empty dataset",
+			apiKey:      "a1b2c3d4e5f67890abcdef1234567890",
+			dataset:     "",
+			environment: "production",
+			prefix:      "test-prefix",
+			expected:    "test-prefix.",
+		},
+		{
+			name:        "legacy key with empty dataset and no prefix",
+			apiKey:      "a1b2c3d4e5f67890abcdef1234567890",
+			dataset:     "",
+			environment: "production",
+			prefix:      "",
+			expected:    "",
+		},
+		{
+			name:        "empty api key defaults to E&S behavior",
+			apiKey:      "",
+			dataset:     "my-dataset",
+			environment: "production",
+			prefix:      "test-prefix",
+			expected:    "production",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &fileConfig{
+				mainConfig: &configContents{
+					General: GeneralConfig{
+						DatasetPrefix: tc.prefix,
+					},
+				},
+			}
+
+			result := config.CalculateSamplerKey(tc.apiKey, tc.dataset, tc.environment)
+			assert.Equal(
+				t,
+				tc.expected,
+				result,
+				"CalculateSamplerKey(%q, %q, %q) = %q, want %q",
+				tc.apiKey,
+				tc.dataset,
+				tc.environment,
+				result,
+				tc.expected)
+		})
+	}
+}
+
+func TestGetSamplingKeyFieldsForDestName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		destName string
+		expected []string
+	}{
+		{"empty dest name", "", nil},
+		{"valid dest name", "my-destination", []string{"sampling_key", "service.name"}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			config := &fileConfig{
+				rulesConfig: &V2SamplerConfig{
+					Samplers: map[string]*V2SamplerChoice{
+						"__default__": {
+							DeterministicSampler: &DeterministicSamplerConfig{SampleRate: 1},
+						},
+						"my-destination": {
+							DynamicSampler: &DynamicSamplerConfig{
+								FieldList: []string{"sampling_key", "service.name"},
+							},
+						},
+					},
+				},
+			}
+			result := config.GetSamplingKeyFieldsForDestName(tc.destName)
+			assert.Equal(
+				t, tc.expected, result,
+				"getSamplingKeyFieldsForDestName(%q) = %v, want %v",
+				tc.destName, result, tc.expected,
+			)
+		})
+	}
+}
