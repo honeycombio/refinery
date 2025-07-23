@@ -259,17 +259,24 @@ func (d *DirectTransmission) RegisterMetrics() {
 			d.metricKeys.counterResponse20x = fullName
 		case counterResponseErrors:
 			d.metricKeys.counterResponseErrors = fullName
+		// below are existing internal libhoney metrics. Prefix it with libhoney to ensure compatibility
 		case counterQueueLength:
+			fullName = "libhoney" + m.Name
 			d.metricKeys.gaugeQueueLength = fullName
 		case counterSendErrors:
+			fullName = "libhoney" + m.Name
 			d.metricKeys.counterSendErrors = fullName
 		case counterSendRetries:
+			fullName = "libhoney" + m.Name
 			d.metricKeys.counterSendRetries = fullName
 		case counterBatchesSent:
+			fullName = "libhoney" + m.Name
 			d.metricKeys.counterBatchesSent = fullName
 		case counterMessagesSent:
+			fullName = "libhoney" + m.Name
 			d.metricKeys.counterMessagesSent = fullName
 		case counterResponseDecodeErrors:
+			fullName = "libhoney" + m.Name
 			d.metricKeys.counterResponseDecodeErrors = fullName
 		}
 		m.Name = fullName // Update the metric name to include the transmit type
