@@ -601,8 +601,6 @@ func (router *Router) processOTLPRequest(
 	for _, batch := range batches {
 		totalEvents += len(batch.Events)
 		for _, ev := range batch.Events {
-			payload := types.NewPayload(router.Config, ev.Attributes)
-
 			event := &types.Event{
 				Context:     ctx,
 				APIHost:     apiHost,
@@ -611,7 +609,7 @@ func (router *Router) processOTLPRequest(
 				Environment: environment,
 				SampleRate:  uint(ev.SampleRate),
 				Timestamp:   ev.Timestamp,
-				Data:        payload,
+				Data:        types.NewPayload(router.Config, ev.Attributes),
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
 			if err := router.processEvent(event, requestID); err != nil {
