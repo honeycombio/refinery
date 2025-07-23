@@ -259,7 +259,8 @@ func (d *DirectTransmission) RegisterMetrics() {
 			d.metricKeys.counterResponse20x = fullName
 		case counterResponseErrors:
 			d.metricKeys.counterResponseErrors = fullName
-		// below are existing internal libhoney metrics. Prefix it with libhoney to ensure compatibility
+		// Below are metrics previously associated with the libhoney transmission used to send data upstream or to peers.
+		// Even though libhoney isn't used, include the prefix in these metric names to avoid breaking existing Refinery operations boards & queries.
 		case counterQueueLength:
 			fullName = "libhoney" + m.Name
 			d.metricKeys.gaugeQueueLength = fullName
