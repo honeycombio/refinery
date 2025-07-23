@@ -36,7 +36,8 @@ func TestPayload(t *testing.T) {
 		"meta.refinery.send_by": "never",
 	}
 	mockCfg := &config.MockConfig{
-		TraceIdFieldNames: []string{"trace.trace_id"},
+		TraceIdFieldNames:  []string{"trace.trace_id"},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 	}
 
 	ph := NewPayload(mockCfg, data)

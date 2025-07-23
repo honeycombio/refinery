@@ -42,8 +42,7 @@ const (
 	counterResponseErrors       = "_response_errors"
 	updownQueuedItems           = "_queued_items"
 	histogramQueueTime          = "_queue_time"
-	counterQueueLength          = "_queue_length"
-	counterSendErrors           = "_send_errors"
+	gaugeQueueLength            = "_queue_length"
 	counterSendRetries          = "_send_retries"
 	counterBatchesSent          = "_batches_sent"
 	counterMessagesSent         = "_messages_sent"
@@ -75,8 +74,7 @@ var transmissionMetrics = []metrics.Metadata{
 	{Name: counterResponseErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when sending events to Honeycomb"},
 	{Name: updownQueuedItems, Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "The number of events queued for transmission to Honeycomb"},
 	{Name: histogramQueueTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent in the queue before being sent to Honeycomb"},
-	{Name: counterQueueLength, Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of events waiting to be sent to destination"},
-	{Name: counterSendErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of errors encountered while sending events to destination"},
+	{Name: gaugeQueueLength, Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of events waiting to be sent to destination"},
 	{Name: counterSendRetries, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times a batch of events was retried"},
 	{Name: counterBatchesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of batches of events sent to destination"},
 	{Name: counterMessagesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of messages sent to destination"},
@@ -91,7 +89,6 @@ type metricKeys struct {
 	counterResponseErrors string
 
 	gaugeQueueLength            string
-	counterSendErrors           string
 	counterSendRetries          string
 	counterBatchesSent          string
 	counterMessagesSent         string
@@ -261,12 +258,9 @@ func (d *DirectTransmission) RegisterMetrics() {
 			d.metricKeys.counterResponseErrors = fullName
 		// Below are metrics previously associated with the libhoney transmission used to send data upstream or to peers.
 		// Even though libhoney isn't used, include the prefix in these metric names to avoid breaking existing Refinery operations boards & queries.
-		case counterQueueLength:
+		case gaugeQueueLength:
 			fullName = "libhoney" + m.Name
 			d.metricKeys.gaugeQueueLength = fullName
-		case counterSendErrors:
-			fullName = "libhoney" + m.Name
-			d.metricKeys.counterSendErrors = fullName
 		case counterSendRetries:
 			fullName = "libhoney" + m.Name
 			d.metricKeys.counterSendRetries = fullName
@@ -480,6 +474,9 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 			continue
 		}
 
+		d.Metrics.Increment(d.metricKeys.counterBatchesSent)
+		d.Metrics.Count(d.metricKeys.counterMessagesSent, int64(len(subBatch)))
+
 		// Parse batch response - following libhoney pattern where any status != 200 is an error for all events
 		if resp.StatusCode == http.StatusOK {
 			// Parse individual responses from batch - handle msgpack or JSON
@@ -487,12 +484,19 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 			if resp.Header.Get("Content-Type") == "application/msgpack" {
 				err := msgpack.NewDecoder(resp.Body).Decode(&batchResponses)
 				if err != nil {
+					d.Metrics.Increment(d.metricKeys.counterResponseDecodeErrors)
 					d.Logger.Error().WithField("err", err.Error()).Logf("failed to decode msgpack batch response")
 				}
 			} else {
 				bodyBytes, err := io.ReadAll(resp.Body)
-				if err == nil {
-					json.Unmarshal(bodyBytes, &batchResponses)
+				if err != nil {
+					d.Metrics.Increment(d.metricKeys.counterResponseDecodeErrors)
+					d.Logger.Error().WithField("err", err.Error()).Logf("failed to read response body")
+				}
+				err = json.Unmarshal(bodyBytes, &batchResponses)
+				if err != nil {
+					d.Metrics.Increment(d.metricKeys.counterResponseDecodeErrors)
+					d.Logger.Error().WithField("err", err.Error()).Logf("failed to decode JSON batch response")
 				}
 			}
 			resp.Body.Close()
@@ -530,9 +534,12 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 					bodyBytes, _ = json.Marshal(&errorBody)
 				}
 			} else {
-				bodyBytes, _ = io.ReadAll(resp.Body)
+				bodyBytes, err = io.ReadAll(resp.Body)
 			}
 			resp.Body.Close()
+			if err != nil {
+				d.Metrics.Increment(d.metricKeys.counterResponseDecodeErrors)
+			}
 
 			// Special handling for unauthorized responses
 			if resp.StatusCode == http.StatusUnauthorized {
@@ -551,17 +558,17 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 func (d *DirectTransmission) dispatchStaleBatches() {
 	defer d.stopWG.Done()
 
-	ticker := d.Clock.NewTicker(d.batchTimeout / 4)
-	defer ticker.Stop()
+	batchTicker := d.Clock.NewTicker(d.batchTimeout / 4)
+	defer batchTicker.Stop()
+
+	metricsTicker := d.Clock.NewTicker(100 * time.Millisecond) // Static 100ms interval for metrics
+	defer metricsTicker.Stop()
 
 	var keys []transmitKey
 
 	for {
 		select {
-		case <-ticker.Chan():
-			// Hey the ticker channel returns a time, why not use that?
-			// Because that time isn't the time RIGHT NOW, and can be really off
-			// when using a fake clock for testing. So just get the current time.
+		case <-batchTicker.Chan():
 			now := d.Clock.Now()
 
 			// Get a snapshot of all keys
@@ -583,7 +590,8 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 				}
 
 				batch.mutex.Lock()
-				if len(batch.events) > 0 && now.Sub(batch.startTime) >= d.batchTimeout {
+				batchCount := len(batch.events)
+				if batchCount > 0 && now.Sub(batch.startTime) >= d.batchTimeout {
 					events := batch.events
 					batch.events = nil
 					batch.mutex.Unlock()
@@ -595,6 +603,32 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 					batch.mutex.Unlock()
 				}
 			}
+
+		case <-metricsTicker.Chan():
+			// Calculate current pending count for metrics
+			var pendingEventCount int64
+			keys = keys[:0]
+			d.batchMutex.RLock()
+			for k := range d.eventBatches {
+				keys = append(keys, k)
+			}
+			d.batchMutex.RUnlock()
+
+			for _, key := range keys {
+				d.batchMutex.RLock()
+				batch, exists := d.eventBatches[key]
+				d.batchMutex.RUnlock()
+
+				if !exists {
+					continue
+				}
+
+				batch.mutex.Lock()
+				pendingEventCount += int64(len(batch.events))
+				batch.mutex.Unlock()
+			}
+			d.Metrics.Gauge(d.metricKeys.gaugeQueueLength, float64(pendingEventCount))
+
 		case <-d.stop:
 			return
 		}

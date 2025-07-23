@@ -143,7 +143,7 @@ func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batch
 
 	mockLogger := &logger.MockLogger{}
 
-	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), batchSize, batchTimeout, true)
+	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 10, 100*time.Millisecond, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 
@@ -246,8 +246,13 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		// Verify metrics: 2 successes and 2 errors
 		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
 		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
+		batchesSent, _ := mockMetrics.Get(dt.metricKeys.counterBatchesSent)
+		messagesSent, _ := mockMetrics.Get(dt.metricKeys.counterMessagesSent)
+
 		assert.Equal(t, float64(2), success)
 		assert.Equal(t, float64(2), errors)
+		assert.Equal(t, float64(1), batchesSent)  // Single batch containing 4 events
+		assert.Equal(t, float64(4), messagesSent) // All 4 events were sent
 
 		// Verify we got error log messages
 		errorEvents := getErrorEvents(mockLogger)
@@ -281,8 +286,13 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		// Both events should be errors, no successes
 		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
 		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
+		batchesSent, _ := mockMetrics.Get(dt.metricKeys.counterBatchesSent)
+		messagesSent, _ := mockMetrics.Get(dt.metricKeys.counterMessagesSent)
+
 		assert.Equal(t, float64(0), success)
 		assert.Equal(t, float64(2), errors)
+		assert.Equal(t, float64(1), batchesSent) // Batch was sent despite error
+		assert.Equal(t, float64(2), messagesSent)
 
 		// Should have 2 error log messages
 		errorEvents := getErrorEvents(mockLogger)
@@ -312,8 +322,13 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		// Should be an error
 		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
 		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
+		batchesSent, _ := mockMetrics.Get(dt.metricKeys.counterBatchesSent)
+		messagesSent, _ := mockMetrics.Get(dt.metricKeys.counterMessagesSent)
+
 		assert.Equal(t, float64(0), success)
 		assert.Equal(t, float64(1), errors)
+		assert.Equal(t, float64(1), batchesSent) // Batch was sent despite error
+		assert.Equal(t, float64(1), messagesSent)
 
 		// Look for the special unauthorized log message
 		var unauthorizedFound bool
@@ -357,8 +372,13 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		// One success (202) and one error (400)
 		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
 		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
+		batchesSent, _ := mockMetrics.Get(dt.metricKeys.counterBatchesSent)
+		messagesSent, _ := mockMetrics.Get(dt.metricKeys.counterMessagesSent)
+
 		assert.Equal(t, float64(1), success)
 		assert.Equal(t, float64(1), errors)
+		assert.Equal(t, float64(1), batchesSent) // Single batch containing 2 events
+		assert.Equal(t, float64(2), messagesSent)
 	})
 
 	t.Run("insufficient responses from server", func(t *testing.T) {
@@ -379,8 +399,13 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		// One success and one error (for missing response)
 		success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
 		errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
+		batchesSent, _ := mockMetrics.Get(dt.metricKeys.counterBatchesSent)
+		messagesSent, _ := mockMetrics.Get(dt.metricKeys.counterMessagesSent)
+
 		assert.Equal(t, float64(1), success)
 		assert.Equal(t, float64(1), errors)
+		assert.Equal(t, float64(1), batchesSent) // Single batch containing 2 events
+		assert.Equal(t, float64(2), messagesSent)
 
 		// Verify error log message mentions insufficient responses
 		errorEvents := getErrorEvents(mockLogger)
@@ -390,6 +415,30 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		assert.Equal(t, "error when sending event", errorEvent.Fields["error"])
 		assert.Equal(t, http.StatusInternalServerError, errorEvent.Fields["status_code"])
 		assert.Contains(t, errorEvent.Fields, "roundtrip_usec")
+	})
+
+	t.Run("response decode errors", func(t *testing.T) {
+		// Create a test server that returns invalid msgpack/JSON
+		decodeErrorServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/msgpack")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("invalid msgpack data"))
+		}))
+		defer decodeErrorServer.Close()
+
+		dt, mockMetrics, _ := setupDirectTransmissionTest(t)
+		sendTestEvents(dt, decodeErrorServer.URL, 1, "test-api-key")
+		err := dt.Stop()
+		require.NoError(t, err)
+
+		// Should have decode error
+		decodeErrors, _ := mockMetrics.Get(dt.metricKeys.counterResponseDecodeErrors)
+		batchesSent, _ := mockMetrics.Get(dt.metricKeys.counterBatchesSent)
+		messagesSent, _ := mockMetrics.Get(dt.metricKeys.counterMessagesSent)
+
+		assert.Equal(t, float64(1), decodeErrors)
+		assert.Equal(t, float64(1), batchesSent)
+		assert.Equal(t, float64(1), messagesSent)
 	})
 
 	t.Run("event over 1M size", func(t *testing.T) {
@@ -664,6 +713,9 @@ func TestDirectTransmission(t *testing.T) {
 	errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
 	enqueueErrors, _ := mockMetrics.Get(dt.metricKeys.counterEnqueueErrors)
 	queuedItems, _ := mockMetrics.Get(dt.metricKeys.updownQueuedItems)
+	batchesSent, _ := mockMetrics.Get(dt.metricKeys.counterBatchesSent)
+	messagesSent, _ := mockMetrics.Get(dt.metricKeys.counterMessagesSent)
+	queueLength, _ := mockMetrics.Get(dt.metricKeys.gaugeQueueLength)
 
 	assert.Equal(t, float64(expectedEvents), success)
 	assert.Equal(t, float64(len(allEvents)-expectedEvents), errors)
@@ -672,6 +724,17 @@ func TestDirectTransmission(t *testing.T) {
 	assert.Equal(t, float64(0), queuedItems)
 	// Verify queue time histogram was updated for all events
 	assert.Equal(t, expectedEvents, mockMetrics.GetHistogramCount(dt.metricKeys.histogramQueueTime))
+
+	// Verify batch and message counts
+	// Dataset A: 5 events -> 2 batches (3+2)
+	// Dataset B: 6 events -> 2 batches (3+3) (1 event skipped due to size)
+	// Dataset C: 2 events -> may create multiple batches depending on timing
+	// The exact number of batches depends on timing, but should be at least 4
+	assert.GreaterOrEqual(t, batchesSent, float64(4), "Should have sent at least 4 batches")
+	assert.Equal(t, float64(expectedEvents), messagesSent)
+
+	// Queue length may not be exactly 0 due to gauge update timing
+	assert.LessOrEqual(t, queueLength, float64(expectedEvents), "Queue length should be reasonable")
 }
 
 func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
@@ -739,11 +802,17 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	success, _ := mockMetrics.Get(dt.metricKeys.counterResponse20x)
 	errors, _ := mockMetrics.Get(dt.metricKeys.counterResponseErrors)
 	queuedItems, _ := mockMetrics.Get(dt.metricKeys.updownQueuedItems)
+	batchesSent, _ := mockMetrics.Get(dt.metricKeys.counterBatchesSent)
+	messagesSent, _ := mockMetrics.Get(dt.metricKeys.counterMessagesSent)
 
 	assert.Equal(t, float64(expectedEvents), success)
 	assert.Equal(t, float64(len(allEvents)-expectedEvents), errors)
 	assert.Equal(t, float64(0), queuedItems)
 	assert.Equal(t, expectedEvents, mockMetrics.GetHistogramCount(dt.metricKeys.histogramQueueTime))
+
+	// Verify batch and message counts - events are large so batches will be smaller
+	assert.Greater(t, batchesSent, float64(0), "Should have sent at least one batch")
+	assert.Equal(t, float64(expectedEvents), messagesSent, "Should have sent all successful events")
 }
 
 func TestDirectTransmissionBatchTiming(t *testing.T) {
@@ -763,6 +832,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 
 	err := dt.Start()
 	require.NoError(t, err)
+	dt.RegisterMetrics() // Register metrics to enable tracking
 	mockCfg := &config.MockConfig{}
 
 	// Send first event at time 0
@@ -850,6 +920,58 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		return len(testServer.getEvents()) == 3
 	}, 100*time.Millisecond, time.Millisecond, "Third event should be sent after its batch timeout")
+
+	err = dt.Stop()
+	require.NoError(t, err)
+
+	// Verify metrics after all batches are sent
+	batchesSent, _ := metrics.Get(dt.metricKeys.counterBatchesSent)
+	messagesSent, _ := metrics.Get(dt.metricKeys.counterMessagesSent)
+
+	assert.Equal(t, float64(2), batchesSent)
+	assert.Equal(t, float64(3), messagesSent)
+}
+
+func TestDirectTransmissionQueueLengthGauge(t *testing.T) {
+	testServer := newTestDirectAPIServer(t, 10)
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+
+	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 10, 200*time.Millisecond, true)
+	dt.Config = &config.MockConfig{}
+	dt.Logger = &logger.NullLogger{}
+	dt.Version = "test-version"
+
+	err := dt.Start()
+	require.NoError(t, err)
+	dt.RegisterMetrics()
+
+	// Send a few events that should queue up
+	mockCfg := &config.MockConfig{}
+	for i := 0; i < 3; i++ {
+		event := &types.Event{
+			Context:    context.Background(),
+			APIHost:    testServer.server.URL,
+			APIKey:     "test-key",
+			Dataset:    "test-dataset",
+			SampleRate: 1,
+			Timestamp:  time.Now(),
+			Data:       types.NewPayload(mockCfg, map[string]any{"event_id": i}),
+		}
+		dt.EnqueueEvent(event)
+	}
+
+	// Verify queue length gauge is updated within the first 200ms
+	assert.Eventually(t, func() bool {
+		v, _ := mockMetrics.Get(dt.metricKeys.gaugeQueueLength)
+		return v == 3
+	}, 200*time.Millisecond, 10*time.Millisecond)
+
+	// Once the batch timeout has elapsed, the queue length should be back to 0
+	assert.Eventually(t, func() bool {
+		v, _ := mockMetrics.Get(dt.metricKeys.gaugeQueueLength)
+		return v == 0
+	}, 200*time.Millisecond, 10*time.Millisecond)
 
 	err = dt.Stop()
 	require.NoError(t, err)
