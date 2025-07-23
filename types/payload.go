@@ -508,7 +508,25 @@ func NewCoreFieldsUnmarshaler(config config.Config, apiKey, dataset, environment
 	}
 }
 
-// UnmarshalPayload creates and unmarshals a new Payload (not implementing msgp.Unmarshaler)
+// UnmarshalPayloadComplete is similar to UnmarshalPayload, but it does not return
+// the remaining bytes. It's expected to be used on a single message
+// where the entire byte slice is consumed.
+// CAUTION: This should only be used when the entire byte slice is safe for the payload to keep.
+func (p CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Payload) error {
+	_, err := payload.extractCriticalFieldsFromBytes(bts,
+		p.traceIdFieldNames, p.parentIdFieldNames, p.samplingKeyFields)
+	if err != nil {
+		return err
+	}
+
+	payload.msgpMap = MsgpPayloadMap{rawData: bts}
+	return nil
+}
+
+// UnmarshalPayload creates and unmarshals a new Payload. It supports operating on a partial message
+// and will extract the critical fields from the byte slice, leaving the rest of the data in the Payload's
+// msgpMap. This is useful for cases where the Payload is part of a larger message and we want to avoid
+// unnecessary allocations.
 func (p CoreFieldsUnmarshaler) UnmarshalPayload(bts []byte, payload *Payload) ([]byte, error) {
 
 	consumed, err := payload.extractCriticalFieldsFromBytes(bts,
