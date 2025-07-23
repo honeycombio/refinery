@@ -77,6 +77,7 @@ func TestOTLPHandler(t *testing.T) {
 		environmentCache: newEnvironmentCache(time.Second, nil),
 		Tracer:           noop.Tracer{},
 	}
+	router.registerMetricNames()
 
 	t.Run("span with status", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
@@ -283,12 +284,17 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
+		currentCount, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpProto)
+
 		w := httptest.NewRecorder()
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		events := mockTransmission.GetBlock(2)
 		assert.Equal(t, 2, len(events))
+
+		v, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpProto)
+		assert.Equal(t, 1.0, v-currentCount)
 	})
 
 	t.Run("can receive OTLP over HTTP/protobuf with gzip encoding", func(t *testing.T) {
@@ -319,12 +325,16 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
+		currentCount, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpProto)
 		w := httptest.NewRecorder()
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		events := mockTransmission.GetBlock(2)
 		assert.Equal(t, 2, len(events))
+
+		v, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpProto)
+		assert.Equal(t, 1.0, v-currentCount)
 	})
 
 	t.Run("can receive OTLP over HTTP/protobuf with zstd encoding", func(t *testing.T) {
@@ -384,7 +394,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("content-type", "application/json")
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
-
+		currentCount, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpProto)
 		w := httptest.NewRecorder()
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
@@ -392,6 +402,8 @@ func TestOTLPHandler(t *testing.T) {
 
 		events := mockTransmission.GetBlock(2)
 		assert.Equal(t, 2, len(events))
+		v, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpProto)
+		assert.Equal(t, 0.0, v-currentCount)
 	})
 
 	t.Run("events created with legacy keys use dataset header", func(t *testing.T) {
