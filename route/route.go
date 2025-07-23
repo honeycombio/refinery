@@ -576,13 +576,13 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	w.Write(response)
 }
 
-func (router *Router) processOTLPRequest(
+// processOTLPRequestCommon contains the common logic for processing OTLP requests
+func (router *Router) processOTLPRequestCommon(
 	ctx context.Context,
-	batches []huskyotlp.Batch,
 	apiKey string,
 	incomingUserAgent string,
+	processEvents func(environment string, apiHost string, requestID types.RequestIDContextKey) (int, error),
 ) error {
-
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
 
@@ -594,29 +594,83 @@ func (router *Router) processOTLPRequest(
 		return nil
 	}
 
-	totalEvents := 0
-	for _, batch := range batches {
-		totalEvents += len(batch.Events)
-		for _, ev := range batch.Events {
-			event := &types.Event{
-				Context:     ctx,
-				APIHost:     apiHost,
-				APIKey:      apiKey,
-				Dataset:     batch.Dataset,
-				Environment: environment,
-				SampleRate:  uint(ev.SampleRate),
-				Timestamp:   ev.Timestamp,
-				Data:        types.NewPayload(router.Config, ev.Attributes),
-			}
-			addIncomingUserAgent(event, incomingUserAgent)
-			if err = router.processEvent(event, requestID); err != nil {
-				router.Logger.Error().Logf("Error processing event: " + err.Error())
+	totalEvents, err := processEvents(environment, apiHost, requestID)
+	if err != nil {
+		return err
+	}
+
+	router.Metrics.Count(router.metricsNames.routerOtlpEvents, int64(totalEvents))
+	return nil
+}
+
+// processOTLPRequest processes OTLP requests with Batch (map[string]interface{}) events
+func (router *Router) processOTLPRequest(
+	ctx context.Context,
+	batches []huskyotlp.Batch,
+	apiKey string,
+	incomingUserAgent string,
+) error {
+	return router.processOTLPRequestCommon(ctx, apiKey, incomingUserAgent, func(environment, apiHost string, requestID types.RequestIDContextKey) (int, error) {
+		totalEvents := 0
+		for _, batch := range batches {
+			totalEvents += len(batch.Events)
+			for _, ev := range batch.Events {
+				payload := types.NewPayload(router.Config, ev.Attributes)
+
+				event := &types.Event{
+					Context:     ctx,
+					APIHost:     apiHost,
+					APIKey:      apiKey,
+					Dataset:     batch.Dataset,
+					Environment: environment,
+					SampleRate:  uint(ev.SampleRate),
+					Timestamp:   ev.Timestamp,
+					Data:        payload,
+				}
+				addIncomingUserAgent(event, incomingUserAgent)
+				if err := router.processEvent(event, requestID); err != nil {
+					router.Logger.Error().Logf("Error processing event: " + err.Error())
+				}
 			}
 		}
-	}
-	router.Metrics.Count(router.metricsNames.routerOtlpEvents, int64(totalEvents))
+		return totalEvents, nil
+	})
+}
 
-	return nil
+// processOTLPRequestBatchMsgp processes OTLP requests with BatchMsgp ([]byte) events
+func (router *Router) processOTLPRequestBatchMsgp(
+	ctx context.Context,
+	batches []huskyotlp.BatchMsgp,
+	apiKey string,
+	incomingUserAgent string,
+) error {
+	return router.processOTLPRequestCommon(ctx, apiKey, incomingUserAgent, func(environment, apiHost string, requestID types.RequestIDContextKey) (int, error) {
+		totalEvents := 0
+		for _, batch := range batches {
+			coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(router.Config, apiKey, batch.Dataset, environment)
+			totalEvents += len(batch.Events)
+			for _, ev := range batch.Events {
+				payload := types.NewPayload(router.Config, nil)
+				coreFieldsUnmarshaler.UnmarshalPayload(ev.Attributes, &payload)
+
+				event := &types.Event{
+					Context:     ctx,
+					APIHost:     apiHost,
+					APIKey:      apiKey,
+					Dataset:     batch.Dataset,
+					Environment: environment,
+					SampleRate:  uint(ev.SampleRate),
+					Timestamp:   ev.Timestamp,
+					Data:        payload,
+				}
+				addIncomingUserAgent(event, incomingUserAgent)
+				if err := router.processEvent(event, requestID); err != nil {
+					router.Logger.Error().Logf("Error processing event: " + err.Error())
+				}
+			}
+		}
+		return totalEvents, nil
+	})
 }
 
 func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
