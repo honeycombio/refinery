@@ -12,6 +12,9 @@ import (
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
+// copied from husky
+var defaultMaxRequestBodySize = 20 * 1024 * 1024 // 20MiB
+
 func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	ctx, span := otelutil.StartSpan(req.Context(), r.Tracer, "postOTLPTrace")
 	defer span.End()
@@ -37,15 +40,31 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	}
 
 	ri.ApiKey = keyToUse
-	result, err := huskyotlp.TranslateTraceRequestFromReader(ctx, req.Body, ri)
-	if err != nil {
-		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
-		return
-	}
 
-	if err := r.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
-		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
-		return
+	switch ri.ContentType {
+	case "application/x-protobuf", "application/protobuf":
+		r.Metrics.Increment(r.metricsNames.routerOtlpHttpProto)
+		result, err := huskyotlp.TranslateTraceRequestFromReaderSizedWithMsgp(ctx, req.Body, ri, int64(defaultMaxRequestBodySize))
+		if err != nil {
+			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
+			return
+		}
+
+		if err := r.processOTLPRequestBatchMsgp(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
+			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
+			return
+		}
+	default:
+		result, err := huskyotlp.TranslateTraceRequestFromReader(ctx, req.Body, ri)
+		if err != nil {
+			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
+			return
+		}
+
+		if err := r.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
+			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
+			return
+		}
 	}
 
 	_ = huskyotlp.WriteOtlpHttpTraceSuccessResponse(w, req)
