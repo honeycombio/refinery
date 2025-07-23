@@ -353,59 +353,67 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 
 		// Create payload and unmarshal
 		payload := &Payload{config: mockConfig}
+		doTest := func(t *testing.T) {
+			// Verify core metadata was extracted
+			assert.Equal(t, "trace", payload.MetaSignalType)
+			assert.Equal(t, "custom-trace-456", payload.MetaTraceID)
+			assert.Equal(t, "span_event", payload.MetaAnnotationType)
+
+			// Verify boolean metadata fields
+			assert.True(t, payload.MetaRefineryProbe.HasValue)
+			assert.True(t, payload.MetaRefineryProbe.Value)
+			assert.True(t, payload.MetaRefineryRoot.HasValue)
+			assert.True(t, payload.MetaRefineryRoot.Value) // Should be true because empty parent ID
+			assert.True(t, payload.MetaRefineryMinSpan.HasValue)
+			assert.True(t, payload.MetaRefineryMinSpan.Value)
+			assert.True(t, payload.MetaRefineryExpiredTrace.HasValue)
+			assert.False(t, payload.MetaRefineryExpiredTrace.Value)
+			assert.True(t, payload.MetaRefineryShutdownSend.HasValue)
+			assert.True(t, payload.MetaRefineryShutdownSend.Value)
+			assert.True(t, payload.MetaStressed.HasValue)
+			assert.True(t, payload.MetaStressed.Value)
+
+			// Verify string metadata fields
+			assert.Equal(t, "test-agent/1.0", payload.MetaRefineryIncomingUserAgent)
+			assert.Equal(t, "192.168.1.1", payload.MetaRefineryForwarded)
+			assert.Equal(t, "test-host", payload.MetaRefineryLocalHostname)
+			assert.Equal(t, "deterministic", payload.MetaRefineryReason)
+			assert.Equal(t, "trace_timeout", payload.MetaRefinerySendReason)
+			assert.Equal(t, "sample-key-123", payload.MetaRefinerySampleKey)
+
+			// Verify int64 metadata fields
+			assert.Equal(t, int64(1234567890), payload.MetaRefinerySendBy)
+			assert.Equal(t, int64(2048), payload.MetaRefinerySpanDataSize)
+			assert.Equal(t, int64(5), payload.MetaSpanEventCount)
+			assert.Equal(t, int64(3), payload.MetaSpanLinkCount)
+			assert.Equal(t, int64(10), payload.MetaSpanCount)
+			assert.Equal(t, int64(15), payload.MetaEventCount)
+			assert.Equal(t, int64(100), payload.MetaRefineryOriginalSampleRate)
+
+			// Verify sampling key extraction
+			assert.Equal(t, "custom-sampling-key", payload.memoizedFields["sampling_key_field"])
+
+			// Verify missing field is tracked
+			_, ok := payload.missingFields["missing_field"]
+			assert.True(t, ok)
+
+			// Verify field not in sampling config is NOT extracted
+			assert.Nil(t, payload.memoizedFields["missing_in_config"])
+
+			// Verify regular fields are still accessible through Get
+			assert.Equal(t, "value1", payload.Get("regular_field"))
+			assert.Equal(t, int64(42), payload.Get("another_field"))
+		}
+
 		remainder, err := unmarshaler.UnmarshalPayload(msgpData, payload)
 		require.NoError(t, err)
 		assert.Empty(t, remainder)
+		t.Run("UnmarshalPayload", doTest)
 
-		// Verify core metadata was extracted
-		assert.Equal(t, "trace", payload.MetaSignalType)
-		assert.Equal(t, "custom-trace-456", payload.MetaTraceID)
-		assert.Equal(t, "span_event", payload.MetaAnnotationType)
+		payload = &Payload{config: mockConfig}
+		require.NoError(t, unmarshaler.UnmarshalPayloadComplete(msgpData, payload))
+		t.Run("UnmarshalPayloadComplete", doTest)
 
-		// Verify boolean metadata fields
-		assert.True(t, payload.MetaRefineryProbe.HasValue)
-		assert.True(t, payload.MetaRefineryProbe.Value)
-		assert.True(t, payload.MetaRefineryRoot.HasValue)
-		assert.True(t, payload.MetaRefineryRoot.Value) // Should be true because empty parent ID
-		assert.True(t, payload.MetaRefineryMinSpan.HasValue)
-		assert.True(t, payload.MetaRefineryMinSpan.Value)
-		assert.True(t, payload.MetaRefineryExpiredTrace.HasValue)
-		assert.False(t, payload.MetaRefineryExpiredTrace.Value)
-		assert.True(t, payload.MetaRefineryShutdownSend.HasValue)
-		assert.True(t, payload.MetaRefineryShutdownSend.Value)
-		assert.True(t, payload.MetaStressed.HasValue)
-		assert.True(t, payload.MetaStressed.Value)
-
-		// Verify string metadata fields
-		assert.Equal(t, "test-agent/1.0", payload.MetaRefineryIncomingUserAgent)
-		assert.Equal(t, "192.168.1.1", payload.MetaRefineryForwarded)
-		assert.Equal(t, "test-host", payload.MetaRefineryLocalHostname)
-		assert.Equal(t, "deterministic", payload.MetaRefineryReason)
-		assert.Equal(t, "trace_timeout", payload.MetaRefinerySendReason)
-		assert.Equal(t, "sample-key-123", payload.MetaRefinerySampleKey)
-
-		// Verify int64 metadata fields
-		assert.Equal(t, int64(1234567890), payload.MetaRefinerySendBy)
-		assert.Equal(t, int64(2048), payload.MetaRefinerySpanDataSize)
-		assert.Equal(t, int64(5), payload.MetaSpanEventCount)
-		assert.Equal(t, int64(3), payload.MetaSpanLinkCount)
-		assert.Equal(t, int64(10), payload.MetaSpanCount)
-		assert.Equal(t, int64(15), payload.MetaEventCount)
-		assert.Equal(t, int64(100), payload.MetaRefineryOriginalSampleRate)
-
-		// Verify sampling key extraction
-		assert.Equal(t, "custom-sampling-key", payload.memoizedFields["sampling_key_field"])
-
-		// Verify missing field is tracked
-		_, ok := payload.missingFields["missing_field"]
-		assert.True(t, ok)
-
-		// Verify field not in sampling config is NOT extracted
-		assert.Nil(t, payload.memoizedFields["missing_in_config"])
-
-		// Verify regular fields are still accessible through Get
-		assert.Equal(t, "value1", payload.Get("regular_field"))
-		assert.Equal(t, int64(42), payload.Get("another_field"))
 	})
 
 	t.Run("handles remainder correctly", func(t *testing.T) {
@@ -469,17 +477,26 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 
 		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-dataset", "test-env")
 		payload := &Payload{config: mockConfig}
+
+		doTest := func(t *testing.T) {
+			// Should extract metadata and trace ID but no sampling fields
+			assert.Equal(t, "trace", payload.MetaSignalType)
+			assert.Equal(t, "trace-123", payload.MetaTraceID)
+			assert.Empty(t, payload.memoizedFields)
+			assert.Empty(t, payload.missingFields)
+
+			// Regular field should still be accessible via Get
+			assert.Equal(t, "should-not-be-extracted", payload.Get("regular_field"))
+		}
+
 		_, err = unmarshaler.UnmarshalPayload(msgpData, payload)
 		require.NoError(t, err)
+		t.Run("UnmarshalPayload", doTest)
 
-		// Should extract metadata and trace ID but no sampling fields
-		assert.Equal(t, "trace", payload.MetaSignalType)
-		assert.Equal(t, "trace-123", payload.MetaTraceID)
-		assert.Empty(t, payload.memoizedFields)
-		assert.Empty(t, payload.missingFields)
+		payload = &Payload{config: mockConfig}
+		require.NoError(t, unmarshaler.UnmarshalPayloadComplete(msgpData, payload))
+		t.Run("UnmarshalPayloadComplete", doTest)
 
-		// Regular field should still be accessible via Get
-		assert.Equal(t, "should-not-be-extracted", payload.Get("regular_field"))
 	})
 }
 
