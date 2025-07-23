@@ -144,6 +144,7 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_batch_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in batches"},
 	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests received"},
 	{Name: "_router_otlp_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in otlp requests"},
+	{Name: "_router_otlp_http_proto", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/protobuf requests received"},
 	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
 }
@@ -172,6 +173,8 @@ func (r *Router) registerMetricNames() {
 			r.metricsNames.routerBatchEvents = fullname
 		case "_router_otlp":
 			r.metricsNames.routerOtlp = fullname
+		case "_router_otlp_http_proto":
+			r.metricsNames.routerOtlpHttpProto = fullname
 		case "_router_otlp_events":
 			r.metricsNames.routerOtlpEvents = fullname
 		}
@@ -182,17 +185,18 @@ func (r *Router) registerMetricNames() {
 }
 
 type routerMetricKeys struct {
-	routerProxied     string
-	routerEvent       string
-	routerEventBytes  string
-	routerSpan        string
-	routerDropped     string
-	routerNonspan     string
-	routerPeer        string
-	routerBatch       string
-	routerBatchEvents string
-	routerOtlp        string
-	routerOtlpEvents  string
+	routerProxied       string
+	routerEvent         string
+	routerEventBytes    string
+	routerSpan          string
+	routerDropped       string
+	routerNonspan       string
+	routerPeer          string
+	routerBatch         string
+	routerBatchEvents   string
+	routerOtlp          string
+	routerOtlpHttpProto string
+	routerOtlpEvents    string
 }
 
 // LnS spins up the Listen and Serve portion of the router. A router is
@@ -576,12 +580,12 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	w.Write(response)
 }
 
-// processOTLPRequestCommon contains the common logic for processing OTLP requests
-func (router *Router) processOTLPRequestCommon(
+// processOTLPRequest processes OTLP requests with Batch (map[string]interface{}) events
+func (router *Router) processOTLPRequest(
 	ctx context.Context,
+	batches []huskyotlp.Batch,
 	apiKey string,
 	incomingUserAgent string,
-	processEvents func(environment string, apiHost string, requestID types.RequestIDContextKey) (int, error),
 ) error {
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
@@ -593,48 +597,31 @@ func (router *Router) processOTLPRequestCommon(
 	if err != nil {
 		return nil
 	}
+	totalEvents := 0
+	for _, batch := range batches {
+		totalEvents += len(batch.Events)
+		for _, ev := range batch.Events {
+			payload := types.NewPayload(router.Config, ev.Attributes)
 
-	totalEvents, err := processEvents(environment, apiHost, requestID)
-	if err != nil {
-		return err
+			event := &types.Event{
+				Context:     ctx,
+				APIHost:     apiHost,
+				APIKey:      apiKey,
+				Dataset:     batch.Dataset,
+				Environment: environment,
+				SampleRate:  uint(ev.SampleRate),
+				Timestamp:   ev.Timestamp,
+				Data:        payload,
+			}
+			addIncomingUserAgent(event, incomingUserAgent)
+			if err := router.processEvent(event, requestID); err != nil {
+				router.Logger.Error().Logf("Error processing event: " + err.Error())
+			}
+		}
 	}
 
 	router.Metrics.Count(router.metricsNames.routerOtlpEvents, int64(totalEvents))
 	return nil
-}
-
-// processOTLPRequest processes OTLP requests with Batch (map[string]interface{}) events
-func (router *Router) processOTLPRequest(
-	ctx context.Context,
-	batches []huskyotlp.Batch,
-	apiKey string,
-	incomingUserAgent string,
-) error {
-	return router.processOTLPRequestCommon(ctx, apiKey, incomingUserAgent, func(environment, apiHost string, requestID types.RequestIDContextKey) (int, error) {
-		totalEvents := 0
-		for _, batch := range batches {
-			totalEvents += len(batch.Events)
-			for _, ev := range batch.Events {
-				payload := types.NewPayload(router.Config, ev.Attributes)
-
-				event := &types.Event{
-					Context:     ctx,
-					APIHost:     apiHost,
-					APIKey:      apiKey,
-					Dataset:     batch.Dataset,
-					Environment: environment,
-					SampleRate:  uint(ev.SampleRate),
-					Timestamp:   ev.Timestamp,
-					Data:        payload,
-				}
-				addIncomingUserAgent(event, incomingUserAgent)
-				if err := router.processEvent(event, requestID); err != nil {
-					router.Logger.Error().Logf("Error processing event: " + err.Error())
-				}
-			}
-		}
-		return totalEvents, nil
-	})
 }
 
 // processOTLPRequestBatchMsgp processes OTLP requests with BatchMsgp ([]byte) events
@@ -644,33 +631,40 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	apiKey string,
 	incomingUserAgent string,
 ) error {
-	return router.processOTLPRequestCommon(ctx, apiKey, incomingUserAgent, func(environment, apiHost string, requestID types.RequestIDContextKey) (int, error) {
-		totalEvents := 0
-		for _, batch := range batches {
-			coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(router.Config, apiKey, batch.Dataset, environment)
-			totalEvents += len(batch.Events)
-			for _, ev := range batch.Events {
-				payload := types.NewPayload(router.Config, nil)
-				coreFieldsUnmarshaler.UnmarshalPayload(ev.Attributes, &payload)
+	var requestID types.RequestIDContextKey
+	apiHost := router.Config.GetHoneycombAPI()
 
-				event := &types.Event{
-					Context:     ctx,
-					APIHost:     apiHost,
-					APIKey:      apiKey,
-					Dataset:     batch.Dataset,
-					Environment: environment,
-					SampleRate:  uint(ev.SampleRate),
-					Timestamp:   ev.Timestamp,
-					Data:        payload,
-				}
-				addIncomingUserAgent(event, incomingUserAgent)
-				if err := router.processEvent(event, requestID); err != nil {
-					router.Logger.Error().Logf("Error processing event: " + err.Error())
-				}
+	// get environment name - will be empty for legacy keys
+	environment, err := router.getEnvironmentName(apiKey)
+	if err != nil {
+		return nil
+	}
+	totalEvents := 0
+	for _, batch := range batches {
+		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(router.Config, apiKey, batch.Dataset, environment)
+		totalEvents += len(batch.Events)
+		for _, ev := range batch.Events {
+			payload := types.NewPayload(router.Config, nil)
+			coreFieldsUnmarshaler.UnmarshalPayload(ev.Attributes, &payload)
+
+			event := &types.Event{
+				Context:     ctx,
+				APIHost:     apiHost,
+				APIKey:      apiKey,
+				Dataset:     batch.Dataset,
+				Environment: environment,
+				SampleRate:  uint(ev.SampleRate),
+				Timestamp:   ev.Timestamp,
+				Data:        payload,
+			}
+			addIncomingUserAgent(event, incomingUserAgent)
+			if err := router.processEvent(event, requestID); err != nil {
+				router.Logger.Error().Logf("Error processing event: " + err.Error())
 			}
 		}
-		return totalEvents, nil
-	})
+	}
+	router.Metrics.Count(router.metricsNames.routerOtlpEvents, int64(totalEvents))
+	return nil
 }
 
 func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {

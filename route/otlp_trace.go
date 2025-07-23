@@ -43,6 +43,7 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 
 	switch ri.ContentType {
 	case "application/x-protobuf", "application/protobuf":
+		r.Metrics.Increment(r.metricsNames.routerOtlpHttpProto)
 		result, err := huskyotlp.TranslateTraceRequestFromReaderSizedWithMsgp(ctx, req.Body, ri, int64(defaultMaxRequestBodySize))
 		if err != nil {
 			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
