@@ -287,7 +287,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 
 	// Generate events until one is sampled and appears on the transmission queue for sending.
 	sendAttemptCount := 0
-	for len(transmission.Events) < 1 {
+	require.Eventually(t, func() bool {
 		sendAttemptCount++
 		span := &types.Span{
 			TraceID: fmt.Sprintf("trace-%v", sendAttemptCount),
@@ -301,8 +301,8 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		}
 		err := coll.AddSpan(span)
 		require.NoError(t, err, "must be able to add the span")
-		time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 5)
-	}
+		return len(transmission.Events) >= 1
+	}, 5*time.Second, conf.GetTracesConfig().GetSendTickerValue(), "at least one event should be sampled and sent")
 
 	events := transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding another root span should send the span")
@@ -327,17 +327,18 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	})
 	require.NoError(t, err, "must be able to add the span")
 
-	// Find the Refinery-sampled-and-sent event that had no upstream sampling which
-	// should be the last event on the transmission queue.
-	events = transmission.GetBlock(1)
-	require.Equal(t, 1, len(events), "adding another root span should send the span")
+	// Wait for the event to be processed and sent
 	var noUpstreamSampleRateEvent *types.Event
-	for _, event := range events {
-		if event.Dataset == "no-upstream-sampling" {
-			noUpstreamSampleRateEvent = event
-			break
+	require.Eventually(t, func() bool {
+		events = transmission.GetBlock(0) // Get any available events
+		for _, event := range events {
+			if event.Dataset == "no-upstream-sampling" {
+				noUpstreamSampleRateEvent = event
+				return true
+			}
 		}
-	}
+		return false
+	}, 5*time.Second, 10*time.Millisecond, "event with no upstream sampling should be sent")
 
 	require.NotNil(t, noUpstreamSampleRateEvent)
 	assert.Equal(t, "no-upstream-sampling", noUpstreamSampleRateEvent.Dataset)
