@@ -76,7 +76,7 @@ var transmissionMetrics = []metrics.Metadata{
 	{Name: updownQueuedItems, Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "The number of events queued for transmission to Honeycomb"},
 	{Name: histogramQueueTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent in the queue before being sent to Honeycomb"},
 	{Name: gaugeQueueLength, Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of events waiting to be sent to destination"},
-	{Name: counterSendErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of errors encountered while sending events to destination"},
+	{Name: counterSendErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of errors encountered while sending a batch of events to destination"},
 	{Name: counterSendRetries, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times a batch of events was retried"},
 	{Name: counterBatchesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of batches of events sent to destination"},
 	{Name: counterMessagesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of messages sent to destination"},
@@ -315,6 +315,7 @@ func (d *DirectTransmission) Stop() error {
 
 // handleBatchFailure handles metrics updates when the entire batch fails
 func (d *DirectTransmission) handleBatchFailure(batch []*types.Event) {
+	d.Metrics.Increment(d.metricKeys.counterSendErrors)
 	for range batch {
 		d.Metrics.Down(d.metricKeys.updownQueuedItems)
 	}
@@ -530,6 +531,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		} else {
 			// HTTP error - affects all events in batch
 			var bodyBytes []byte
+			d.Metrics.Increment(d.metricKeys.counterSendErrors)
 
 			// Handle msgpack or JSON response body
 			if resp.Header.Get("Content-Type") == "application/msgpack" {
