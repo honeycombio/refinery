@@ -361,6 +361,13 @@ var batchBufferPool = sync.Pool{
 	},
 }
 
+// Pool for bytes.Reader objects to avoid allocation on retries
+var readerPool = sync.Pool{
+	New: func() any {
+		return &bytes.Reader{}
+	},
+}
+
 // Sends one message or, if the batch is larger than what is allowed, several.
 func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 	subBatch := make([]*types.Event, 0, len(wholeBatch))
@@ -440,33 +447,79 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 			continue
 		}
 
-		var reader io.Reader
+		var resp *http.Response
+		var compressedData []byte
+		var zBufPtr *[]byte
+
 		if d.enableCompression {
-			zBufPtr := batchBufferPool.Get().(*[]byte)
-			zBuf := zstdEncoder.EncodeAll(packed, *zBufPtr)
-			reader = bytes.NewReader(zBuf)
-
-			*zBufPtr = zBuf[:0]
-			defer batchBufferPool.Put(zBufPtr)
-		} else {
-			reader = bytes.NewReader(packed)
+			zBufPtr = batchBufferPool.Get().(*[]byte)
+			compressedData = zstdEncoder.EncodeAll(packed, *zBufPtr)
 		}
 
-		req, err := http.NewRequest("POST", apiURL.String(), reader)
-		if err != nil {
-			d.Logger.Error().WithField("err", err.Error()).Logf("failed to create request")
-			d.handleBatchFailure(subBatch)
-			continue
+		var req *http.Request
+		for try := 0; try < 2; try++ {
+			if try > 0 {
+				d.Metrics.Increment(d.metricKeys.counterSendRetries)
+			}
+			readerPtr := readerPool.Get().(*bytes.Reader)
+
+			if d.enableCompression {
+				readerPtr.Reset(compressedData)
+			} else {
+				readerPtr.Reset(packed)
+			}
+
+			req, err = http.NewRequest("POST", apiURL.String(), readerPtr)
+			if err != nil {
+				readerPool.Put(readerPtr)
+				d.Logger.Error().WithField("err", err.Error()).Logf("failed to create request")
+				d.handleBatchFailure(subBatch)
+				break
+			}
+
+			req.Header.Set("Content-Type", "application/msgpack")
+			req.Header.Set("X-Honeycomb-Team", apiKey)
+			req.Header.Set("User-Agent", d.userAgent)
+			if d.enableCompression {
+				req.Header.Set("Content-Encoding", "zstd")
+			}
+
+			resp, err = d.httpClient.Do(req)
+			// Handle 429 or 503 with Retry-After
+			if resp != nil && (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable) {
+				retryAfter := resp.Header.Get("Retry-After")
+				sleepDur := time.Second // default 1s
+				if retryAfter != "" {
+					if secs, err := time.ParseDuration(retryAfter + "s"); err == nil {
+						sleepDur = secs
+					} else if t, err := http.ParseTime(retryAfter); err == nil {
+						sleepDur = d.Clock.Until(t)
+					}
+				}
+				if sleepDur > 0 && sleepDur < 60*time.Second {
+					resp.Body.Close()
+					readerPool.Put(readerPtr)
+					d.Clock.Sleep(sleepDur)
+					continue // retry in the loop
+				}
+			}
+
+			if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
+				readerPool.Put(readerPtr)
+				continue
+			}
+
+			// Return reader to pool before breaking out of retry loop
+			readerPool.Put(readerPtr)
+			break
 		}
 
-		req.Header.Set("Content-Type", "application/msgpack")
-		req.Header.Set("X-Honeycomb-Team", apiKey)
-		req.Header.Set("User-Agent", d.userAgent)
-		if d.enableCompression {
-			req.Header.Set("Content-Encoding", "zstd")
+		// Clean up compression buffer if used
+		if d.enableCompression && zBufPtr != nil {
+			*zBufPtr = compressedData[:0]
+			batchBufferPool.Put(zBufPtr)
 		}
 
-		resp, err := d.httpClient.Do(req)
 		dequeuedAt := d.Clock.Now()
 
 		if err != nil {
@@ -632,4 +685,8 @@ func (z *batchedEvent) MarshalMsg(b []byte) (o []byte, err error) {
 		return
 	}
 	return
+}
+
+type httpError interface {
+	Timeout() bool
 }

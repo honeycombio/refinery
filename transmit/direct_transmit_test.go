@@ -855,6 +855,143 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestDirectTransmissionRetryLogic(t *testing.T) {
+	tests := []struct {
+		name           string
+		statusCode     int
+		retryAfter     string
+		expectRetries  int
+		expectSuccess  bool
+		enableCompress bool
+	}{
+		{
+			name:          "429_with_retry_after_1s",
+			statusCode:    http.StatusTooManyRequests,
+			retryAfter:    "1",
+			expectRetries: 1,
+			expectSuccess: true,
+		},
+		{
+			name:          "503_with_retry_after_2s",
+			statusCode:    http.StatusServiceUnavailable,
+			retryAfter:    "2",
+			expectRetries: 1,
+			expectSuccess: true,
+		},
+		{
+			name:          "429_with_retry_after_too_long",
+			statusCode:    http.StatusTooManyRequests,
+			retryAfter:    "61", // Over 60s limit
+			expectRetries: 0,
+			expectSuccess: false,
+		},
+		{
+			name:          "success_after_retry",
+			statusCode:    http.StatusTooManyRequests,
+			retryAfter:    "1",
+			expectRetries: 1,
+			expectSuccess: true,
+		},
+		{
+			name:           "timeout_retries_with_compression",
+			statusCode:     0, // Will simulate timeout by hanging
+			expectRetries:  1,
+			expectSuccess:  false,
+			enableCompress: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Track request attempts
+			var requestCount atomic.Int32
+			var requestBodies [][]byte
+			var requestMutex sync.Mutex
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				count := requestCount.Add(1)
+
+				// Read and validate the request body to ensure reader works correctly
+				require.NotZero(t, r.ContentLength, "Request should have valid Content-Length")
+				body, err := io.ReadAll(r.Body)
+				require.NoError(t, err)
+				require.Equal(t, r.ContentLength, int64(len(body)))
+
+				// Store body for later verification that retries use same data
+				requestMutex.Lock()
+				requestBodies = append(requestBodies, body)
+				requestMutex.Unlock()
+
+				// Verify content type and headers
+				assert.Equal(t, "application/msgpack", r.Header.Get("Content-Type"))
+				if tt.enableCompress {
+					assert.Equal(t, "zstd", r.Header.Get("Content-Encoding"))
+				}
+
+				if tt.statusCode == 0 {
+					// Simulate timeout by hanging the request
+					time.Sleep(150 * time.Millisecond) // Longer than client timeout
+					return
+				}
+
+				// First request gets error status, second succeeds (if expected)
+				if count == 1 && tt.statusCode != 0 {
+					w.Header().Set("Retry-After", tt.retryAfter)
+					w.WriteHeader(tt.statusCode)
+					w.Write([]byte(`{"error": "rate limited"}`))
+					return
+				}
+
+				// Success response
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`[{"status": 202}]`))
+			}))
+			defer server.Close()
+
+			dt, mockMetrics, _ := setupDirectTransmissionTestWithBatchSize(t, 1, time.Second)
+			dt.enableCompression = tt.enableCompress
+
+			// Set shorter timeout for timeout test cases
+			if tt.statusCode == 0 {
+				dt.httpClient.Timeout = 100 * time.Millisecond
+			}
+
+			sendTestEvents(dt, server.URL, 1, "test-key")
+
+			// Wait for processing with timeout for slow retries
+			assert.Eventually(t, func() bool {
+				return int(requestCount.Load()) >= 1+tt.expectRetries
+			}, 5*time.Second, 10*time.Millisecond, "Should receive expected number of requests")
+
+			err := dt.Stop()
+			require.NoError(t, err)
+
+			totalRequests := int(requestCount.Load())
+			expectedRequests := 1 + tt.expectRetries
+			assert.Equal(t, expectedRequests, totalRequests,
+				"Expected %d total requests (1 initial + %d retries), got %d",
+				expectedRequests, tt.expectRetries, totalRequests)
+
+			// Verify that retry requests use the same data (reader pooling working correctly)
+			requestMutex.Lock()
+			if len(requestBodies) > 1 {
+				for i := 1; i < len(requestBodies); i++ {
+					assert.Equal(t, requestBodies[0], requestBodies[i],
+						"Retry request %d should have identical body to first request", i)
+				}
+			}
+			requestMutex.Unlock()
+
+			if tt.expectSuccess {
+				assert.Contains(t, mockMetrics.CounterIncrements, "upstream_response_20x")
+			} else {
+				assert.Contains(t, mockMetrics.CounterIncrements, "upstream_response_errors")
+			}
+		})
+	}
+}
+
 // Lightweight benchmark HTTP server
 type benchmarkAPIServer struct {
 	server     *httptest.Server
