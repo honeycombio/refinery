@@ -36,6 +36,20 @@ const (
 	maxConcurrentBatches = 500
 )
 
+const (
+	counterEnqueueErrors        = "_enqueue_errors"
+	counterResponse20x          = "_response_20x"
+	counterResponseErrors       = "_response_errors"
+	updownQueuedItems           = "_queued_items"
+	histogramQueueTime          = "_queue_time"
+	counterQueueLength          = "_queue_length"
+	counterSendErrors           = "_send_errors"
+	counterSendRetries          = "_send_retries"
+	counterBatchesSent          = "_batches_sent"
+	counterMessagesSent         = "_messages_sent"
+	counterResponseDecodeErrors = "_response_decode_errors"
+)
+
 // Instantiating a new encoder is expensive, so use a global one.
 // EncodeAll() is concurrency-safe.
 var zstdEncoder *zstd.Encoder
@@ -53,6 +67,35 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+var transmissionMetrics = []metrics.Metadata{
+	{Name: counterEnqueueErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when enqueueing events"},
+	{Name: counterResponse20x, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of successful responses from Honeycomb"},
+	{Name: counterResponseErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when sending events to Honeycomb"},
+	{Name: updownQueuedItems, Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "The number of events queued for transmission to Honeycomb"},
+	{Name: histogramQueueTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent in the queue before being sent to Honeycomb"},
+	{Name: counterQueueLength, Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of events waiting to be sent to destination"},
+	{Name: counterSendErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of errors encountered while sending events to destination"},
+	{Name: counterSendRetries, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times a batch of events was retried"},
+	{Name: counterBatchesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of batches of events sent to destination"},
+	{Name: counterMessagesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of messages sent to destination"},
+	{Name: counterResponseDecodeErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of errors encountered while decoding responses from destination"},
+}
+
+type metricKeys struct {
+	updownQueuedItems     string
+	histogramQueueTime    string
+	counterEnqueueErrors  string
+	counterResponse20x    string
+	counterResponseErrors string
+
+	gaugeQueueLength            string
+	counterSendErrors           string
+	counterSendRetries          string
+	counterBatchesSent          string
+	counterMessagesSent         string
+	counterResponseDecodeErrors string
 }
 
 type transmitKey struct {
@@ -84,7 +127,7 @@ type DirectTransmission struct {
 	Clock     clockwork.Clock
 
 	// Type is peer or upstream, and used only for naming metrics
-	name string
+	transmitType types.TransmitType
 
 	enableCompression bool
 
@@ -100,12 +143,13 @@ type DirectTransmission struct {
 
 	httpClient *http.Client
 	userAgent  string
+	metricKeys metricKeys
 }
 
 func NewDirectTransmission(
 	m metrics.Metrics,
+	transmitType types.TransmitType,
 	transport *http.Transport,
-	name string,
 	maxBatchSize int,
 	batchTimeout time.Duration,
 	enableCompression bool,
@@ -114,7 +158,7 @@ func NewDirectTransmission(
 		Metrics:           m,
 		Transport:         transport,
 		Clock:             clockwork.NewRealClock(),
-		name:              name,
+		transmitType:      transmitType,
 		enableCompression: enableCompression,
 		maxBatchSize:      maxBatchSize,
 		batchTimeout:      batchTimeout,
@@ -124,7 +168,7 @@ func NewDirectTransmission(
 }
 
 func (d *DirectTransmission) Start() error {
-	d.Logger.Debug().Logf("Starting DirectTransmission: %s type", d.name)
+	d.Logger.Debug().Logf("Starting DirectTransmission: %s type", d.transmitType.String())
 	d.userAgent = fmt.Sprintf("refinery/%s %s (%s/%s)", d.Version, strings.Replace(runtime.Version(), "go", "go/", 1), runtime.GOOS, runtime.GOARCH)
 	d.httpClient = &http.Client{
 		Transport: d.Transport,
@@ -191,7 +235,7 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 		batch.mutex.Unlock()
 	}
 
-	d.Metrics.Up(updownQueuedItems)
+	d.Metrics.Up(d.metricKeys.updownQueuedItems)
 }
 
 func (d *DirectTransmission) EnqueueSpan(sp *types.Span) {
@@ -203,6 +247,40 @@ func (d *DirectTransmission) EnqueueSpan(sp *types.Span) {
 // it should be called after the metrics object has been created.
 func (d *DirectTransmission) RegisterMetrics() {
 	for _, m := range transmissionMetrics {
+		fullName := d.transmitType.String() + m.Name
+		switch m.Name {
+		case updownQueuedItems:
+			d.metricKeys.updownQueuedItems = fullName
+		case histogramQueueTime:
+			d.metricKeys.histogramQueueTime = fullName
+		case counterEnqueueErrors:
+			d.metricKeys.counterEnqueueErrors = fullName
+		case counterResponse20x:
+			d.metricKeys.counterResponse20x = fullName
+		case counterResponseErrors:
+			d.metricKeys.counterResponseErrors = fullName
+		// Below are metrics previously associated with the libhoney transmission used to send data upstream or to peers.
+		// Even though libhoney isn't used, include the prefix in these metric names to avoid breaking existing Refinery operations boards & queries.
+		case counterQueueLength:
+			fullName = "libhoney" + m.Name
+			d.metricKeys.gaugeQueueLength = fullName
+		case counterSendErrors:
+			fullName = "libhoney" + m.Name
+			d.metricKeys.counterSendErrors = fullName
+		case counterSendRetries:
+			fullName = "libhoney" + m.Name
+			d.metricKeys.counterSendRetries = fullName
+		case counterBatchesSent:
+			fullName = "libhoney" + m.Name
+			d.metricKeys.counterBatchesSent = fullName
+		case counterMessagesSent:
+			fullName = "libhoney" + m.Name
+			d.metricKeys.counterMessagesSent = fullName
+		case counterResponseDecodeErrors:
+			fullName = "libhoney" + m.Name
+			d.metricKeys.counterResponseDecodeErrors = fullName
+		}
+		m.Name = fullName // Update the metric name to include the transmit type
 		d.Metrics.Register(m)
 	}
 }
@@ -238,7 +316,7 @@ func (d *DirectTransmission) Stop() error {
 // handleBatchFailure handles metrics updates when the entire batch fails
 func (d *DirectTransmission) handleBatchFailure(batch []*types.Event) {
 	for range batch {
-		d.Metrics.Down(updownQueuedItems)
+		d.Metrics.Down(d.metricKeys.updownQueuedItems)
 	}
 }
 
@@ -269,9 +347,9 @@ func (d *DirectTransmission) handleEventError(ev *types.Event, statusCode int, q
 	}
 
 	log.Logf("error when sending event")
-	d.Metrics.Increment(counterResponseErrors)
-	d.Metrics.Down(updownQueuedItems)
-	d.Metrics.Histogram(histogramQueueTime, float64(queueTime))
+	d.Metrics.Increment(d.metricKeys.counterResponseErrors)
+	d.Metrics.Down(d.metricKeys.updownQueuedItems)
+	d.Metrics.Histogram(d.metricKeys.histogramQueueTime, float64(queueTime))
 }
 
 // Stores *[]byte instead of []byte to avoid having the slice headers themselves
@@ -319,8 +397,8 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 				// Skip this message and remove it from the list, so we don't
 				// try to account for it again.
 				d.Logger.Error().WithField("err", err.Error()).Logf("failed to marshal event")
-				d.Metrics.Down(updownQueuedItems)
-				d.Metrics.Increment(counterResponseErrors)
+				d.Metrics.Down(d.metricKeys.updownQueuedItems)
+				d.Metrics.Increment(d.metricKeys.counterResponseErrors)
 				continue
 			}
 			if len(newPacked) > apiMaxBatchSize {
@@ -434,9 +512,9 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 					d.handleEventError(ev, batchResponses[i].Status, queueTime, "", nil)
 				} else {
 					// Success
-					d.Metrics.Increment(counterResponse20x)
-					d.Metrics.Down(updownQueuedItems)
-					d.Metrics.Histogram(histogramQueueTime, float64(queueTime))
+					d.Metrics.Increment(d.metricKeys.counterResponse20x)
+					d.Metrics.Down(d.metricKeys.updownQueuedItems)
+					d.Metrics.Histogram(d.metricKeys.histogramQueueTime, float64(queueTime))
 				}
 			}
 		} else {

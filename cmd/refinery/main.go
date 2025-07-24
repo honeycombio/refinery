@@ -39,6 +39,7 @@ import (
 	"github.com/honeycombio/refinery/service/debug"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/honeycombio/refinery/types"
 )
 
 // set by travis.
@@ -164,23 +165,19 @@ func main() {
 		ForceAttemptHTTP2:   true,
 	}
 
-	genericMetricsRecorder := metrics.NewMetricsPrefixer("")
-	upstreamMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_upstream")
-	peerMetricsRecorder := metrics.NewMetricsPrefixer("libhoney_peer")
-
 	stressRelief := &collect.StressRelief{Done: done}
 	upstreamTransmission := transmit.NewDirectTransmission(
-		upstreamMetricsRecorder,
+		metricsSingleton,
+		types.TransmitTypeUpstream,
 		upstreamTransport,
-		"upstream",
 		int(c.GetTracesConfig().GetMaxBatchSize()),
 		time.Duration(c.GetTracesConfig().GetBatchTimeout()),
 		true,
 	)
 	peerTransmission := transmit.NewDirectTransmission(
-		peerMetricsRecorder,
+		metricsSingleton,
+		types.TransmitTypePeer,
 		peerTransport,
-		"peer",
 		int(c.GetTracesConfig().GetMaxBatchSize()),
 		time.Duration(c.GetTracesConfig().GetBatchTimeout()),
 		c.GetCompressPeerCommunication(),
@@ -253,9 +250,6 @@ func main() {
 		{Value: tracer, Name: "tracer"}, // we need to use a named injection here because trace.Tracer's struct fields are all private
 		{Value: clockwork.NewRealClock()},
 		{Value: metricsSingleton, Name: "metrics"},
-		{Value: genericMetricsRecorder, Name: "genericMetrics"},
-		{Value: upstreamMetricsRecorder, Name: "upstreamMetrics"},
-		{Value: peerMetricsRecorder, Name: "peerMetrics"},
 		{Value: version, Name: "version"},
 		{Value: samplerFactory},
 		{Value: stressRelief, Name: "stressRelief"},
@@ -301,13 +295,6 @@ func main() {
 	if err != nil {
 		fmt.Printf("failed to start peer management: %v\n", err)
 		os.Exit(1)
-	}
-
-	// these have to be done after the injection (of metrics)
-	// these are the metrics that libhoney will emit; we preregister them so that they always appear
-	for _, metric := range libhoneyMetrics {
-		upstreamMetricsRecorder.Register(metric)
-		peerMetricsRecorder.Register(metric)
 	}
 
 	// Register metrics after the metrics object has been created
@@ -368,49 +355,4 @@ func main() {
 	startstop.Stop(g.Objects(), ststLogger)
 	close(monitorDone)
 	close(sigsToExit)
-}
-
-var libhoneyMetrics = []metrics.Metadata{
-	{
-		Name:        "queue_length",
-		Type:        metrics.Gauge,
-		Unit:        metrics.Dimensionless,
-		Description: "number of events waiting to be sent to destination",
-	},
-	{
-		Name:        "queue_overflow",
-		Type:        metrics.Counter,
-		Unit:        metrics.Dimensionless,
-		Description: "number of events dropped due to queue overflow",
-	},
-	{
-		Name:        "send_errors",
-		Type:        metrics.Counter,
-		Unit:        metrics.Dimensionless,
-		Description: "number of errors encountered while sending events to destination",
-	},
-	{
-		Name:        "send_retries",
-		Type:        metrics.Counter,
-		Unit:        metrics.Dimensionless,
-		Description: "number of times a batch of events was retried",
-	},
-	{
-		Name:        "batches_sent",
-		Type:        metrics.Counter,
-		Unit:        metrics.Dimensionless,
-		Description: "number of batches of events sent to destination",
-	},
-	{
-		Name:        "messages_sent",
-		Type:        metrics.Counter,
-		Unit:        metrics.Dimensionless,
-		Description: "number of messages sent to destination",
-	},
-	{
-		Name:        "response_decode_errors",
-		Type:        metrics.Counter,
-		Unit:        metrics.Dimensionless,
-		Description: "number of errors encountered while decoding responses from destination",
-	},
 }

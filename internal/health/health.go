@@ -54,7 +54,7 @@ var TickerTime = 500 * time.Millisecond
 // every timeout interval. If they don't, they will be marked as not alive.
 type Health struct {
 	Clock      clockwork.Clock `inject:""`
-	Metrics    metrics.Metrics `inject:"genericMetrics"`
+	Metrics    metrics.Metrics `inject:"metrics"`
 	Logger     logger.Logger   `inject:""`
 	timeouts   map[string]time.Duration
 	timeLeft   map[string]time.Duration

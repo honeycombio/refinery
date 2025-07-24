@@ -80,7 +80,7 @@ func TestDependencyInjection(t *testing.T) {
 
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
-		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &peer.MockPeers{Peers: []string{"foo", "bar"}}},
 	)
 	if err != nil {
