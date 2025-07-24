@@ -509,6 +509,18 @@ func TestDirectTransmission(t *testing.T) {
 	require.NoError(t, err)
 	defer dt.Stop()
 	dt.RegisterMetrics()
+	assert.Equal(t, "upstream_queued_items", dt.metricKeys.updownQueuedItems)
+	assert.Equal(t, "upstream_response_20x", dt.metricKeys.counterResponse20x)
+	assert.Equal(t, "upstream_response_errors", dt.metricKeys.counterResponseErrors)
+	assert.Equal(t, "upstream_enqueue_errors", dt.metricKeys.counterEnqueueErrors)
+	assert.Equal(t, "upstream_queue_time", dt.metricKeys.histogramQueueTime)
+
+	assert.Equal(t, "libhoney_upstream_send_errors", dt.metricKeys.counterSendErrors)
+	assert.Equal(t, "libhoney_upstream_send_retries", dt.metricKeys.counterSendRetries)
+	assert.Equal(t, "libhoney_upstream_batches_sent", dt.metricKeys.counterBatchesSent)
+	assert.Equal(t, "libhoney_upstream_messages_sent", dt.metricKeys.counterMessagesSent)
+	assert.Equal(t, "libhoney_upstream_queue_length", dt.metricKeys.gaugeQueueLength)
+	assert.Equal(t, "libhoney_upstream_response_decode_errors", dt.metricKeys.counterResponseDecodeErrors)
 
 	now := time.Now().UTC()
 	cfg := &config.MockConfig{

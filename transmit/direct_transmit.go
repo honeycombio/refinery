@@ -43,6 +43,7 @@ const (
 	updownQueuedItems           = "_queued_items"
 	histogramQueueTime          = "_queue_time"
 	gaugeQueueLength            = "_queue_length"
+	counterSendErrors           = "_send_errors"
 	counterSendRetries          = "_send_retries"
 	counterBatchesSent          = "_batches_sent"
 	counterMessagesSent         = "_messages_sent"
@@ -75,6 +76,7 @@ var transmissionMetrics = []metrics.Metadata{
 	{Name: updownQueuedItems, Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "The number of events queued for transmission to Honeycomb"},
 	{Name: histogramQueueTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent in the queue before being sent to Honeycomb"},
 	{Name: gaugeQueueLength, Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of events waiting to be sent to destination"},
+	{Name: counterSendErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of errors encountered while sending events to destination"},
 	{Name: counterSendRetries, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of times a batch of events was retried"},
 	{Name: counterBatchesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of batches of events sent to destination"},
 	{Name: counterMessagesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of messages sent to destination"},
@@ -89,6 +91,7 @@ type metricKeys struct {
 	counterResponseErrors string
 
 	gaugeQueueLength            string
+	counterSendErrors           string
 	counterSendRetries          string
 	counterBatchesSent          string
 	counterMessagesSent         string
@@ -259,19 +262,22 @@ func (d *DirectTransmission) RegisterMetrics() {
 		// Below are metrics previously associated with the libhoney transmission used to send data upstream or to peers.
 		// Even though libhoney isn't used, include the prefix in these metric names to avoid breaking existing Refinery operations boards & queries.
 		case gaugeQueueLength:
-			fullName = "libhoney" + m.Name
+			fullName = "libhoney_" + fullName
 			d.metricKeys.gaugeQueueLength = fullName
+		case counterSendErrors:
+			fullName = "libhoney_" + fullName
+			d.metricKeys.counterSendErrors = fullName
 		case counterSendRetries:
-			fullName = "libhoney" + m.Name
+			fullName = "libhoney_" + fullName
 			d.metricKeys.counterSendRetries = fullName
 		case counterBatchesSent:
-			fullName = "libhoney" + m.Name
+			fullName = "libhoney_" + fullName
 			d.metricKeys.counterBatchesSent = fullName
 		case counterMessagesSent:
-			fullName = "libhoney" + m.Name
+			fullName = "libhoney_" + fullName
 			d.metricKeys.counterMessagesSent = fullName
 		case counterResponseDecodeErrors:
-			fullName = "libhoney" + m.Name
+			fullName = "libhoney_" + fullName
 			d.metricKeys.counterResponseDecodeErrors = fullName
 		}
 		m.Name = fullName // Update the metric name to include the transmit type
