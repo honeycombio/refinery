@@ -36,8 +36,8 @@ func (p *FilePeers) GetInstanceID() (string, error) {
 
 func (p *FilePeers) RegisterUpdatedPeersCallback(callback func()) {
 	// whenever registered, call the callback immediately
-	// otherwise do nothing since they never change
 	callback()
+	// and also add it to the list of callbacks
 	p.callbacks = append(p.callbacks, callback)
 }
 
