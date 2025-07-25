@@ -488,25 +488,27 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		if resp.StatusCode == http.StatusOK {
 			// Parse individual responses from batch - handle msgpack or JSON
 			var batchResponses []batchResponse
+			var err error
 			if resp.Header.Get("Content-Type") == "application/msgpack" {
-				err := msgpack.NewDecoder(resp.Body).Decode(&batchResponses)
+				err = msgpack.NewDecoder(resp.Body).Decode(&batchResponses)
 				if err != nil {
-					d.Metrics.Increment(d.metricKeys.counterResponseDecodeErrors)
 					d.Logger.Error().WithField("err", err.Error()).Logf("failed to decode msgpack batch response")
 				}
 			} else {
 				bodyBytes, err := io.ReadAll(resp.Body)
 				if err != nil {
-					d.Metrics.Increment(d.metricKeys.counterResponseDecodeErrors)
 					d.Logger.Error().WithField("err", err.Error()).Logf("failed to read response body")
-				}
-				err = json.Unmarshal(bodyBytes, &batchResponses)
-				if err != nil {
-					d.Metrics.Increment(d.metricKeys.counterResponseDecodeErrors)
-					d.Logger.Error().WithField("err", err.Error()).Logf("failed to decode JSON batch response")
+				} else {
+					err = json.Unmarshal(bodyBytes, &batchResponses)
+					if err != nil {
+						d.Logger.Error().WithField("err", err.Error()).Logf("failed to decode JSON batch response")
+					}
 				}
 			}
 			resp.Body.Close()
+			if err != nil {
+				d.Metrics.Increment(d.metricKeys.counterResponseDecodeErrors)
+			}
 
 			// Process each event response
 			for i, ev := range subBatch {
@@ -539,7 +541,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 				decoder := msgpack.NewDecoder(resp.Body)
 				err = decoder.Decode(&errorBody)
 				if err == nil {
-					bodyBytes, _ = json.Marshal(&errorBody)
+					bodyBytes, err = json.Marshal(&errorBody)
 				}
 			} else {
 				bodyBytes, err = io.ReadAll(resp.Body)
