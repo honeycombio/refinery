@@ -15,6 +15,7 @@ type FilePeers struct {
 	Done    chan struct{}
 
 	publicAddr string
+	callbacks  []func()
 }
 
 // GetPeers returns the list of peers, including the host itself.
@@ -37,6 +38,7 @@ func (p *FilePeers) RegisterUpdatedPeersCallback(callback func()) {
 	// whenever registered, call the callback immediately
 	// otherwise do nothing since they never change
 	callback()
+	p.callbacks = append(p.callbacks, callback)
 }
 
 var filePeersMetrics = []metrics.Metadata{
@@ -52,6 +54,18 @@ func (p *FilePeers) Start() (err error) {
 	if err != nil {
 		return err
 	}
+
+	hash := hashList(p.Cfg.GetPeers())
+	p.callbacks = append(p.callbacks, func() {
+		currentHash := hashList(p.Cfg.GetPeers())
+		if currentHash != hash {
+			hash = currentHash
+			// Call the callbacks in a separate goroutine to avoid blocking
+			for _, callback := range p.callbacks {
+				go callback()
+			}
+		}
+	})
 
 	return nil
 }
