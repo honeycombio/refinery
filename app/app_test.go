@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -39,6 +40,13 @@ import (
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
+	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	common "go.opentelemetry.io/proto/otlp/common/v1"
+	trace "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 )
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
@@ -197,13 +205,18 @@ func (w *countingTransmission) waitForCount(t testing.TB, n int) {
 //
 // by default, every Redis instance supports 16 databases, we use redisDB as a way to separate test data
 func defaultConfig(basePort int, redisDB int, apiURL string) *config.MockConfig {
+	return defaultConfigWithGRPC(basePort, redisDB, apiURL, false)
+}
+
+func defaultConfigWithGRPC(basePort int, redisDB int, apiURL string, enableGRPC bool) *config.MockConfig {
 	if redisDB >= 16 {
 		panic("redisDB must be less than 16")
 	}
 	if apiURL == "" {
 		apiURL = "http://api.honeycomb.io"
 	}
-	return &config.MockConfig{
+
+	cfg := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(2 * time.Millisecond),
 			SendDelay:    config.Duration(1 * time.Millisecond),
@@ -235,6 +248,24 @@ func defaultConfig(basePort int, redisDB int, apiURL string) *config.MockConfig 
 			AcceptOnlyListedKeys: true,
 		},
 	}
+
+	if enableGRPC {
+		cfg.GetGRPCEnabledVal = true
+		cfg.GetGRPCListenAddrVal = "127.0.0.1:" + strconv.Itoa(basePort+2)
+		cfg.GetGRPCServerParameters = config.GRPCServerParameters{
+			Enabled:               func() *config.DefaultTrue { dt := config.DefaultTrue(true); return &dt }(),
+			ListenAddr:            "127.0.0.1:" + strconv.Itoa(basePort+2),
+			MaxConnectionIdle:     config.Duration(1 * time.Minute),
+			MaxConnectionAge:      config.Duration(3 * time.Minute),
+			MaxConnectionAgeGrace: config.Duration(1 * time.Minute),
+			KeepAlive:             config.Duration(1 * time.Minute),
+			KeepAliveTimeout:      config.Duration(20 * time.Second),
+			MaxSendMsgSize:        config.MemorySize(15 << 20), // 15MB
+			MaxRecvMsgSize:        config.MemorySize(15 << 20), // 15MB
+		}
+	}
+
+	return cfg
 }
 
 func newStartedApp(
@@ -896,6 +927,109 @@ func TestPeerRouting_TraceLocalityDisabled(t *testing.T) {
 	assert.Equal(t, "2", event.Data.Get("trace.trace_id"))
 }
 
+func TestOTLPProtobufIntegration(t *testing.T) {
+	t.Parallel()
+	port := 16000
+	redisDB := 14
+
+	testServer := newTestAPIServer(t)
+	cfg := defaultConfigWithGRPC(port, redisDB, testServer.server.URL, true)
+	app, graph := newStartedApp(t, nil, nil, cfg)
+
+	// Create OTLP protobuf request
+	req := &collectortrace.ExportTraceServiceRequest{
+		ResourceSpans: []*trace.ResourceSpans{{
+			ScopeSpans: []*trace.ScopeSpans{{
+				Spans: []*trace.Span{{
+					TraceId:           []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+					SpanId:            []byte{0, 0, 0, 0, 0, 0, 0, 1},
+					Name:              "test-span",
+					StartTimeUnixNano: uint64(time.Now().UnixNano()),
+					EndTimeUnixNano:   uint64(time.Now().UnixNano()),
+					Attributes: []*common.KeyValue{{
+						Key:   "test.key",
+						Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "test-value"}},
+					}},
+				}},
+			}},
+		}},
+	}
+
+	t.Run("HTTP", func(t *testing.T) {
+		// Marshal to protobuf
+		body, err := proto.Marshal(req)
+		require.NoError(t, err)
+
+		// Send OTLP protobuf request via HTTP
+		httpReq := httptest.NewRequest(
+			"POST",
+			fmt.Sprintf("http://localhost:%d/v1/traces", port),
+			bytes.NewReader(body),
+		)
+		httpReq.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+		httpReq.Header.Set("X-Honeycomb-Dataset", "test-dataset")
+		httpReq.Header.Set("Content-Type", "application/protobuf")
+
+		resp, err := http.DefaultTransport.RoundTrip(httpReq)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.Body.Close()
+
+		time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+
+		require.EventuallyWithT(t, func(collect *assert.CollectT) {
+			events := testServer.getEvents()
+			require.Len(collect, events, 1)
+			assert.Equal(collect, "test-dataset", events[0].Dataset)
+			assert.Equal(collect, "test-value", events[0].Data.Get("test.key"))
+			assert.Equal(collect, "test-span", events[0].Data.Get("name"))
+		}, 2*time.Second, 10*time.Millisecond)
+	})
+
+	t.Run("gRPC", func(t *testing.T) {
+		// Connect to gRPC server
+		grpcAddr := fmt.Sprintf("localhost:%d", port+2)
+		conn, err := grpc.Dial(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		require.NoError(t, err)
+		defer conn.Close()
+
+		// Create gRPC client
+		client := collectortrace.NewTraceServiceClient(conn)
+
+		// Create gRPC context with metadata
+		ctx := metadata.AppendToOutgoingContext(context.Background(),
+			"x-honeycomb-team", legacyAPIKey,
+			"x-honeycomb-dataset", "test-dataset-grpc",
+		)
+
+		// Send OTLP protobuf request via gRPC
+		_, err = client.Export(ctx, req)
+		require.NoError(t, err)
+
+		time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+
+		require.EventuallyWithT(t, func(collect *assert.CollectT) {
+			events := testServer.getEvents()
+			require.GreaterOrEqual(collect, len(events), 1)
+			// Find the gRPC event (it may not be the first one if HTTP test ran first)
+			var grpcEvent *types.Event
+			for _, event := range events {
+				if event.Dataset == "test-dataset-grpc" {
+					grpcEvent = event
+					break
+				}
+			}
+			require.NotNil(collect, grpcEvent)
+			assert.Equal(collect, "test-dataset-grpc", grpcEvent.Dataset)
+			assert.Equal(collect, "test-value", grpcEvent.Data.Get("test.key"))
+			assert.Equal(collect, "test-span", grpcEvent.Data.Get("name"))
+		}, 2*time.Second, 10*time.Millisecond)
+	})
+
+	err := startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
+}
+
 var (
 	benchmarkMutex  sync.Mutex
 	benchmarkEvents []batchedEvent
@@ -966,6 +1100,12 @@ type batchedEvent struct {
 	Data             map[string]interface{} `json:"data" msgpack:"data"`
 }
 
+var zstdEncoder *zstd.Encoder
+
+func init() {
+	zstdEncoder, _ = zstd.NewWriter(nil)
+}
+
 func encodeAndCompress(events []batchedEvent, contentType, compression string) ([]byte, error) {
 	var data []byte
 	var err error
@@ -978,23 +1118,166 @@ func encodeAndCompress(events []batchedEvent, contentType, compression string) (
 		return nil, err
 	}
 
-	var buf bytes.Buffer
+	var out []byte
 	switch compression {
 	case "gzip":
+		var buf bytes.Buffer
 		w := gzip.NewWriter(&buf)
 		w.Write(data)
 		w.Close()
+		out = buf.Bytes()
 	case "zstd":
-		w, _ := zstd.NewWriter(&buf)
-		w.Write(data)
-		w.Close()
+		out = zstdEncoder.EncodeAll(data, nil)
+	default:
+		out = data
 	}
-	return buf.Bytes(), nil
+	return out, nil
+}
+
+// Pre-build OTLP benchmark requests
+var (
+	benchmarkOTLPMutex    sync.Mutex
+	benchmarkOTLPRequests []*collectortrace.ExportTraceServiceRequest
+)
+
+func createBenchmarkOTLPRequest() *collectortrace.ExportTraceServiceRequest {
+	benchmarkOTLPMutex.Lock()
+	defer benchmarkOTLPMutex.Unlock()
+
+	if len(benchmarkOTLPRequests) == 0 {
+		// Create a single request with 50 spans
+		spans := make([]*trace.Span, 50)
+		for i := 0; i < 50; i++ {
+			traceID := make([]byte, 16)
+			spanID := make([]byte, 8)
+			binary.BigEndian.PutUint64(traceID[8:], uint64(i))
+			binary.BigEndian.PutUint64(spanID, uint64(i))
+
+			spans[i] = &trace.Span{
+				TraceId:           traceID,
+				SpanId:            spanID,
+				Name:              "benchmark-span",
+				StartTimeUnixNano: uint64(now.UnixNano()),
+				EndTimeUnixNano:   uint64(now.UnixNano()),
+				Attributes: []*common.KeyValue{
+					{Key: "key", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "value"}}},
+					{Key: "field0", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64(i % 10)}}},
+					{Key: "field1", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 1) % 10)}}},
+					{Key: "field2", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 2) % 10)}}},
+					{Key: "field3", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 3) % 10)}}},
+					{Key: "field4", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 4) % 10)}}},
+					{Key: "field5", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 5) % 10)}}},
+					{Key: "field6", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 6) % 10)}}},
+					{Key: "field7", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 7) % 10)}}},
+					{Key: "field8", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 8) % 10)}}},
+					{Key: "field9", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 9) % 10)}}},
+					{Key: "field10", Value: &common.AnyValue{Value: &common.AnyValue_IntValue{IntValue: int64((i + 10) % 10)}}},
+					{Key: "long", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "this is a test of the emergency broadcast system"}}},
+					{Key: "foo", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "bar"}}},
+				},
+			}
+		}
+
+		benchmarkOTLPRequests = []*collectortrace.ExportTraceServiceRequest{{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: spans,
+				}},
+			}},
+		}}
+	}
+	return benchmarkOTLPRequests[0]
+}
+
+func BenchmarkTracesOTLP(b *testing.B) {
+	sender := &countingTransmission{}
+	redisDB := 15
+	cfg := defaultConfigWithGRPC(18000, redisDB, "", true)
+	_, graph := newStartedApp(b, sender, nil, cfg)
+	defer func() {
+		err := startstop.Stop(graph.Objects(), nil)
+		assert.NoError(b, err)
+	}()
+
+	b.Run("http", func(b *testing.B) {
+		// Pre-compute single protobuf blob with 50 spans
+		otlpReq := createBenchmarkOTLPRequest()
+		blob, err := proto.Marshal(otlpReq)
+		assert.NoError(b, err)
+
+		req, err := http.NewRequest(
+			"POST",
+			"http://localhost:18000/v1/traces",
+			nil,
+		)
+		assert.NoError(b, err)
+		req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+		req.Header.Set("X-Honeycomb-Dataset", "benchmark")
+		req.Header.Set("Content-Type", "application/protobuf")
+
+		sender.resetCount()
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			req.Body = io.NopCloser(bytes.NewReader(blob))
+			post(b, req)
+		}
+		sender.waitForCount(b, b.N*50) // 50 spans per request
+	})
+
+	b.Run("http-zstd", func(b *testing.B) {
+		// Pre-compute single protobuf blob with 50 spans
+		otlpReq := createBenchmarkOTLPRequest()
+		blob, err := proto.Marshal(otlpReq)
+		assert.NoError(b, err)
+
+		blob = zstdEncoder.EncodeAll(blob, nil)
+
+		req, err := http.NewRequest(
+			"POST",
+			"http://localhost:18000/v1/traces",
+			nil,
+		)
+		assert.NoError(b, err)
+		req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+		req.Header.Set("X-Honeycomb-Dataset", "benchmark")
+		req.Header.Set("Content-Type", "application/protobuf")
+		req.Header.Set("Content-Encoding", "zstd")
+
+		sender.resetCount()
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			req.Body = io.NopCloser(bytes.NewReader(blob))
+			post(b, req)
+		}
+		sender.waitForCount(b, b.N*50) // 50 spans per request
+	})
+
+	b.Run("grpc", func(b *testing.B) {
+		// Connect to gRPC server
+		conn, err := grpc.Dial("localhost:18002", grpc.WithTransportCredentials(insecure.NewCredentials()))
+		assert.NoError(b, err)
+		defer conn.Close()
+
+		client := collectortrace.NewTraceServiceClient(conn)
+		ctx := metadata.AppendToOutgoingContext(context.Background(),
+			"x-honeycomb-team", legacyAPIKey,
+			"x-honeycomb-dataset", "benchmark",
+		)
+
+		// Pre-compute single request with 50 spans
+		otlpReq := createBenchmarkOTLPRequest()
+
+		sender.resetCount()
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			_, err := client.Export(ctx, otlpReq)
+			assert.NoError(b, err)
+		}
+		sender.waitForCount(b, b.N*50) // 50 spans per request
+	})
 }
 
 func BenchmarkTraces(b *testing.B) {
-	ctx := context.Background()
-
 	sender := &countingTransmission{}
 	redisDB := 1
 	cfg := defaultConfig(11000, redisDB, "")
@@ -1006,6 +1289,15 @@ func BenchmarkTraces(b *testing.B) {
 
 	for _, encoding := range encodings {
 		b.Run(encoding.name, func(b *testing.B) {
+			// Pre-compute single batch with 50 events
+			createBenchmarkEvents(50)
+			events := make([]batchedEvent, 50)
+			for i := 0; i < 50; i++ {
+				events[i] = benchmarkEvents[i]
+			}
+			blob, err := encodeAndCompress(events, encoding.contentType, encoding.encoding)
+			assert.NoError(b, err)
+
 			req, err := http.NewRequest(
 				"POST",
 				"http://localhost:11000/1/batch/dataset",
@@ -1016,86 +1308,13 @@ func BenchmarkTraces(b *testing.B) {
 			req.Header.Set("Content-Type", encoding.contentType)
 			req.Header.Set("Content-Encoding", encoding.encoding)
 
-			b.Run("single", func(b *testing.B) {
-				// Pre-compute blobs
-				createBenchmarkEvents(b.N)
-				blobs := make([][]byte, b.N)
-				for n := 0; n < b.N; n++ {
-					blobs[n], err = encodeAndCompress([]batchedEvent{benchmarkEvents[n%len(benchmarkEvents)]}, encoding.contentType, encoding.encoding)
-					assert.NoError(b, err)
-				}
-
-				sender.resetCount()
-				b.ResetTimer()
-				for n := 0; n < b.N; n++ {
-					req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
-					post(b, req)
-				}
-				sender.waitForCount(b, b.N)
-			})
-
-			b.Run("batch", func(b *testing.B) {
-				// Pre-compute blobs
-				createBenchmarkEvents(b.N)
-				numBatches := (b.N / 50) + 1
-				blobs := make([][]byte, numBatches)
-				for n := 0; n < numBatches; n++ {
-					events := make([]batchedEvent, 50)
-					for i := 0; i < 50; i++ {
-						events[i] = benchmarkEvents[((n*50)+i)%len(benchmarkEvents)]
-					}
-					blobs[n], err = encodeAndCompress(events, encoding.contentType, encoding.encoding)
-					assert.NoError(b, err)
-				}
-
-				sender.resetCount()
-				b.ResetTimer()
-				for n := 0; n < numBatches; n++ {
-					req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
-					post(b, req)
-				}
-				sender.waitForCount(b, b.N)
-			})
-
-			b.Run("multi", func(b *testing.B) {
-				// Pre-compute blobs
-				createBenchmarkEvents(b.N)
-				numBatches := (b.N / 500) + 1
-				blobs := make([][]byte, numBatches)
-				for n := 0; n < numBatches; n++ {
-					events := make([]batchedEvent, 50)
-					for i := 0; i < 50; i++ {
-						events[i] = benchmarkEvents[((n*50)+i)%len(benchmarkEvents)]
-					}
-					blobs[n], err = encodeAndCompress(events, encoding.contentType, encoding.encoding)
-					assert.NoError(b, err)
-				}
-
-				sender.resetCount()
-				b.ResetTimer()
-				var wg sync.WaitGroup
-				for i := 0; i < 10; i++ {
-					wg.Add(1)
-					go func() {
-						defer wg.Done()
-
-						req := req.Clone(ctx)
-						for n := 0; n < numBatches; n++ {
-							req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
-
-							resp, err := httpClient.Do(req)
-							assert.NoError(b, err)
-							if resp != nil {
-								assert.Equal(b, http.StatusOK, resp.StatusCode)
-								io.Copy(io.Discard, resp.Body)
-								resp.Body.Close()
-							}
-						}
-					}()
-				}
-				wg.Wait()
-				sender.waitForCount(b, b.N)
-			})
+			sender.resetCount()
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				req.Body = io.NopCloser(bytes.NewReader(blob))
+				post(b, req)
+			}
+			sender.waitForCount(b, b.N*50) // 50 events per request
 		})
 	}
 }
