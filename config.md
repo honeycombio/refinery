@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-07-15 at 17:41:46 UTC.
+It was automatically generated on 2025-07-25 at 19:58:08 UTC.
 
 ## The Config file
 
@@ -866,7 +866,7 @@ Peers is the list of peers to use when Type is "file", excluding self.
 This list is ignored when Type is "redis".
 The format is a list of strings of the form "scheme://host:port".
 
-- Not eligible for live reload.
+- Eligible for live reload.
 - Type: `stringarray`
 - Example: `http://192.168.1.11:8081,http://192.168.1.12:8081`
 

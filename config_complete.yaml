@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-07-15 at 17:41:46 UTC from ../../config.yaml using a template generated on 2025-07-15 at 17:41:41 UTC
+# created on 2025-07-25 at 19:58:08 UTC from ../../config.yaml using a template generated on 2025-07-25 at 19:57:55 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -566,8 +566,8 @@ HoneycombLogger:
     ## by the Honeycomb logger.
     ##
     ## When supplying via a environment variable, the value should be a
-    ## string of comma-separated key-value pairs.  When supplying via the
-    ## command line, the value should be a key value pair.  If multiple
+    ## string of comma-separated key-value pairs. When supplying via the
+    ## command line, the value should be a key value pair. If multiple
     ## key-value pairs are needed, each should be supplied via its own
     ## command line flag. The key-value pairs must use ':' as the separator.
     ##
@@ -904,7 +904,7 @@ PeerManagement:
     ## This list is ignored when Type is "redis". The format is a list of
     ## strings of the form "scheme://host:port".
     ##
-    ## Not eligible for live reload.
+    ## Eligible for live reload.
     # Peers:
       # - http://192.168.1.11:8081
       # - http://192.168.1.12:8081
@@ -1275,8 +1275,8 @@ Specialized:
     ##
     ## Eligible for live reload.
     # AdditionalAttributes:
-      #  ClusterName: MyCluster
       #  environment: production
+      #  ClusterName: MyCluster
 
 ###############
 ## ID Fields ##

@@ -658,8 +658,8 @@ groups:
         envvar: REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES
         commandline: logger-additional-attributes
         description: >
-           When supplying via a environment variable, the value should be a string of comma-separated key-value pairs. 
-           When supplying via the command line, the value should be a key value pair. 
+           When supplying via a environment variable, the value should be a string of comma-separated key-value pairs.
+           When supplying via the command line, the value should be a key value pair.
            If multiple key-value pairs are needed, each should be supplied via its own command line flag.
            The key-value pairs must use ':' as the separator.
 
@@ -1058,7 +1058,7 @@ groups:
         type: stringarray
         valuetype: stringarray
         example: "http://192.168.1.11:8081,http://192.168.1.12:8081"
-        reload: false
+        reload: true
         validations:
           - type: elementType
             arg: url
