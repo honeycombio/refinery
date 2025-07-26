@@ -345,12 +345,28 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 		mockConfig := &config.MockConfig{
 			TraceIdFieldNames:  []string{"wrong", "trace.trace_id"},
 			ParentIdFieldNames: []string{"span.parent_id"},
-			GetSamplerTypeVal: &config.DynamicSamplerConfig{
-				FieldList: []string{"sampling_key_field", "missing_field"},
+			GetSamplerTypeVal: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field: "sampling_key_field",
+							},
+							{
+								Field: "missing_field",
+							},
+						},
+						Sampler: &config.RulesBasedDownstreamSampler{
+							DynamicSampler: &config.DynamicSamplerConfig{
+								FieldList: []string{"boolean_key_field", "dynamic_missing_field"},
+							},
+						},
+					},
+				},
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-dataset", "test-env")
+		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
 
 		// Create payload and unmarshal
 		payload := &Payload{config: mockConfig}
@@ -393,9 +409,14 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 
 			// Verify sampling key extraction
 			assert.Equal(t, "custom-sampling-key", payload.memoizedFields["sampling_key_field"])
+			v, ok := payload.memoizedFields["boolean_key_field"].(bool)
+			assert.True(t, ok)
+			assert.True(t, v)
 
 			// Verify missing field is tracked
-			_, ok := payload.missingFields["missing_field"]
+			_, ok = payload.missingFields["missing_field"]
+			assert.True(t, ok)
+			_, ok = payload.missingFields["dynamic_missing_field"]
 			assert.True(t, ok)
 
 			// Verify field not in sampling config is NOT extracted

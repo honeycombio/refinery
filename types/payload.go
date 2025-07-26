@@ -497,8 +497,8 @@ type CoreFieldsUnmarshaler struct {
 	samplingKeyFields  []string
 }
 
-func NewCoreFieldsUnmarshaler(config config.Config, apiKey, dataset, environment string) CoreFieldsUnmarshaler {
-	samplerKey := config.CalculateSamplerKey(apiKey, dataset, environment)
+func NewCoreFieldsUnmarshaler(config config.Config, apiKey, env, dataset string) CoreFieldsUnmarshaler {
+	samplerKey := config.CalculateSamplerKey(apiKey, env, dataset)
 	keyFields := config.GetSamplingKeyFieldsForDestName(samplerKey)
 
 	return CoreFieldsUnmarshaler{
@@ -956,6 +956,16 @@ func (p Payload) MarshalMsg(buf []byte) ([]byte, error) {
 func (p Payload) String() string {
 	buf, _ := p.MarshalJSON()
 	return string(buf)
+}
+
+// GetMemoizedFields returns a copy of the memoized fields.
+// This is useful for testing and debugging, but should not be used in production
+func (p Payload) GetMemoizedFields() map[string]any {
+	// Return a copy of the memoized fields to avoid external modification
+	if p.memoizedFields == nil {
+		return nil
+	}
+	return maps.Clone(p.memoizedFields)
 }
 
 // When trying to find a particular []byte in a slice of strings, we could use

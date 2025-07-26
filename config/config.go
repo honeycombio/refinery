@@ -89,7 +89,7 @@ type Config interface {
 	// GetHealthCheckTimeout returns the timeout for Refinery's internal health checks used in the collector
 	GetHealthCheckTimeout() time.Duration
 
-	CalculateSamplerKey(apiKey, dataset, environment string) string
+	CalculateSamplerKey(apiKey, env, dataset string) string
 
 	// GetSamplingKeyFieldsForDestName returns the key fields and non-root fields
 	// for the given destination (environment, or dataset in classic)
