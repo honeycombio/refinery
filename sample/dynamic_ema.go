@@ -47,7 +47,7 @@ func (d *EMADynamicSampler) Start() error {
 		d.maxKeys = 500
 	}
 	d.prefix = "emadynamic"
-	d.keyFields, d.nonRootFields = GetKeyFields(d.Config.GetSamplingFields())
+	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 
 	// spin up the actual dynamic sampler

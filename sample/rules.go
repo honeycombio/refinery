@@ -25,8 +25,6 @@ type RulesBasedSampler struct {
 	metricNames samplerMetricNames
 }
 
-const RootPrefix = "root."
-
 func (s *RulesBasedSampler) Start() error {
 	s.Logger.Debug().Logf("Starting RulesBasedSampler")
 	defer func() { s.Logger.Debug().Logf("Finished starting RulesBasedSampler") }()
@@ -34,7 +32,7 @@ func (s *RulesBasedSampler) Start() error {
 	s.metricNames = newSamplerMetricNames("rulesbased", s.Metrics)
 
 	s.samplers = make(map[string]Sampler)
-	s.keyFields, s.nonRootFields = GetKeyFields(s.Config.GetSamplingFields())
+	s.keyFields, s.nonRootFields = config.GetKeyFields(s.Config.GetSamplingFields())
 
 	for _, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {
@@ -305,10 +303,10 @@ func extractValueFromSpan(
 		// always start with the original span
 		span = original
 		// check if rule uses root span context
-		if strings.HasPrefix(field, RootPrefix) {
+		if strings.HasPrefix(field, config.RootPrefix) {
 			// make sure root span exists
 			if trace.RootSpan != nil {
-				field = field[len(RootPrefix):]
+				field = field[len(config.RootPrefix):]
 				// now we're using the root span
 				span = trace.RootSpan
 			} else {

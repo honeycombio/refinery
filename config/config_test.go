@@ -1257,6 +1257,78 @@ func TestIsLegacyKey(t *testing.T) {
 	}
 }
 
+func TestGetKeyFields(t *testing.T) {
+	tests := []struct {
+		name                  string
+		input                 []string
+		expectedAll           []string
+		expectedNonRootFields []string
+	}{
+		{
+			name:                  "empty slice",
+			input:                 []string{},
+			expectedAll:           nil,
+			expectedNonRootFields: nil,
+		},
+		{
+			name:                  "nil input",
+			input:                 nil,
+			expectedAll:           nil,
+			expectedNonRootFields: nil,
+		},
+		{
+			name:                  "no root fields",
+			input:                 []string{"service.name", "operation.name", "duration_ms"},
+			expectedAll:           []string{"service.name", "operation.name", "duration_ms"},
+			expectedNonRootFields: []string{"service.name", "operation.name", "duration_ms"},
+		},
+		{
+			name:                  "only root fields",
+			input:                 []string{"root.service.name", "root.operation.name", "root.duration_ms"},
+			expectedAll:           []string{"service.name", "operation.name", "duration_ms"},
+			expectedNonRootFields: []string{},
+		},
+		{
+			name:                  "mixed root and non-root fields",
+			input:                 []string{"service.name", "root.operation.name", "duration_ms", "root.user.id"},
+			expectedAll:           []string{"operation.name", "user.id", "service.name", "duration_ms"},
+			expectedNonRootFields: []string{"service.name", "duration_ms"},
+		},
+		{
+			name:                  "duplicate fields with and without root prefix",
+			input:                 []string{"service.name", "root.service.name", "operation.name"},
+			expectedAll:           []string{"service.name", "operation.name"},
+			expectedNonRootFields: []string{"service.name", "operation.name"},
+		},
+		{
+			name:                  "fields with dots in names",
+			input:                 []string{"root.http.request.method", "http.response.status", "root.db.query.time"},
+			expectedAll:           []string{"http.request.method", "db.query.time", "http.response.status"},
+			expectedNonRootFields: []string{"http.response.status"},
+		},
+		{
+			name:                  "single non-root field",
+			input:                 []string{"test"},
+			expectedAll:           []string{"test"},
+			expectedNonRootFields: []string{"test"},
+		},
+		{
+			name:                  "single root field",
+			input:                 []string{"root.test"},
+			expectedAll:           []string{"test"},
+			expectedNonRootFields: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			allFields, nonrootFields := config.GetKeyFields(tt.input)
+
+			assert.Equal(t, tt.expectedAll, allFields, "All fields should have root prefix stripped and be combined")
+			assert.Equal(t, tt.expectedNonRootFields, nonrootFields, "Non-root fields should match expected non-root fields")
+		})
+	}
+}
 func BenchmarkIsLegacyAPIKey(b *testing.B) {
 	tests := []struct {
 		name string

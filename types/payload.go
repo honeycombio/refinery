@@ -497,14 +497,14 @@ type CoreFieldsUnmarshaler struct {
 	samplingKeyFields  []string
 }
 
-func NewCoreFieldsUnmarshaler(config config.Config, apiKey, env, dataset string) CoreFieldsUnmarshaler {
-	samplerKey := config.CalculateSamplerKey(apiKey, env, dataset)
-	keyFields := config.GetSamplingKeyFieldsForDestName(samplerKey)
+func NewCoreFieldsUnmarshaler(cfg config.Config, apiKey, env, dataset string) CoreFieldsUnmarshaler {
+	samplerKey := cfg.CalculateSamplerKey(apiKey, env, dataset)
+	keyFields, _ := config.GetKeyFields(cfg.GetSamplingKeyFieldsForDestName(samplerKey))
 
 	return CoreFieldsUnmarshaler{
-		traceIdFieldNames:  config.GetTraceIdFieldNames(),
-		parentIdFieldNames: config.GetParentIdFieldNames(),
-		samplingKeyFields:  keyFields,
+		traceIdFieldNames:  cfg.GetTraceIdFieldNames(),
+		parentIdFieldNames: cfg.GetParentIdFieldNames(),
+		samplingKeyFields:  keyFields, // AllFields includes both root and non-root fields
 	}
 }
 
@@ -512,9 +512,9 @@ func NewCoreFieldsUnmarshaler(config config.Config, apiKey, env, dataset string)
 // the remaining bytes. It's expected to be used on a single message
 // where the entire byte slice is consumed.
 // CAUTION: This should only be used when the entire byte slice is safe for the payload to keep.
-func (p CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Payload) error {
+func (cu CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Payload) error {
 	_, err := payload.extractCriticalFieldsFromBytes(bts,
-		p.traceIdFieldNames, p.parentIdFieldNames, p.samplingKeyFields)
+		cu.traceIdFieldNames, cu.parentIdFieldNames, cu.samplingKeyFields)
 	if err != nil {
 		return err
 	}
@@ -528,7 +528,7 @@ func (p CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Pay
 // msgpMap. This is useful for cases where the Payload is part of a larger message and we want to avoid
 // unnecessary allocations.
 func (p CoreFieldsUnmarshaler) UnmarshalPayload(bts []byte, payload *Payload) ([]byte, error) {
-
+	fmt.Println("extracting key fields", p.samplingKeyFields)
 	consumed, err := payload.extractCriticalFieldsFromBytes(bts,
 		p.traceIdFieldNames, p.parentIdFieldNames, p.samplingKeyFields)
 	if err != nil {
