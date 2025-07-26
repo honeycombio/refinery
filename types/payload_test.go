@@ -353,6 +353,9 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 								Field: "sampling_key_field",
 							},
 							{
+								Field: "root.test",
+							},
+							{
 								Field: "missing_field",
 							},
 						},
@@ -417,6 +420,8 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			_, ok = payload.missingFields["missing_field"]
 			assert.True(t, ok)
 			_, ok = payload.missingFields["dynamic_missing_field"]
+			assert.True(t, ok)
+			_, ok = payload.missingFields["test"]
 			assert.True(t, ok)
 
 			// Verify field not in sampling config is NOT extracted

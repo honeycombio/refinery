@@ -171,32 +171,6 @@ func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, ke
 	d.met.Histogram(d.metricNames.sampleRate, float64(rate))
 }
 
-// GetKeyFields returns the fields that should be used as keys for the sampler.
-// It returns two slices: the first contains fields with the root prefix removed,
-// and the second contains fields that do not have the root prefix.
-func GetKeyFields(fields []string) ([]string, []string) {
-	if len(fields) == 0 {
-		return nil, nil
-	}
-
-	new := make([]string, 0, len(fields))
-	nonRootFields := make([]string, 0, len(fields))
-
-	for _, field := range fields {
-		if strings.HasPrefix(field, RootPrefix) {
-			new = append(new, field[len(RootPrefix):])
-		} else {
-			nonRootFields = append(nonRootFields, field)
-		}
-	}
-
-	if len(new) == 0 {
-		return nonRootFields, nonRootFields
-	}
-
-	return append(new, nonRootFields...), nonRootFields
-}
-
 // samplerMetricNames is a struct that holds the names of metrics used by the
 // sampler implementations. This is used to avoid allocation from string concatenation
 // in the hot path of sampling.

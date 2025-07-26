@@ -1,6 +1,8 @@
 package config
 
 import (
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -232,4 +234,32 @@ func IsLegacyAPIKey(key string) bool {
 	default:
 		return false
 	}
+}
+
+const RootPrefix = "root."
+
+// GetKeyFields returns the fields that should be used as keys for the sampler.
+// It returns two slices: the first contains all fields, including those with the root prefix,
+// and the second contains fields that do not have the root prefix.
+func GetKeyFields(fields []string) (allFields []string, nonRootFields []string) {
+	if len(fields) == 0 {
+		return nil, nil
+	}
+
+	rootFields := make([]string, 0, len(fields))
+	nonRootFields = make([]string, 0, len(fields))
+
+	for _, field := range fields {
+		if strings.HasPrefix(field, RootPrefix) {
+			rootFields = append(rootFields, field[len(RootPrefix):])
+		} else {
+			nonRootFields = append(nonRootFields, field)
+		}
+	}
+
+	if len(rootFields) == 0 {
+		return nonRootFields, nonRootFields
+	}
+
+	return slices.Compact(append(rootFields, nonRootFields...)), nonRootFields
 }
