@@ -991,7 +991,7 @@ func TestDirectTransmissionQueueLengthGauge(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		v, _ := mockMetrics.Get(dt.metricKeys.gaugeQueueLength)
 		return v == 0
-	}, batchTimeout+100*time.Millisecond, 10*time.Millisecond)
+	}, batchTimeout*2, batchTimeout/10)
 
 	err = dt.Stop()
 	require.NoError(t, err)
