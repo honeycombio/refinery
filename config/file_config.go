@@ -850,7 +850,7 @@ func (f *fileConfig) GetAllSamplerRules() *V2SamplerConfig {
 	return f.rulesConfig
 }
 
-func (f *fileConfig) CalculateSamplerKey(apiKey, env, dataset string) string {
+func (f *fileConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
 	if !IsLegacyAPIKey(apiKey) {
 		return env
 	}

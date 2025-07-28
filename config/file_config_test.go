@@ -198,7 +198,7 @@ func TestCalculateSamplerKey(t *testing.T) {
 				},
 			}
 
-			result := config.CalculateSamplerKey(tc.apiKey, tc.environment, tc.dataset)
+			result := config.DetermineSamplerKey(tc.apiKey, tc.environment, tc.dataset)
 			assert.Equal(
 				t,
 				tc.expected,

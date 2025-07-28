@@ -498,7 +498,7 @@ type CoreFieldsUnmarshaler struct {
 }
 
 func NewCoreFieldsUnmarshaler(cfg config.Config, apiKey, env, dataset string) CoreFieldsUnmarshaler {
-	samplerKey := cfg.CalculateSamplerKey(apiKey, env, dataset)
+	samplerKey := cfg.DetermineSamplerKey(apiKey, env, dataset)
 	keyFields, _ := config.GetKeyFields(cfg.GetSamplingKeyFieldsForDestName(samplerKey))
 
 	return CoreFieldsUnmarshaler{
