@@ -868,7 +868,6 @@ func (f *fileConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string
 
 	sampler, ok := f.rulesConfig.Samplers[samplerKey]
 	if ok {
-		fmt.Println("found sampler for key", samplerKey)
 		return sampler.GetSamplingFields()
 	}
 
