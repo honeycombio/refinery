@@ -527,10 +527,9 @@ func (cu CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Pa
 // and will extract the critical fields from the byte slice, leaving the rest of the data in the Payload's
 // msgpMap. This is useful for cases where the Payload is part of a larger message and we want to avoid
 // unnecessary allocations.
-func (p CoreFieldsUnmarshaler) UnmarshalPayload(bts []byte, payload *Payload) ([]byte, error) {
-	fmt.Println("extracting key fields", p.samplingKeyFields)
+func (cu CoreFieldsUnmarshaler) UnmarshalPayload(bts []byte, payload *Payload) ([]byte, error) {
 	consumed, err := payload.extractCriticalFieldsFromBytes(bts,
-		p.traceIdFieldNames, p.parentIdFieldNames, p.samplingKeyFields)
+		cu.traceIdFieldNames, cu.parentIdFieldNames, cu.samplingKeyFields)
 	if err != nil {
 		return nil, err
 	}
