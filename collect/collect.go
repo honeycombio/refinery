@@ -1317,7 +1317,7 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 }
 
 func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, targetShard sharder.Shard) *types.Event {
-	selector := i.Config.CalculateSamplerKey(sp.APIKey, trace.Dataset, trace.Environment)
+	selector := i.Config.DetermineSamplerKey(sp.APIKey, trace.Environment, trace.Dataset)
 
 	sampler, found := i.datasetSamplers[selector]
 	if !found {
@@ -1536,7 +1536,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	var sampler sample.Sampler
 	var found bool
 	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerSelector := i.Config.CalculateSamplerKey(trace.APIKey, trace.Dataset, trace.Environment)
+	samplerSelector := i.Config.DetermineSamplerKey(trace.APIKey, trace.Environment, trace.Dataset)
 
 	// use sampler key to find sampler; create and cache if not found
 	if sampler, found = i.datasetSamplers[samplerSelector]; !found {

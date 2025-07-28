@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/dgryski/go-wyhash"
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -31,8 +32,8 @@ func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 	rootOnlyFields := make([]string, 0, len(fields)/2)
 	nonRootFields := make([]string, 0, len(fields)/2)
 	for _, field := range fields {
-		if strings.HasPrefix(field, RootPrefix) {
-			rootOnlyFields = append(rootOnlyFields, field[len(RootPrefix):])
+		if strings.HasPrefix(field, config.RootPrefix) {
+			rootOnlyFields = append(rootOnlyFields, field[len(config.RootPrefix):])
 			continue
 		}
 

@@ -92,6 +92,25 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 	mockCfg := &config.MockConfig{
 		TraceIdFieldNames:  []string{"trace.trace_id"},
 		ParentIdFieldNames: []string{"trace.parent_id"},
+		GetSamplerTypeVal: &config.RulesBasedSamplerConfig{
+			Rules: []*config.RulesBasedSamplerRule{
+				{
+					Conditions: []*config.RulesBasedSamplerCondition{
+						{
+							Field: "sampling_key_field",
+						},
+						{
+							Field: "missing_field",
+						},
+					},
+					Sampler: &config.RulesBasedDownstreamSampler{
+						DynamicSampler: &config.DynamicSamplerConfig{
+							FieldList: []string{"boolean_key_field", "dynamic_missing_field"},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	// Create multiple test events
@@ -113,10 +132,12 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 	for _, event := range events {
 		// Create event data
 		eventData := map[string]interface{}{
-			"trace.trace_id":   event.traceID,
-			"trace.parent_id":  event.parentID,
-			"meta.signal_type": event.signalType,
-			"field":            "value",
+			"trace.trace_id":     event.traceID,
+			"trace.parent_id":    event.parentID,
+			"meta.signal_type":   event.signalType,
+			"field":              "value",
+			"sampling_key_field": "sampled_value",
+			"boolean_key_field":  true,
 		}
 
 		// Marshal the event data
@@ -124,8 +145,11 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 		dataBuf = msgp.AppendMapHeader(dataBuf, uint32(len(eventData)))
 		for k, v := range eventData {
 			dataBuf = msgp.AppendString(dataBuf, k)
-			if s, ok := v.(string); ok {
-				dataBuf = msgp.AppendString(dataBuf, s)
+			switch v := v.(type) {
+			case string:
+				dataBuf = msgp.AppendString(dataBuf, v)
+			case bool:
+				dataBuf = msgp.AppendBool(dataBuf, v)
 			}
 		}
 
@@ -163,4 +187,13 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 	assert.Equal(t, "log", batchEvents[2].Data.MetaSignalType)
 	assert.False(t, batchEvents[2].Data.MetaRefineryRoot.HasValue)
 	assert.False(t, batchEvents[2].Data.MetaRefineryRoot.Value)
+
+	// verify sampling key extraction
+	for i, event := range batchEvents {
+		samplingKeys := event.Data.GetMemoizedFields()
+		assert.NotNil(t, samplingKeys)
+		assert.Len(t, samplingKeys, 2, "expected 2 sampling keys to be extracted")
+		assert.Equal(t, "sampled_value", samplingKeys["sampling_key_field"], "unexpected sampling key value for event %d", i)
+		assert.Equal(t, true, samplingKeys["boolean_key_field"], "unexpected sampling key value for event %d", i)
+	}
 }

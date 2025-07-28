@@ -850,9 +850,9 @@ func (f *fileConfig) GetAllSamplerRules() *V2SamplerConfig {
 	return f.rulesConfig
 }
 
-func (f *fileConfig) CalculateSamplerKey(apiKey, dataset, environment string) string {
+func (f *fileConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
 	if !IsLegacyAPIKey(apiKey) {
-		return environment
+		return env
 	}
 
 	if prefix := f.GetDatasetPrefix(); prefix != "" {
@@ -867,14 +867,16 @@ func (f *fileConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string
 	defer f.mux.RUnlock()
 
 	sampler, ok := f.rulesConfig.Samplers[samplerKey]
-	if !ok {
-		sampler, ok = f.rulesConfig.Samplers["__default__"]
-		if !ok {
-			return nil
-		}
+	if ok {
+		return sampler.GetSamplingFields()
 	}
 
-	return sampler.GetSamplingFields()
+	sampler, ok = f.rulesConfig.Samplers["__default__"]
+	if ok {
+		return sampler.GetSamplingFields()
+	}
+
+	return nil
 }
 
 // GetSamplerConfigForDestName returns the sampler config for the given

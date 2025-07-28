@@ -42,7 +42,7 @@ func (d *DynamicSampler) Start() error {
 	if d.maxKeys == 0 {
 		d.maxKeys = 500
 	}
-	d.keyFields, d.nonRootFields = GetKeyFields(d.Config.GetSamplingFields())
+	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
 	d.prefix = "dynamic"
 	// spin up the actual dynamic sampler

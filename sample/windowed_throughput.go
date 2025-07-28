@@ -48,7 +48,7 @@ func (d *WindowedThroughputSampler) Start() error {
 		d.maxKeys = 500
 	}
 	d.prefix = "windowedthroughput"
-	d.keyFields, d.nonRootFields = GetKeyFields(d.Config.GetSamplingFields())
+	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.WindowedThroughput{
