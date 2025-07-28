@@ -450,11 +450,16 @@ func TestAddSpan(t *testing.T) {
 	span.Event.Data.ExtractMetadata()
 	coll.AddSpanFromPeer(span)
 
-	assert.EventuallyWithT(t, func(collect *assert.CollectT) {
-		trace := coll.getFromCache(traceID)
-		require.NotNil(t, trace)
-		assert.Equal(t, traceID, trace.TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
-	}, time.Second*1, time.Millisecond)
+	assert.EventuallyWithT(t,
+		func(cT *assert.CollectT) {
+			trace := coll.getFromCache(traceID)
+			require.NotNil(cT, trace)
+			assert.Equal(cT, traceID, trace.TraceID)
+		},
+		conf.GetTracesConfig().GetSendTickerValue()*60, // waitFor
+		conf.GetTracesConfig().GetSendTickerValue()*2,  // tick
+		"within a reasonable time, cache should contain a traceID matching the one from the span we added",
+	)
 	assert.Equal(t, 0, len(transmission.GetBlock(0)), "adding a non-root span should not yet send the span")
 
 	sendBy := coll.Clock.Now().Add(10 * time.Second).Unix()
@@ -473,11 +478,21 @@ func TestAddSpan(t *testing.T) {
 	spanFromPeer.Event.Data.ExtractMetadata()
 
 	coll.AddSpanFromPeer(spanFromPeer)
-	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
+	assert.EventuallyWithT(t,
+		func(cT *assert.CollectT) {
+			trace := coll.getFromCache(traceID)
+			require.NotNil(cT, trace)
+			assert.Equal(cT, traceID, trace.TraceID)
+			assert.Equal(cT, 2, int(trace.DescendantCount()))
+		},
+		conf.GetTracesConfig().GetSendTickerValue()*60, // waitFor
+		conf.GetTracesConfig().GetSendTickerValue()*2,  // tick
+		"within a reasonable time after adding a decision span, we should have 2 descendants in the trace",
+	)
 
 	trace := coll.getFromCache(traceID)
 	require.NotNil(t, trace)
-	assert.Equal(t, int(trace.DescendantCount()), 2, "after adding a decision span, we should have 2 descendant in the trace")
 	assert.Equal(t, trace.SendBy.Unix(), sendBy, "send_by should be the same as the one set from its peer")
 	assert.Equal(t, traceID, trace.TraceID, "after adding the span, we should have a trace in the cache with the right trace ID")
 	assert.Equal(t, 0, len(transmission.Events), "adding a non-root span should not yet send the span")
@@ -1202,7 +1217,11 @@ func TestAddSpanCount(t *testing.T) {
 	coll.AddSpanFromPeer(decisionSpan)
 
 	assert.EventuallyWithT(t,
-		func(collect *assert.CollectT) { assert.Equal(collect, traceID, coll.getFromCache(traceID).TraceID) },
+		func(cT *assert.CollectT) {
+			trace := coll.getFromCache(traceID)
+			require.NotNil(cT, trace)
+			assert.Equal(cT, traceID, trace.TraceID)
+		},
 		conf.GetTracesConfig().GetSendTickerValue()*60, // waitFor
 		conf.GetTracesConfig().GetSendTickerValue()*2,  // tick
 		"within a reasonable time, cache should contain a traceID matching the one from the span we added",
