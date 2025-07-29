@@ -252,17 +252,11 @@ func GetKeyFields(fields []string) (allFields []string, nonRootFields []string) 
 	nonRootFields = make([]string, 0, len(fields))
 
 	for _, field := range fields {
-		values := strings.SplitAfterN(field, ".", 2)
-		if len(values) < 2 {
-			nonRootFields = append(nonRootFields, field)
-			continue
-		}
-
-		switch values[0] {
-		case RootPrefix:
+		switch {
+		case field[0] == 'r' && strings.HasPrefix(field, RootPrefix):
 			// If the field starts with "root.", add it to rootFields
-			rootFields = append(rootFields, values[1])
-		case ComputedFieldPrefix:
+			rootFields = append(rootFields, field[len(RootPrefix):])
+		case field[0] == '?' && strings.HasPrefix(field, ComputedFieldPrefix):
 			// If the field starts with "?.", skip it
 		default:
 			// Otherwise, add it to nonRootFields
