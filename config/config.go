@@ -242,7 +242,7 @@ const RootPrefix = "root."
 // GetKeyFields returns the fields that should be used as keys for the sampler.
 // It returns two slices: the first contains all fields, including those with the root prefix,
 // and the second contains fields that do not have the root prefix.
-// Fields that start with "computed." are ignored since they should not exist as a field in a trace.
+// Fields that start with "?." are ignored since they should not exist as a field in a trace.
 func GetKeyFields(fields []string) (allFields []string, nonRootFields []string) {
 	if len(fields) == 0 {
 		return nil, nil
@@ -263,7 +263,7 @@ func GetKeyFields(fields []string) (allFields []string, nonRootFields []string) 
 			// If the field starts with "root.", add it to rootFields
 			rootFields = append(rootFields, values[1])
 		case ComputedFieldPrefix:
-			// If the field starts with "computed.", skip it
+			// If the field starts with "?.", skip it
 		default:
 			// Otherwise, add it to nonRootFields
 			nonRootFields = append(nonRootFields, field)
