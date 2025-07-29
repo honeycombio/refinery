@@ -49,7 +49,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
-	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
 const (
@@ -305,7 +304,8 @@ func (r *Router) LnS() {
 		r.grpcServer = grpc.NewServer(serverOpts...)
 
 		traceServer := NewTraceServer(r)
-		collectortrace.RegisterTraceServiceServer(r.grpcServer, traceServer)
+		// Register custom service handler that can access raw bytes for msgpack optimization
+		registerCustomTraceService(r.grpcServer, traceServer)
 
 		logsServer := NewLogsServer(r)
 		collectorlogs.RegisterLogsServiceServer(r.grpcServer, logsServer)
@@ -1165,4 +1165,25 @@ func addIncomingUserAgent(ev *types.Event, userAgent string) {
 	if userAgent != "" && ev.Data.MetaRefineryIncomingUserAgent == "" {
 		ev.Data.MetaRefineryIncomingUserAgent = userAgent
 	}
+}
+
+// registerCustomTraceService registers our custom trace service that can access raw bytes
+// for msgpack optimization, replacing the standard OTLP registration.
+func registerCustomTraceService(grpcServer *grpc.Server, traceServer *TraceServer) {
+	// Create custom service descriptor that uses our raw bytes handler
+	customTraceServiceDesc := grpc.ServiceDesc{
+		ServiceName: "opentelemetry.proto.collector.trace.v1.TraceService",
+		HandlerType: (*CustomTraceServiceServer)(nil),
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: "Export",
+				Handler:    customTraceExportHandler,
+			},
+		},
+		Streams:  []grpc.StreamDesc{},
+		Metadata: "opentelemetry/proto/collector/trace/v1/trace_service.proto",
+	}
+
+	// Register our custom service directly with the GRPC server
+	grpcServer.RegisterService(&customTraceServiceDesc, traceServer)
 }
