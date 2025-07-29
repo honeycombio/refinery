@@ -46,6 +46,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -1242,6 +1243,31 @@ func BenchmarkTracesOTLP(b *testing.B) {
 		req.Header.Set("X-Honeycomb-Dataset", "benchmark")
 		req.Header.Set("Content-Type", "application/protobuf")
 		req.Header.Set("Content-Encoding", "zstd")
+
+		sender.resetCount()
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			req.Body = io.NopCloser(bytes.NewReader(blob))
+			post(b, req)
+		}
+		sender.waitForCount(b, b.N*50) // 50 spans per request
+	})
+
+	b.Run("http-json", func(b *testing.B) {
+		// Pre-compute single JSON blob with 50 spans
+		otlpReq := createBenchmarkOTLPRequest()
+		blob, err := protojson.Marshal(otlpReq)
+		assert.NoError(b, err)
+
+		req, err := http.NewRequest(
+			"POST",
+			"http://localhost:18000/v1/traces",
+			nil,
+		)
+		assert.NoError(b, err)
+		req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+		req.Header.Set("X-Honeycomb-Dataset", "benchmark")
+		req.Header.Set("Content-Type", "application/json")
 
 		sender.resetCount()
 		b.ResetTimer()
