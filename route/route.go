@@ -145,6 +145,7 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests received"},
 	{Name: "_router_otlp_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in otlp requests"},
 	{Name: "_router_otlp_http_proto", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/protobuf requests received"},
+	{Name: "_router_otlp_http_json", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/json requests received"},
 	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
 }
@@ -175,6 +176,8 @@ func (r *Router) registerMetricNames() {
 			r.metricsNames.routerOtlp = fullname
 		case "_router_otlp_http_proto":
 			r.metricsNames.routerOtlpHttpProto = fullname
+		case "_router_otlp_http_json":
+			r.metricsNames.routerOtlpHttpJson = fullname
 		case "_router_otlp_events":
 			r.metricsNames.routerOtlpEvents = fullname
 		}
@@ -196,6 +199,7 @@ type routerMetricKeys struct {
 	routerBatchEvents   string
 	routerOtlp          string
 	routerOtlpHttpProto string
+	routerOtlpHttpJson  string
 	routerOtlpEvents    string
 }
 

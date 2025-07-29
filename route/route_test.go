@@ -1351,7 +1351,7 @@ func BenchmarkRouterBatch(b *testing.B) {
 		}
 	})
 
-	b.Run("otlp", func(b *testing.B) {
+	b.Run("otlp/proto", func(b *testing.B) {
 		// Convert batchedEvents to OTLP format
 		otlpReq, err := convertBatchedEventsToOTLP(batchEvents)
 		require.NoError(b, err)
@@ -1366,6 +1366,40 @@ func BenchmarkRouterBatch(b *testing.B) {
 			b.Fatal(err)
 		}
 		req.Header.Set("Content-Type", "application/x-protobuf")
+		req.Header.Set("X-Honeycomb-Team", "test-api-key")
+		req.Header.Set("X-Honeycomb-Dataset", "test-dataset")
+
+		// Create reusable discard response writer
+		w := &discardResponseWriter{}
+
+		b.ResetTimer()
+		for b.Loop() {
+			req.Body = io.NopCloser(bytes.NewReader(otlpData))
+
+			router.postOTLPTrace(w, req)
+
+			// Drain spans to prevent channel from filling up
+			for len(mockCollector.Spans) > 0 {
+				<-mockCollector.Spans
+			}
+		}
+	})
+
+	b.Run("otlp_json", func(b *testing.B) {
+		// Convert batchedEvents to OTLP format
+		otlpReq, err := convertBatchedEventsToOTLP(batchEvents)
+		require.NoError(b, err)
+
+		// Serialize to JSON using protojson
+		otlpData, err := protojson.Marshal(otlpReq)
+		require.NoError(b, err)
+
+		// Create HTTP request for OTLP endpoint
+		req, err := http.NewRequest("POST", "/v1/traces", nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Honeycomb-Team", "test-api-key")
 		req.Header.Set("X-Honeycomb-Dataset", "test-dataset")
 
