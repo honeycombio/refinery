@@ -850,7 +850,7 @@ If this value is specified, then Refinery will use the first IPV6 unicast addres
 This list is ignored when Type is "redis".
 The format is a list of strings of the form "scheme://host:port".
 
-- Not eligible for live reload.
+- Eligible for live reload.
 - Type: `stringarray`
 - Example: `http://192.168.1.11:8081,http://192.168.1.12:8081`
 
