@@ -949,7 +949,15 @@ func TestDirectTransmissionQueueLengthGauge(t *testing.T) {
 	mockMetrics := &metrics.MockMetrics{}
 	mockMetrics.Start()
 
-	dt := NewDirectTransmission(mockMetrics, types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 10, 200*time.Millisecond, true)
+	batchTimeout := 200 * time.Millisecond
+	dt := NewDirectTransmission(
+		mockMetrics,
+		types.TransmitTypeUpstream,
+		http.DefaultTransport.(*http.Transport),
+		10,
+		batchTimeout,
+		true,
+	)
 	dt.Config = &config.MockConfig{}
 	dt.Logger = &logger.NullLogger{}
 	dt.Version = "test-version"
@@ -983,7 +991,7 @@ func TestDirectTransmissionQueueLengthGauge(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		v, _ := mockMetrics.Get(dt.metricKeys.gaugeQueueLength)
 		return v == 0
-	}, 200*time.Millisecond, 10*time.Millisecond)
+	}, batchTimeout*2, batchTimeout/10)
 
 	err = dt.Stop()
 	require.NoError(t, err)
