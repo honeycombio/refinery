@@ -237,8 +237,6 @@ func IsLegacyAPIKey(key string) bool {
 	}
 }
 
-const RootPrefix = "root."
-
 // GetKeyFields returns the fields that should be used as keys for the sampler.
 // It returns two slices: the first contains all fields, including those with the root prefix,
 // and the second contains fields that do not have the root prefix.
