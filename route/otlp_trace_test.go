@@ -395,6 +395,7 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 		currentCount, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpProto)
+		jsonReqCount, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpJson)
 		w := httptest.NewRecorder()
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
@@ -404,6 +405,8 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 		v, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpProto)
 		assert.Equal(t, 0.0, v-currentCount)
+		jsonReqCountVal, _ := router.Metrics.Get(router.metricsNames.routerOtlpHttpJson)
+		assert.Equal(t, 1.0, jsonReqCountVal-jsonReqCount)
 	})
 
 	t.Run("events created with legacy keys use dataset header", func(t *testing.T) {
