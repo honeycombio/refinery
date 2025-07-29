@@ -38,9 +38,13 @@ type ComputedField string
 
 const (
 	// ComputedFieldPrefix is the prefix for computed fields.
-	ComputedFieldPrefix               = "?."
-	NUM_DESCENDANTS     ComputedField = ComputedFieldPrefix + "NUM_DESCENDANTS"
-	RootPrefix                        = "root."
+	ComputedFieldPrefix = "?."
+	// ComputedFieldFirstChar is the first character of computed fields.
+	ComputedFieldFirstChar               = '?'
+	NUM_DESCENDANTS        ComputedField = ComputedFieldPrefix + "NUM_DESCENDANTS"
+	RootPrefix                           = "root."
+	// RootPrefixFirstChar is the first character of root fields.
+	RootPrefixFirstChar = 'r'
 )
 
 // The json tags in this file are used for conversion from the old format (see tools/convert for details).

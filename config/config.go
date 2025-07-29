@@ -251,10 +251,10 @@ func GetKeyFields(fields []string) (allFields []string, nonRootFields []string) 
 
 	for _, field := range fields {
 		switch {
-		case field[0] == 'r' && strings.HasPrefix(field, RootPrefix):
+		case field[0] == RootPrefixFirstChar && strings.HasPrefix(field, RootPrefix):
 			// If the field starts with "root.", add it to rootFields
 			rootFields = append(rootFields, field[len(RootPrefix):])
-		case field[0] == '?' && strings.HasPrefix(field, ComputedFieldPrefix):
+		case field[0] == ComputedFieldFirstChar && strings.HasPrefix(field, ComputedFieldPrefix):
 			// If the field starts with "?.", skip it
 		default:
 			// Otherwise, add it to nonRootFields
