@@ -119,4 +119,4 @@ tool github.com/google/go-licenses/v2
 
 replace go.opentelemetry.io/proto/otlp => github.com/honeycombio/opentelemetry-proto-go/otlp v1.3.1-compat
 
-replace github.com/honeycombio/husky => github.com/honeycombio/husky v0.37.1-0.20250729164345-ed6a8be4045a
+replace github.com/honeycombio/husky => github.com/honeycombio/husky v0.37.1-0.20250729215257-eb95c950c0e9
