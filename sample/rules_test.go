@@ -18,10 +18,11 @@ type TestRulesData struct {
 	Spans []*types.Span
 	// Set to the matching rule's sample rate if the rule matches.
 	// Set to the default rate (1) if you expect no rule to match.
-	ExpectedRate      uint
-	ExpectedKeep      bool
-	ExpectedName      string
-	ExpectedKeyFields []string
+	ExpectedRate           uint
+	ExpectedKeep           bool
+	ExpectedName           string
+	ExpectedKeyFields      []string
+	ExpectedSamplingFields []string
 }
 
 func TestRules(t *testing.T) {
@@ -52,9 +53,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -81,9 +83,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -110,9 +113,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -139,9 +143,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -172,10 +177,11 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedName:      "fallback",
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedName:           "fallback",
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -220,9 +226,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test", "test_two"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test", "test_two"},
+			ExpectedSamplingFields: []string{"test", "test_two"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -249,9 +256,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      false,
-			ExpectedRate:      0,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           false,
+			ExpectedRate:           0,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -271,9 +279,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      false,
-			ExpectedRate:      0,
-			ExpectedKeyFields: nil,
+			ExpectedKeep:           false,
+			ExpectedRate:           0,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: nil,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -314,9 +323,10 @@ func TestRules(t *testing.T) {
 			},
 			ExpectedKeep: true,
 			// the trace does not match all the rules so we expect the default sample rate
-			ExpectedRate:      1,
-			ExpectedName:      "no rule matched",
-			ExpectedKeyFields: []string{"first", "second"},
+			ExpectedRate:           1,
+			ExpectedName:           "no rule matched",
+			ExpectedKeyFields:      []string{"first", "second"},
+			ExpectedSamplingFields: []string{"first", "second"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -343,9 +353,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -371,9 +382,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -399,9 +411,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -428,9 +441,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -457,9 +471,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -486,9 +501,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -515,9 +531,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -557,10 +574,11 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedName:      "Check that root span is missing",
-			ExpectedKeep:      false,
-			ExpectedRate:      0,
-			ExpectedKeyFields: nil,
+			ExpectedName:           "Check that root span is missing",
+			ExpectedKeep:           false,
+			ExpectedRate:           0,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: nil,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -609,10 +627,11 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedName:      "Check that root span is present",
-			ExpectedKeep:      true,
-			ExpectedRate:      99,
-			ExpectedKeyFields: nil,
+			ExpectedName:           "Check that root span is present",
+			ExpectedKeep:           true,
+			ExpectedRate:           99,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: nil,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -639,9 +658,10 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test", "test2"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test", "test2"},
+			ExpectedSamplingFields: []string{"test", "test2"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -668,10 +688,11 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedName:      "no rule matched",
-			ExpectedRate:      1,
-			ExpectedKeyFields: []string{"test", "test2"},
+			ExpectedKeep:           true,
+			ExpectedName:           "no rule matched",
+			ExpectedRate:           1,
+			ExpectedKeyFields:      []string{"test", "test2"},
+			ExpectedSamplingFields: []string{"test", "test2"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -699,10 +720,11 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedName:      "no rule matched",
-			ExpectedRate:      1,
-			ExpectedKeyFields: []string{"test", "test2"},
+			ExpectedKeep:           true,
+			ExpectedName:           "no rule matched",
+			ExpectedRate:           1,
+			ExpectedKeyFields:      []string{"test", "test2"},
+			ExpectedSamplingFields: []string{"test", "test2"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -761,10 +783,11 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedName:      "Check that the number of descendants is greater than 3",
-			ExpectedKeep:      false,
-			ExpectedRate:      1,
-			ExpectedKeyFields: []string{string(config.NUM_DESCENDANTS)},
+			ExpectedName:           "Check that the number of descendants is greater than 3",
+			ExpectedKeep:           false,
+			ExpectedRate:           1,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: []string{"?.NUM_DESCENDANTS"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -821,10 +844,11 @@ func TestRules(t *testing.T) {
 					},
 				},
 			},
-			ExpectedName:      "no rule matched",
-			ExpectedKeep:      true,
-			ExpectedRate:      1,
-			ExpectedKeyFields: []string{string(config.NUM_DESCENDANTS)},
+			ExpectedName:           "no rule matched",
+			ExpectedKeep:           true,
+			ExpectedRate:           1,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: []string{"?.NUM_DESCENDANTS"},
 		},
 	}
 
@@ -861,6 +885,9 @@ func TestRules(t *testing.T) {
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "", key)
 
+		samplingFields := sampler.Config.GetSamplingFields()
+		slices.Sort(samplingFields)
+		assert.Equal(t, d.ExpectedSamplingFields, samplingFields)
 		allFields, nonRootFields := sampler.GetKeyFields()
 		slices.Sort(allFields)
 		assert.Equal(t, d.ExpectedKeyFields, allFields)

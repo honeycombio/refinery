@@ -353,6 +353,9 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 								Field: "sampling_key_field",
 							},
 							{
+								Field: "?.NUMBER_DESCENDANTS",
+							},
+							{
 								Field: "root.test",
 							},
 							{
@@ -423,9 +426,14 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.True(t, ok)
 			_, ok = payload.missingFields["test"]
 			assert.True(t, ok)
+			// Verify computed field is not extracted
+			_, ok = payload.missingFields["?.NUMBER_DESCENDANTS"]
+			assert.False(t, ok)
 
 			// Verify field not in sampling config is NOT extracted
 			assert.Nil(t, payload.memoizedFields["missing_in_config"])
+			// Verify computed field is not extracted
+			assert.Nil(t, payload.memoizedFields["?.NUMBER_DESCENDANTS"])
 
 			// Verify regular fields are still accessible through Get
 			assert.Equal(t, "value1", payload.Get("regular_field"))

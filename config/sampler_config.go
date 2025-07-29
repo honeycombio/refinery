@@ -300,7 +300,12 @@ func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
 		}
 	}
 
-	return fields.Members()
+	v := fields.Members()
+	if len(v) == 0 {
+		return nil
+	}
+
+	return v
 }
 
 var _ GetSamplingFielder = (*RulesBasedDownstreamSampler)(nil)
