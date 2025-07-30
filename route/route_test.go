@@ -1363,6 +1363,37 @@ func BenchmarkRouterBatch(b *testing.B) {
 		}
 	})
 
+	b.Run("json", func(b *testing.B) {
+		batchMsgpack, err := json.Marshal(batchEvents.events)
+		require.NoError(b, err)
+
+		// Create HTTP request directly without server
+		req, err := http.NewRequest("POST", "/1/batch/test-dataset", nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Honeycomb-Team", "test-api-key")
+
+		// Set up mux variables for dataset extraction
+		req = mux.SetURLVars(req, map[string]string{"datasetName": "test-dataset"})
+
+		// Create reusable discard response writer
+		w := &discardResponseWriter{}
+
+		b.ResetTimer()
+		for b.Loop() {
+			req.Body = io.NopCloser(bytes.NewReader(batchMsgpack))
+
+			router.batch(w, req)
+
+			// Drain spans to prevent channel from filling up
+			for len(mockCollector.Spans) > 0 {
+				<-mockCollector.Spans
+			}
+		}
+	})
+
 	b.Run("otlp/proto", func(b *testing.B) {
 		// Convert batchedEvents to OTLP format
 		otlpReq, err := convertBatchedEventsToOTLP(batchEvents)
