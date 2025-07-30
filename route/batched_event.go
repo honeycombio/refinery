@@ -51,14 +51,18 @@ func (b *batchedEvent) UnmarshalJSON(data []byte) error {
 	b.Timestamp = temp.Timestamp
 	b.SampleRate = temp.SampleRate
 
-	// Initialize Data with config and then unmarshal the raw JSON into it
+	// Initialize Data with config
 	b.Data = types.NewPayload(b.cfg, nil)
-	err = json.Unmarshal(temp.Data, &b.Data)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	// Convert JSON Data to MessagePack and use optimized unmarshaling
+	buf := httpBodyBufferPool.Get().(*bytes.Buffer)
+	defer recycleHTTPBodyBuffer(buf)
+
+	msgpackData, err := types.JSONToMessagePack(buf.Bytes()[:0], temp.Data)
+
+	// Use the same optimized unmarshaling logic as UnmarshalMsg
+	_, err = b.coreFieldsExtractor.UnmarshalPayload(msgpackData, &b.Data)
+	return err
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler

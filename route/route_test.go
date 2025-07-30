@@ -230,11 +230,23 @@ func TestUnmarshal(t *testing.T) {
 
 					assert.Equal(t, now.UTC(), result.events[0].getEventTime())
 					assert.Equal(t, uint(2), result.events[0].getSampleRate())
-					assert.Equal(t, testData, maps.Collect(result.events[0].Data.All()))
+
+					// When using JSON->MessagePack conversion, integers are preserved as int64
+					expectedData := map[string]any{
+						"trace.trace_id": "test-trace-id",
+						"trace.span_id":  "test-span-id",
+						"service.name":   "test-service",
+						"operation.name": "test-operation",
+						"duration_ms":    150.5,        // float remains float64
+						"status_code":    int64(200),   // 200.0 -> 200 in JSON -> int64 in MessagePack
+						"user_id":        int64(12345), // 12345.0 -> 12345 in JSON -> int64 in MessagePack
+						"is_error":       false,
+					}
+					assert.Equal(t, expectedData, maps.Collect(result.events[0].Data.All()))
 
 					assert.Equal(t, now.Add(time.Second).UTC(), result.events[1].getEventTime())
 					assert.Equal(t, uint(4), result.events[1].getSampleRate())
-					assert.Equal(t, testData, maps.Collect(result.events[1].Data.All()))
+					assert.Equal(t, expectedData, maps.Collect(result.events[1].Data.All()))
 				})
 			}
 		})
