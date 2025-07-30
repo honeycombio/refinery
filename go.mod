@@ -15,7 +15,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/honeycombio/dynsampler-go v0.6.3
 	github.com/honeycombio/hpsf v0.5.1-0.20250605195630-9b072f9dbd61
-	github.com/honeycombio/husky v0.36.0
+	github.com/honeycombio/husky v0.37.1-0.20250730154742-ddf9db5b5fe7
 	github.com/honeycombio/libhoney-go v1.25.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jonboulle/clockwork v0.5.0
@@ -118,5 +118,3 @@ require (
 tool github.com/google/go-licenses/v2
 
 replace go.opentelemetry.io/proto/otlp => github.com/honeycombio/opentelemetry-proto-go/otlp v1.3.1-compat
-
-replace github.com/honeycombio/husky => github.com/honeycombio/husky v0.37.1-0.20250729215257-eb95c950c0e9
