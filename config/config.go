@@ -237,11 +237,10 @@ func IsLegacyAPIKey(key string) bool {
 	}
 }
 
-const RootPrefix = "root."
-
 // GetKeyFields returns the fields that should be used as keys for the sampler.
 // It returns two slices: the first contains all fields, including those with the root prefix,
 // and the second contains fields that do not have the root prefix.
+// Fields that start with "?." are ignored since they should not exist as a field in a trace.
 func GetKeyFields(fields []string) (allFields []string, nonRootFields []string) {
 	if len(fields) == 0 {
 		return nil, nil
@@ -251,11 +250,20 @@ func GetKeyFields(fields []string) (allFields []string, nonRootFields []string) 
 	nonRootFields = make([]string, 0, len(fields))
 
 	for _, field := range fields {
-		if strings.HasPrefix(field, RootPrefix) {
+		switch {
+		case field[0] == RootPrefixFirstChar && strings.HasPrefix(field, RootPrefix):
+			// If the field starts with "root.", add it to rootFields
 			rootFields = append(rootFields, field[len(RootPrefix):])
-		} else {
+		case field[0] == ComputedFieldFirstChar && strings.HasPrefix(field, ComputedFieldPrefix):
+			// If the field starts with "?.", skip it
+		default:
+			// Otherwise, add it to nonRootFields
 			nonRootFields = append(nonRootFields, field)
 		}
+	}
+
+	if len(rootFields) == 0 && len(nonRootFields) == 0 {
+		return nil, nil
 	}
 
 	if len(rootFields) == 0 {

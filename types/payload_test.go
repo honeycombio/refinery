@@ -353,6 +353,9 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 								Field: "sampling_key_field",
 							},
 							{
+								Field: "?.NUMBER_DESCENDANTS",
+							},
+							{
 								Field: "root.test",
 							},
 							{
@@ -423,9 +426,14 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.True(t, ok)
 			_, ok = payload.missingFields["test"]
 			assert.True(t, ok)
+			// Verify computed field is not extracted
+			_, ok = payload.missingFields["?.NUMBER_DESCENDANTS"]
+			assert.False(t, ok)
 
 			// Verify field not in sampling config is NOT extracted
 			assert.Nil(t, payload.memoizedFields["missing_in_config"])
+			// Verify computed field is not extracted
+			assert.Nil(t, payload.memoizedFields["?.NUMBER_DESCENDANTS"])
 
 			// Verify regular fields are still accessible through Get
 			assert.Equal(t, "value1", payload.Get("regular_field"))
@@ -734,6 +742,83 @@ func BenchmarkPayload(b *testing.B) {
 		// subsequent calls to unknown fields are fast, since they are memoized
 		for b.Loop() {
 			_ = phMsgp.Exists("exist-unknown")
+		}
+	})
+}
+
+func BenchmarkUnmarshalPayload(b *testing.B) {
+	data := make(map[string]any)
+	for i := 0; i < 100; i++ {
+		data[fmt.Sprintf("key%d", i)] = fmt.Sprintf("value%d", i)
+		data[fmt.Sprintf("num%d", i)] = int64(i)
+		data[fmt.Sprintf("float%d", i)] = float64(i) * 1.5
+		data[fmt.Sprintf("bool%d", i)] = i%2 == 0
+	}
+
+	// Add metadata fields
+	data["meta.signal_type"] = "trace"
+	data["meta.trace_id"] = "test-trace-123"
+	data["meta.annotation_type"] = "span_event"
+	data["meta.refinery.probe"] = true
+	data["meta.refinery.root"] = true
+	data["meta.refinery.min_span"] = false
+	data["meta.refinery.send_by"] = int64(1234567890)
+	data["meta.refinery.span_data_size"] = int64(2048)
+
+	data["trace.trace_id"] = "custom-trace-456"
+	data["span.parent_id"] = ""
+
+	// Add sampling key fields
+	data["http.status_code"] = int64(200)
+	data["http.method"] = "GET"
+	data["service.name"] = "test-service"
+
+	msgpData, err := msgpack.Marshal(data)
+	require.NoError(b, err)
+
+	mockConfig := &config.MockConfig{
+		TraceIdFieldNames:  []string{"trace.trace_id"},
+		ParentIdFieldNames: []string{"span.parent_id"},
+		GetSamplerTypeVal: &config.RulesBasedSamplerConfig{
+			Rules: []*config.RulesBasedSamplerRule{
+				{
+					Conditions: []*config.RulesBasedSamplerCondition{
+						{
+							Field: "http.status_code",
+						},
+						{
+							Field: "?.NUM_DESCENDANTS",
+						},
+						{
+							Field: "http.method",
+						},
+						{
+							Field: "service.name",
+						},
+					},
+					Sampler: &config.RulesBasedDownstreamSampler{
+						DynamicSampler: &config.DynamicSamplerConfig{
+							FieldList: []string{"http.status_code", "dynamic_missing_field"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
+
+	b.Run("UnmarshalPayload", func(b *testing.B) {
+		for b.Loop() {
+			payload := &Payload{config: mockConfig}
+			_, _ = unmarshaler.UnmarshalPayload(msgpData, payload)
+		}
+	})
+
+	b.Run("UnmarshalPayloadComplete", func(b *testing.B) {
+		for b.Loop() {
+			payload := &Payload{config: mockConfig}
+			_ = unmarshaler.UnmarshalPayloadComplete(msgpData, payload)
 		}
 	})
 }

@@ -1318,6 +1318,12 @@ func TestGetKeyFields(t *testing.T) {
 			expectedAll:           []string{"test"},
 			expectedNonRootFields: []string{},
 		},
+		{
+			name:                  "computed fields",
+			input:                 []string{"root.test.field", "?.NUMBER_DESCENDANTS", "test.?.field"},
+			expectedAll:           []string{"test.field", "test.?.field"},
+			expectedNonRootFields: []string{"test.?.field"},
+		},
 	}
 
 	for _, tt := range tests {
