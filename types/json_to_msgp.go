@@ -43,9 +43,6 @@ func AppendJSONValue(buf []byte, v *fastjson.Value) ([]byte, error) {
 		s, _ := v.StringBytes()
 		return msgp.AppendStringFromBytes(buf, s), nil
 	case fastjson.TypeNumber:
-		if float64(v.GetInt64()) == v.GetFloat64() {
-			return msgp.AppendInt64(buf, v.GetInt64()), nil
-		}
 		return msgp.AppendFloat64(buf, v.GetFloat64()), nil
 	case fastjson.TypeTrue:
 		return msgp.AppendBool(buf, true), nil

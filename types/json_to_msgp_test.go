@@ -19,7 +19,7 @@ func TestJSONToMessagePack(t *testing.T) {
 			input: `{"str": "hello", "num": 123, "flag": true, "empty": null}`,
 			expected: map[string]any{
 				"str":   "hello",
-				"num":   int64(123),
+				"num":   float64(123),
 				"flag":  true,
 				"empty": nil,
 			},
@@ -30,7 +30,7 @@ func TestJSONToMessagePack(t *testing.T) {
 			expected: map[string]any{
 				"nested": map[string]any{
 					"inner": "value",
-					"count": int64(5),
+					"count": float64(5),
 				},
 			},
 		},
@@ -45,14 +45,14 @@ func TestJSONToMessagePack(t *testing.T) {
 			name:  "array of numbers",
 			input: `{"numbers": [1, 2, 3]}`,
 			expected: map[string]any{
-				"numbers": []any{int64(1), int64(2), int64(3)},
+				"numbers": []any{float64(1), float64(2), float64(3)},
 			},
 		},
 		{
 			name:  "array of mixed types",
 			input: `{"mixed": ["string", 42, true, null]}`,
 			expected: map[string]any{
-				"mixed": []any{"string", int64(42), true, nil},
+				"mixed": []any{"string", float64(42), true, nil},
 			},
 		},
 		{
@@ -73,10 +73,10 @@ func TestJSONToMessagePack(t *testing.T) {
 			expected: map[string]any{
 				"data": map[string]any{
 					"users": []any{
-						map[string]any{"name": "Alice", "age": int64(30)},
-						map[string]any{"name": "Bob", "age": int64(25)},
+						map[string]any{"name": "Alice", "age": float64(30)},
+						map[string]any{"name": "Bob", "age": float64(25)},
 					},
-					"count": int64(2),
+					"count": float64(2),
 				},
 			},
 		},
@@ -115,8 +115,7 @@ func TestJSONToMessagePack(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 
-			// Note: We don't compare with json.Unmarshal because it converts all numbers to float64,
-			// while our converter correctly preserves integers as int64
+			// Note: Our converter now matches json.Unmarshal behavior by converting all numbers to float64
 
 			// Test idempotency - convert same input again
 			msgpackData2, err := JSONToMessagePack(nil, []byte(tt.input))
