@@ -23,7 +23,7 @@ func JSONToMessagePack(buf []byte, jsonData []byte) ([]byte, error) {
 		return buf, err
 	}
 
-	buf, err = appendJSONValue(buf, v)
+	buf, err = AppendJSONValue(buf, v)
 	if err != nil {
 		return buf, err
 	}
@@ -31,7 +31,9 @@ func JSONToMessagePack(buf []byte, jsonData []byte) ([]byte, error) {
 	return buf, nil
 }
 
-func appendJSONValue(buf []byte, v *fastjson.Value) ([]byte, error) {
+// AppendJSONValue appends a fastjson.Value to a MessagePack buffer.
+// It recursively converts JSON types to their MessagePack equivalents.
+func AppendJSONValue(buf []byte, v *fastjson.Value) ([]byte, error) {
 	switch v.Type() {
 	case fastjson.TypeObject:
 		return appendJSONObject(buf, v)
@@ -39,7 +41,7 @@ func appendJSONValue(buf []byte, v *fastjson.Value) ([]byte, error) {
 		return appendJSONArray(buf, v)
 	case fastjson.TypeString:
 		s, _ := v.StringBytes()
-		return msgp.AppendString(buf, string(s)), nil
+		return msgp.AppendStringFromBytes(buf, s), nil
 	case fastjson.TypeNumber:
 		if float64(v.GetInt64()) == v.GetFloat64() {
 			return msgp.AppendInt64(buf, v.GetInt64()), nil
@@ -69,7 +71,7 @@ func appendJSONObject(buf []byte, v *fastjson.Value) ([]byte, error) {
 			return
 		}
 		buf = msgp.AppendStringFromBytes(buf, key)
-		buf, err = appendJSONValue(buf, v)
+		buf, err = AppendJSONValue(buf, v)
 	})
 
 	return buf, err
@@ -84,7 +86,7 @@ func appendJSONArray(buf []byte, v *fastjson.Value) ([]byte, error) {
 	buf = msgp.AppendArrayHeader(buf, uint32(len(arr)))
 
 	for _, item := range arr {
-		buf, err = appendJSONValue(buf, item)
+		buf, err = AppendJSONValue(buf, item)
 		if err != nil {
 			return buf, err
 		}

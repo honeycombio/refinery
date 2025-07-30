@@ -1332,7 +1332,7 @@ func BenchmarkRouterBatch(b *testing.B) {
 	batchEvents := createBatchEventsWithLargeAttributes(3, router.Config)
 	mockCollector := router.Collector.(*collect.MockCollector)
 
-	b.Run("msgpack", func(b *testing.B) {
+	b.Run("batch_msgpack", func(b *testing.B) {
 		batchMsgpack, err := msgpack.Marshal(batchEvents.events)
 		require.NoError(b, err)
 
@@ -1363,7 +1363,7 @@ func BenchmarkRouterBatch(b *testing.B) {
 		}
 	})
 
-	b.Run("json", func(b *testing.B) {
+	b.Run("batch_json", func(b *testing.B) {
 		batchMsgpack, err := json.Marshal(batchEvents.events)
 		require.NoError(b, err)
 
