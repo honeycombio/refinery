@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
+
+	"github.com/tinylib/msgp/msgp"
+	"github.com/valyala/fastjson"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
-	"github.com/tinylib/msgp/msgp"
-	"github.com/valyala/fastjson"
 )
 
 var fastJsonParserPool fastjson.ParserPool
@@ -36,37 +38,6 @@ func (b *batchedEvent) getSampleRate() uint {
 		return defaultSampleRate
 	}
 	return uint(b.SampleRate)
-}
-
-func (b *batchedEvent) UnmarshalJSON(data []byte) error {
-	// This method is now primarily used as a fallback for individual event unmarshaling
-	// Most of the time, events are unmarshaled via batchedEvents.UnmarshalJSON
-	type tempEvent struct {
-		Timestamp  string          `json:"time"`
-		SampleRate int64           `json:"samplerate"`
-		Data       json.RawMessage `json:"data"`
-	}
-
-	var temp tempEvent
-	if err := json.Unmarshal(data, &temp); err != nil {
-		return err
-	}
-
-	b.Timestamp = temp.Timestamp
-	b.SampleRate = temp.SampleRate
-	b.Data = types.NewPayload(b.cfg, nil)
-
-	// Convert data field to MessagePack and use optimized unmarshaling
-	buf := httpBodyBufferPool.Get().(*bytes.Buffer)
-	defer recycleHTTPBodyBuffer(buf)
-
-	msgpackData, err := types.JSONToMessagePack(buf.Bytes()[:0], temp.Data)
-	if err != nil {
-		return err
-	}
-
-	_, err = b.coreFieldsExtractor.UnmarshalPayload(msgpackData, &b.Data)
-	return err
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -203,6 +174,13 @@ func (b *batchedEvents) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+var bytesPool = sync.Pool{
+	New: func() any {
+		slice := make([]byte, 0, 128)
+		return &slice
+	},
+}
+
 // unmarshalBatchedEventFromFastJSON populates a batchedEvent from a fastjson.Value
 func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v *fastjson.Value) error {
 	if v.Type() != fastjson.TypeObject {
@@ -214,12 +192,8 @@ func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v
 		return err
 	}
 
-	// Initialize Data with config
-	event.Data = types.NewPayload(event.cfg, nil)
-
-	var dataValue *fastjson.Value
-
 	// Visit each field in the event object
+	var dataValue *fastjson.Value
 	obj.Visit(func(key []byte, v *fastjson.Value) {
 		if err != nil {
 			return
@@ -242,26 +216,25 @@ func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v
 		}
 	})
 
-	if err != nil {
-		return err
-	}
-
 	// Convert data field to MessagePack and use optimized unmarshaling
+	event.Data = types.NewPayload(event.cfg, nil)
 	if dataValue != nil {
-		buf := httpBodyBufferPool.Get().(*bytes.Buffer)
-		defer recycleHTTPBodyBuffer(buf)
+		buf := bytesPool.Get().(*[]byte)
+		defer func() {
+			*buf = (*buf)[:0]
+			bytesPool.Put(buf)
+		}()
 
 		// Use AppendJSONValue directly to avoid expensive MarshalTo() call
-		msgpackData, err := types.AppendJSONValue(buf.Bytes()[:0], dataValue)
+		*buf, err = types.AppendJSONValue(*buf, dataValue)
 		if err != nil {
 			return err
 		}
 
 		// Use the same optimized unmarshaling logic as UnmarshalMsg
-		_, err = event.coreFieldsExtractor.UnmarshalPayload(msgpackData, &event.Data)
+		_, err = event.coreFieldsExtractor.UnmarshalPayload(*buf, &event.Data)
 		return err
 	}
 
 	return nil
 }
-
