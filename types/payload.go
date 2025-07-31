@@ -354,23 +354,20 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 		if !handled && keysFound < len(samplingKeyFields) {
 			// Check if the key matches any of the key fields
 			var val any
-			for _, field := range samplingKeyFields {
-				if _, ok := p.memoizedFields[field]; ok {
-					// If we already memoized this field, skip it
+			if sliceContains(samplingKeyFields, keyBytes) {
+				if p.memoizedFields[string(keyBytes)] != nil {
+					// If we already have this key, skip it
 					continue
 				}
-				if bytes.Equal(keyBytes, []byte(field)) {
-					keysFound++
+				keysFound++
 
-					val, remaining, err = msgp.ReadIntfBytes(remaining)
-					if err != nil {
-						return len(data) - len(remaining), fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
-					}
-
-					p.Set(field, val)
-					handled = true
-					break
+				val, remaining, err = msgp.ReadIntfBytes(remaining)
+				if err != nil {
+					return len(data) - len(remaining), fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
 				}
+
+				p.Set(string(keyBytes), val)
+				handled = true
 			}
 		}
 
