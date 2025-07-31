@@ -332,10 +332,11 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 
 		// Handle special trace ID and parent ID fields
 		if !handled && valueType == msgp.StrType {
-			if p.MetaTraceID == "" && sliceContains(traceIdFieldNames, keyBytes) {
+			_, ok := sliceContains(traceIdFieldNames, keyBytes)
+			if p.MetaTraceID == "" && ok {
 				p.MetaTraceID, remaining, err = msgp.ReadStringBytes(remaining)
 				handled = true
-			} else if sliceContains(parentIdFieldNames, keyBytes) {
+			} else if _, ok := sliceContains(parentIdFieldNames, keyBytes); ok {
 				var parentId string
 				parentId, remaining, err = msgp.ReadStringBytes(remaining)
 				if err == nil && parentId != "" {
@@ -354,8 +355,8 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 		if !handled && keysFound < len(samplingKeyFields) {
 			// Check if the key matches any of the key fields
 			var val any
-			if sliceContains(samplingKeyFields, keyBytes) {
-				if p.memoizedFields[string(keyBytes)] != nil {
+			if idx, ok := sliceContains(samplingKeyFields, keyBytes); ok {
+				if p.memoizedFields[samplingKeyFields[idx]] != nil {
 					// If we already have this key, skip it
 					continue
 				}
@@ -366,7 +367,7 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 					return len(data) - len(remaining), fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
 				}
 
-				p.Set(string(keyBytes), val)
+				p.Set(samplingKeyFields[idx], val)
 				handled = true
 			}
 		}
@@ -967,11 +968,12 @@ func (p Payload) GetMemoizedFields() map[string]any {
 // When trying to find a particular []byte in a slice of strings, we could use
 // slices.Contains, but this involves casting the []byte to a string which does
 // a heap allocation. This is cheaper.
-func sliceContains(in []string, find []byte) bool {
+// Returns the index of the first matching string, or -1 if not found.
+func sliceContains(in []string, find []byte) (int, bool) {
 	for i := range in {
 		if bytes.Equal([]byte(in[i]), find) {
-			return true
+			return i, true
 		}
 	}
-	return false
+	return -1, false
 }
