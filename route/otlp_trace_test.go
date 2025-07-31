@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,7 +28,9 @@ import (
 	common "go.opentelemetry.io/proto/otlp/common/v1"
 	resource "go.opentelemetry.io/proto/otlp/resource/v1"
 	trace "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -36,10 +39,51 @@ import (
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
 
-func TestOTLPHandler(t *testing.T) {
-	md := metadata.New(map[string]string{"x-honeycomb-team": legacyAPIKey, "x-honeycomb-dataset": "ds"})
-	ctx := metadata.NewIncomingContext(context.Background(), md)
+// setupGRPCTestEnvironment creates a GRPC test server with our custom trace service
+// registration. It returns a client connected to the server and automatically
+// cleans up resources when the test completes.
+func setupGRPCTestEnvironment(t testing.TB, router *Router) collectortrace.TraceServiceClient {
+	// Create a listener on a random port
+	lis, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
 
+	// Create GRPC server and register our custom trace service
+	grpcServer := grpc.NewServer()
+
+	// Register the custom trace service directly
+	traceServer := NewTraceServer(router)
+	registerCustomTraceService(grpcServer, traceServer)
+
+	// Start the server in a goroutine
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			t.Logf("GRPC server error: %v", err)
+		}
+	}()
+
+	// Create a client connection
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+
+	client := collectortrace.NewTraceServiceClient(conn)
+
+	// Register cleanup using t.Cleanup()
+	t.Cleanup(func() {
+		conn.Close()
+		grpcServer.Stop()
+		lis.Close()
+	})
+
+	return client
+}
+
+// createGRPCContext creates a context with GRPC metadata from the provided headers.
+func createGRPCContext(headers map[string]string) context.Context {
+	md := metadata.New(headers)
+	return metadata.NewOutgoingContext(context.Background(), md)
+}
+
+func TestOTLPHandler(t *testing.T) {
 	mockMetrics := metrics.MockMetrics{}
 	mockMetrics.Start()
 	mockTransmission := &transmit.MockTransmission{}
@@ -79,6 +123,9 @@ func TestOTLPHandler(t *testing.T) {
 	}
 	router.registerMetricNames()
 
+	// Set up single GRPC test environment for all test cases
+	grpcClient := setupGRPCTestEnvironment(t, router)
+
 	t.Run("span with status", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
@@ -87,8 +134,12 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -105,8 +156,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -139,8 +193,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -185,8 +242,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -410,9 +470,6 @@ func TestOTLPHandler(t *testing.T) {
 	})
 
 	t.Run("events created with legacy keys use dataset header", func(t *testing.T) {
-		md := metadata.New(map[string]string{"x-honeycomb-team": legacyAPIKey, "x-honeycomb-dataset": "my-dataset"})
-		ctx := metadata.NewIncomingContext(context.Background(), md)
-
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
 				Resource: &resource.Resource{
@@ -427,8 +484,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "my-dataset",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -443,8 +503,6 @@ func TestOTLPHandler(t *testing.T) {
 
 	t.Run("events created with non-legacy keys lookup and use environment name", func(t *testing.T) {
 		apiKey := "my-api-key"
-		md := metadata.New(map[string]string{"x-honeycomb-team": apiKey})
-		ctx := metadata.NewIncomingContext(context.Background(), md)
 
 		// add cached environment lookup
 		router.environmentCache.addItem(apiKey, "local", time.Minute)
@@ -463,8 +521,10 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team": apiKey,
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -537,8 +597,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		assert.Equal(t, codes.Unauthenticated, status.Code(err))
 		assert.Contains(t, err.Error(), "not found in list of authorized keys")
 
@@ -547,9 +610,6 @@ func TestOTLPHandler(t *testing.T) {
 	})
 
 	t.Run("spans record incoming user agent - gRPC", func(t *testing.T) {
-		md := metadata.New(map[string]string{"x-honeycomb-team": legacyAPIKey, "x-honeycomb-dataset": "ds", "user-agent": "my-user-agent"})
-		ctx := metadata.NewIncomingContext(context.Background(), md)
-
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
 				ScopeSpans: []*trace.ScopeSpans{{
@@ -557,8 +617,12 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+			"user-agent":          "my-user-agent",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -567,7 +631,9 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data.MetaRefineryIncomingUserAgent)
+		// Note: GRPC clients override the user-agent header with their own value.
+		// This is expected behavior and differs from HTTP where custom user-agents are preserved.
+		assert.Equal(t, "grpc-go/1.73.0", event.Data.MetaRefineryIncomingUserAgent)
 	})
 
 	t.Run("spans record incoming user agent - HTTP", func(t *testing.T) {
@@ -766,10 +832,8 @@ func TestOTLPHandler(t *testing.T) {
 				if len(tt.apiKey) > 0 {
 					opts["x-honeycomb-team"] = tt.apiKey
 				}
-				md := metadata.New(opts)
-				ctx := metadata.NewIncomingContext(context.Background(), md)
-				traceServer := NewTraceServer(router)
-				_, err := traceServer.Export(ctx, req)
+				ctx := createGRPCContext(opts)
+				_, err := grpcClient.Export(ctx, req)
 				if tt.wantStatus == http.StatusOK {
 					require.NoError(t, err)
 				} else {

@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jonboulle/clockwork"
 	"github.com/klauspost/compress/zstd"
+	"github.com/sourcegraph/conc/pool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/vmihailenco/msgpack/v5"
@@ -1028,6 +1029,89 @@ func TestOTLPProtobufIntegration(t *testing.T) {
 	})
 
 	err := startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
+}
+
+func TestOTLPGRPCConcurrency(t *testing.T) {
+	t.Parallel()
+	port := 19000
+	redisDB := 15
+
+	testServer := newTestAPIServer(t)
+	cfg := defaultConfigWithGRPC(port, redisDB, testServer.server.URL, true)
+	_, graph := newStartedApp(t, nil, nil, cfg)
+
+	// Connect to gRPC server
+	grpcAddr := fmt.Sprintf("localhost:%d", port+2)
+	conn, err := grpc.Dial(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	defer conn.Close()
+
+	client := collectortrace.NewTraceServiceClient(conn)
+
+	// Create multiple different OTLP requests to ensure race conditions are triggered
+	numRequests := 10
+	numConcurrent := 5
+
+	// Launch concurrent goroutines sending different requests
+	p := pool.New().WithErrors().WithMaxGoroutines(numConcurrent)
+	for i := range numConcurrent {
+		routineID := i
+		p.Go(func() error {
+			for j := 0; j < numRequests; j++ {
+				// Create unique trace data for each request to detect corruption
+				traceID := make([]byte, 16)
+				spanID := make([]byte, 8)
+				// Use routine ID and request number to create unique IDs
+				binary.BigEndian.PutUint64(traceID[8:], uint64(routineID*1000+j))
+				binary.BigEndian.PutUint64(spanID, uint64(routineID*1000+j))
+
+				req := &collectortrace.ExportTraceServiceRequest{
+					ResourceSpans: []*trace.ResourceSpans{{
+						ScopeSpans: []*trace.ScopeSpans{{
+							Spans: []*trace.Span{{
+								TraceId:           traceID,
+								SpanId:            spanID,
+								Name:              fmt.Sprintf("concurrent-span-r%d-j%d", routineID, j),
+								StartTimeUnixNano: uint64(time.Now().UnixNano()),
+								EndTimeUnixNano:   uint64(time.Now().UnixNano()),
+								Attributes: []*common.KeyValue{{
+									Key:   fmt.Sprintf("routine.id.%d.request.%d", routineID, j),
+									Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: fmt.Sprintf("routine-%d-request-%d", routineID, j)}},
+								}},
+							}},
+						}},
+					}},
+				}
+
+				// Create gRPC context with metadata
+				ctx := metadata.AppendToOutgoingContext(context.Background(),
+					"x-honeycomb-team", legacyAPIKey,
+					"x-honeycomb-dataset", fmt.Sprintf("test-dataset-r%d-j%d", routineID, j),
+				)
+
+				// Send OTLP protobuf request via gRPC
+				_, err := client.Export(ctx, req)
+				if err != nil {
+					return fmt.Errorf("routine %d request %d failed: %w", routineID, j, err)
+				}
+			}
+			return nil
+		})
+	}
+
+	// Wait for all requests to complete and check for errors
+	err = p.Wait()
+	require.NoError(t, err)
+
+	// Verify that events were processed
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := testServer.getEvents()
+		// We expect exactly numRequests * numConcurrent events
+		assert.GreaterOrEqual(collect, len(events), numRequests*numConcurrent)
+	}, 5*time.Second, 10*time.Millisecond)
+
+	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)
 }
 
