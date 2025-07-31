@@ -95,7 +95,11 @@ func NewTraceServer(router *Router) *TraceServer {
 }
 
 // ExportTraceData processes translated trace data using msgpack optimization
-func (t *TraceServer) ExportTraceData(ctx context.Context, result *huskyotlp.TranslateOTLPRequestResultMsgp, ri huskyotlp.RequestInfo) (*collectortrace.ExportTraceServiceResponse, error) {
+func (t *TraceServer) ExportTraceData(
+	ctx context.Context,
+	result *huskyotlp.TranslateOTLPRequestResultMsgp,
+	ri huskyotlp.RequestInfo,
+) (*collectortrace.ExportTraceServiceResponse, error) {
 	ctx, span := otelutil.StartSpan(ctx, t.router.Tracer, "ExportOTLPTrace")
 	defer span.End()
 
@@ -113,16 +117,18 @@ func (t *TraceServer) ExportTraceData(ctx context.Context, result *huskyotlp.Tra
 	return &collectortrace.ExportTraceServiceResponse{}, nil
 }
 
-// translatedTraceServiceRequest is a wrapper that implements proto.Message but
-// actually produces a translated TranslateOTLPRequestResultMsgp instead of a
-// real unserialized protobuf struct.
+// translatedTraceServiceRequest is a wrapper that implements protoiface.MessageV1
+// but actually produces a translated TranslateOTLPRequestResultMsgp instead of a
+// real unserialized protobuf struct. We're using the V1 API because the V2 API
+// is tightly bound to proto's modern-but-slow way of doing everything.
 type translatedTraceServiceRequest struct {
 	requestInfo huskyotlp.RequestInfo
 	result      *huskyotlp.TranslateOTLPRequestResultMsgp
 	ctx         context.Context
 }
 
-// Implement proto.Message interface.
+// Implement the protoiface.MessageV1 interface. This is required by proto.Unmarshal
+// at runtime, but we don't expect these methods to actually be called.
 func (r *translatedTraceServiceRequest) Reset() {
 	r.result = nil
 }
@@ -133,8 +139,12 @@ func (r *translatedTraceServiceRequest) String() string {
 
 func (r *translatedTraceServiceRequest) ProtoMessage() {}
 
-// Unmarshal implements a custom unmarshaling method that performs translation
-// during the unmarshaling step using husky's msgpack optimization.
+// Unmarshal performs translation during the unmarshaling step using husky's
+// msgpack optimization. We assume the supplied data field is a re-used buffer
+// and we're not allowed to keep any references to it after this call returns,
+// although that doesn't seem to be explicitly documented anywhere. Note this
+// is an optional method defined in protoiface.Methods. See:
+// https://pkg.go.dev/google.golang.org/protobuf/runtime/protoiface#Methods
 func (r *translatedTraceServiceRequest) Unmarshal(data []byte) error {
 	result, err := huskyotlp.UnmarshalTraceRequestDirectMsgp(r.ctx, data, r.requestInfo)
 	if err != nil {
@@ -145,8 +155,17 @@ func (r *translatedTraceServiceRequest) Unmarshal(data []byte) error {
 }
 
 // customTraceExportHandler is a custom GRPC handler that uses husky's optimized
-// translation codepath.
-func customTraceExportHandler(srv any, ctx context.Context, dec func(any) error, interceptor grpc.UnaryServerInterceptor) (any, error) {
+// translation codepath. The dec() callback will call proto.Unmarshal on the supplied
+// translatedTraceServiceRequest, (which will in turn call our Unmarshal method).
+// That is the ONLY place we'll get access to the input body. I believe that GRPC
+// obfuscates the body buffer like this because it's re-using buffers between requests
+// and doesn't want people keeping references to it.
+func customTraceExportHandler(
+	srv any,
+	ctx context.Context,
+	dec func(any) error,
+	interceptor grpc.UnaryServerInterceptor,
+) (any, error) {
 	traceServer := srv.(*TraceServer)
 
 	// Get request info from GRPC metadata and prepare our custom wrapper.

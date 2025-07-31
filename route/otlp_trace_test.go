@@ -83,17 +83,6 @@ func createGRPCContext(headers map[string]string) context.Context {
 	return metadata.NewOutgoingContext(context.Background(), md)
 }
 
-// makeGRPCCall executes a trace export request via GRPC and returns any error.
-func makeGRPCCall(
-	t testing.TB,
-	client collectortrace.TraceServiceClient,
-	ctx context.Context,
-	req *collectortrace.ExportTraceServiceRequest,
-) error {
-	_, err := client.Export(ctx, req)
-	return err
-}
-
 func TestOTLPHandler(t *testing.T) {
 	mockMetrics := metrics.MockMetrics{}
 	mockMetrics.Start()
@@ -150,7 +139,7 @@ func TestOTLPHandler(t *testing.T) {
 			"x-honeycomb-team":    legacyAPIKey,
 			"x-honeycomb-dataset": "ds",
 		})
-		err := makeGRPCCall(t, grpcClient, ctx, req)
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -171,7 +160,7 @@ func TestOTLPHandler(t *testing.T) {
 			"x-honeycomb-team":    legacyAPIKey,
 			"x-honeycomb-dataset": "ds",
 		})
-		err := makeGRPCCall(t, grpcClient, ctx, req)
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -208,7 +197,7 @@ func TestOTLPHandler(t *testing.T) {
 			"x-honeycomb-team":    legacyAPIKey,
 			"x-honeycomb-dataset": "ds",
 		})
-		err := makeGRPCCall(t, grpcClient, ctx, req)
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -257,7 +246,7 @@ func TestOTLPHandler(t *testing.T) {
 			"x-honeycomb-team":    legacyAPIKey,
 			"x-honeycomb-dataset": "ds",
 		})
-		err := makeGRPCCall(t, grpcClient, ctx, req)
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -499,7 +488,7 @@ func TestOTLPHandler(t *testing.T) {
 			"x-honeycomb-team":    legacyAPIKey,
 			"x-honeycomb-dataset": "my-dataset",
 		})
-		err := makeGRPCCall(t, grpcClient, ctx, req)
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -535,7 +524,7 @@ func TestOTLPHandler(t *testing.T) {
 		ctx := createGRPCContext(map[string]string{
 			"x-honeycomb-team": apiKey,
 		})
-		err := makeGRPCCall(t, grpcClient, ctx, req)
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -612,7 +601,7 @@ func TestOTLPHandler(t *testing.T) {
 			"x-honeycomb-team":    legacyAPIKey,
 			"x-honeycomb-dataset": "ds",
 		})
-		err := makeGRPCCall(t, grpcClient, ctx, req)
+		_, err := grpcClient.Export(ctx, req)
 		assert.Equal(t, codes.Unauthenticated, status.Code(err))
 		assert.Contains(t, err.Error(), "not found in list of authorized keys")
 
@@ -633,7 +622,7 @@ func TestOTLPHandler(t *testing.T) {
 			"x-honeycomb-dataset": "ds",
 			"user-agent":          "my-user-agent",
 		})
-		err := makeGRPCCall(t, grpcClient, ctx, req)
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -844,7 +833,7 @@ func TestOTLPHandler(t *testing.T) {
 					opts["x-honeycomb-team"] = tt.apiKey
 				}
 				ctx := createGRPCContext(opts)
-				err := makeGRPCCall(t, grpcClient, ctx, req)
+				_, err := grpcClient.Export(ctx, req)
 				if tt.wantStatus == http.StatusOK {
 					require.NoError(t, err)
 				} else {
