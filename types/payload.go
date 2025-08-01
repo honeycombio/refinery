@@ -239,7 +239,7 @@ func (nb *nullableBool) Unset() {
 // honeycomb, but never accessess most fields, this is a big speedup.
 type Payload struct {
 	// A serialized messagepack map used to source fields.
-	msgpMap MsgpPayloadMap
+	msgpData []byte
 
 	// Deserialized fields, either from the internal msgpMap, or set externally.
 	memoizedFields map[string]any
@@ -459,8 +459,8 @@ func (p *Payload) ExtractMetadata() error {
 	}
 
 	// For msgpMap fields, extract from the raw bytes
-	if p.msgpMap.Size() > 0 {
-		_, err := p.extractCriticalFieldsFromBytes(p.msgpMap.rawData, traceIdFieldNames, parentIdFieldNames, nil)
+	if len(p.msgpData) > 0 {
+		_, err := p.extractCriticalFieldsFromBytes(p.msgpData, traceIdFieldNames, parentIdFieldNames, nil)
 		if err != nil {
 			return err
 		}
@@ -517,7 +517,7 @@ func (cu CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Pa
 		return err
 	}
 
-	payload.msgpMap = MsgpPayloadMap{rawData: bts}
+	payload.msgpData = bts
 	return nil
 }
 
@@ -533,7 +533,7 @@ func (cu CoreFieldsUnmarshaler) UnmarshalPayload(bts []byte, payload *Payload) (
 	}
 
 	ourData := slices.Clone(bts[:consumed])
-	payload.msgpMap = MsgpPayloadMap{rawData: ourData}
+	payload.msgpData = ourData
 
 	return bts[consumed:], nil
 }
@@ -541,7 +541,7 @@ func (cu CoreFieldsUnmarshaler) UnmarshalPayload(bts []byte, payload *Payload) (
 // UnmarshalMsgpack implements msgpack.Unmarshaler, but doesn't unmarshal.
 // Instead it keeps a copy of the serialized data.
 func (p *Payload) UnmarshalMsgpack(data []byte) error {
-	p.msgpMap = MsgpPayloadMap{rawData: slices.Clone(data)}
+	p.msgpData = slices.Clone(data)
 	return p.ExtractMetadata()
 }
 
@@ -558,7 +558,7 @@ func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 	// Store the raw data
 	ourData := slices.Clone(bts[:consumed])
-	p.msgpMap = MsgpPayloadMap{rawData: ourData}
+	p.msgpData = ourData
 
 	// Return remainder
 	return bts[consumed:], nil
@@ -594,14 +594,14 @@ func (p *Payload) MemoizeFields(keys ...string) {
 		return
 	}
 
-	iter, err := p.msgpMap.Iterate()
+	iter, err := newMsgpPayloadMapIter(p.msgpData)
 	if err != nil {
 		return
 	}
 
 	var keysFound int
 	for keysFound < len(keysToFind) {
-		keyBytes, _, err := iter.NextKey()
+		keyBytes, _, err := iter.nextKey()
 		if err != nil {
 			break
 		}
@@ -611,7 +611,7 @@ func (p *Payload) MemoizeFields(keys ...string) {
 		// Keeping the string cast inline like this allows us to avoid the heap
 		// unless we're actually going to memoize the field.
 		if _, ok := keysToFind[string(keyBytes)]; ok {
-			value, err := iter.ValueAny()
+			value, err := iter.valueAny()
 			if err != nil {
 				break
 			}
@@ -650,13 +650,13 @@ func (p *Payload) Exists(key string) bool {
 		}
 	}
 
-	iter, err := p.msgpMap.Iterate()
+	iter, err := newMsgpPayloadMapIter(p.msgpData)
 	if err != nil {
 		return false
 	}
 
 	for {
-		keyBytes, _, err := iter.NextKey()
+		keyBytes, _, err := iter.nextKey()
 		if err != nil {
 			break
 		}
@@ -693,19 +693,19 @@ func (p *Payload) Get(key string) any {
 		}
 	}
 
-	iter, err := p.msgpMap.Iterate()
+	iter, err := newMsgpPayloadMapIter(p.msgpData)
 	if err != nil {
 		return nil
 	}
 
 	for {
-		keyBytes, _, err := iter.NextKey()
+		keyBytes, _, err := iter.nextKey()
 		if err != nil {
 			break
 		}
 
 		if string(keyBytes) == key {
-			value, err := iter.ValueAny()
+			value, err := iter.valueAny()
 			if err == nil {
 				return value
 			}
@@ -730,7 +730,7 @@ func (p *Payload) Set(key string, value any) {
 }
 
 func (p *Payload) IsEmpty() bool {
-	return len(p.memoizedFields) == 0 && p.msgpMap.Size() == 0
+	return len(p.memoizedFields) == 0 && len(p.msgpData) == 0
 }
 
 // All() allows easily iterating all values in the Payload, but this is very
@@ -768,13 +768,13 @@ func (p *Payload) All() iter.Seq2[string, any] {
 		}
 
 		// Then iterate through msgpMap for any remaining fields
-		iter, err := p.msgpMap.Iterate()
+		iter, err := newMsgpPayloadMapIter(p.msgpData)
 		if err != nil {
 			return
 		}
 
 		for {
-			keyBytes, _, err := iter.NextKey()
+			keyBytes, _, err := iter.nextKey()
 			if err != nil {
 				break
 			}
@@ -794,7 +794,7 @@ func (p *Payload) All() iter.Seq2[string, any] {
 				continue
 			}
 
-			value, err := iter.ValueAny()
+			value, err := iter.valueAny()
 			if err != nil {
 				return
 			}
@@ -807,7 +807,7 @@ func (p *Payload) All() iter.Seq2[string, any] {
 
 // Estimates data size, not very accurately, but it's fast.
 func (p *Payload) GetDataSize() int {
-	total := p.msgpMap.Size()
+	total := len(p.msgpData)
 	for k, v := range p.memoizedFields {
 		total += len(k) + getByteSize(v)
 	}
@@ -901,10 +901,10 @@ func (p Payload) MarshalMsg(buf []byte) ([]byte, error) {
 	}
 
 	// Serialize msgpMap fields, skipping duplicates
-	iter, err := p.msgpMap.Iterate()
+	iter, err := newMsgpPayloadMapIter(p.msgpData)
 	if err == nil {
 		for {
-			keyBytes, _, err := iter.NextKey()
+			keyBytes, _, err := iter.nextKey()
 			if err != nil {
 				break
 			}
