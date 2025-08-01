@@ -3,12 +3,18 @@ package route
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"sync"
 	"time"
+
+	"github.com/tinylib/msgp/msgp"
+	"github.com/valyala/fastjson"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
-	"github.com/tinylib/msgp/msgp"
 )
+
+var fastJsonParserPool fastjson.ParserPool
 
 type batchedEvent struct {
 	Timestamp           string        `json:"time"`
@@ -32,33 +38,6 @@ func (b *batchedEvent) getSampleRate() uint {
 		return defaultSampleRate
 	}
 	return uint(b.SampleRate)
-}
-
-func (b *batchedEvent) UnmarshalJSON(data []byte) error {
-	type tempEvent struct {
-		Timestamp  string          `json:"time"`
-		SampleRate int64           `json:"samplerate"`
-		Data       json.RawMessage `json:"data"`
-	}
-
-	var temp tempEvent
-	err := json.Unmarshal(data, &temp)
-	if err != nil {
-		return err
-	}
-
-	// Copy the simple fields
-	b.Timestamp = temp.Timestamp
-	b.SampleRate = temp.SampleRate
-
-	// Initialize Data with config and then unmarshal the raw JSON into it
-	b.Data = types.NewPayload(b.cfg, nil)
-	err = json.Unmarshal(temp.Data, &b.Data)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // UnmarshalMsg implements msgp.Unmarshaler
@@ -163,21 +142,93 @@ func (b *batchedEvents) MarshalJSON() ([]byte, error) {
 }
 
 func (b *batchedEvents) UnmarshalJSON(data []byte) error {
-	var rawEvents []json.RawMessage
-	err := json.Unmarshal(data, &rawEvents)
+	parser := fastJsonParserPool.Get()
+	defer fastJsonParserPool.Put(parser)
+
+	v, err := parser.ParseBytes(data)
 	if err != nil {
 		return err
 	}
 
-	b.events = make([]batchedEvent, len(rawEvents))
-	for i := range b.events {
+	if v.Type() != fastjson.TypeArray {
+		return fmt.Errorf("expected JSON array")
+	}
+
+	arr, err := v.Array()
+	if err != nil {
+		return err
+	}
+
+	b.events = make([]batchedEvent, len(arr))
+	for i, eventValue := range arr {
 		b.events[i].cfg = b.cfg
 		b.events[i].coreFieldsExtractor = b.coreFieldsExtractor
 
-		err = json.Unmarshal(rawEvents[i], &b.events[i])
+		// Parse each event directly using fastjson
+		err = b.unmarshalBatchedEventFromFastJSON(&b.events[i], eventValue)
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+var bytesPool = sync.Pool{
+	New: func() any {
+		slice := make([]byte, 0, 128)
+		return &slice
+	},
+}
+
+// unmarshalBatchedEventFromFastJSON populates a batchedEvent from a fastjson.Value
+func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v *fastjson.Value) error {
+	if v.Type() != fastjson.TypeObject {
+		return fmt.Errorf("expected JSON object for event")
+	}
+
+	obj, err := v.Object()
+	if err != nil {
+		return err
+	}
+
+	// Visit each field in the event object
+	var dataValue *fastjson.Value
+	obj.Visit(func(key []byte, v *fastjson.Value) {
+		switch string(key) {
+		case "time":
+			if v.Type() == fastjson.TypeString {
+				s := v.GetStringBytes()
+				event.Timestamp = string(s)
+			}
+		case "samplerate":
+			if v.Type() == fastjson.TypeNumber {
+				event.SampleRate = v.GetInt64()
+			}
+		case "data":
+			if v.Type() == fastjson.TypeObject {
+				dataValue = v
+			}
+		}
+	})
+
+	// Convert data field to MessagePack and use optimized unmarshaling
+	event.Data = types.NewPayload(event.cfg, nil)
+	if dataValue != nil {
+		buf := bytesPool.Get().(*[]byte)
+		defer func() {
+			*buf = (*buf)[:0]
+			bytesPool.Put(buf)
+		}()
+
+		*buf, err = types.AppendJSONValue(*buf, dataValue)
+		if err != nil {
+			return err
+		}
+
+		// Use the same optimized unmarshaling logic as UnmarshalMsg
+		_, err = event.coreFieldsExtractor.UnmarshalPayload(*buf, &event.Data)
+		return err
 	}
 
 	return nil

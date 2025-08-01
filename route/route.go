@@ -916,6 +916,12 @@ func unmarshal(r *http.Request, data []byte, v interface{}) error {
 		decoder.UseLooseInterfaceDecoding(true)
 		return decoder.Decode(v)
 	default:
+		// If UnmarshalJSON is available, call it directly, which is surprisingly
+		// much more efficient than allowing it to be called from the library.
+		if unmarshaler, ok := v.(json.Unmarshaler); ok {
+			err := unmarshaler.UnmarshalJSON(data)
+			return err
+		}
 		return jsoniter.Unmarshal(data, v)
 	}
 }

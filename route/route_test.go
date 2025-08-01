@@ -1320,7 +1320,7 @@ func BenchmarkRouterBatch(b *testing.B) {
 	batchEvents := createBatchEventsWithLargeAttributes(3, router.Config)
 	mockCollector := router.Collector.(*collect.MockCollector)
 
-	b.Run("msgpack", func(b *testing.B) {
+	b.Run("batch_msgpack", func(b *testing.B) {
 		batchMsgpack, err := msgpack.Marshal(batchEvents.events)
 		require.NoError(b, err)
 
@@ -1330,6 +1330,37 @@ func BenchmarkRouterBatch(b *testing.B) {
 			b.Fatal(err)
 		}
 		req.Header.Set("Content-Type", "application/x-msgpack")
+		req.Header.Set("X-Honeycomb-Team", "test-api-key")
+
+		// Set up mux variables for dataset extraction
+		req = mux.SetURLVars(req, map[string]string{"datasetName": "test-dataset"})
+
+		// Create reusable discard response writer
+		w := &discardResponseWriter{}
+
+		b.ResetTimer()
+		for b.Loop() {
+			req.Body = io.NopCloser(bytes.NewReader(batchMsgpack))
+
+			router.batch(w, req)
+
+			// Drain spans to prevent channel from filling up
+			for len(mockCollector.Spans) > 0 {
+				<-mockCollector.Spans
+			}
+		}
+	})
+
+	b.Run("batch_json", func(b *testing.B) {
+		batchMsgpack, err := json.Marshal(batchEvents.events)
+		require.NoError(b, err)
+
+		// Create HTTP request directly without server
+		req, err := http.NewRequest("POST", "/1/batch/test-dataset", nil)
+		if err != nil {
+			b.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("X-Honeycomb-Team", "test-api-key")
 
 		// Set up mux variables for dataset extraction
