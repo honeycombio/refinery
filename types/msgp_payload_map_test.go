@@ -32,61 +32,34 @@ func TestMsgpPayloadMap_WorkingCases(t *testing.T) {
 	encoded, err := msgpack.Marshal(inputData)
 	require.NoError(t, err)
 
-	// Create MsgpPayloadMap
-	payloadMap := NewMessagePackPayloadMap(encoded)
-
-	// Test iteration
-	iter, err := payloadMap.Iterate()
+	// Create iterator
+	iter, err := newMsgpPayloadMapIter(encoded)
 	require.NoError(t, err)
 
 	gotData := make(map[string]any)
 	for {
-		key, typ, err := iter.NextKey()
+		key, typ, err := iter.nextKey()
 		if err == io.EOF {
 			break
 		}
 		require.NoError(t, err)
+		assert.NotEqual(t, FieldTypeUnknown, typ)
 
 		keyStr := string(key)
-		switch typ {
-		case FieldTypeString:
-			val, err := iter.ValueString()
-			require.NoError(t, err)
-			assert.EqualValues(t, inputData[keyStr], val)
-			gotData[keyStr] = val
-		case FieldTypeInt64:
-			val, err := iter.ValueInt64()
-			require.NoError(t, err)
-			assert.EqualValues(t, inputData[keyStr], val)
-			gotData[keyStr] = val
-		case FieldTypeFloat64:
-			val, err := iter.ValueFloat64()
-			require.NoError(t, err)
-			assert.EqualValues(t, inputData[keyStr], val)
-			gotData[keyStr] = val
-		case FieldTypeBool:
-			val, err := iter.ValueBool()
-			require.NoError(t, err)
-			assert.EqualValues(t, inputData[keyStr], val)
-			gotData[keyStr] = val
-		case FieldTypeOther:
-			val, err := iter.ValueAny()
-			require.NoError(t, err)
-			assert.EqualValues(t, inputData[keyStr], val)
-			gotData[keyStr] = val
-		default:
-			assert.Fail(t, "Unexpected field type", "Unexpected field type %v for key %s", typ, keyStr)
-		}
+		val, err := iter.valueAny()
+		require.NoError(t, err)
+		assert.EqualValues(t, inputData[keyStr], val)
+		gotData[keyStr] = val
 	}
 	assert.Len(t, gotData, len(inputData))
 
 	// Test skipping all values
-	iter, err = payloadMap.Iterate()
+	iter, err = newMsgpPayloadMapIter(encoded)
 	require.NoError(t, err)
 
 	skipCount := 0
 	for {
-		_, _, err := iter.NextKey()
+		_, _, err := iter.nextKey()
 		if err == io.EOF {
 			break
 		}
@@ -97,20 +70,20 @@ func TestMsgpPayloadMap_WorkingCases(t *testing.T) {
 	assert.Equal(t, len(inputData), skipCount)
 
 	// Test skipping some, but not all values
-	iter, err = payloadMap.Iterate()
+	iter, err = newMsgpPayloadMapIter(encoded)
 	require.NoError(t, err)
 
 	clear(gotData)
 	skipCount = 0
 	for {
-		key, typ, err := iter.NextKey()
+		key, typ, err := iter.nextKey()
 		if err == io.EOF {
 			break
 		}
 		require.NoError(t, err)
 
 		if typ == FieldTypeInt64 {
-			val, err := iter.ValueInt64()
+			val, err := iter.valueAny()
 			require.NoError(t, err)
 			assert.EqualValues(t, inputData[string(key)], val)
 			gotData[string(key)] = val
@@ -125,20 +98,17 @@ func TestMsgpPayloadMap_WorkingCases(t *testing.T) {
 	emptyEncoded, err := msgpack.Marshal(emptyData)
 	require.NoError(t, err)
 
-	emptyPayloadMap := NewMessagePackPayloadMap(emptyEncoded)
-	emptyIter, err := emptyPayloadMap.Iterate()
+	emptyIter, err := newMsgpPayloadMapIter(emptyEncoded)
 	require.NoError(t, err)
 
-	_, _, err = emptyIter.NextKey()
+	_, _, err = emptyIter.nextKey()
 	assert.Equal(t, io.EOF, err)
 }
 
 func TestMsgpPayloadMap_ErrorCases(t *testing.T) {
 	// Test invalid msgpack data
 	invalidData := []byte{0xFF, 0xFF, 0xFF}
-	invalidPayloadMap := NewMessagePackPayloadMap(invalidData)
-
-	_, err := invalidPayloadMap.Iterate()
+	_, err := newMsgpPayloadMapIter(invalidData)
 	assert.Error(t, err)
 
 	// Test non-map msgpack data (array)
@@ -146,15 +116,13 @@ func TestMsgpPayloadMap_ErrorCases(t *testing.T) {
 	arrayEncoded, err := msgpack.Marshal(arrayData)
 	require.NoError(t, err)
 
-	arrayPayloadMap := NewMessagePackPayloadMap(arrayEncoded)
-	_, err = arrayPayloadMap.Iterate()
+	_, err = newMsgpPayloadMapIter(arrayEncoded)
 	assert.Error(t, err)
 
 	// Test empty data - iterating is ok, but EOFs immediately.
-	emptyPayloadMap := NewMessagePackPayloadMap(nil)
-	iter, err := emptyPayloadMap.Iterate()
+	iter, err := newMsgpPayloadMapIter(nil)
 	assert.NoError(t, err)
-	_, _, err = iter.NextKey()
+	_, _, err = iter.nextKey()
 	assert.Error(t, err)
 
 	// Test truncated data, should fail on the second value.
@@ -163,68 +131,22 @@ func TestMsgpPayloadMap_ErrorCases(t *testing.T) {
 	require.NoError(t, err)
 
 	truncatedData := validEncoded[:len(validEncoded)-2]
-	truncatedPayloadMap := NewMessagePackPayloadMap(truncatedData)
-	truncatedIter, err := truncatedPayloadMap.Iterate()
+	truncatedIter, err := newMsgpPayloadMapIter(truncatedData)
 	assert.NoError(t, err)
-	_, _, err = truncatedIter.NextKey()
+	_, _, err = truncatedIter.nextKey()
 	assert.NoError(t, err)
-	_, _, err = truncatedIter.NextKey()
+	_, _, err = truncatedIter.nextKey()
 	assert.Error(t, err)
-
-	// Test type mismatch errors by creating a map with specific types
-	// and attempting to read them as wrong types
-	inputData := map[string]any{
-		"string_field": "hello",
-		"int_field":    int64(42),
-		"float_field":  3.14,
-		"bool_field":   true,
-	}
-
-	encoded, err := msgpack.Marshal(inputData)
-	require.NoError(t, err)
-
-	payloadMap := NewMessagePackPayloadMap(encoded)
-	iter, err = payloadMap.Iterate()
-	require.NoError(t, err)
-
-	for {
-		_, typ, err := iter.NextKey()
-		if err == io.EOF {
-			break
-		}
-		require.NoError(t, err)
-
-		// Try to access with wrong types
-		switch typ {
-		case FieldTypeString:
-			// Try to read as int
-			_, err := iter.ValueInt64()
-			assert.Error(t, err)
-		case FieldTypeInt64:
-			// Try to read as string
-			_, err := iter.ValueString()
-			assert.Error(t, err)
-		case FieldTypeFloat64:
-			// Try to read as bool
-			_, err := iter.ValueBool()
-			assert.Error(t, err)
-		case FieldTypeBool:
-			// Try to read as float
-			_, err := iter.ValueFloat64()
-			assert.Error(t, err)
-		}
-	}
 
 	// Test calling Value methods without NextKey
 	simpleData := map[string]any{"test": "value"}
 	simpleEncoded, err := msgpack.Marshal(simpleData)
 	require.NoError(t, err)
 
-	freshPayloadMap := NewMessagePackPayloadMap(simpleEncoded)
-	freshIter, err := freshPayloadMap.Iterate()
+	freshIter, err := newMsgpPayloadMapIter(simpleEncoded)
 	require.NoError(t, err)
 
-	_, err = freshIter.ValueString()
+	_, err = freshIter.valueAny()
 	assert.Error(t, err)
 }
 
@@ -257,29 +179,16 @@ func BenchmarkMsgpPayloadMap(b *testing.B) {
 
 	b.Run("iter_values", func(b *testing.B) {
 		for b.Loop() {
-			payloadMap := NewMessagePackPayloadMap(encoded)
-			iter, _ := payloadMap.Iterate()
+			iter, _ := newMsgpPayloadMapIter(encoded)
 
 			fieldCount := 0
 			for {
-				_, typ, err := iter.NextKey()
+				_, _, err := iter.nextKey()
 				if err == io.EOF {
 					break
 				}
 
-				// Access the value based on type
-				switch typ {
-				case FieldTypeString:
-					_, _ = iter.ValueString()
-				case FieldTypeInt64:
-					_, _ = iter.ValueInt64()
-				case FieldTypeFloat64:
-					_, _ = iter.ValueFloat64()
-				case FieldTypeBool:
-					_, _ = iter.ValueBool()
-				case FieldTypeOther:
-					_, _ = iter.ValueAny()
-				}
+				_, _ = iter.valueAny()
 				fieldCount++
 			}
 
@@ -291,12 +200,11 @@ func BenchmarkMsgpPayloadMap(b *testing.B) {
 
 	b.Run("iter_novalues", func(b *testing.B) {
 		for b.Loop() {
-			payloadMap := NewMessagePackPayloadMap(encoded)
-			iter, _ := payloadMap.Iterate()
+			iter, _ := newMsgpPayloadMapIter(encoded)
 
 			fieldCount := 0
 			for {
-				_, _, err := iter.NextKey()
+				_, _, err := iter.nextKey()
 				if err == io.EOF {
 					break
 				}

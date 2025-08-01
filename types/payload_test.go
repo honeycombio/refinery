@@ -226,9 +226,7 @@ func TestPayloadExtractMetadataError(t *testing.T) {
 	t.Run("invalid msgpack data", func(t *testing.T) {
 		// Create a payload with invalid msgpack data
 		p := Payload{
-			msgpMap: MsgpPayloadMap{
-				rawData: []byte{0xFF, 0xFF, 0xFF}, // Invalid msgpack
-			},
+			msgpData: []byte{0xFF, 0xFF, 0xFF}, // Invalid msgpack
 			config: &config.MockConfig{
 				TraceIdFieldNames:  []string{"trace.trace_id"},
 				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
