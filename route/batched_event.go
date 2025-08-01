@@ -195,14 +195,10 @@ func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v
 	// Visit each field in the event object
 	var dataValue *fastjson.Value
 	obj.Visit(func(key []byte, v *fastjson.Value) {
-		if err != nil {
-			return
-		}
-
 		switch string(key) {
 		case "time":
 			if v.Type() == fastjson.TypeString {
-				s, _ := v.StringBytes()
+				s := v.GetStringBytes()
 				event.Timestamp = string(s)
 			}
 		case "samplerate":
@@ -225,7 +221,6 @@ func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v
 			bytesPool.Put(buf)
 		}()
 
-		// Use AppendJSONValue directly to avoid expensive MarshalTo() call
 		*buf, err = types.AppendJSONValue(*buf, dataValue)
 		if err != nil {
 			return err
