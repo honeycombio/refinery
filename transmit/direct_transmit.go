@@ -458,11 +458,13 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		}
 
 		var req *http.Request
+		readerPtr := readerPool.Get().(*bytes.Reader)
+		defer readerPool.Put(readerPtr)
+
 		for try := 0; try < 2; try++ {
 			if try > 0 {
 				d.Metrics.Increment(d.metricKeys.counterSendRetries)
 			}
-			readerPtr := readerPool.Get().(*bytes.Reader)
 
 			if d.enableCompression {
 				readerPtr.Reset(compressedData)
@@ -472,7 +474,6 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 
 			req, err = http.NewRequest("POST", apiURL.String(), readerPtr)
 			if err != nil {
-				readerPool.Put(readerPtr)
 				d.Logger.Error().WithField("err", err.Error()).Logf("failed to create request")
 				d.handleBatchFailure(subBatch)
 				break
@@ -499,19 +500,15 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 				}
 				if sleepDur > 0 && sleepDur < 60*time.Second {
 					resp.Body.Close()
-					readerPool.Put(readerPtr)
 					d.Clock.Sleep(sleepDur)
 					continue // retry in the loop
 				}
 			}
 
 			if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
-				readerPool.Put(readerPtr)
 				continue
 			}
 
-			// Return reader to pool before breaking out of retry loop
-			readerPool.Put(readerPtr)
 			break
 		}
 
