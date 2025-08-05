@@ -3,6 +3,7 @@ package collect
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/rand"
 	"runtime"
 	"strconv"
@@ -2547,7 +2548,11 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 
 }
 
-// BenchmarkCollectorWithSamplers runs benchmarks for different sampler configurations
+// BenchmarkCollectorWithSamplers runs benchmarks for different sampler configurations.
+// This is a tricky benchmark to interpret because just setting up the input data
+// can easily be more expensive than the collector's routing code. The goal is to
+// demonstrate the collector's (in-)ability to scale across CPUs. It does NOT work
+// well with just one CPU.
 func BenchmarkCollectorWithSamplers(b *testing.B) {
 	// Common test scenarios to run for each sampler
 	scenarios := []struct {
@@ -2555,14 +2560,13 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 		spansPerTrace int
 	}{
 		{"small_traces", 100},
-		{"medium_traces", 10000},
-		{"large_traces", 1_000_000},
+		{"large_traces", 10_000},
 	}
 
 	// Different sampler configurations to test
 	samplerConfigs := []struct {
 		name   string
-		config interface{}
+		config any
 	}{
 		{
 			"deterministic",
@@ -2618,57 +2622,35 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 				b.StopTimer()
 
 				sender := &mockSender{
-					eventQueue: make(chan *types.Event, 10000),
+					spanQueue: make(chan *types.Span, 1000),
 				}
-				collector := setupBenchmarkCollector(b, sampler.config, sender)
+				collector := setupBenchmarkCollector(sampler.config, sender)
 				collector.Start()
 
 				defer collector.Stop()
 
-				// use b.N as the number of traces to create
-				totalSpans := b.N * scenario.spansPerTrace
+				b.N = scenario.spansPerTrace * int(math.Ceil(float64(b.N)/float64(scenario.spansPerTrace)))
 
 				// Setup done channel that waits for all spans to be processed
 				wg := &sync.WaitGroup{}
 				wg.Add(1)
 				go func() {
-					sender.waitForCount(b, totalSpans)
+					sender.waitForCount(b.N)
 					wg.Done()
 				}()
 
-				spans := make([]*types.Span, totalSpans)
-				spanIdx := 0
-
-				// Create spans for each trace
-				for t := 0; t < b.N; t++ {
-					traceID := fmt.Sprintf("trace-%d", t)
-
-					// Create spans for this trace
-					for s := 0; s < scenario.spansPerTrace; s++ {
-						isRoot := (s == scenario.spansPerTrace-1) // Last span is root
-
-						spans[spanIdx] = &types.Span{
-							TraceID: traceID,
-							IsRoot:  isRoot,
-							Event: types.Event{
-								Dataset: "benchmark-dataset",
-								APIKey:  "test-api-key",
-								Data:    createBenchmarkSpansWithLargeAttributes(traceID, spanIdx, collector.Config),
-							},
-						}
-
-						// Add parent ID to non-root spans
-						if !isRoot {
-							spans[spanIdx].Data.Set("trace.parent_id", fmt.Sprintf("parent-%s", traceID))
-						}
-
-						spanIdx++
-					}
-				}
-
 				b.StartTimer()
-				for i := 0; i < totalSpans; i++ {
-					collector.AddSpan(spans[i])
+				var traceID string
+				for n := range b.N {
+					if n%scenario.spansPerTrace == 0 {
+						// Start a new trace
+						traceID = fmt.Sprintf("trace-%d", n)
+					}
+					// Create spans for this trace
+					isRoot := n%scenario.spansPerTrace == scenario.spansPerTrace-1 // Last span is root
+
+					span := createBenchmarkSpans(traceID, n%scenario.spansPerTrace, isRoot, collector.Config)
+					collector.AddSpan(span)
 				}
 
 				// Wait for all spans to be processed
@@ -2679,75 +2661,105 @@ func BenchmarkCollectorWithSamplers(b *testing.B) {
 	}
 }
 
-func createBenchmarkSpansWithLargeAttributes(traceID string, spanIdx int, cfg config.Config) types.Payload {
-	// Large text values for testing
-	largeText := strings.Repeat("x", 1000)
-	mediumText := strings.Repeat("y", 500)
-	smallText := strings.Repeat("z", 100)
+// Why not a sync.Pool? We're handling a lot of points in-flight and empirically
+// a sync.Pool gets emptied by the garbage collector too aggressively. A channel
+// allows us to guarantee that nothing in the pool is ever GC'd.
+var benchmarkSpanPool = make(chan *types.Span, 25_000)
 
-	data := make(map[string]interface{})
+func createBenchmarkSpans(traceID string, spanIdx int, isRoot bool, cfg config.Config) *types.Span {
+	// Recycle spans through a pool, changing only the fields we really need to
+	// per use. This means that the various other fields in there will carry over
+	// between uses and won't be "correct" relative to the spanIdx, but the benchmark
+	// should be structured such that we don't really care. It also means that
+	// memoized values for trace_id etc within the Payload are incorrect, so we
+	// can't use those for our sampler rules.
+	var span *types.Span
+	select {
+	case span = <-benchmarkSpanPool:
+	default:
+		// Large text values for testing
+		largeText := strings.Repeat("x", 1000)
+		mediumText := strings.Repeat("y", 500)
+		smallText := strings.Repeat("z", 100)
 
-	// Core tracing fields (always present)
-	data["trace.trace_id"] = traceID
-	spanID := fmt.Sprintf("span-%018d", spanIdx)
+		data := make(map[string]any)
+
+		// fields used for sampling
+		data["sampler-field-1"] = rand.Intn(20)
+		data["sampler-field-2"] = "static-value"
+
+		data["service.name"] = fmt.Sprintf("service-%d", spanIdx%3)
+		data["duration_ms"] = 100.0
+
+		data["meta.signal_type"] = "trace"
+		data["meta.annotation_type"] = "span"
+		data["meta.refinery.incoming_user_agent"] = "refinery/v2.4.1"
+
+		// Large text fields (3 large fields)
+		data["large_field_1"] = largeText
+		data["large_field_2"] = mediumText
+		data["large_field_3"] = smallText
+
+		// many string, float, int, and bool fields
+		for j := 0; j < 25; j++ {
+			data[fmt.Sprintf("string.field_%d", j)] = fmt.Sprintf("string_value_%d", j)
+			data[fmt.Sprintf("int.field_%d", j)] = int64(j)
+			data[fmt.Sprintf("float.field_%d", j)] = float64(j)
+			data[fmt.Sprintf("bool.field_%d", j)] = (spanIdx+j)%2 == 0
+		}
+
+		// Array field
+		data["tags"] = []string{
+			fmt.Sprintf("tag_%d", spanIdx),
+			fmt.Sprintf("tag_%d", spanIdx+1),
+			fmt.Sprintf("tag_%d", spanIdx+2),
+		}
+
+		// Nested map field
+		data["custom.metadata"] = map[string]interface{}{
+			"nested_field_1": map[string]interface{}{
+				"key1": fmt.Sprintf("value_%d", spanIdx),
+				"key2": spanIdx * 10,
+				"key3": spanIdx%2 == 0,
+			},
+			"nested_field_2": map[string]interface{}{
+				"key1": true,
+				"key2": false,
+				"key3": spanIdx + 100,
+			},
+		}
+		payload := types.NewPayload(cfg, data)
+		payload.ExtractMetadata()
+
+		span = &types.Span{
+			Event: types.Event{
+				Dataset: "benchmark-dataset",
+				APIKey:  "test-api-key",
+				Data:    payload,
+			},
+		}
+	}
+
+	span.TraceID = traceID
+	span.IsRoot = isRoot
+
+	// Core tracing fields (always present, differs per trace)
 	parentID := ""
 	if spanIdx%3 != 0 { // 2/3 of spans have parents
 		parentID = fmt.Sprintf("span-%018d", spanIdx-1)
 	}
-
-	// fields used for sampling
-	data["sampler-field-1"] = rand.Intn(20)
-	data["sampler-field-2"] = "static-value"
-
-	data["trace.trace_id"] = traceID
-	data["trace.span_id"] = spanID
-	data["trace.parent_id"] = parentID
-	data["service.name"] = fmt.Sprintf("service-%d", spanIdx%3)
-	data["duration_ms"] = 100.0
-
-	data["meta.signal_type"] = "trace"
-	data["meta.annotation_type"] = "span"
-	data["meta.refinery.incoming_user_agent"] = "refinery/v2.4.1"
-
-	// Large text fields (3 large fields)
-	data["large_field_1"] = largeText
-	data["large_field_2"] = mediumText
-	data["large_field_3"] = smallText
-
-	// many string, float, int, and bool fields
-	for j := 0; j < 25; j++ {
-		data[fmt.Sprintf("string.field_%d", j)] = fmt.Sprintf("string_value_%d", j)
-		data[fmt.Sprintf("int.field_%d", j)] = int64(j)
-		data[fmt.Sprintf("float.field_%d", j)] = float64(j)
-		data[fmt.Sprintf("bool.field_%d", j)] = (spanIdx+j)%2 == 0
+	span.Event.Data.Set("trace.trace_id", traceID)
+	span.Event.Data.Set("trace.span_id", fmt.Sprintf("span-%018d", spanIdx))
+	if isRoot {
+		span.Event.Data.UnsetForTest("trace.parent_id")
+	} else {
+		span.Event.Data.Set("trace.parent_id", parentID)
 	}
 
-	// Array field
-	data["tags"] = []string{
-		fmt.Sprintf("tag_%d", spanIdx),
-		fmt.Sprintf("tag_%d", spanIdx+1),
-		fmt.Sprintf("tag_%d", spanIdx+2),
-	}
-
-	// Nested map field
-	data["custom.metadata"] = map[string]interface{}{
-		"nested_field_1": map[string]interface{}{
-			"key1": fmt.Sprintf("value_%d", spanIdx),
-			"key2": spanIdx * 10,
-			"key3": spanIdx%2 == 0,
-		},
-		"nested_field_2": map[string]interface{}{
-			"key1": true,
-			"key2": false,
-			"key3": spanIdx + 100,
-		},
-	}
-	payload := types.NewPayload(cfg, data)
-	payload.ExtractMetadata()
-	return payload
+	return span
 }
 
-func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mockSender) *InMemCollector {
+func setupBenchmarkCollector(samplerConfig any, sender *mockSender) *InMemCollector {
 	conf := &config.MockConfig{
 		DryRun: true,
 		GetTracesConfigVal: config.TracesConfig{
@@ -2785,18 +2797,16 @@ func setupBenchmarkCollector(b *testing.B, samplerConfig interface{}, sender *mo
 
 // mockSender is a mock implementation of the Transmission
 type mockSender struct {
-	eventQueue chan *types.Event
+	spanQueue chan *types.Span
 }
 
 func (c *mockSender) EnqueueEvent(event *types.Event) {
-	select {
-	case c.eventQueue <- event:
-	}
+	panic("unimplemented")
 }
 
 func (c *mockSender) EnqueueSpan(span *types.Span) {
 	select {
-	case c.eventQueue <- &span.Event:
+	case c.spanQueue <- span:
 	}
 }
 
@@ -2808,11 +2818,15 @@ func (c *mockSender) RegisterMetrics() {
 	// No-op for mock sender
 }
 
-func (c *mockSender) waitForCount(b *testing.B, target int) {
+func (c *mockSender) waitForCount(target int) {
 	var count int
 	for {
 		select {
-		case <-c.eventQueue:
+		case span := <-c.spanQueue:
+			select {
+			case benchmarkSpanPool <- span:
+			default:
+			}
 			count += 1
 			if count >= target {
 				return

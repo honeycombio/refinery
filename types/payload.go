@@ -729,6 +729,10 @@ func (p *Payload) Set(key string, value any) {
 	p.memoizedFields[key] = value
 }
 
+func (p *Payload) UnsetForTest(key string) {
+	delete(p.memoizedFields, key)
+}
+
 func (p *Payload) IsEmpty() bool {
 	return len(p.memoizedFields) == 0 && len(p.msgpData) == 0
 }
