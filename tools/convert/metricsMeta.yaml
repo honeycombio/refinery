@@ -352,10 +352,10 @@ hasprefix:
       type: Counter
       unit: Dimensionless
       description: the number of events received in batches
-    - name: _router_otlp
+    - name: _router_otlp_other
       type: Counter
       unit: Dimensionless
-      description: the number of otlp requests received
+      description: the number of otlp requests not using optimized http json/protobuf processing
     - name: _router_otlp_events
       type: Counter
       unit: Dimensionless

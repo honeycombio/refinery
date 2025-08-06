@@ -141,7 +141,7 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_peer", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of spans proxied to a peer"},
 	{Name: "_router_batch", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of events received"},
 	{Name: "_router_batch_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in batches"},
-	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests received"},
+	{Name: "_router_otlp_other", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests not using optimized http json/protobuf processing"},
 	{Name: "_router_otlp_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in otlp requests"},
 	{Name: "_router_otlp_http_proto", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/protobuf requests received"},
 	{Name: "_router_otlp_http_json", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/json requests received"},
@@ -171,8 +171,8 @@ func (r *Router) registerMetricNames() {
 			r.metricsNames.routerBatch = fullname
 		case "_router_batch_events":
 			r.metricsNames.routerBatchEvents = fullname
-		case "_router_otlp":
-			r.metricsNames.routerOtlp = fullname
+		case "_router_otlp_other":
+			r.metricsNames.routerOtlpOther = fullname
 		case "_router_otlp_http_proto":
 			r.metricsNames.routerOtlpHttpProto = fullname
 		case "_router_otlp_http_json":
@@ -196,7 +196,7 @@ type routerMetricKeys struct {
 	routerPeer          string
 	routerBatch         string
 	routerBatchEvents   string
-	routerOtlp          string
+	routerOtlpOther     string
 	routerOtlpHttpProto string
 	routerOtlpHttpJson  string
 	routerOtlpEvents    string
@@ -602,7 +602,7 @@ func (router *Router) processOTLPRequest(
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
 
-	router.Metrics.Increment(router.metricsNames.routerOtlp)
+	router.Metrics.Increment(router.metricsNames.routerOtlpOther)
 
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)

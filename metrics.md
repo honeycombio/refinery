@@ -108,7 +108,7 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _router_peer | Counter | Dimensionless | the number of spans proxied to a peer |
 | _router_batch | Counter | Dimensionless | the number of batches of events received |
 | _router_batch_events | Counter | Dimensionless | the number of events received in batches |
-| _router_otlp | Counter | Dimensionless | the number of otlp requests received |
+| _router_otlp_other | Counter | Dimensionless | the number of otlp requests not using optimized http json/protobuf processing |
 | _router_otlp_events | Counter | Dimensionless | the number of events received in otlp requests |
 | bytes_received_traces | Counter | Bytes | the number of bytes received in trace events |
 | bytes_received_logs | Counter | Bytes | the number of bytes received in log events |
