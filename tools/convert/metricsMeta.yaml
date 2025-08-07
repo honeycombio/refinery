@@ -376,22 +376,34 @@ hasprefix:
       type: Counter
       unit: Dimensionless
       description: the number of events received in batches
-    - name: _router_otlp_other
-      type: Counter
-      unit: Dimensionless
-      description: the number of otlp requests received without http json/protobuf processing optimization
     - name: _router_otlp_events
       type: Counter
       unit: Dimensionless
       description: the number of events received in otlp requests
-    - name: _router_otlp_http_proto
+    - name: _router_otlp_log_http_proto
       type: Counter
       unit: Dimensionless
-      description: the number of http/protobuf requests received
-    - name: _router_otlp_http_json
+      description: the number of otlp log http/protobuf requests received
+    - name: _router_otlp_log_http_json
       type: Counter
       unit: Dimensionless
-      description: the number of http/json requests received
+      description: the number of otlp log http/json requests received
+    - name: _router_otlp_log_grpc
+      type: Counter
+      unit: Dimensionless
+      description: the number of otlp log grpc requests received
+    - name: _router_otlp_trace_http_proto
+      type: Counter
+      unit: Dimensionless
+      description: the number of otlp trace http/protobuf requests received
+    - name: _router_otlp_trace_http_json
+      type: Counter
+      unit: Dimensionless
+      description: the number of otlp trace http/json requests received
+    - name: _router_otlp_trace_grpc
+      type: Counter
+      unit: Dimensionless
+      description: the number of otlp trace grpc requests received
     - name: bytes_received_traces
       type: Counter
       unit: Bytes

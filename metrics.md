@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-08-07 at 16:59:29 UTC.
+It was automatically generated on 2025-08-07 at 21:56:06 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -114,9 +114,12 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _router_peer | Counter | Dimensionless | the number of spans proxied to a peer |
 | _router_batch | Counter | Dimensionless | the number of batches of events received |
 | _router_batch_events | Counter | Dimensionless | the number of events received in batches |
-| _router_otlp_other | Counter | Dimensionless | the number of otlp requests received without http json/protobuf processing optimization |
 | _router_otlp_events | Counter | Dimensionless | the number of events received in otlp requests |
-| _router_otlp_http_proto | Counter | Dimensionless | the number of http/protobuf requests received |
-| _router_otlp_http_json | Counter | Dimensionless | the number of http/json requests received |
+| _router_otlp_log_http_proto | Counter | Dimensionless | the number of otlp log http/protobuf requests received |
+| _router_otlp_log_http_json | Counter | Dimensionless | the number of otlp log http/json requests received |
+| _router_otlp_log_grpc | Counter | Dimensionless | the number of otlp log grpc requests received |
+| _router_otlp_trace_http_proto | Counter | Dimensionless | the number of otlp trace http/protobuf requests received |
+| _router_otlp_trace_http_json | Counter | Dimensionless | the number of otlp trace http/json requests received |
+| _router_otlp_trace_grpc | Counter | Dimensionless | the number of otlp trace grpc requests received |
 | bytes_received_traces | Counter | Bytes | the number of bytes received in trace events |
 | bytes_received_logs | Counter | Bytes | the number of bytes received in log events |
