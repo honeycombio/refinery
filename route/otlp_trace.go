@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -42,40 +43,40 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 
 	ri.ApiKey = keyToUse
 
+	var err error
 	switch ri.ContentType {
 	case "application/json":
 		r.Metrics.Increment(r.metricsNames.routerOtlpHttpJson)
-		r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
+		err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
 	case "application/x-protobuf", "application/protobuf":
 		r.Metrics.Increment(r.metricsNames.routerOtlpHttpProto)
-		r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
+		err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
 	default:
-		result, err := huskyotlp.TranslateTraceRequestFromReader(ctx, req.Body, ri)
-		if err != nil {
-			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
-			return
-		}
-
-		if err := r.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
-			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
-			return
-		}
+		err = errors.New("unsupported content type")
 	}
 
-	_ = huskyotlp.WriteOtlpHttpTraceSuccessResponse(w, req)
-}
-
-func (r *Router) processOTLPRequestWithMsgp(ctx context.Context, w http.ResponseWriter, req *http.Request, ri huskyotlp.RequestInfo, keyToUse string) {
-	result, err := huskyotlp.TranslateTraceRequestFromReaderSizedWithMsgp(ctx, req.Body, ri, int64(defaultMaxRequestBodySize))
 	if err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
+	err = huskyotlp.WriteOtlpHttpTraceSuccessResponse(w, req)
+	if err != nil {
+		r.Logger.Error().WithField("error", err).Logf("failed to write OTLP HTTP trace success response")
+	}
+	return
+}
+
+func (r *Router) processOTLPRequestWithMsgp(ctx context.Context, w http.ResponseWriter, req *http.Request, ri huskyotlp.RequestInfo, keyToUse string) error {
+	result, err := huskyotlp.TranslateTraceRequestFromReaderSizedWithMsgp(ctx, req.Body, ri, int64(defaultMaxRequestBodySize))
+	if err != nil {
+		return err
+	}
 
 	if err := r.processOTLPRequestBatchMsgp(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
-		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
-		return
+		return err
 	}
+
+	return nil
 }
 
 // CustomTraceServiceServer defines our custom interface for the trace service.
