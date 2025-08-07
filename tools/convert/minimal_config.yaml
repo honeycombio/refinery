@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2025-06-03 at 21:32:31 UTC
+# automatically generated on 2025-07-15 at 17:41:44 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -50,6 +50,10 @@ HoneycombLogger:
   Dataset: "Refinery Logs"
   SamplerEnabled: true
   SamplerThroughput: 10
+  AdditionalAttributes: 
+    "pipeline.id": "'12345'"
+    "rollout.id": "'67890'"
+
 StdoutLogger:
   Structured: false
   SamplerEnabled: false

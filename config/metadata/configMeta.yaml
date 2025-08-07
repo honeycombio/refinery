@@ -646,6 +646,23 @@ groups:
           unique logs arrive at Honeycomb at least once per sampling
           period.
 
+      - name: AdditionalAttributes
+        type: map
+        valuetype: map
+        example: "pipeline.id:'12345',rollout.id:'67890'"
+        reload: false
+        validations:
+          - type: elementType
+            arg: string
+        summary: adds the provided attributes to all logs written by the Honeycomb logger.
+        envvar: REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES
+        commandline: logger-additional-attributes
+        description: >
+           When supplying via a environment variable, the value should be a string of comma-separated key-value pairs.
+           When supplying via the command line, the value should be a key value pair.
+           If multiple key-value pairs are needed, each should be supplied via its own command line flag.
+           The key-value pairs must use ':' as the separator.
+
   - name: StdoutLogger
     title: "Stdout Logger"
     description: contains configuration for logging to `stdout`. Only used if `Logger.Type` is "stdout".
@@ -1041,7 +1058,7 @@ groups:
         type: stringarray
         valuetype: stringarray
         example: "http://192.168.1.11:8081,http://192.168.1.12:8081"
-        reload: false
+        reload: true
         validations:
           - type: elementType
             arg: url
@@ -1243,18 +1260,14 @@ groups:
         validations:
           - type: minimum
             arg: 1000
-        summary: is the number of traces to keep in the cache's circular buffer.
+        summary: Deprecated. Set PeerQueueSize and IncomingQueueSize instead.
         description: >
-          The collection cache is used to collect all active spans into traces.
-          It is organized as a circular buffer. When the buffer wraps around,
-          Refinery will try a few times to find an empty slot; if it fails, it
-          starts ejecting traces from the cache earlier than would otherwise be
-          necessary. Ideally, the size of the cache should be many
-          multiples (100x to 1000x) of the total number of concurrently active
-          traces (average trace throughput * average trace duration).
-
           NOTE: This setting is now deprecated and no longer controls the cache size.
-          Instead the maxmimum memory usage is controlled by `MaxMemoryPercentage` and `MaxAlloc`.
+          Instead the maximum memory usage is controlled by `MaxMemoryPercentage` and `MaxAlloc`.
+          
+          Setting this value does still set the default PeerQueueSize to (3 x CacheCapacity) and IncomingQueueSize
+          to (3 x CacheCapacity) if they are not set. This behavior will be removed in the future.
+          Instead, set PeerQueueSize and IncomingQueueSize to the exact values you want.
 
       - name: PeerQueueSize
         type: int

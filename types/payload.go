@@ -240,6 +240,7 @@ func (nb *nullableBool) Unset() {
 type Payload struct {
 	// A serialized messagepack map used to source fields.
 	msgpData []byte
+	isEmpty  bool
 
 	// Deserialized fields, either from the internal msgpMap, or set externally.
 	memoizedFields map[string]any
@@ -290,6 +291,10 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 	mapSize, remaining, err := msgp.ReadMapHeaderBytes(data)
 	if err != nil {
 		return len(data) - len(remaining), fmt.Errorf("failed to read msgpack map header: %w", err)
+	}
+
+	if mapSize == 0 {
+		p.isEmpty = true
 	}
 
 	// Process all map entries
@@ -730,7 +735,7 @@ func (p *Payload) Set(key string, value any) {
 }
 
 func (p *Payload) IsEmpty() bool {
-	return len(p.memoizedFields) == 0 && len(p.msgpData) == 0
+	return p.isEmpty
 }
 
 // All() allows easily iterating all values in the Payload, but this is very

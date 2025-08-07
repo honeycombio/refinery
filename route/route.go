@@ -494,6 +494,10 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 		return nil, err
 	}
 
+	if len(data) == 0 {
+		return nil, fmt.Errorf("empty event data")
+	}
+
 	return &types.Event{
 		Context:     ctx,
 		APIHost:     apiHost,
@@ -539,8 +543,8 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	batchedEvents := newBatchedEvents(r.Config, apiKey, environment, dataset)
 	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
 	if err != nil {
-		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(bodyBuffer.Bytes())).Logf("error parsing json")
-		r.handlerReturnWithError(w, ErrJSONFailed, err)
+		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("body", string(bodyBuffer.Bytes())).Logf("error parsing json")
+		r.handlerReturnWithError(w, ErrBatchToEvent, err)
 		return
 	}
 	r.Metrics.Count(r.metricsNames.routerBatchEvents, int64(len(batchedEvents.events)))
@@ -549,19 +553,23 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	userAgent := getUserAgentFromRequest(req)
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
 	for _, bev := range batchedEvents.events {
-		ev := &types.Event{
-			Context:     ctx,
-			APIHost:     apiHost,
-			APIKey:      apiKey,
-			Dataset:     dataset,
-			Environment: environment,
-			SampleRate:  bev.getSampleRate(),
-			Timestamp:   bev.getEventTime(),
-			Data:        bev.Data,
-		}
+		if !bev.Data.IsEmpty() {
+			ev := &types.Event{
+				Context:     ctx,
+				APIHost:     apiHost,
+				APIKey:      apiKey,
+				Dataset:     dataset,
+				Environment: environment,
+				SampleRate:  bev.getSampleRate(),
+				Timestamp:   bev.getEventTime(),
+				Data:        bev.Data,
+			}
 
-		addIncomingUserAgent(ev, userAgent)
-		err = r.processEvent(ev, reqID)
+			addIncomingUserAgent(ev, userAgent)
+			err = r.processEvent(ev, reqID)
+		} else {
+			err = fmt.Errorf("empty event data")
+		}
 
 		var resp BatchResponse
 		switch {
