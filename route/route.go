@@ -141,10 +141,13 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_peer", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of spans proxied to a peer"},
 	{Name: "_router_batch", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of events received"},
 	{Name: "_router_batch_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in batches"},
-	{Name: "_router_otlp_other", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests received without http json/protobuf processing optimization"},
 	{Name: "_router_otlp_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in otlp requests"},
-	{Name: "_router_otlp_http_proto", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/protobuf requests received"},
-	{Name: "_router_otlp_http_json", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/json requests received"},
+	{Name: "_router_otlp_log_http_proto", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp log http/protobuf requests received"},
+	{Name: "_router_otlp_log_http_json", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp log http/json requests received"},
+	{Name: "_router_otlp_log_grpc", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp log grpc requests received"},
+	{Name: "_router_otlp_trace_http_proto", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp trace http/protobuf requests received"},
+	{Name: "_router_otlp_trace_http_json", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp trace http/json requests received"},
+	{Name: "_router_otlp_trace_grpc", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp trace grpc requests received"},
 	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
 }
@@ -171,12 +174,18 @@ func (r *Router) registerMetricNames() {
 			r.metricsNames.routerBatch = fullname
 		case "_router_batch_events":
 			r.metricsNames.routerBatchEvents = fullname
-		case "_router_otlp_other":
-			r.metricsNames.routerOtlpOther = fullname
-		case "_router_otlp_http_proto":
-			r.metricsNames.routerOtlpHttpProto = fullname
-		case "_router_otlp_http_json":
-			r.metricsNames.routerOtlpHttpJson = fullname
+		case "_router_otlp_log_http_json":
+			r.metricsNames.routerOtlpLogHttpJson = fullname
+		case "_router_otlp_log_http_proto":
+			r.metricsNames.routerOtlpLogHttpProto = fullname
+		case "_router_otlp_log_grpc":
+			r.metricsNames.routerOtlpLogGrpc = fullname
+		case "_router_otlp_trace_http_proto":
+			r.metricsNames.routerOtlpTraceHttpProto = fullname
+		case "_router_otlp_trace_http_json":
+			r.metricsNames.routerOtlpTraceHttpJson = fullname
+		case "_router_otlp_trace_grpc":
+			r.metricsNames.routerOtlpTraceGrpc = fullname
 		case "_router_otlp_events":
 			r.metricsNames.routerOtlpEvents = fullname
 		}
@@ -187,19 +196,22 @@ func (r *Router) registerMetricNames() {
 }
 
 type routerMetricKeys struct {
-	routerProxied       string
-	routerEvent         string
-	routerEventBytes    string
-	routerSpan          string
-	routerDropped       string
-	routerNonspan       string
-	routerPeer          string
-	routerBatch         string
-	routerBatchEvents   string
-	routerOtlpOther     string
-	routerOtlpHttpProto string
-	routerOtlpHttpJson  string
-	routerOtlpEvents    string
+	routerProxied            string
+	routerEvent              string
+	routerEventBytes         string
+	routerSpan               string
+	routerDropped            string
+	routerNonspan            string
+	routerPeer               string
+	routerBatch              string
+	routerBatchEvents        string
+	routerOtlpLogHttpJson    string
+	routerOtlpLogHttpProto   string
+	routerOtlpLogGrpc        string
+	routerOtlpTraceHttpProto string
+	routerOtlpTraceHttpJson  string
+	routerOtlpTraceGrpc      string
+	routerOtlpEvents         string
 }
 
 // LnS spins up the Listen and Serve portion of the router. A router is
@@ -601,8 +613,6 @@ func (router *Router) processOTLPRequest(
 ) error {
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
-
-	router.Metrics.Increment(router.metricsNames.routerOtlpOther)
 
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
