@@ -47,11 +47,12 @@ func (h *HoneycombLogger) Start() error {
 	} else {
 		loggerTx = &transmission.Honeycomb{
 			// logs are often sent in flurries; flush every half second
-			MaxBatchSize:        100,
-			BatchTimeout:        500 * time.Millisecond,
-			UserAgentAddition:   "refinery/" + h.Version + " (metrics)",
-			Transport:           h.UpstreamTransport,
-			PendingWorkCapacity: libhoney.DefaultPendingWorkCapacity,
+			MaxBatchSize:          100,
+			BatchTimeout:          500 * time.Millisecond,
+			UserAgentAddition:     "refinery/" + h.Version + " (metrics)",
+			Transport:             h.UpstreamTransport,
+			PendingWorkCapacity:   libhoney.DefaultPendingWorkCapacity,
+			EnableMsgpackEncoding: true,
 		}
 	}
 

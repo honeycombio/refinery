@@ -54,7 +54,7 @@ var TickerTime = 500 * time.Millisecond
 // every timeout interval. If they don't, they will be marked as not alive.
 type Health struct {
 	Clock      clockwork.Clock `inject:""`
-	Metrics    metrics.Metrics `inject:"genericMetrics"`
+	Metrics    metrics.Metrics `inject:"metrics"`
 	Logger     logger.Logger   `inject:""`
 	timeouts   map[string]time.Duration
 	timeLeft   map[string]time.Duration
@@ -191,8 +191,8 @@ func (h *Health) Ready(subsystem string, ready bool) {
 		h.alives[subsystem] = true
 		h.Logger.Info().WithField("subsystem", subsystem).Logf("Health.Ready reporting subsystem alive")
 	}
-	h.Metrics.Gauge("is_ready", h.checkReady())
-	h.Metrics.Gauge("is_alive", h.checkAlive())
+	h.Metrics.Gauge("is_ready", metrics.ConvertBoolToFloat(h.checkReady()))
+	h.Metrics.Gauge("is_alive", metrics.ConvertBoolToFloat(h.checkAlive()))
 }
 
 // IsAlive returns true if all registered subsystems are alive

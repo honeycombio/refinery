@@ -23,8 +23,10 @@ func TestDefaultTransmissionUpdatesUserAgentAdditionAfterStart(t *testing.T) {
 
 	assert.Equal(t, libhoney.UserAgentAddition, "")
 	err := transmission.Start()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, libhoney.UserAgentAddition, "refinery/test")
+	err = transmission.Stop()
+	assert.NoError(t, err)
 }
 
 func TestDependencyInjection(t *testing.T) {
@@ -34,7 +36,6 @@ func TestDependencyInjection(t *testing.T) {
 
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
-		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: "test", Name: "version"},
 	)

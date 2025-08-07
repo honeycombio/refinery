@@ -8,7 +8,7 @@ var _ Metrics = (*MockMetrics)(nil)
 // verify expected behavior
 type MockMetrics struct {
 	Registrations     map[string]string
-	CounterIncrements map[string]int
+	CounterIncrements map[string]int64
 	GaugeRecords      map[string]float64
 	Histograms        map[string][]float64
 	UpdownIncrements  map[string]int
@@ -20,7 +20,7 @@ type MockMetrics struct {
 // Start initializes all metrics or resets all metrics to zero
 func (m *MockMetrics) Start() {
 	m.Registrations = make(map[string]string)
-	m.CounterIncrements = make(map[string]int)
+	m.CounterIncrements = make(map[string]int64)
 	m.GaugeRecords = make(map[string]float64)
 	m.Histograms = make(map[string][]float64)
 	m.UpdownIncrements = make(map[string]int)
@@ -43,19 +43,19 @@ func (m *MockMetrics) Increment(name string) {
 
 	m.CounterIncrements[name] += 1
 }
-func (m *MockMetrics) Gauge(name string, val interface{}) {
+func (m *MockMetrics) Gauge(name string, val float64) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	m.GaugeRecords[name] = ConvertNumeric(val)
+	m.GaugeRecords[name] = val
 }
-func (m *MockMetrics) Count(name string, val interface{}) {
+func (m *MockMetrics) Count(name string, val int64) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	m.CounterIncrements[name] += int(ConvertNumeric(val))
+	m.CounterIncrements[name] += val
 }
-func (m *MockMetrics) Histogram(name string, val interface{}) {
+func (m *MockMetrics) Histogram(name string, val float64) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -63,7 +63,7 @@ func (m *MockMetrics) Histogram(name string, val interface{}) {
 	if !ok {
 		m.Histograms[name] = make([]float64, 0)
 	}
-	m.Histograms[name] = append(m.Histograms[name], ConvertNumeric(val))
+	m.Histograms[name] = append(m.Histograms[name], val)
 }
 func (m *MockMetrics) Up(name string) {
 	m.lock.Lock()
@@ -99,4 +99,15 @@ func (m *MockMetrics) Store(name string, val float64) {
 	defer m.lock.Unlock()
 
 	m.Constants[name] = val
+}
+
+// GetHistogramCount returns the number of values recorded for a histogram
+func (m *MockMetrics) GetHistogramCount(name string) int {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	if hist, ok := m.Histograms[name]; ok {
+		return len(hist)
+	}
+	return 0
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/route"
+	"github.com/honeycombio/refinery/types"
 )
 
 type App struct {
@@ -17,7 +18,7 @@ type App struct {
 	IncomingRouter route.Router      `inject:"inline"`
 	PeerRouter     route.Router      `inject:"inline"`
 	Collector      collect.Collector `inject:""`
-	Metrics        metrics.Metrics   `inject:"genericMetrics"`
+	Metrics        metrics.Metrics   `inject:"metrics"`
 
 	// Version is the build ID for Refinery so that the running process may answer
 	// requests for the version
@@ -44,8 +45,8 @@ func (a *App) Start() error {
 		}
 		cfgMetric := config.ConfigHashMetrics(cfgHash)
 		ruleMetric := config.ConfigHashMetrics(rulesHash)
-		a.Metrics.Gauge("config_hash", cfgMetric)
-		a.Metrics.Gauge("rule_config_hash", ruleMetric)
+		a.Metrics.Gauge("config_hash", float64(cfgMetric))
+		a.Metrics.Gauge("rule_config_hash", float64(ruleMetric))
 	}
 
 	a.Logger.Debug().Logf("Starting up App...")
@@ -54,6 +55,8 @@ func (a *App) Start() error {
 	}
 	a.IncomingRouter.SetVersion(a.Version)
 	a.PeerRouter.SetVersion(a.Version)
+	a.IncomingRouter.SetType(types.RouterTypeIncoming)
+	a.PeerRouter.SetType(types.RouterTypePeer)
 
 	record_hashes("loaded configuration at startup")
 	a.Config.RegisterReloadCallback(func(configHash, rulesHash string) {
@@ -62,8 +65,8 @@ func (a *App) Start() error {
 
 	// launch our main routers to listen for incoming event traffic from both peers
 	// and external sources
-	a.IncomingRouter.LnS("incoming")
-	a.PeerRouter.LnS("peer")
+	a.IncomingRouter.LnS()
+	a.PeerRouter.LnS()
 
 	// only enable the opamp agent if it's configured
 	if a.Config.GetOpAMPConfig().Enabled {

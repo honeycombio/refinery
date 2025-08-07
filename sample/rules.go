@@ -15,33 +15,24 @@ import (
 var _ ClusterSizer = (*RulesBasedSampler)(nil)
 
 type RulesBasedSampler struct {
-	Config    *config.RulesBasedSamplerConfig
-	Logger    logger.Logger
-	Metrics   metrics.Metrics
-	samplers  map[string]Sampler
-	prefix    string
-	keyFields []string
-}
+	Config        *config.RulesBasedSamplerConfig
+	Logger        logger.Logger
+	Metrics       metrics.Metrics
+	samplers      map[string]Sampler
+	keyFields     []string
+	nonRootFields []string
 
-const RootPrefix = "root."
-
-var ruleBasedSamplerMetrics = []metrics.Metadata{
-	{Name: "_num_dropped_by_drop_rule", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of traces dropped by the drop rule"},
+	metricNames samplerMetricNames
 }
 
 func (s *RulesBasedSampler) Start() error {
 	s.Logger.Debug().Logf("Starting RulesBasedSampler")
 	defer func() { s.Logger.Debug().Logf("Finished starting RulesBasedSampler") }()
-	s.prefix = "rulesbased"
 
-	ruleBasedSamplerMetrics = append(ruleBasedSamplerMetrics, samplerMetrics...)
-	for _, metric := range ruleBasedSamplerMetrics {
-		metric.Name = s.prefix + metric.Name
-		s.Metrics.Register(metric)
-	}
+	s.metricNames = newSamplerMetricNames("rulesbased", s.Metrics)
 
 	s.samplers = make(map[string]Sampler)
-	s.keyFields = s.Config.GetSamplingFields()
+	s.keyFields, s.nonRootFields = config.GetKeyFields(s.Config.GetSamplingFields())
 
 	for _, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {
@@ -150,16 +141,16 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				rate = uint(rule.SampleRate)
 				keep = !rule.Drop && rule.SampleRate > 0 && rand.Intn(rule.SampleRate) == 0
 				reason += rule.Name
-				s.Metrics.Histogram(s.prefix+"_sample_rate", float64(rate))
+				s.Metrics.Histogram(s.metricNames.sampleRate, float64(rate))
 			}
 
 			if keep {
-				s.Metrics.Increment(s.prefix + "_num_kept")
+				s.Metrics.Increment(s.metricNames.numKept)
 			} else {
-				s.Metrics.Increment(s.prefix + "_num_dropped")
+				s.Metrics.Increment(s.metricNames.numDropped)
 				if rule.Drop {
 					// If we dropped because of an explicit drop rule, then increment that too.
-					s.Metrics.Increment(s.prefix + "_num_dropped_by_drop_rule")
+					s.Metrics.Increment(s.metricNames.numDroppedByDropRule)
 				}
 			}
 			logger.WithFields(map[string]interface{}{
@@ -174,8 +165,8 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	return 1, true, "no rule matched", ""
 }
 
-func (s *RulesBasedSampler) GetKeyFields() []string {
-	return s.keyFields
+func (s *RulesBasedSampler) GetKeyFields() ([]string, []string) {
+	return s.keyFields, s.nonRootFields
 }
 
 func ruleMatchesTrace(t *types.Trace, rule *config.RulesBasedSamplerRule, checkNestedFields bool) bool {
@@ -289,7 +280,8 @@ func extractValueFromSpan(
 	trace *types.Trace,
 	span *types.Span,
 	condition *config.RulesBasedSamplerCondition,
-	checkNestedFields bool) (value interface{}, exists bool, checkedOnlyRoot bool) {
+	checkNestedFields bool,
+) (value interface{}, exists bool, checkedOnlyRoot bool) {
 	// start with the assumption that we only checked the root span
 	checkedOnlyRoot = true
 
@@ -311,10 +303,10 @@ func extractValueFromSpan(
 		// always start with the original span
 		span = original
 		// check if rule uses root span context
-		if strings.HasPrefix(field, RootPrefix) {
+		if strings.HasPrefix(field, config.RootPrefix) {
 			// make sure root span exists
 			if trace.RootSpan != nil {
-				field = field[len(RootPrefix):]
+				field = field[len(config.RootPrefix):]
 				// now we're using the root span
 				span = trace.RootSpan
 			} else {
@@ -325,12 +317,11 @@ func extractValueFromSpan(
 			checkedOnlyRoot = false
 		}
 
-		value, exists = span.Data[field]
-		if exists {
-			return value, exists, checkedOnlyRoot
+		if span.Data.Exists(field) {
+			return span.Data.Get(field), true, checkedOnlyRoot
 		}
 	}
-	if !exists && checkNestedFields {
+	if checkNestedFields {
 		jsonStr, err := json.Marshal(span.Data)
 		if err == nil {
 			for _, field := range condition.Fields {

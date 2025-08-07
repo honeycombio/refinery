@@ -18,13 +18,15 @@ type TestRulesData struct {
 	Spans []*types.Span
 	// Set to the matching rule's sample rate if the rule matches.
 	// Set to the default rate (1) if you expect no rule to match.
-	ExpectedRate      uint
-	ExpectedKeep      bool
-	ExpectedName      string
-	ExpectedKeyFields []string
+	ExpectedRate           uint
+	ExpectedKeep           bool
+	ExpectedName           string
+	ExpectedKeyFields      []string
+	ExpectedSamplingFields []string
 }
 
 func TestRules(t *testing.T) {
+	mockCfg := &config.MockConfig{}
 	data := []TestRulesData{
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -45,15 +47,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -74,15 +77,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(2),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -103,15 +107,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -132,15 +137,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -165,16 +171,17 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedName:      "fallback",
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedName:           "fallback",
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -205,23 +212,24 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":     2.2,
 							"test_two": false,
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test_two": true,
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test", "test_two"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test", "test_two"},
+			ExpectedSamplingFields: []string{"test", "test_two"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -242,15 +250,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": float64(3),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      false,
-			ExpectedRate:      0,
-			ExpectedKeyFields: []string{"test"},
+			ExpectedKeep:           false,
+			ExpectedRate:           0,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -264,15 +273,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      false,
-			ExpectedRate:      0,
-			ExpectedKeyFields: []string{},
+			ExpectedKeep:           false,
+			ExpectedRate:           0,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: nil,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -298,24 +308,25 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": int64(1),
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": int64(1),
-						},
+						}),
 					},
 				},
 			},
 			ExpectedKeep: true,
 			// the trace does not match all the rules so we expect the default sample rate
-			ExpectedRate:      1,
-			ExpectedName:      "no rule matched",
-			ExpectedKeyFields: []string{"first", "second"},
+			ExpectedRate:           1,
+			ExpectedName:           "no rule matched",
+			ExpectedKeyFields:      []string{"first", "second"},
+			ExpectedSamplingFields: []string{"first", "second"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -336,15 +347,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": int64(9),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -364,15 +376,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": int64(9),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -392,15 +405,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"second": int64(9),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -421,15 +435,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": "honeycomb",
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -450,15 +465,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": "honeycomb",
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -479,15 +495,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": "honeycomb",
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      4,
-			ExpectedKeyFields: []string{"first"},
+			ExpectedKeep:           true,
+			ExpectedRate:           4,
+			ExpectedKeyFields:      []string{"first"},
+			ExpectedSamplingFields: []string{"first"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -508,112 +525,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(2),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test"},
-		},
-		{
-			Rules: &config.RulesBasedSamplerConfig{
-				Rules: []*config.RulesBasedSamplerRule{
-					{
-						Name:       "Check root span for span count",
-						SampleRate: 1,
-						Conditions: []*config.RulesBasedSamplerCondition{
-							{
-								Field:    "meta.span_count",
-								Operator: config.EQ,
-								Value:    int(2),
-							},
-						},
-					},
-				},
-			},
-			Spans: []*types.Span{
-				{
-					Event: types.Event{
-						Data: map[string]interface{}{
-							"trace.trace_id":  "12345",
-							"trace.span_id":   "54321",
-							"meta.span_count": int64(2),
-							"test":            int64(2),
-						},
-					},
-				},
-				{
-					Event: types.Event{
-						Data: map[string]interface{}{
-							"trace.trace_id":  "12345",
-							"trace.span_id":   "654321",
-							"trace.parent_id": "54321",
-							"test":            int64(2),
-						},
-					},
-				},
-			},
-			ExpectedName:      "Check root span for span count",
-			ExpectedKeep:      true,
-			ExpectedRate:      1,
-			ExpectedKeyFields: []string{"meta.span_count"},
-		},
-		{
-			Rules: &config.RulesBasedSamplerConfig{
-				Rules: []*config.RulesBasedSamplerRule{
-					{
-						Name:       "Check root span for span count",
-						Drop:       true,
-						SampleRate: 0,
-						Conditions: []*config.RulesBasedSamplerCondition{
-							{
-								Field:    "meta.span_count",
-								Operator: config.GTE,
-								Value:    int(2),
-							},
-						},
-					},
-				},
-			},
-			Spans: []*types.Span{
-				{
-					Event: types.Event{
-						Data: map[string]interface{}{
-							"trace.trace_id":  "12345",
-							"trace.span_id":   "54321",
-							"meta.span_count": int64(2),
-							"test":            int64(2),
-						},
-					},
-				},
-				{
-					Event: types.Event{
-						Data: map[string]interface{}{
-							"trace.trace_id":  "12345",
-							"trace.span_id":   "654321",
-							"trace.parent_id": "54321",
-							"test":            int64(2),
-						},
-					},
-				},
-				{
-					Event: types.Event{
-						Data: map[string]interface{}{
-							"trace.trace_id":  "12345",
-							"trace.span_id":   "754321",
-							"trace.parent_id": "54321",
-							"test":            int64(3),
-						},
-					},
-				},
-			},
-			ExpectedName:      "Check root span for span count",
-			ExpectedKeep:      false,
-			ExpectedRate:      0,
-			ExpectedKeyFields: []string{"meta.span_count"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test"},
+			ExpectedSamplingFields: []string{"test"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -634,29 +555,30 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "654321",
 							"trace.parent_id": "54321",
 							"test":            int64(2),
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
 							"trace.parent_id": "54321",
 							"test":            int64(3),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedName:      "Check that root span is missing",
-			ExpectedKeep:      false,
-			ExpectedRate:      0,
-			ExpectedKeyFields: []string{},
+			ExpectedName:           "Check that root span is missing",
+			ExpectedKeep:           false,
+			ExpectedRate:           0,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: nil,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -676,39 +598,40 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "54321",
 							"meta.span_count": int64(2),
 							"test":            int64(2),
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "654321",
 							"trace.parent_id": "54321",
 							"test":            int64(2),
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
 							"trace.parent_id": "54321",
 							"test":            int64(3),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedName:      "Check that root span is present",
-			ExpectedKeep:      true,
-			ExpectedRate:      99,
-			ExpectedKeyFields: []string{},
+			ExpectedName:           "Check that root span is present",
+			ExpectedKeep:           true,
+			ExpectedRate:           99,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: nil,
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -729,15 +652,16 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test2": int64(17),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedRate:      10,
-			ExpectedKeyFields: []string{"test", "test2"},
+			ExpectedKeep:           true,
+			ExpectedRate:           10,
+			ExpectedKeyFields:      []string{"test", "test2"},
+			ExpectedSamplingFields: []string{"test", "test2"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -758,16 +682,17 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test2": int64(16),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedName:      "no rule matched",
-			ExpectedRate:      1,
-			ExpectedKeyFields: []string{"test", "test2"},
+			ExpectedKeep:           true,
+			ExpectedName:           "no rule matched",
+			ExpectedRate:           1,
+			ExpectedKeyFields:      []string{"test", "test2"},
+			ExpectedSamplingFields: []string{"test", "test2"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -788,17 +713,18 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":  int64(2),
 							"test2": int64(17),
-						},
+						}),
 					},
 				},
 			},
-			ExpectedKeep:      true,
-			ExpectedName:      "no rule matched",
-			ExpectedRate:      1,
-			ExpectedKeyFields: []string{"test", "test2"},
+			ExpectedKeep:           true,
+			ExpectedName:           "no rule matched",
+			ExpectedRate:           1,
+			ExpectedKeyFields:      []string{"test", "test2"},
+			ExpectedSamplingFields: []string{"test", "test2"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -821,46 +747,47 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "54322",
 							"trace.parent_id": "54321",
 							"meta.span_count": int64(2),
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "654321",
 							"trace.parent_id": "54322",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
 							"trace.parent_id": "54322",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
 							"trace.parent_id": "54322",
-						},
+						}),
 					},
 				},
 			},
-			ExpectedName:      "Check that the number of descendants is greater than 3",
-			ExpectedKeep:      false,
-			ExpectedRate:      1,
-			ExpectedKeyFields: []string{string(config.NUM_DESCENDANTS)},
+			ExpectedName:           "Check that the number of descendants is greater than 3",
+			ExpectedKeep:           false,
+			ExpectedRate:           1,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: []string{"?.NUM_DESCENDANTS"},
 		},
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -881,46 +808,47 @@ func TestRules(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "54322",
 							"trace.parent_id": "54321",
 							"meta.span_count": int64(2),
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "654321",
 							"trace.parent_id": "54322",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
 							"trace.parent_id": "54322",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
 							"trace.parent_id": "54322",
-						},
+						}),
 					},
 				},
 			},
-			ExpectedName:      "no rule matched",
-			ExpectedKeep:      true,
-			ExpectedRate:      1,
-			ExpectedKeyFields: []string{string(config.NUM_DESCENDANTS)},
+			ExpectedName:           "no rule matched",
+			ExpectedKeep:           true,
+			ExpectedRate:           1,
+			ExpectedKeyFields:      nil,
+			ExpectedSamplingFields: []string{"?.NUM_DESCENDANTS"},
 		},
 	}
 
@@ -941,7 +869,7 @@ func TestRules(t *testing.T) {
 
 		for _, span := range d.Spans {
 			trace.AddSpan(span)
-			if _, ok := span.Data["trace.parent_id"]; ok == false {
+			if span.Data.Get("trace.parent_id") == nil {
 				trace.RootSpan = span
 			}
 		}
@@ -957,9 +885,13 @@ func TestRules(t *testing.T) {
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "", key)
 
-		keyFields := sampler.GetKeyFields()
-		slices.Sort(keyFields)
-		assert.Equal(t, d.ExpectedKeyFields, keyFields)
+		samplingFields := sampler.Config.GetSamplingFields()
+		slices.Sort(samplingFields)
+		assert.Equal(t, d.ExpectedSamplingFields, samplingFields)
+		allFields, nonRootFields := sampler.GetKeyFields()
+		slices.Sort(allFields)
+		assert.Equal(t, d.ExpectedKeyFields, allFields)
+		assert.Equal(t, d.ExpectedKeyFields, nonRootFields)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -969,6 +901,8 @@ func TestRules(t *testing.T) {
 }
 
 func TestRulesWithNestedFields(t *testing.T) {
+	// TODO test this with serialized msgpack as well, we want to make sure the behavior is equivalent.
+	mockCfg := &config.MockConfig{}
 	data := []TestRulesData{
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -990,11 +924,11 @@ func TestRulesWithNestedFields(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": map[string]interface{}{
 								"test1": "a",
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -1022,9 +956,9 @@ func TestRulesWithNestedFields(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test.test1": "a",
-						},
+						}),
 					},
 				},
 			},
@@ -1051,11 +985,11 @@ func TestRulesWithNestedFields(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": map[string]interface{}{
 								"test2": "b",
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -1082,11 +1016,11 @@ func TestRulesWithNestedFields(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": map[string]interface{}{
 								"test1": "a",
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -1115,11 +1049,11 @@ func TestRulesWithNestedFields(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": map[string]interface{}{
 								"test2": "a",
 							},
-						},
+						}),
 					},
 				},
 			},
@@ -1160,9 +1094,10 @@ func TestRulesWithNestedFields(t *testing.T) {
 			assert.Contains(t, reason, name)
 			assert.Equal(t, "", key)
 
-			keyFields := sampler.GetKeyFields()
+			keyFields, nonRootFields := sampler.GetKeyFields()
 			slices.Sort(keyFields)
 			assert.Equal(t, d.ExpectedKeyFields, keyFields)
+			assert.Equal(t, d.ExpectedKeyFields, nonRootFields)
 			// we can only test when we don't expect to keep the trace
 			if !d.ExpectedKeep {
 				assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
@@ -1172,6 +1107,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 }
 
 func TestRulesWithDynamicSampler(t *testing.T) {
+	mockCfg := &config.MockConfig{}
 	data := []TestRulesData{
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1197,18 +1133,18 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 			},
@@ -1248,9 +1184,10 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "200•,", key)
 
-		keyFields := sampler.GetKeyFields()
+		keyFields, nonRootFields := sampler.GetKeyFields()
 		slices.Sort(keyFields)
 		assert.Equal(t, d.ExpectedKeyFields, keyFields)
+		assert.Equal(t, d.ExpectedKeyFields, nonRootFields)
 
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
@@ -1263,6 +1200,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 }
 
 func TestRulesWithEMADynamicSampler(t *testing.T) {
+	mockCfg := &config.MockConfig{}
 	data := []TestRulesData{
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1288,18 +1226,18 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 			},
@@ -1339,9 +1277,10 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 		assert.Contains(t, reason, name)
 		assert.Equal(t, "200•,", key)
 
-		keyFields := sampler.GetKeyFields()
+		keyFields, nonRootFields := sampler.GetKeyFields()
 		slices.Sort(keyFields)
 		assert.Equal(t, d.ExpectedKeyFields, keyFields)
+		assert.Equal(t, d.ExpectedKeyFields, nonRootFields)
 		// we can only test when we don't expect to keep the trace
 		if !d.ExpectedKeep {
 			assert.Equal(t, d.ExpectedKeep, keep, d.Rules)
@@ -1353,6 +1292,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 }
 
 func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
+	mockCfg := &config.MockConfig{}
 	testCases := []struct {
 		name           string
 		spans          []*types.Span
@@ -1366,18 +1306,18 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 			spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(5),
 							"http.status_code": "500",
-						},
+						}),
 					},
 				},
 			},
@@ -1389,18 +1329,18 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 			spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "500",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(5),
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 			},
@@ -1470,6 +1410,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 }
 
 func TestRulesDatatypes(t *testing.T) {
+	mockCfg := &config.MockConfig{}
 	data := []TestRulesData{
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -1491,9 +1432,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
-						},
+						}),
 					},
 				},
 			},
@@ -1520,9 +1461,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": float64(1.01),
-						},
+						}),
 					},
 				},
 			},
@@ -1549,9 +1490,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "foo",
-						},
+						}),
 					},
 				},
 			},
@@ -1578,9 +1519,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": true,
-						},
+						}),
 					},
 				},
 			},
@@ -1607,9 +1548,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": true,
-						},
+						}),
 					},
 				},
 			},
@@ -1636,9 +1577,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": true,
-						},
+						}),
 					},
 				},
 			},
@@ -1665,9 +1606,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 10.,
-						},
+						}),
 					},
 				},
 			},
@@ -1694,9 +1635,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 100,
-						},
+						}),
 					},
 				},
 			},
@@ -1723,9 +1664,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "500",
-						},
+						}),
 					},
 				},
 			},
@@ -1752,9 +1693,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "500",
-						},
+						}),
 					},
 				},
 			},
@@ -1781,9 +1722,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 2,
-						},
+						}),
 					},
 				},
 			},
@@ -1810,9 +1751,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 9.3, // "9.3" is greater than "10.3" when compared as a string
-						},
+						}),
 					},
 				},
 			},
@@ -1839,9 +1780,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "4.13",
-						},
+						}),
 					},
 				},
 			},
@@ -1868,9 +1809,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "fourPointOneThree",
-						},
+						}),
 					},
 				},
 			},
@@ -1897,9 +1838,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "rightValue",
-						},
+						}),
 					},
 				},
 			},
@@ -1926,9 +1867,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 777,
-						},
+						}),
 					},
 				},
 			},
@@ -1955,9 +1896,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(11),
-						},
+						}),
 					},
 				},
 			},
@@ -1983,9 +1924,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(123),
-						},
+						}),
 					},
 				},
 			},
@@ -2011,9 +1952,9 @@ func TestRulesDatatypes(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "abc",
-						},
+						}),
 					},
 				},
 			},
@@ -2049,6 +1990,7 @@ func TestRulesDatatypes(t *testing.T) {
 }
 
 func TestRegexpRules(t *testing.T) {
+	mockCfg := &config.MockConfig{}
 	testdata := []struct {
 		re      string
 		value   any
@@ -2104,9 +2046,9 @@ func TestRegexpRules(t *testing.T) {
 			spans := []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": d.value,
-						},
+						}),
 					},
 				},
 			}
@@ -2122,6 +2064,7 @@ func TestRegexpRules(t *testing.T) {
 }
 
 func TestRulesWithDeterministicSampler(t *testing.T) {
+	mockCfg := &config.MockConfig{}
 	data := []TestRulesData{
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -2146,18 +2089,18 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 			},
@@ -2207,6 +2150,7 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 }
 
 func TestRulesRootSpanContext(t *testing.T) {
+	mockCfg := &config.MockConfig{}
 	data := []TestRulesData{
 		{
 			Rules: &config.RulesBasedSamplerConfig{
@@ -2227,25 +2171,25 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "123testABC", // I am root.
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "foo",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
 							"test3": "foo",
-						},
+						}),
 					},
 				},
 			},
@@ -2278,25 +2222,25 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "123testABC", // I am root.
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "foo",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
 							"test3": "foo",
-						},
+						}),
 					},
 				},
 			},
@@ -2328,27 +2272,27 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "123testABC", // I am root.
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":         "foo",
 							"anotherField": 3.5,
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 							"anotherField":     1.1,
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
 							"test3": "foo",
-						},
+						}),
 					},
 				},
 			},
@@ -2384,27 +2328,27 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "123testABC", // I am root.
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":         "foo",
 							"anotherField": 50,
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 							"anotherField":     10,
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
 							"test3": "foo",
-						},
+						}),
 					},
 				},
 			},
@@ -2440,27 +2384,27 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "123testABC", // I am root.
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":         "foo",
 							"anotherField": 50,
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 							"anotherField":     10,
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
 							"test3": "foo",
-						},
+						}),
 					},
 				},
 			},
@@ -2489,25 +2433,25 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "123testABC", // I am root.
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "nope", // I am the root span that does not match.
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":  "foo", // I am the span that almost matches, but I'm not root.
 							"test1": 1,
 							"test2": 2.2,
-						},
+						}),
 					},
 				},
 			},
@@ -2536,25 +2480,25 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "123testABC", // I am root.
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "nope",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":  "nope",
 							"test1": 1,
 							"test2": 2.2,
-						},
+						}),
 					},
 				},
 			},
@@ -2582,23 +2526,23 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "123testABC", // I am root.
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "nope",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "500",
-						},
+						}),
 					},
 				},
 			},
@@ -2626,23 +2570,23 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "123testABC", // I am root.
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "nope",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "500",
-						},
+						}),
 					},
 				},
 			},
@@ -2669,16 +2613,16 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "500",
-						},
+						}),
 					},
 				},
 			},
@@ -2705,17 +2649,17 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": 100.01,
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": 99.1,
 							"bar": 100.10,
-						},
+						}),
 					},
 				},
 			},
@@ -2742,16 +2686,16 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
-						},
+						}),
 					},
 				},
 			},
@@ -2782,16 +2726,16 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "abc123",
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"name.of.service": "is not service.name!",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
-						},
+						}),
 					},
 				},
 			},
@@ -2822,16 +2766,16 @@ func TestRulesRootSpanContext(t *testing.T) {
 				{
 					TraceID: "abc123",
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"service.name": "totally present",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
-						},
+						}),
 					},
 				},
 			},
@@ -2858,16 +2802,16 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"service.name": "no trace id on this test span, so it's not root",
-						},
+						}),
 					},
 				},
 				{
 					Event: types.Event{
-						Data: map[string]interface{}{
+						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
-						},
+						}),
 					},
 				},
 			},

@@ -851,6 +851,35 @@ func (f *fileConfig) GetAllSamplerRules() *V2SamplerConfig {
 	return f.rulesConfig
 }
 
+func (f *fileConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
+	if !IsLegacyAPIKey(apiKey) {
+		return env
+	}
+
+	if prefix := f.GetDatasetPrefix(); prefix != "" {
+		return fmt.Sprintf("%s.%s", prefix, dataset)
+	}
+
+	return dataset
+}
+
+func (f *fileConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	sampler, ok := f.rulesConfig.Samplers[samplerKey]
+	if ok {
+		return sampler.GetSamplingFields()
+	}
+
+	sampler, ok = f.rulesConfig.Samplers["__default__"]
+	if ok {
+		return sampler.GetSamplingFields()
+	}
+
+	return nil
+}
+
 // GetSamplerConfigForDestName returns the sampler config for the given
 // destination (environment, or dataset in classic mode), as well as the name of
 // the sampler type. If the specific destination is not found, it returns the
@@ -859,11 +888,11 @@ func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string) 
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	nameToUse := "__default__"
-	if _, ok := f.rulesConfig.Samplers[destname]; ok {
-		nameToUse = destname
+	if sampler, ok := f.rulesConfig.Samplers[destname]; ok {
+		return sampler.Sampler()
 	}
 
+	nameToUse := "__default__"
 	name := "not found"
 	var cfg any
 	if sampler, ok := f.rulesConfig.Samplers[nameToUse]; ok {

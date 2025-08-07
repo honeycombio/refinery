@@ -2,15 +2,19 @@ package sample
 
 import (
 	"os"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/facebookgo/inject"
+	dynsampler "github.com/honeycombio/dynsampler-go"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,7 +28,7 @@ func getConfig(args []string) (config.Config, error) {
 }
 
 // creates two temporary yaml files from the strings passed in and returns their filenames
-func createTempConfigs(t *testing.T, configBody, rulesBody string) (string, string) {
+func createTempConfigs(t testing.TB, configBody, rulesBody string) (string, string) {
 	tmpDir := t.TempDir()
 
 	configFile, err := os.CreateTemp(tmpDir, "cfg_*.yaml")
@@ -76,7 +80,7 @@ func TestDependencyInjection(t *testing.T) {
 
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
-		&inject.Object{Value: &metrics.NullMetrics{}, Name: "genericMetrics"},
+		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		&inject.Object{Value: &peer.MockPeers{Peers: []string{"foo", "bar"}}},
 	)
 	if err != nil {
@@ -85,50 +89,6 @@ func TestDependencyInjection(t *testing.T) {
 	if err := g.Populate(); err != nil {
 		t.Error(err)
 	}
-}
-
-func TestDatasetPrefix(t *testing.T) {
-	cm := makeYAML(
-		"General/ConfigurationVersion", 2,
-		"General/DatasetPrefix", "dataset",
-	)
-	rm := makeYAML(
-		"RulesVersion", 2,
-		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
-		"Samplers/production/DeterministicSampler/SampleRate", 10,
-		"Samplers/dataset.production/DeterministicSampler/SampleRate", 20,
-	)
-	cfg, rules := createTempConfigs(t, cm, rm)
-	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
-	assert.NoError(t, err)
-
-	assert.Equal(t, "dataset", c.GetDatasetPrefix())
-
-	factory := SamplerFactory{Config: c, Logger: &logger.NullLogger{}, Metrics: &metrics.NullMetrics{}}
-	factory.Start()
-
-	defaultSampler := &DeterministicSampler{
-		Config: &config.DeterministicSamplerConfig{SampleRate: 1},
-		Logger: &logger.NullLogger{},
-	}
-	defaultSampler.Start()
-
-	envSampler := &DeterministicSampler{
-		Config: &config.DeterministicSamplerConfig{SampleRate: 10},
-		Logger: &logger.NullLogger{},
-	}
-	envSampler.Start()
-
-	datasetSampler := &DeterministicSampler{
-		Config: &config.DeterministicSamplerConfig{SampleRate: 20},
-		Logger: &logger.NullLogger{},
-	}
-	datasetSampler.Start()
-
-	assert.Equal(t, defaultSampler, factory.GetSamplerImplementationForKey("unknown", false))
-	assert.Equal(t, defaultSampler, factory.GetSamplerImplementationForKey("unknown", true))
-	assert.Equal(t, envSampler, factory.GetSamplerImplementationForKey("production", false))
-	assert.Equal(t, datasetSampler, factory.GetSamplerImplementationForKey("production", true))
 }
 
 func TestTotalThroughputClusterSize(t *testing.T) {
@@ -152,7 +112,7 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*TotalThroughputSampler)
@@ -181,7 +141,7 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*EMAThroughputSampler)
@@ -210,10 +170,296 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production", false)
+	sampler := factory.GetSamplerImplementationForKey("production")
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*WindowedThroughputSampler)
 	defer impl.dynsampler.Stop()
 	assert.Equal(t, 5.0, impl.dynsampler.GoalThroughputPerSec)
+}
+
+func TestRulesBasedSamplerGetKeyFields(t *testing.T) {
+	// Test that RulesBasedSampler correctly aggregates fields from conditions and samplers
+	tests := []struct {
+		name                  string
+		rules                 *config.RulesBasedSamplerConfig
+		expectedAll           []string
+		expectedNonRootFields []string
+	}{
+		{
+			name: "fields from multiple rules",
+			rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{Field: "service.name"},
+							{Field: "root.operation.name"},
+						},
+					},
+					{
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{Field: "http.status_code"},
+							{Field: "root.user.id"},
+						},
+					},
+				},
+			},
+			expectedAll:           []string{"http.status_code", "operation.name", "service.name", "user.id"},
+			expectedNonRootFields: []string{"http.status_code", "service.name"},
+		},
+		{
+			name: "fields from dynamic sampler",
+			rules: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{Field: "test"},
+						},
+						Sampler: &config.RulesBasedDownstreamSampler{
+							DynamicSampler: &config.DynamicSamplerConfig{
+								FieldList: []string{"service.name", "root.operation.name"},
+							},
+						},
+					},
+				},
+			},
+			expectedAll:           []string{"operation.name", "service.name", "test"},
+			expectedNonRootFields: []string{"service.name", "test"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sampler := &RulesBasedSampler{
+				Config:  tt.rules,
+				Logger:  &logger.NullLogger{},
+				Metrics: &metrics.NullMetrics{},
+			}
+			sampler.Start()
+
+			allFields, nonRootFields := sampler.GetKeyFields()
+			// Sort for comparison since order may vary
+			sortedFields := slices.Clone(allFields)
+			sort.Strings(sortedFields)
+			assert.Equal(t, tt.expectedAll, sortedFields, "all fields should match expected")
+
+			sortedFields = slices.Clone(nonRootFields)
+			sort.Strings(sortedFields)
+			assert.Equal(t, tt.expectedNonRootFields, sortedFields, "non-root fields should match expected")
+		})
+	}
+}
+
+func TestDynsamplerMetricsRecorder_RegisterMetrics(t *testing.T) {
+	t.Run("registers internal dynsampler metrics", func(t *testing.T) {
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		defer mockMetrics.Stop()
+		mockSampler := &MockSampler{}
+
+		internalMetrics := map[string]int64{
+			"test_gauge_metric":  100,
+			"test_counter_count": 50,
+			"test_another_gauge": 200,
+		}
+		mockSampler.On("GetMetrics", "test_").Return(internalMetrics)
+
+		recorder := &dynsamplerMetricsRecorder{
+			prefix: "test",
+			met:    mockMetrics,
+		}
+
+		recorder.RegisterMetrics(mockSampler)
+
+		// Verify internal state
+		assert.Equal(t, "test_", recorder.dynPrefix)
+		assert.Len(t, recorder.lastMetrics, 3)
+
+		assert.Equal(t, internalDysamplerMetric{
+			metricType: metrics.Gauge,
+			val:        100,
+		}, recorder.lastMetrics["test_gauge_metric"])
+
+		assert.Equal(t, internalDysamplerMetric{
+			metricType: metrics.Counter,
+			val:        50,
+		}, recorder.lastMetrics["test_counter_count"])
+
+		// Check metric names mapping
+		assert.Equal(t, "test_num_dropped", recorder.metricNames.numDropped)
+		assert.Equal(t, "test_num_kept", recorder.metricNames.numKept)
+		assert.Equal(t, "test_sample_rate", recorder.metricNames.sampleRate)
+		assert.Equal(t, "test_sampler_key_cardinality", recorder.metricNames.samplerKeyCardinality)
+
+		mockSampler.AssertExpectations(t)
+	})
+
+	t.Run("handles empty metrics from sampler", func(t *testing.T) {
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		mockSampler := &MockSampler{}
+
+		mockSampler.On("GetMetrics", "empty_").Return(map[string]int64{})
+
+		recorder := &dynsamplerMetricsRecorder{
+			prefix:      "empty",
+			lastMetrics: make(map[string]internalDysamplerMetric),
+			met:         mockMetrics,
+		}
+
+		recorder.RegisterMetrics(mockSampler)
+
+		assert.Equal(t, "empty_", recorder.dynPrefix)
+		assert.Len(t, recorder.lastMetrics, 0)
+
+		mockSampler.AssertExpectations(t)
+	})
+}
+
+func TestDynsamplerMetricsRecorder_RecordMetrics(t *testing.T) {
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+	mockSampler := &MockSampler{}
+
+	recorder := &dynsamplerMetricsRecorder{
+		prefix: "test",
+		met:    mockMetrics,
+	}
+
+	initialMetrics := map[string]int64{
+		"test_requests_count":     100,
+		"test_errors_count":       10,
+		"test_active_connections": 25,
+		"test_memory_usage":       1024,
+	}
+	mockSampler.On("GetMetrics", "test_").Return(initialMetrics).Once()
+	recorder.RegisterMetrics(mockSampler)
+
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_requests_count"])
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_errors_count"])
+
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_num_kept"])
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_num_dropped"])
+	assert.Len(t, mockMetrics.Histograms["test_sampler_key_cardinality"], 0)
+	assert.Len(t, mockMetrics.Histograms["test_sample_rate"], 0)
+	assert.Equal(t, float64(0), mockMetrics.GaugeRecords["test_active_connections"])
+	assert.Equal(t, float64(0), mockMetrics.GaugeRecords["test_memory_usage"])
+
+	mockSampler.AssertExpectations(t)
+
+	updatedMetrics := map[string]int64{
+		"test_requests_count":     150,
+		"test_errors_count":       15,
+		"test_active_connections": 55,
+		"test_memory_usage":       2048,
+	}
+
+	mockSampler.On("GetMetrics", "test_").Return(updatedMetrics).Once()
+
+	recorder.RecordMetrics(mockSampler, true, 20, 30)
+
+	// Verify delta counts were recorded
+	assert.Equal(t, int64(50), mockMetrics.CounterIncrements["test_requests_count"]) // 150 - 100
+	assert.Equal(t, int64(5), mockMetrics.CounterIncrements["test_errors_count"])    // 15 - 10
+
+	// Verify sampler metrics
+	assert.Equal(t, int64(1), mockMetrics.CounterIncrements["test_num_kept"])
+	assert.Equal(t, int64(0), mockMetrics.CounterIncrements["test_num_dropped"])
+	assert.Len(t, mockMetrics.Histograms["test_sampler_key_cardinality"], 1)
+	assert.Equal(t, mockMetrics.Histograms["test_sampler_key_cardinality"][0], float64(30))
+	assert.Len(t, mockMetrics.Histograms["test_sample_rate"], 1)
+	assert.Equal(t, mockMetrics.Histograms["test_sample_rate"][0], float64(20))
+
+	// Verify direct gauge values (not deltas)
+	assert.Equal(t, float64(55), mockMetrics.GaugeRecords["test_active_connections"])
+	assert.Equal(t, float64(2048), mockMetrics.GaugeRecords["test_memory_usage"])
+
+	mockSampler.AssertExpectations(t)
+}
+
+var _ dynsampler.Sampler = (*MockSampler)(nil)
+
+// MockSampler implements dynsampler.Sampler for testing
+type MockSampler struct {
+	mock.Mock
+}
+
+func (m *MockSampler) GetMetrics(prefix string) map[string]int64 {
+	args := m.Called(prefix)
+	return args.Get(0).(map[string]int64)
+}
+
+func (m *MockSampler) GetSampleRate(key string) int {
+	args := m.Called(key)
+	return args.Get(0).(int)
+}
+
+func (m *MockSampler) GetSampleRateMulti(key string, val int) int {
+	args := m.Called(key, val)
+	return args.Get(0).(int)
+}
+
+func (m *MockSampler) Start() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockSampler) Stop() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
+func (m *MockSampler) LoadState(state []byte) error {
+	return nil
+}
+
+func (m *MockSampler) SaveState() ([]byte, error) {
+	return nil, nil
+}
+
+func BenchmarkGetSamplerImplementation(b *testing.B) {
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/test/DynamicSampler/SampleRate", 1,
+		"Samplers/test2/EMADynamicSampler/SampleRate", 1,
+		"Samplers/test3/WindowedThroughputSampler/SampleRate", 1,
+		"Samplers/test4/TotalThroughputSampler/SampleRate", 1,
+		"Samplers/test5/EMAThroughputSampler/SampleRate", 1,
+	)
+	cfg, rules := createTempConfigs(b, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(b, err)
+	mockPeers := &peer.MockPeers{Peers: []string{"foo", "bar"}}
+	mockPeers.Start()
+
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   mockPeers,
+	}
+	factory.Start()
+
+	// Define the keys to distribute evenly
+	keys := []string{"default", "test", "test2", "test3", "test4", "test5"}
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for pb.Next() {
+			if i%10 == 5 {
+				factory.updatePeerCounts()
+				i++
+				continue
+			}
+			// Evenly distribute among the 6 keys
+			key := keys[i%len(keys)]
+
+			_ = factory.GetSamplerImplementationForKey(key)
+			i++
+		}
+	})
 }

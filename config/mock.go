@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -470,4 +471,33 @@ func (f *MockConfig) SetMaxAlloc(v MemorySize) {
 	defer f.Mux.Unlock()
 
 	f.GetCollectionConfigVal.MaxAlloc = v
+}
+
+func (f *MockConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
+	if IsLegacyAPIKey(apiKey) {
+		if f.DatasetPrefix != "" {
+			return fmt.Sprintf("%s.%s", f.DatasetPrefix, dataset)
+		}
+		return dataset
+	}
+
+	return env
+}
+
+func (f *MockConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string {
+	switch sampler := f.GetSamplerTypeVal.(type) {
+	case *DeterministicSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *DynamicSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *EMADynamicSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *RulesBasedSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *TotalThroughputSamplerConfig:
+		return sampler.GetSamplingFields()
+	default:
+		return nil
+	}
+
 }

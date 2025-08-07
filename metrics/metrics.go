@@ -14,8 +14,8 @@ import (
 // objects. This allows us to support multiple metrics backends at once.
 //
 // The user can configure which metrics backends are enabled, and which are not.
-// The StoreMetrics object is always enabled, and is the first child of the
-// MultiMetrics object. This is because we always want StressRelief to be able
+// Metrics contains two more methods for retrieving metrics data: Get() and Store().
+// This is because we always want StressRelief to be able
 // to retrieve metrics data even if the user has not configured any other
 // metrics backends.
 //
@@ -33,52 +33,29 @@ import (
 // used in combination with other metrics. This is mainly to support
 // StressRelief.
 type Metrics interface {
+	MetricsBackend
+	Get(name string) (float64, bool) // for reading back a counter or a gauge
+	Store(name string, val float64)  // for storing a rarely-changing value not sent as a metric
+}
+
+type MetricsBackend interface {
 	// Register declares a metric; metricType should be one of counter, gauge, histogram, updown
 	Register(metadata Metadata)
-	Increment(name string)                  // for counters
-	Gauge(name string, val interface{})     // for gauges
-	Count(name string, n interface{})       // for counters
-	Histogram(name string, obs interface{}) // for histogram
-	Up(name string)                         // for updown
-	Down(name string)                       // for updown
-	Get(name string) (float64, bool)        // for reading back a counter or a gauge
-	Store(name string, val float64)         // for storing a rarely-changing value not sent as a metric
+	Increment(name string)              // for counters
+	Gauge(name string, val float64)     // for gauges
+	Count(name string, n int64)         // for counters
+	Histogram(name string, obs float64) // for histogram
+	Up(name string)                     // for updown
+	Down(name string)                   // for updown
 }
 
 func GetMetricsImplementation(c config.Config) *MultiMetrics {
 	return NewMultiMetrics()
 }
 
-func ConvertNumeric(val interface{}) float64 {
-	switch n := val.(type) {
-	case int:
-		return float64(n)
-	case uint:
-		return float64(n)
-	case int64:
-		return float64(n)
-	case uint64:
-		return float64(n)
-	case int32:
-		return float64(n)
-	case uint32:
-		return float64(n)
-	case int16:
-		return float64(n)
-	case uint16:
-		return float64(n)
-	case int8:
-		return float64(n)
-	case uint8:
-		return float64(n)
-	case float64:
-		return n
-	case float32:
-		return float64(n)
-	case bool:
-		if n {
-			return 1
-		}
+func ConvertBoolToFloat(val bool) float64 {
+	if val {
+		return 1
 	}
 	return 0
 }

@@ -87,7 +87,7 @@ type InMemCollector struct {
 	Transmission     transmit.Transmission  `inject:"upstreamTransmission"`
 	PeerTransmission transmit.Transmission  `inject:"peerTransmission"`
 	PubSub           pubsub.PubSub          `inject:""`
-	Metrics          metrics.Metrics        `inject:"genericMetrics"`
+	Metrics          metrics.Metrics        `inject:"metrics"`
 	SamplerFactory   *sample.SamplerFactory `inject:""`
 	StressRelief     StressReliever         `inject:"stressRelief"`
 	Peers            peer.Peers             `inject:""`
@@ -120,6 +120,13 @@ type InMemCollector struct {
 	keptDecisionBuffer chan TraceDecision
 	hostname           string
 }
+
+// These are the names of the metrics we use to track the number of events sent to peers through the router.
+// Defining them here to avoid computing the names in the hot path of the collector.
+const (
+	peerRouterPeerMetricName     = "peer_router_peer"
+	incomingRouterPeerMetricName = "incoming_router_peer"
+)
 
 var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "trace_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "time taken to process a trace from arrival to send"},
@@ -232,11 +239,13 @@ func (i *InMemCollector) Start() error {
 	i.shutdownWG.Add(1)
 	go i.sendTraces()
 
-	i.shutdownWG.Add(1)
 	// spin up a drop decision batch sender
+	i.shutdownWG.Add(1)
 	go i.sendDropDecisions()
 	i.shutdownWG.Add(1)
 	go i.sendKeptDecisions()
+	i.shutdownWG.Add(1)
+	go i.recordQueueMetrics()
 
 	return nil
 }
@@ -275,7 +284,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
-	i.Metrics.Gauge("memory_heap_allocation", int64(mem.Alloc))
+	i.Metrics.Gauge("memory_heap_allocation", float64(mem.Alloc))
 	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
 		return
 	}
@@ -307,7 +316,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	// or just run out of traces to delete.
 
 	cacheSize := len(allTraces)
-	i.Metrics.Gauge("collector_cache_size", cacheSize)
+	i.Metrics.Gauge("collector_cache_size", float64(cacheSize))
 
 	totalDataSizeSent := 0
 	tracesSent := generics.NewSet[string]()
@@ -409,12 +418,6 @@ func (i *InMemCollector) collect() {
 		startTime := time.Now()
 
 		i.Health.Ready(CollectorHealthKey, true)
-		// record channel lengths as histogram but also as gauges
-		i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
-		i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
-		i.Metrics.Gauge("collector_incoming_queue_length", float64(len(i.incoming)))
-		i.Metrics.Gauge("collector_peer_queue_length", float64(len(i.fromPeer)))
-
 		// Always drain peer channel before doing anything else. By processing peer
 		// traffic preferentially we avoid the situation where the cluster essentially
 		// deadlocks because peers are waiting to get their events handed off to each
@@ -431,7 +434,7 @@ func (i *InMemCollector) collect() {
 				span.End()
 				return
 			}
-			i.processSpan(ctx, sp, "peer")
+			i.processSpan(ctx, sp, types.RouterTypePeer)
 		default:
 			select {
 			case msg, ok := <-i.dropDecisionMessages:
@@ -469,14 +472,14 @@ func (i *InMemCollector) collect() {
 					span.End()
 					return
 				}
-				i.processSpan(ctx, sp, "incoming")
+				i.processSpan(ctx, sp, types.RouterTypeIncoming)
 			case sp, ok := <-i.fromPeer:
 				if !ok {
 					// channel's been closed; we should shut down.
 					span.End()
 					return
 				}
-				i.processSpan(ctx, sp, "peer")
+				i.processSpan(ctx, sp, types.RouterTypePeer)
 			case <-i.reload:
 				i.reloadConfigs()
 			}
@@ -489,10 +492,10 @@ func (i *InMemCollector) collect() {
 
 func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "redistributeTraces")
-	redistrubutionStartTime := i.Clock.Now()
+	redistributionStartTime := i.Clock.Now()
 
 	defer func() {
-		i.Metrics.Histogram("collector_redistribute_traces_duration_ms", i.Clock.Now().Sub(redistrubutionStartTime).Milliseconds())
+		i.Metrics.Histogram("collector_redistribute_traces_duration_ms", float64(i.Clock.Now().Sub(redistributionStartTime).Milliseconds()))
 		span.End()
 	}()
 
@@ -558,13 +561,10 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 
 			sp.APIHost = newTarget.GetAddress()
 
-			if sp.Data == nil {
-				sp.Data = make(map[string]interface{})
-			}
-			if v, ok := sp.Data["meta.refinery.forwarded"]; ok {
-				sp.Data["meta.refinery.forwarded"] = fmt.Sprintf("%s,%s", v, i.hostname)
+			if sp.Data.MetaRefineryForwarded != "" {
+				sp.Data.MetaRefineryForwarded = fmt.Sprintf("%s,%s", sp.Data.MetaRefineryForwarded, i.hostname)
 			} else {
-				sp.Data["meta.refinery.forwarded"] = i.hostname
+				sp.Data.MetaRefineryForwarded = i.hostname
 			}
 
 			i.PeerTransmission.EnqueueSpan(sp)
@@ -580,7 +580,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 		"hostname":              i.hostname,
 	})
 
-	i.Metrics.Gauge("trace_forwarded_on_peer_change", len(forwardedTraces)+len(emptyTraces))
+	i.Metrics.Gauge("trace_forwarded_on_peer_change", float64(len(forwardedTraces)+len(emptyTraces)))
 
 	// remove all redistributed traces from the cache if we are in traces locality concentrated mode
 	if i.Config.GetCollectionConfig().TraceLocalityEnabled() {
@@ -598,7 +598,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTracesInCache")
 	startTime := time.Now()
 	defer func() {
-		i.Metrics.Histogram("collector_send_expired_traces_in_cache_dur_ms", time.Since(startTime).Milliseconds())
+		i.Metrics.Histogram("collector_send_expired_traces_in_cache_dur_ms", float64(time.Since(startTime).Milliseconds()))
 		span.End()
 	}()
 
@@ -631,8 +631,8 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 	})
 
 	dur := time.Now().Sub(startTime)
-	i.Metrics.Gauge("collector_expired_traces_missing_decisions", len(expiredTraces))
-	i.Metrics.Gauge("collector_expired_traces_orphans", orphanTraceCount)
+	i.Metrics.Gauge("collector_expired_traces_missing_decisions", float64(len(expiredTraces)))
+	i.Metrics.Gauge("collector_expired_traces_orphans", float64(orphanTraceCount))
 
 	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)), attribute.Int64("take_expired_traces_duration_ms", dur.Milliseconds()))
 
@@ -682,7 +682,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 				Dataset: trace.Dataset,
 			},
 		}, trace, i.Sharder.WhichShard(trace.ID()))
-		dc.Data["meta.refinery.expired_trace"] = true
+		dc.Data.MetaRefineryExpiredTrace.Set(true)
 		i.PeerTransmission.EnqueueEvent(dc)
 	}
 	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
@@ -690,7 +690,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 
 // processSpan does all the stuff necessary to take an incoming span and add it
 // to (or create a new placeholder for) a trace.
-func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source string) {
+func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source types.RouterType) {
 	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "processSpan")
 	defer func() {
 		i.Metrics.Increment("span_processed")
@@ -726,7 +726,6 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
 		if sr, keptReason, found := i.sampleTraceCache.CheckSpan(sp); found {
-			span.SetAttributes(attribute.String("disposition", "already_sent"))
 			i.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
@@ -737,13 +736,12 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 		// if the span is sent for signaling expired traces,
 		// we should not add it to the cache
-		if sp.Data["meta.refinery.expired_trace"] != nil {
+		if sp.Data.MetaRefineryExpiredTrace.Value {
 			return
 		}
 
 		// trace hasn't already been sent (or this span is really old); let's
 		// create a new trace to hold it
-		span.SetAttributes(attribute.Bool("create_new_trace", true))
 		i.Metrics.Increment("trace_accepted")
 
 		timeout := tcfg.GetTraceTimeout()
@@ -762,6 +760,7 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 			APIHost:          sp.APIHost,
 			APIKey:           sp.APIKey,
 			Dataset:          sp.Dataset,
+			Environment:      sp.Environment,
 			TraceID:          sp.TraceID,
 			ArrivalTime:      now,
 			SendBy:           sendBy,
@@ -775,7 +774,6 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 	// span.
 	if trace.Sent {
 		if sr, reason, found := i.sampleTraceCache.CheckSpan(sp); found {
-			span.SetAttributes(attribute.String("disposition", "already_sent"))
 			i.Metrics.Increment("trace_sent_cache_hit")
 			i.dealWithSentTrace(ctx, sr, reason, sp)
 			return
@@ -789,18 +787,21 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 
 	// if the span is sent for signaling expired traces,
 	// we should not add it to the cache
-	if sp.Data["meta.refinery.expired_trace"] != nil {
+	if sp.Data.MetaRefineryExpiredTrace.Value {
 		return
 	}
 
 	// great! trace is live. add the span.
 	trace.AddSpan(sp)
-	span.SetAttributes(attribute.String("disposition", "live_trace"))
 
 	var spanForwarded bool
 	// if this trace doesn't belong to us and it's not in sent state, we should forward a decision span to its decider
 	if !trace.Sent && !isMyTrace {
-		i.Metrics.Increment(source + "_router_peer")
+		if source.IsIncoming() {
+			i.Metrics.Increment(incomingRouterPeerMetricName)
+		} else {
+			i.Metrics.Increment(peerRouterPeerMetricName)
+		}
 		i.Logger.Debug().
 			WithString("peer", targetShard.GetAddress()).
 			Logf("Sending span to peer")
@@ -835,7 +836,6 @@ func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source
 		updatedSendBy := i.Clock.Now().Add(timeout)
 		// if the trace has already timed out, we should not update the send_by time
 		if trace.SendBy.After(updatedSendBy) {
-			span.SetAttributes(attribute.String("disposition", "marked_for_sending"))
 			trace.SendBy = updatedSendBy
 			i.cache.Set(trace)
 		}
@@ -898,12 +898,12 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 
 	i.Metrics.Increment("kept_from_stress")
 	// ok, we're sending it, so decorate it first
-	sp.Data["meta.stressed"] = true
+	sp.Data.Set(types.MetaStressed, true)
 	if i.Config.GetAddRuleReasonToTrace() {
-		sp.Data["meta.refinery.reason"] = reason
+		sp.Data.Set(types.MetaRefineryReason, reason)
 	}
 	if i.hostname != "" {
-		sp.Data["meta.refinery.local_hostname"] = i.hostname
+		sp.Data.Set(types.MetaRefineryLocalHostname, i.hostname)
 	}
 
 	i.addAdditionalAttributes(sp)
@@ -949,12 +949,12 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		} else {
 			metaReason = "late arriving span"
 		}
-		sp.Data["meta.refinery.reason"] = metaReason
-		sp.Data["meta.refinery.send_reason"] = TraceSendLateSpan
+		sp.Data.Set(types.MetaRefineryReason, metaReason)
+		sp.Data.Set(types.MetaRefinerySendReason, TraceSendLateSpan)
 
 	}
 	if i.hostname != "" {
-		sp.Data["meta.refinery.local_hostname"] = i.hostname
+		sp.Data.Set(types.MetaRefineryLocalHostname, i.hostname)
 	}
 	isDryRun := i.Config.GetIsDryRun()
 	keep := tr.Kept()
@@ -965,7 +965,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 
 	if isDryRun {
 		// if dry run mode is enabled, we keep all traces and mark the spans with the sampling decision
-		sp.Data[config.DryRunFieldName] = keep
+		sp.Data.Set(config.DryRunFieldName, keep)
 		if !keep {
 			i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Sending span that would have been dropped, but dry run mode is enabled")
 			i.Metrics.Increment(TraceSendLateSpan)
@@ -980,12 +980,12 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		// if this span is a late root span, possibly update it with our current span count
 		if sp.IsRoot {
 			if i.Config.GetAddCountsToRoot() {
-				sp.Data["meta.span_event_count"] = int64(tr.SpanEventCount())
-				sp.Data["meta.span_link_count"] = int64(tr.SpanLinkCount())
-				sp.Data["meta.span_count"] = int64(tr.SpanCount())
-				sp.Data["meta.event_count"] = int64(tr.DescendantCount())
+				sp.Data.Set(types.MetaSpanEventCount, int64(tr.SpanEventCount()))
+				sp.Data.Set(types.MetaSpanLinkCount, int64(tr.SpanLinkCount()))
+				sp.Data.Set(types.MetaSpanCount, int64(tr.SpanCount()))
+				sp.Data.Set(types.MetaEventCount, int64(tr.DescendantCount()))
 			} else if i.Config.GetAddSpanCountToRoot() {
-				sp.Data["meta.span_count"] = int64(tr.DescendantCount())
+				sp.Data.Set(types.MetaSpanCount, int64(tr.DescendantCount()))
 			}
 		}
 		otelutil.AddSpanField(span, "is_root_span", sp.IsRoot)
@@ -1002,7 +1002,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	if sp.SampleRate != 0 {
 		// Write down the original sample rate so that that information
 		// is more easily recovered
-		sp.Data["meta.refinery.original_sample_rate"] = sp.SampleRate
+		sp.Data.Set(types.MetaRefineryOriginalSampleRate, int64(sp.SampleRate))
 	}
 
 	if tempSampleRate < 1 {
@@ -1017,7 +1017,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 	// if spans are already sampled, take that into account when computing
 	// the final rate
 	if dryRunMode {
-		sp.Data["meta.dryrun.sample_rate"] = tempSampleRate * traceSampleRate
+		sp.Data.Set("meta.dryrun.sample_rate", tempSampleRate*traceSampleRate)
 		sp.SampleRate = tempSampleRate
 	} else {
 		sp.SampleRate = tempSampleRate * traceSampleRate
@@ -1055,18 +1055,18 @@ func (i *InMemCollector) send(ctx context.Context, trace *types.Trace, td *Trace
 		rs := trace.RootSpan
 		if rs != nil {
 			if i.Config.GetAddCountsToRoot() {
-				rs.Data["meta.span_event_count"] = int64(td.EventCount)
-				rs.Data["meta.span_link_count"] = int64(td.LinkCount)
-				rs.Data["meta.span_count"] = int64(td.Count)
-				rs.Data["meta.event_count"] = int64(td.DescendantCount())
+				rs.Data.Set(types.MetaSpanEventCount, int64(td.EventCount))
+				rs.Data.Set(types.MetaSpanLinkCount, int64(td.LinkCount))
+				rs.Data.Set(types.MetaSpanCount, int64(td.Count))
+				rs.Data.Set(types.MetaEventCount, int64(td.DescendantCount()))
 			} else if i.Config.GetAddSpanCountToRoot() {
-				rs.Data["meta.span_count"] = int64(td.DescendantCount())
+				rs.Data.Set(types.MetaSpanCount, int64(td.DescendantCount()))
 			}
 		}
 	}
 
 	i.Metrics.Increment(td.SendReason)
-	if types.IsLegacyAPIKey(trace.APIKey) {
+	if config.IsLegacyAPIKey(trace.APIKey) {
 		logFields["dataset"] = td.SamplerSelector
 	} else {
 		logFields["environment"] = td.SamplerSelector
@@ -1117,10 +1117,6 @@ func (i *InMemCollector) Stop() error {
 		if len(peers) > 0 {
 			i.sendTracesOnShutdown()
 		}
-	}
-
-	if i.Transmission != nil {
-		i.Transmission.Flush()
 	}
 
 	i.sampleTraceCache.Stop()
@@ -1235,9 +1231,6 @@ func (i *InMemCollector) distributeSpansOnShutdown(sentSpanChan chan sentRecord,
 			}
 
 			if sendBy != nil {
-				if sp.Data == nil {
-					sp.Data = make(map[string]interface{})
-				}
 				sp.SetSendBy(*sendBy)
 			}
 			// if there's no trace decision, then we need to forward the trace to its new home
@@ -1264,7 +1257,7 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 			}
 
 			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_span", map[string]interface{}{"trace_id": r.span.TraceID, "hostname": i.hostname})
-			r.span.Data["meta.refinery.shutdown.send"] = true
+			r.span.Data.Set(types.MetaRefineryShutdownSend, true)
 
 			i.dealWithSentTrace(ctx, r.record, r.reason, r.span)
 			_, exist := sentTraces[r.span.TraceID]
@@ -1290,13 +1283,10 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 
 			sp.APIHost = url
 
-			if sp.Data == nil {
-				sp.Data = make(map[string]interface{})
-			}
-			if v, ok := sp.Data["meta.refinery.forwarded"]; ok {
-				sp.Data["meta.refinery.forwarded"] = fmt.Sprintf("%s,%s", v, i.hostname)
+			if sp.Data.MetaRefineryForwarded != "" {
+				sp.Data.MetaRefineryForwarded = fmt.Sprintf("%s,%s", sp.Data.MetaRefineryForwarded, i.hostname)
 			} else {
-				sp.Data["meta.refinery.forwarded"] = i.hostname
+				sp.Data.MetaRefineryForwarded = i.hostname
 			}
 
 			i.PeerTransmission.EnqueueSpan(sp)
@@ -1322,28 +1312,32 @@ func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
 
 func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 	for k, v := range i.Config.GetAdditionalAttributes() {
-		sp.Data[k] = v
+		sp.Data.Set(k, v)
 	}
 }
 
 func (i *InMemCollector) createDecisionSpan(sp *types.Span, trace *types.Trace, targetShard sharder.Shard) *types.Event {
-	selector, isLegacyKey := trace.GetSamplerKey()
-	if selector == "" {
-		i.Logger.Error().WithField("trace_id", trace.ID()).Logf("error getting sampler selection key for trace")
-	}
+	selector := i.Config.DetermineSamplerKey(sp.APIKey, trace.Environment, trace.Dataset)
 
 	sampler, found := i.datasetSamplers[selector]
 	if !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForKey(selector, isLegacyKey)
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(selector)
 		i.datasetSamplers[selector] = sampler
 	}
 
-	dc := sp.ExtractDecisionContext()
+	dc := sp.ExtractDecisionContext(i.Config)
 	// extract all key fields from the span
-	keyFields := sampler.GetKeyFields()
+	keyFields, nonRootFields := sampler.GetKeyFields()
+	if sp.IsRoot {
+		sp.Data.MemoizeFields(keyFields...)
+	} else {
+		sp.Data.MemoizeFields(nonRootFields...)
+	}
 	for _, keyField := range keyFields {
-		if val, ok := sp.Data[keyField]; ok {
-			dc.Data[keyField] = val
+		// Less efficient than a two-return version of Get(), so consider adding
+		// that to the Payload interface if these becomes a hotspot.
+		if sp.Data.Exists(keyField) {
+			dc.Data.Set(keyField, sp.Data.Get(keyField))
 		}
 	}
 
@@ -1376,10 +1370,10 @@ func (i *InMemCollector) sendTraces() {
 			}
 
 			if i.Config.GetAddRuleReasonToTrace() {
-				sp.Data["meta.refinery.reason"] = t.reason
-				sp.Data["meta.refinery.send_reason"] = t.sendReason
+				sp.Data.Set(types.MetaRefineryReason, t.reason)
+				sp.Data.Set(types.MetaRefinerySendReason, t.sendReason)
 				if t.sampleKey != "" {
-					sp.Data["meta.refinery.sample_key"] = t.sampleKey
+					sp.Data.Set(types.MetaRefinerySampleKey, t.sampleKey)
 				}
 			}
 
@@ -1387,21 +1381,21 @@ func (i *InMemCollector) sendTraces() {
 			// with the final total as of our send time
 			if sp.IsRoot {
 				if i.Config.GetAddCountsToRoot() {
-					sp.Data["meta.span_event_count"] = int64(t.SpanEventCount())
-					sp.Data["meta.span_link_count"] = int64(t.SpanLinkCount())
-					sp.Data["meta.span_count"] = int64(t.SpanCount())
-					sp.Data["meta.event_count"] = int64(t.DescendantCount())
+					sp.Data.Set(types.MetaSpanEventCount, int64(t.SpanEventCount()))
+					sp.Data.Set(types.MetaSpanLinkCount, int64(t.SpanLinkCount()))
+					sp.Data.Set(types.MetaSpanCount, int64(t.SpanCount()))
+					sp.Data.Set(types.MetaEventCount, int64(t.DescendantCount()))
 				} else if i.Config.GetAddSpanCountToRoot() {
-					sp.Data["meta.span_count"] = int64(t.DescendantCount())
+					sp.Data.Set(types.MetaSpanCount, int64(t.DescendantCount()))
 				}
 			}
 
 			isDryRun := i.Config.GetIsDryRun()
 			if isDryRun {
-				sp.Data[config.DryRunFieldName] = t.shouldSend
+				sp.Data.Set(config.DryRunFieldName, t.shouldSend)
 			}
 			if i.hostname != "" {
-				sp.Data["meta.refinery.local_hostname"] = i.hostname
+				sp.Data.Set(types.MetaRefineryLocalHostname, i.hostname)
 			}
 			mergeTraceAndSpanSampleRates(sp, t.SampleRate(), isDryRun)
 			i.addAdditionalAttributes(sp)
@@ -1493,7 +1487,7 @@ func (i *InMemCollector) processTraceDecisions(msg string, decisionType decision
 		return
 	}
 
-	i.Metrics.Count(fmt.Sprintf("%s_decisions_received", decisionType.String()), len(decisions))
+	i.Metrics.Count(fmt.Sprintf("%s_decisions_received", decisionType.String()), int64(len(decisions)))
 
 	if len(decisions) == 0 {
 		return
@@ -1542,12 +1536,22 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	var sampler sample.Sampler
 	var found bool
 	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerSelector, isLegacyKey := trace.GetSamplerKey()
+	samplerSelector := i.Config.DetermineSamplerKey(trace.APIKey, trace.Environment, trace.Dataset)
 
 	// use sampler key to find sampler; create and cache if not found
 	if sampler, found = i.datasetSamplers[samplerSelector]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector, isLegacyKey)
+		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector)
 		i.datasetSamplers[samplerSelector] = sampler
+	}
+
+	// prepopulate spans with key fields
+	allFields, nonRootFields := sampler.GetKeyFields()
+	for _, sp := range trace.GetSpans() {
+		if sp.IsRoot {
+			sp.Data.MemoizeFields(allFields...)
+		} else {
+			sp.Data.MemoizeFields(nonRootFields...)
+		}
 	}
 
 	startGetSampleRate := i.Clock.Now()
@@ -1617,7 +1621,7 @@ func (i *InMemCollector) IsMyTrace(traceID string) (sharder.Shard, bool) {
 func (i *InMemCollector) publishTraceDecision(ctx context.Context, td TraceDecision) {
 	start := time.Now()
 	defer func() {
-		i.Metrics.Histogram("collector_publish_trace_decision_dur_ms", time.Since(start).Milliseconds())
+		i.Metrics.Histogram("collector_publish_trace_decision_dur_ms", float64(time.Since(start).Milliseconds()))
 	}()
 
 	_, span := otelutil.StartSpanWith(ctx, i.Tracer, "publishTraceDecision", "decision", td.Kept)
@@ -1720,7 +1724,7 @@ func (i *InMemCollector) sendDecisions(decisionChan <-chan TraceDecision, interv
 
 		// Send the batch if ready
 		if send && len(decisions) > 0 {
-			i.Metrics.Histogram(metricName, len(decisions))
+			i.Metrics.Histogram(metricName, float64(len(decisions)))
 
 			// Copy current batch to process
 			decisionsToProcess := make([]TraceDecision, len(decisions))
@@ -1758,6 +1762,24 @@ func (i *InMemCollector) sendDecisions(decisionChan <-chan TraceDecision, interv
 			}
 			timer.Reset(interval)
 			send = false
+		}
+	}
+}
+
+func (i *InMemCollector) recordQueueMetrics() {
+	defer i.shutdownWG.Done()
+
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for {
+		select {
+		case <-ticker.C:
+			i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
+			i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
+			i.Metrics.Gauge("collector_incoming_queue_length", float64(len(i.incoming)))
+			i.Metrics.Gauge("collector_peer_queue_length", float64(len(i.fromPeer)))
+		case <-i.done:
+			ticker.Stop()
+			return
 		}
 	}
 }

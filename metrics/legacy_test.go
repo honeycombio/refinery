@@ -25,9 +25,7 @@ func Test_getOrAdd_counter(t *testing.T) {
 			for j := 0; j < 1000; j++ {
 				name := "foo"
 				var ctr *counter = getOrAdd(lock, name, metrics, createCounter)
-				ctr.lock.Lock()
-				ctr.val++
-				ctr.lock.Unlock()
+				ctr.add(1)
 			}
 			wg.Done()
 		}()
@@ -35,7 +33,7 @@ func Test_getOrAdd_counter(t *testing.T) {
 	wg.Wait()
 
 	var ctr *counter = getOrAdd(lock, "foo", metrics, createCounter)
-	assert.Equal(t, nthreads*1000, ctr.val)
+	assert.Equal(t, int64(nthreads*1000), ctr.get())
 }
 
 func Test_getOrAdd_gauge(t *testing.T) {
@@ -48,21 +46,22 @@ func Test_getOrAdd_gauge(t *testing.T) {
 
 	for i := 0; i < nthreads; i++ {
 		wg.Add(1)
-		go func() {
+		go func(idx int) {
 			for j := 0; j < 1000; j++ {
 				name := "foo"
 				var g *gauge = getOrAdd(lock, name, metrics, createGauge)
-				g.lock.Lock()
-				g.val++
-				g.lock.Unlock()
+
+				g.store(float64(idx*1000 + j))
 			}
 			wg.Done()
-		}()
+		}(i)
 	}
 	wg.Wait()
 
 	var g *gauge = getOrAdd(lock, "foo", metrics, createGauge)
-	assert.Equal(t, float64(nthreads*1000), g.val)
+	// it should end with 999 regardless of the thread index
+	val := int64(g.get())
+	assert.Equal(t, int64(999), val%1000)
 }
 
 func Test_getOrAdd_histogram(t *testing.T) {
@@ -109,13 +108,11 @@ func Test_getOrAdd_updown(t *testing.T) {
 			for j := 0; j < 1000; j++ {
 				name := "foo"
 				var ctr *updown = getOrAdd(lock, name, metrics, createUpdown)
-				ctr.lock.Lock()
 				if direction {
-					ctr.val++
+					ctr.add(1)
 				} else {
-					ctr.val--
+					ctr.add(-1)
 				}
-				ctr.lock.Unlock()
 			}
 			wg.Done()
 		}(i%2 == 0)
@@ -123,7 +120,7 @@ func Test_getOrAdd_updown(t *testing.T) {
 	wg.Wait()
 
 	var ctr *updown = getOrAdd(lock, "foo", metrics, createUpdown)
-	assert.Equal(t, 0, ctr.val)
+	assert.Equal(t, int64(0), ctr.get())
 }
 
 func TestMetricsUpdown(t *testing.T) {
@@ -140,5 +137,55 @@ func TestMetricsUpdown(t *testing.T) {
 	m.Up("foo")
 	m.Up("foo")
 	m.Down("foo")
-	assert.Equal(t, 1, m.updowns["foo"].val)
+	assert.Equal(t, int64(1), m.updowns["foo"].get())
+}
+
+func TestCreateReport(t *testing.T) {
+	conf := &config.MockConfig{}
+	m := LegacyMetrics{
+		Config: conf,
+		Logger: &logger.NullLogger{},
+	}
+	m.Start()
+	m.Register(Metadata{
+		Name: "foo",
+		Type: Counter,
+	})
+	m.Register(Metadata{
+		Name: "bar",
+		Type: Gauge,
+	})
+	m.Register(Metadata{
+		Name: "baz",
+		Type: Histogram,
+	})
+	m.Register(Metadata{
+		Name: "qux",
+		Type: UpDown,
+	})
+
+	m.counters["foo"].add(10)
+	m.gauges["bar"].store(20.5)
+	m.histograms["baz"].vals = []float64{30.0, 40.0}
+	m.updowns["qux"].add(1)
+
+	ev := m.createReport()
+	result := ev.Fields()
+	assert.Equal(t, int64(10), result["foo"])
+	assert.Equal(t, float64(20.5), result["bar"])
+
+	assert.Equal(t, int64(1), result["qux"])
+
+	assert.Equal(t, 40.0, result["baz_p50"])
+	assert.Equal(t, 40.0, result["baz_p95"])
+	assert.Equal(t, 40.0, result["baz_p99"])
+	assert.Equal(t, 30.0, result["baz_min"])
+	assert.Equal(t, 40.0, result["baz_max"])
+	assert.Equal(t, 35.0, result["baz_avg"])
+
+	// check the internal metrics state after report creation
+	assert.Equal(t, int64(0), m.counters["foo"].get())
+	assert.Equal(t, float64(0), m.gauges["bar"].get())
+	assert.Len(t, m.histograms["baz"].vals, 0)
+	assert.Equal(t, int64(1), m.updowns["qux"].get())
 }

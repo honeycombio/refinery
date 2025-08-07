@@ -22,6 +22,7 @@ import (
 	jsoniter "github.com/json-iterator/go"
 	"github.com/klauspost/compress/zstd"
 	"github.com/pelletier/go-toml/v2"
+	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
 	healthserver "google.golang.org/grpc/health"
@@ -48,7 +49,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
 	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
-	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
 const (
@@ -72,7 +72,7 @@ type Router struct {
 	PeerTransmission     transmit.Transmission `inject:"peerTransmission"`
 	Sharder              sharder.Sharder       `inject:""`
 	Collector            collect.Collector     `inject:""`
-	Metrics              metrics.Metrics       `inject:"genericMetrics"`
+	Metrics              metrics.Metrics       `inject:"metrics"`
 	Tracer               trace.Tracer          `inject:"tracer"`
 
 	// version is set on startup so that the router may answer HTTP requests for
@@ -83,7 +83,7 @@ type Router struct {
 
 	// type indicates whether this should listen for incoming events or content
 	// redirected from a peer
-	incomingOrPeer string
+	routerType types.RouterType
 
 	// iopLogger is a logger that knows whether it's incoming or peer
 	iopLogger iopLogger
@@ -97,6 +97,8 @@ type Router struct {
 
 	environmentCache *environmentCache
 	hsrv             *healthserver.Server
+
+	metricsNames routerMetricKeys
 }
 
 type BatchResponse struct {
@@ -125,6 +127,10 @@ func (r *Router) SetVersion(ver string) {
 	r.versionStr = ver
 }
 
+func (r *Router) SetType(rt types.RouterType) {
+	r.routerType = rt
+}
+
 var routerMetrics = []metrics.Metadata{
 	{Name: "_router_proxied", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events proxied to another refinery"},
 	{Name: "_router_event", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received"},
@@ -137,19 +143,73 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_batch_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in batches"},
 	{Name: "_router_otlp", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests received"},
 	{Name: "_router_otlp_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in otlp requests"},
+	{Name: "_router_otlp_http_proto", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/protobuf requests received"},
+	{Name: "_router_otlp_http_json", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/json requests received"},
 	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
+}
+
+func (r *Router) registerMetricNames() {
+	for _, metric := range routerMetrics {
+		fullname := r.routerType.String() + metric.Name
+		switch metric.Name {
+		case "_router_proxied":
+			r.metricsNames.routerProxied = fullname
+		case "_router_event":
+			r.metricsNames.routerEvent = fullname
+		case "_router_event_bytes":
+			r.metricsNames.routerEventBytes = fullname
+		case "_router_span":
+			r.metricsNames.routerSpan = fullname
+		case "_router_dropped":
+			r.metricsNames.routerDropped = fullname
+		case "_router_nonspan":
+			r.metricsNames.routerNonspan = fullname
+		case "_router_peer":
+			r.metricsNames.routerPeer = fullname
+		case "_router_batch":
+			r.metricsNames.routerBatch = fullname
+		case "_router_batch_events":
+			r.metricsNames.routerBatchEvents = fullname
+		case "_router_otlp":
+			r.metricsNames.routerOtlp = fullname
+		case "_router_otlp_http_proto":
+			r.metricsNames.routerOtlpHttpProto = fullname
+		case "_router_otlp_http_json":
+			r.metricsNames.routerOtlpHttpJson = fullname
+		case "_router_otlp_events":
+			r.metricsNames.routerOtlpEvents = fullname
+		}
+
+		metric.Name = fullname
+		r.Metrics.Register(metric)
+	}
+}
+
+type routerMetricKeys struct {
+	routerProxied       string
+	routerEvent         string
+	routerEventBytes    string
+	routerSpan          string
+	routerDropped       string
+	routerNonspan       string
+	routerPeer          string
+	routerBatch         string
+	routerBatchEvents   string
+	routerOtlp          string
+	routerOtlpHttpProto string
+	routerOtlpHttpJson  string
+	routerOtlpEvents    string
 }
 
 // LnS spins up the Listen and Serve portion of the router. A router is
 // initialized as being for either incoming traffic from clients or traffic from
 // a peer. They listen on different addresses so peer traffic can be
 // prioritized.
-func (r *Router) LnS(incomingOrPeer string) {
-	r.incomingOrPeer = incomingOrPeer
+func (r *Router) LnS() {
 	r.iopLogger = iopLogger{
 		Logger:         r.Logger,
-		incomingOrPeer: incomingOrPeer,
+		incomingOrPeer: r.routerType.String(),
 	}
 
 	r.proxyClient = &http.Client{
@@ -165,12 +225,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 		return
 	}
 
-	for _, metric := range routerMetrics {
-		if strings.HasPrefix(metric.Name, "_") {
-			metric.Name = r.incomingOrPeer + metric.Name
-		}
-		r.Metrics.Register(metric)
-	}
+	r.registerMetricNames()
 
 	muxxer := mux.NewRouter()
 
@@ -209,7 +264,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	muxxer.PathPrefix("/").HandlerFunc(r.proxy).Name("proxy")
 
 	var listenAddr, grpcAddr string
-	if r.incomingOrPeer == "incoming" {
+	if r.routerType.IsIncoming() {
 		listenAddr = r.Config.GetListenAddr()
 		// GRPC listen addr is optional
 		grpcAddr = r.Config.GetGRPCListenAddr()
@@ -249,7 +304,8 @@ func (r *Router) LnS(incomingOrPeer string) {
 		r.grpcServer = grpc.NewServer(serverOpts...)
 
 		traceServer := NewTraceServer(r)
-		collectortrace.RegisterTraceServiceServer(r.grpcServer, traceServer)
+		// Register custom service handler that can access raw bytes for msgpack optimization
+		registerCustomTraceService(r.grpcServer, traceServer)
 
 		logsServer := NewLogsServer(r)
 		collectorlogs.RegisterLogsServiceServer(r.grpcServer, logsServer)
@@ -293,7 +349,7 @@ func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /alive check")
 
 	alive := r.Health.IsAlive()
-	r.Metrics.Gauge("is_alive", alive)
+	r.Metrics.Gauge("is_alive", metrics.ConvertBoolToFloat(alive))
 	if !alive {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "alive": "no"}, "json")
@@ -306,7 +362,7 @@ func (r *Router) ready(w http.ResponseWriter, req *http.Request) {
 	r.iopLogger.Debug().Logf("answered /ready check")
 
 	ready := r.Health.IsReady()
-	r.Metrics.Gauge("is_ready", ready)
+	r.Metrics.Gauge("is_ready", metrics.ConvertBoolToFloat(ready))
 	if !ready {
 		w.WriteHeader(http.StatusServiceUnavailable)
 		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "ready": "no"}, "json")
@@ -383,23 +439,17 @@ func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format 
 
 // event is handler for /1/event/
 func (r *Router) event(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.Increment(r.incomingOrPeer + "_router_event")
-	defer req.Body.Close()
+	r.Metrics.Increment(r.metricsNames.routerEvent)
 
 	ctx := req.Context()
-	bodyReader, err := r.getMaybeCompressedBody(req)
+	bodyBuffer, err := r.readAndCloseMaybeCompressedBody(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
 	}
+	defer recycleHTTPBodyBuffer(bodyBuffer)
 
-	reqBod, err := io.ReadAll(bodyReader)
-	if err != nil {
-		r.handlerReturnWithError(w, ErrPostBody, err)
-		return
-	}
-
-	ev, err := r.requestToEvent(ctx, req, reqBod)
+	ev, err := r.requestToEvent(ctx, req, bodyBuffer.Bytes())
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
@@ -439,7 +489,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 	}
 
 	data := map[string]interface{}{}
-	err = unmarshal(req, bytes.NewReader(reqBod), &data)
+	err = unmarshal(req, reqBod, &data)
 	if err != nil {
 		return nil, err
 	}
@@ -456,44 +506,28 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 		Environment: environment,
 		SampleRate:  uint(sampleRate),
 		Timestamp:   eventTime,
-		Data:        data,
+		Data:        types.NewPayload(r.Config, data),
 	}, nil
 }
 
 func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
-	r.Metrics.Increment(r.incomingOrPeer + "_router_batch")
-	defer req.Body.Close()
+	r.Metrics.Increment(r.metricsNames.routerBatch)
 
 	ctx := req.Context()
 	reqID := ctx.Value(types.RequestIDContextKey{})
 	debugLog := r.iopLogger.Debug().WithField("request_id", reqID)
 
-	bodyReader, err := r.getMaybeCompressedBody(req)
+	bodyBuffer, err := r.readAndCloseMaybeCompressedBody(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrPostBody, err)
 		return
 	}
-
-	reqBod, err := io.ReadAll(bodyReader)
-	if err != nil {
-		r.handlerReturnWithError(w, ErrPostBody, err)
-		return
-	}
-
-	batchedEvents := make([]batchedEvent, 0)
-	err = unmarshal(req, bytes.NewReader(reqBod), &batchedEvents)
-	if err != nil {
-		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("json_body", string(reqBod)).Logf("error parsing json")
-		r.handlerReturnWithError(w, ErrJSONFailed, err)
-		return
-	}
-	r.Metrics.Count(r.incomingOrPeer+"_router_batch_events", len(batchedEvents))
+	defer recycleHTTPBodyBuffer(bodyBuffer)
 
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
-	apiHost := r.Config.GetHoneycombAPI()
 
 	apiKey := req.Header.Get(types.APIKeyHeader)
 	if apiKey == "" {
@@ -506,10 +540,20 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
 
+	batchedEvents := newBatchedEvents(r.Config, apiKey, environment, dataset)
+	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
+	if err != nil {
+		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("body", string(bodyBuffer.Bytes())).Logf("error parsing json")
+		r.handlerReturnWithError(w, ErrBatchToEvent, err)
+		return
+	}
+	r.Metrics.Count(r.metricsNames.routerBatchEvents, int64(len(batchedEvents.events)))
+
+	apiHost := r.Config.GetHoneycombAPI()
 	userAgent := getUserAgentFromRequest(req)
-	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents))
-	for _, bev := range batchedEvents {
-		if len(bev.Data) != 0 {
+	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
+	for _, bev := range batchedEvents.events {
+		if !bev.Data.IsEmpty() {
 			ev := &types.Event{
 				Context:     ctx,
 				APIHost:     apiHost,
@@ -524,7 +568,6 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			addIncomingUserAgent(ev, userAgent)
 			err = r.processEvent(ev, reqID)
 		} else {
-			// return an error for empty events
 			err = fmt.Errorf("empty event data")
 		}
 
@@ -549,23 +592,23 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	w.Write(response)
 }
 
+// processOTLPRequest processes OTLP requests with Batch (map[string]interface{}) events
 func (router *Router) processOTLPRequest(
 	ctx context.Context,
 	batches []huskyotlp.Batch,
 	apiKey string,
-	incomingUserAgent string) error {
-
+	incomingUserAgent string,
+) error {
 	var requestID types.RequestIDContextKey
 	apiHost := router.Config.GetHoneycombAPI()
 
-	router.Metrics.Increment(router.incomingOrPeer + "_router_otlp")
+	router.Metrics.Increment(router.metricsNames.routerOtlp)
 
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
 	if err != nil {
 		return nil
 	}
-
 	totalEvents := 0
 	for _, batch := range batches {
 		totalEvents += len(batch.Events)
@@ -578,16 +621,63 @@ func (router *Router) processOTLPRequest(
 				Environment: environment,
 				SampleRate:  uint(ev.SampleRate),
 				Timestamp:   ev.Timestamp,
-				Data:        ev.Attributes,
+				Data:        types.NewPayload(router.Config, ev.Attributes),
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
-			if err = router.processEvent(event, requestID); err != nil {
+			if err := router.processEvent(event, requestID); err != nil {
 				router.Logger.Error().Logf("Error processing event: " + err.Error())
 			}
 		}
 	}
-	router.Metrics.Count(router.incomingOrPeer+"_router_otlp_events", totalEvents)
 
+	router.Metrics.Count(router.metricsNames.routerOtlpEvents, int64(totalEvents))
+	return nil
+}
+
+// processOTLPRequestBatchMsgp processes OTLP requests with BatchMsgp ([]byte) events
+func (router *Router) processOTLPRequestBatchMsgp(
+	ctx context.Context,
+	batches []huskyotlp.BatchMsgp,
+	apiKey string,
+	incomingUserAgent string,
+) error {
+	var requestID types.RequestIDContextKey
+	apiHost := router.Config.GetHoneycombAPI()
+
+	// get environment name - will be empty for legacy keys
+	environment, err := router.getEnvironmentName(apiKey)
+	if err != nil {
+		return nil
+	}
+	totalEvents := 0
+	for _, batch := range batches {
+		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(router.Config, apiKey, batch.Dataset, environment)
+		totalEvents += len(batch.Events)
+		for _, ev := range batch.Events {
+			payload := types.NewPayload(router.Config, nil)
+			err := coreFieldsUnmarshaler.UnmarshalPayloadComplete(ev.Attributes, &payload)
+			if err != nil {
+				router.Logger.Error().Logf("Error unmarshaling payload: " + err.Error())
+				continue
+			}
+
+			event := &types.Event{
+				Context:     ctx,
+				APIHost:     apiHost,
+				APIKey:      apiKey,
+				Dataset:     batch.Dataset,
+				Environment: environment,
+				SampleRate:  uint(ev.SampleRate),
+				Timestamp:   ev.Timestamp,
+				Data:        payload,
+			}
+			addIncomingUserAgent(event, incomingUserAgent)
+			if err := router.processEvent(event, requestID); err != nil {
+				router.Logger.Error().Logf("Error processing event: " + err.Error())
+			}
+		}
+	}
+	router.Metrics.Count(router.metricsNames.routerOtlpEvents, int64(totalEvents))
 	return nil
 }
 
@@ -600,38 +690,41 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	// record the event bytes size
 	// we do this early so can include all event types (span, event, log, etc)
-	r.Metrics.Histogram(r.incomingOrPeer+"_router_event_bytes", float64(ev.GetDataSize()))
+	r.Metrics.Histogram(r.metricsNames.routerEventBytes, float64(ev.GetDataSize()))
 
+	// An error here is effectively a parsing error, so return it up the stack.
+	if err := ev.Data.ExtractMetadata(); err != nil {
+		return err
+	}
 	// check if this is a probe from another refinery; if so, we should drop it
-	if ev.Data["meta.refinery.probe"] != nil {
+	if ev.Data.MetaRefineryProbe.HasValue && ev.Data.MetaRefineryProbe.Value {
 		debugLog.Logf("dropping probe")
 		return nil
 	}
 
-	traceID := extractTraceID(r.Config.GetTraceIdFieldNames(), ev)
-	if traceID == "" {
+	if ev.Data.MetaTraceID == "" {
 		// not part of a trace. send along upstream
-		r.Metrics.Increment(r.incomingOrPeer + "_router_nonspan")
+		r.Metrics.Increment(r.metricsNames.routerNonspan)
 		debugLog.WithString("api_host", ev.APIHost).
 			WithString("dataset", ev.Dataset).
 			Logf("sending non-trace event from batch")
 		r.UpstreamTransmission.EnqueueEvent(ev)
 		return nil
 	}
-	debugLog = debugLog.WithString("trace_id", traceID)
+	debugLog = debugLog.WithString("trace_id", ev.Data.MetaTraceID)
 
 	span := &types.Span{
 		Event:   *ev,
-		TraceID: traceID,
-		IsRoot:  isRootSpan(ev, r.Config),
+		TraceID: ev.Data.MetaTraceID,
+		IsRoot:  ev.Data.MetaRefineryRoot.Value,
 	}
 
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
-	if r.incomingOrPeer == "incoming" && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
-		if span.Data["meta.signal_type"] == "log" {
-			r.Metrics.Count("bytes_received_logs", span.GetDataSize())
+	if r.routerType.IsIncoming() && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
+		if span.Data.MetaSignalType == "log" {
+			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
 		} else {
-			r.Metrics.Count("bytes_received_traces", span.GetDataSize())
+			r.Metrics.Count("bytes_received_traces", int64(span.GetDataSize()))
 		}
 	}
 
@@ -652,7 +745,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 				// If the span was kept, we want to generate a probe that we'll forward
 				// to a peer IF this span would have been forwarded.
-				ev.Data["meta.refinery.probe"] = true
+				ev.Data.MetaRefineryProbe.Set(true)
 				isProbe = true
 			}
 		}
@@ -660,9 +753,9 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	if r.Config.GetCollectionConfig().TraceLocalityEnabled() {
 		// Figure out if we should handle this span locally or pass on to a peer
-		targetShard := r.Sharder.WhichShard(traceID)
+		targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
 		if !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Metrics.Increment(r.incomingOrPeer + "_router_peer")
+			r.Metrics.Increment(r.metricsNames.routerPeer)
 			debugLog.
 				WithString("peer", targetShard.GetAddress()).
 				WithField("isprobe", isProbe).
@@ -684,26 +777,47 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		return nil
 	}
 
-	// we're supposed to handle it normally
 	var err error
-	if r.incomingOrPeer == "incoming" {
+	// we're supposed to handle it normally
+	if r.routerType.IsIncoming() {
 		err = r.Collector.AddSpan(span)
 	} else {
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
-		r.Metrics.Increment(r.incomingOrPeer + "_router_dropped")
+		r.Metrics.Increment(r.metricsNames.routerDropped)
 		debugLog.Logf("Dropping span from batch, channel full")
 		return err
 	}
 
-	r.Metrics.Increment(r.incomingOrPeer + "_router_span")
+	r.Metrics.Increment(r.metricsNames.routerSpan)
 
-	debugLog.WithField("source", r.incomingOrPeer).Logf("Accepting span from batch for collection into a trace")
+	debugLog.WithField("source", r.routerType.String()).Logf("Accepting span from batch for collection into a trace")
 	return nil
 }
 
-func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
+// A pool of buffers for HTTP bodies; there's no sorting by size here, since
+// the assumption is that over time these will converge on the largest typical
+// body size used in this environment.
+var httpBodyBufferPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
+
+func recycleHTTPBodyBuffer(b *bytes.Buffer) {
+	if b != nil {
+		b.Reset()
+		httpBodyBufferPool.Put(b)
+	}
+}
+
+// When finished with the returned buffer, callers should return it to the pool
+// by calling recycleHTTPBodyBuffer.
+// Reads the body and immediately closes it, releasing resources as soon as possible.
+func (r *Router) readAndCloseMaybeCompressedBody(req *http.Request) (*bytes.Buffer, error) {
+	defer req.Body.Close()
+
 	var reader io.Reader
 	switch req.Header.Get("Content-Encoding") {
 	case "gzip":
@@ -712,12 +826,7 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 			return nil, err
 		}
 		defer gzipReader.Close()
-
-		buf := &bytes.Buffer{}
-		if _, err := io.Copy(buf, io.LimitReader(gzipReader, HTTPMessageSizeMax)); err != nil {
-			return nil, err
-		}
-		reader = buf
+		reader = gzipReader
 	case "zstd":
 		zReader := <-r.zstdDecoders
 		defer func(zReader *zstd.Decoder) {
@@ -729,38 +838,18 @@ func (r *Router) getMaybeCompressedBody(req *http.Request) (io.Reader, error) {
 		if err != nil {
 			return nil, err
 		}
-		buf := &bytes.Buffer{}
-		if _, err := io.Copy(buf, io.LimitReader(zReader, HTTPMessageSizeMax)); err != nil {
-			return nil, err
-		}
-
-		reader = buf
+		reader = zReader
 	default:
 		reader = req.Body
 	}
-	return reader, nil
-}
 
-type batchedEvent struct {
-	Timestamp        string                 `json:"time"`
-	MsgPackTimestamp *time.Time             `msgpack:"time,omitempty"`
-	SampleRate       int64                  `json:"samplerate" msgpack:"samplerate"`
-	Data             map[string]interface{} `json:"data" msgpack:"data"`
-}
-
-func (b *batchedEvent) getEventTime() time.Time {
-	if b.MsgPackTimestamp != nil {
-		return b.MsgPackTimestamp.UTC()
+	buf := httpBodyBufferPool.Get().(*bytes.Buffer)
+	if _, err := io.Copy(buf, io.LimitReader(reader, HTTPMessageSizeMax)); err != nil {
+		recycleHTTPBodyBuffer(buf)
+		return nil, err
 	}
 
-	return getEventTime(b.Timestamp)
-}
-
-func (b *batchedEvent) getSampleRate() uint {
-	if b.SampleRate == 0 {
-		return defaultSampleRate
-	}
-	return uint(b.SampleRate)
+	return buf, nil
 }
 
 // getEventTime tries to guess the time format in our time header!
@@ -824,14 +913,24 @@ func makeDecoders(num int) (chan *zstd.Decoder, error) {
 	return zstdDecoders, nil
 }
 
-func unmarshal(r *http.Request, data io.Reader, v interface{}) error {
+func unmarshal(r *http.Request, data []byte, v interface{}) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
-		decoder := msgpack.NewDecoder(data)
+		if unmarshaler, ok := v.(msgp.Unmarshaler); ok {
+			_, err := unmarshaler.UnmarshalMsg(data)
+			return err
+		}
+		decoder := msgpack.NewDecoder(bytes.NewReader(data))
 		decoder.UseLooseInterfaceDecoding(true)
 		return decoder.Decode(v)
 	default:
-		return jsoniter.NewDecoder(data).Decode(v)
+		// If UnmarshalJSON is available, call it directly, which is surprisingly
+		// much more efficient than allowing it to be called from the library.
+		if unmarshaler, ok := v.(json.Unmarshaler); ok {
+			err := unmarshaler.UnmarshalJSON(data)
+			return err
+		}
+		return jsoniter.Unmarshal(data, v)
 	}
 }
 
@@ -943,7 +1042,7 @@ type AuthInfo struct {
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
-	if apiKey == "" || types.IsLegacyAPIKey(apiKey) {
+	if apiKey == "" || config.IsLegacyAPIKey(apiKey) {
 		return "", nil
 	}
 
@@ -1072,52 +1171,33 @@ func getDatasetFromRequest(req *http.Request) (string, error) {
 	return dataset, nil
 }
 
-func isRootSpan(ev *types.Event, cfg config.Config) bool {
-	// log event should never be considered a root span, check for that first
-	if signalType := ev.Data["meta.signal_type"]; signalType == "log" {
-		return false
-	}
-
-	// check if the event has a root flag
-	if isRoot, ok := ev.Data["meta.refinery.root"]; ok {
-		v, ok := isRoot.(bool)
-		if !ok {
-			return false
-		}
-
-		return v
-	}
-
-	// check if the event has a parent id using the configured parent id field names
-	for _, parentIdFieldName := range cfg.GetParentIdFieldNames() {
-		parentId := ev.Data[parentIdFieldName]
-		if _, ok := parentId.(string); ok && parentId != "" {
-			return false
-		}
-	}
-	return true
-}
-
-func extractTraceID(traceIdFieldNames []string, ev *types.Event) string {
-	if trID, ok := ev.Data["meta.trace_id"]; ok {
-		return trID.(string)
-	}
-
-	for _, traceIdFieldName := range traceIdFieldNames {
-		if trID, ok := ev.Data[traceIdFieldName]; ok {
-			return trID.(string)
-		}
-	}
-
-	return ""
-}
-
 func getUserAgentFromRequest(req *http.Request) string {
 	return req.Header.Get("User-Agent")
 }
 
 func addIncomingUserAgent(ev *types.Event, userAgent string) {
-	if userAgent != "" && ev.Data["meta.refinery.incoming_user_agent"] == nil {
-		ev.Data["meta.refinery.incoming_user_agent"] = userAgent
+	if userAgent != "" && ev.Data.MetaRefineryIncomingUserAgent == "" {
+		ev.Data.MetaRefineryIncomingUserAgent = userAgent
 	}
+}
+
+// registerCustomTraceService registers our custom trace service that can access raw bytes
+// for msgpack optimization, replacing the standard OTLP registration.
+func registerCustomTraceService(grpcServer *grpc.Server, traceServer *TraceServer) {
+	// Create custom service descriptor that uses our raw bytes handler
+	customTraceServiceDesc := grpc.ServiceDesc{
+		ServiceName: "opentelemetry.proto.collector.trace.v1.TraceService",
+		HandlerType: (*CustomTraceServiceServer)(nil),
+		Methods: []grpc.MethodDesc{
+			{
+				MethodName: "Export",
+				Handler:    customTraceExportHandler,
+			},
+		},
+		Streams:  []grpc.StreamDesc{},
+		Metadata: "opentelemetry/proto/collector/trace/v1/trace_service.proto",
+	}
+
+	// Register our custom service directly with the GRPC server
+	grpcServer.RegisterService(&customTraceServiceDesc, traceServer)
 }

@@ -142,7 +142,7 @@ outer:
 	c.mut.Unlock()
 	timeout.Stop()
 	qlt := time.Since(lockStart)
-	c.met.Histogram(AddQueueLockTime, qlt.Microseconds())
+	c.met.Histogram(AddQueueLockTime, float64(qlt.Microseconds()))
 }
 
 // Add puts a traceID into the filter. We need this to be fast
@@ -180,7 +180,7 @@ func (c *CuckooTraceChecker) Maintain() {
 	if c.future != nil {
 		c.met.Gauge(FutureLoadFactor, c.future.LoadFactor())
 	}
-	c.met.Gauge(CurrentCapacity, c.capacity)
+	c.met.Gauge(CurrentCapacity, float64(c.capacity))
 	c.mut.RUnlock()
 
 	// once the current one is half loaded, we can start using the future one too
