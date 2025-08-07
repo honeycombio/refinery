@@ -276,10 +276,6 @@ complete:
       unit: Dimensionless
       description: The hash of the current rules configuration
 hasprefix:
-    - name: _num_dropped_by_drop_rule
-      type: Counter
-      unit: Dimensionless
-      description: Number of traces dropped by the drop rule
     - name: _num_dropped
       type: Counter
       unit: Dimensionless
@@ -296,26 +292,54 @@ hasprefix:
       type: Histogram
       unit: Dimensionless
       description: Number of unique keys being tracked by the sampler
-    - name: enqueue_errors
+    - name: rulebased_num_dropped_by_drop_rule
+      type: Counter
+      unit: Dimensionless
+      description: Number of traces dropped by the drop rule
+    - name: _enqueue_errors
       type: Counter
       unit: Dimensionless
       description: The number of errors encountered when enqueueing events
-    - name: response_20x
+    - name: _response_20x
       type: Counter
       unit: Dimensionless
       description: The number of successful responses from Honeycomb
-    - name: response_errors
+    - name: _response_errors
       type: Counter
       unit: Dimensionless
       description: The number of errors encountered when sending events to Honeycomb
-    - name: queued_items
+    - name: _queued_items
       type: UpDown
       unit: Dimensionless
       description: The number of events queued for transmission to Honeycomb
-    - name: queue_time
+    - name: _queue_time
       type: Histogram
       unit: Microseconds
       description: The time spent in the queue before being sent to Honeycomb
+    - name: _queue_length
+      type: Gauge
+      unit: Dimensionless
+      description: number of events waiting to be sent to destination
+    - name: _send_errors
+      type: Counter
+      unit: Dimensionless
+      description: number of errors encountered while sending a batch of events to destination
+    - name: _send_retries
+      type: Counter
+      unit: Dimensionless
+      description: number of times a batch of events was retried
+    - name: _batches_sent
+      type: Counter
+      unit: Dimensionless
+      description: number of batches of events sent to destination
+    - name: _messages_sent
+      type: Counter
+      unit: Dimensionless
+      description: number of messages sent to destination
+    - name: _response_decode_errors
+      type: Counter
+      unit: Dimensionless
+      description: number of errors encountered while decoding responses from destination
     - name: _router_proxied
       type: Counter
       unit: Dimensionless
@@ -355,11 +379,19 @@ hasprefix:
     - name: _router_otlp_other
       type: Counter
       unit: Dimensionless
-      description: the number of otlp requests not using optimized http json/protobuf processing
+      description: the number of otlp requests received without http json/protobuf processing optimization
     - name: _router_otlp_events
       type: Counter
       unit: Dimensionless
       description: the number of events received in otlp requests
+    - name: _router_otlp_http_proto
+      type: Counter
+      unit: Dimensionless
+      description: the number of http/protobuf requests received
+    - name: _router_otlp_http_json
+      type: Counter
+      unit: Dimensionless
+      description: the number of http/json requests received
     - name: bytes_received_traces
       type: Counter
       unit: Bytes
@@ -368,31 +400,3 @@ hasprefix:
       type: Counter
       unit: Bytes
       description: the number of bytes received in log events
-    - name: queue_length
-      type: Gauge
-      unit: Dimensionless
-      description: number of events waiting to be sent to destination
-    - name: queue_overflow
-      type: Counter
-      unit: Dimensionless
-      description: number of events dropped due to queue overflow
-    - name: send_errors
-      type: Counter
-      unit: Dimensionless
-      description: number of errors encountered while sending events to destination
-    - name: send_retries
-      type: Counter
-      unit: Dimensionless
-      description: number of times a batch of events was retried
-    - name: batches_sent
-      type: Counter
-      unit: Dimensionless
-      description: number of batches of events sent to destination
-    - name: messages_sent
-      type: Counter
-      unit: Dimensionless
-      description: number of messages sent to destination
-    - name: response_decode_errors
-      type: Counter
-      unit: Dimensionless
-      description: number of errors encountered while decoding responses from destination

@@ -141,7 +141,7 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_peer", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of spans proxied to a peer"},
 	{Name: "_router_batch", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of batches of events received"},
 	{Name: "_router_batch_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in batches"},
-	{Name: "_router_otlp_other", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests not using optimized http json/protobuf processing"},
+	{Name: "_router_otlp_other", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp requests received without http json/protobuf processing optimization"},
 	{Name: "_router_otlp_events", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of events received in otlp requests"},
 	{Name: "_router_otlp_http_proto", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/protobuf requests received"},
 	{Name: "_router_otlp_http_json", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of http/json requests received"},
