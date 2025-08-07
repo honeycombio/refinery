@@ -2741,7 +2741,9 @@ func createBenchmarkSpans(traceID string, spanIdx int, isRoot bool, cfg config.C
 	}
 
 	span.TraceID = traceID
+	span.Event.Data.MetaTraceID = traceID
 	span.IsRoot = isRoot
+	span.Event.Data.MetaRefineryRoot.Set(isRoot)
 
 	// Core tracing fields (always present, differs per trace)
 	parentID := ""
