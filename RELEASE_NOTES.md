@@ -2,6 +2,10 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.9.7
+
+This release focuses on improving Refinery by fixing a bug with empty payloads. It also adds a new feature that allows you to add static fields to all internal refinery logs.
+
 ## Version 2.9.6
 
 This release focuses on improving observability and making Refinery easier to operate with better default values and new metrics. It also includes several important bug fixes for edge cases and configuration handling.

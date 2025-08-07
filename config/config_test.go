@@ -642,6 +642,11 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 		"HoneycombLogger.Dataset", "loggerDataset",
 		"HoneycombLogger.SamplerEnabled", true,
 		"HoneycombLogger.SamplerThroughput", 5,
+		"HoneycombLogger.AdditionalAttributes", map[string]string{
+			"name":    "foo",
+			"other":   "bar",
+			"another": "OneHundred",
+		},
 	)
 	rm := makeYAML("ConfigVersion", 2)
 	config, rules := createTempConfigs(t, cm, rm)
@@ -659,6 +664,7 @@ func TestHoneycombLoggerConfig(t *testing.T) {
 	assert.Equal(t, "loggerDataset", loggerConfig.Dataset)
 	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, 5, loggerConfig.SamplerThroughput)
+	assert.Equal(t, map[string]string{"name": "foo", "other": "bar", "another": "OneHundred"}, loggerConfig.AdditionalAttributes)
 }
 
 func TestHoneycombLoggerConfigDefaults(t *testing.T) {
@@ -678,6 +684,7 @@ func TestHoneycombLoggerConfigDefaults(t *testing.T) {
 
 	assert.Equal(t, true, loggerConfig.GetSamplerEnabled())
 	assert.Equal(t, 10, loggerConfig.SamplerThroughput)
+	assert.Len(t, loggerConfig.AdditionalAttributes, 0)
 }
 
 func TestHoneycombGRPCConfigDefaults(t *testing.T) {

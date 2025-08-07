@@ -1,5 +1,22 @@
 # Refinery Changelog
 
+## 2.9.7 2025-07-16
+
+### Features
+
+- feat: add support for REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_FIELDS to honeycomb logger (#1600) | [Tyler Helmuth](https://github.com/TylerHelmuth)
+
+### Fixes
+
+- fix: use unique port number for integration test (#1621) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: send http status code 400 for empty event payload (#1618) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: make TestStableMaxAlloc less flaky (#1596) | [Yingrong Zhao](https://github.com/vinozzZ)
+- fix: wait for goroutines to finish before shutting down (#1593) | [Yingrong Zhao](https://github.com/vinozzZ)
+
+### Maintenance
+
+- maint: use collect.Start() in collector_test.go (#1591) | [Yingrong Zhao](https://github.com/vinozzZ)
+
 ## 2.9.6 2025-06-20
 
 This release aims to improve user experience by adding new metrics and making default values more sensible.

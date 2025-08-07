@@ -520,6 +520,20 @@ The sampling algorithm attempts to make sure that the average throughput approxi
 - Default: `10`
 - Example: `10`
 
+### `AdditionalAttributes`
+
+`AdditionalAttributes` adds the provided attributes to all logs written by the Honeycomb logger.
+
+When supplying via a environment variable, the value should be a string of comma-separated key-value pairs.
+When supplying via the command line, the value should be a key value pair.
+If multiple key-value pairs are needed, each should be supplied via its own command line flag.
+The key-value pairs must use ':' as the separator.
+
+- Not eligible for live reload.
+- Type: `map`
+- Example: `pipeline.id:'12345',rollout.id:'67890'`
+- Environment variable: `REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES`
+
 ## Stdout Logger
 
 `StdoutLogger` contains configuration for logging to `stdout`.
@@ -836,7 +850,7 @@ If this value is specified, then Refinery will use the first IPV6 unicast addres
 This list is ignored when Type is "redis".
 The format is a list of strings of the form "scheme://host:port".
 
-- Not eligible for live reload.
+- Eligible for live reload.
 - Type: `stringarray`
 - Example: `http://192.168.1.11:8081,http://192.168.1.12:8081`
 

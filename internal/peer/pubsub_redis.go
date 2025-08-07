@@ -105,6 +105,7 @@ type RedisPubsubPeers struct {
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
+// in a separate goroutine if the hash has changed.
 func (p *RedisPubsubPeers) checkHash() {
 	peers := p.peers.SortedKeys()
 	newhash := hashList(peers)
