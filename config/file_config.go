@@ -321,9 +321,6 @@ type CollectionConfig struct {
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 
-	DisableRedistribution bool     `yaml:"DisableRedistribution"`
-	RedistributionDelay   Duration `yaml:"RedistributionDelay" default:"30s"`
-
 	ShutdownDelay     Duration `yaml:"ShutdownDelay" default:"15s"`
 	TraceLocalityMode string   `yaml:"TraceLocalityMode" default:"concentrated"`
 

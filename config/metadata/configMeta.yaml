@@ -1354,38 +1354,6 @@ groups:
           supported. See `MaxMemoryPercentage` for more details. If set,
           `Collections.AvailableMemory` must not be defined.
 
-      - name: DisableRedistribution
-        type: bool
-        valuetype: nondefault
-        firstversion: v2.8
-        default: false
-        reload: true
-        summary: controls whether to transmit traces in cache to remaining peers during cluster scaling event.
-        description: >
-          Redistribution is intended to help prevent data loss by reconsolidating traces onto the appropriate node after a scaling event.
-          During scale down events, all stored spans are forwarded to the new owning Refinery peer instance, so it can shut down without dropping spans.
-          During scale up events, only stored spans that belong to another Refinery peer instance are forwarded, so that instance can make whole trace decisions.
-          Refinery uses additional system resources during scale up/down events.
-          If the cluster does not have enough resource capacity headroom, a redistribution event can cause the cluster to go into stress relief (if enabled).
-
-          If `true`, Refinery will NOT forward live traces in its cache to the rest of the peers when peers join or leave the cluster.
-          Disabling redistribution can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout` are redistributed.
-          However, disabling redistribution may also cause partial data loss of traces that were in flight when scaling occurred.
-
-      - name: RedistributionDelay
-        type: duration
-        valuetype: nondefault
-        firstversion: v2.9
-        default: 30s
-        reload: false
-        summary: controls the amount of time Refinery waits after each cluster scaling event before redistributing in-memory traces.
-        description: >
-          This value should be longer than the amount of time between individual pod changes in a bulk scaling operation
-          (changing the cluster size by more than one pod).
-          Each redistribution generates additional traffic between peers.
-          If this value is too short, multiple consecutive redistributions will occur and the resulting traffic
-          may overwhelm the cluster.
-
       - name: ShutdownDelay
         type: duration
         valuetype: nondefault
