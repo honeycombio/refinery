@@ -721,6 +721,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		r.UpstreamTransmission.EnqueueEvent(ev)
 		return nil
 	}
+
 	debugLog = debugLog.WithString("trace_id", ev.Data.MetaTraceID)
 
 	span := &types.Span{
@@ -737,6 +738,8 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 			r.Metrics.Count("bytes_received_traces", int64(span.GetDataSize()))
 		}
 	}
+
+	r.Metrics.Increment(r.metricsNames.routerSpan)
 
 	// we know we're a span, but we need to check if we're in Stress Relief mode;
 	// if we are, then we want to make an immediate, deterministic trace decision
@@ -799,8 +802,6 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		debugLog.Logf("Dropping span from batch, channel full")
 		return err
 	}
-
-	r.Metrics.Increment(r.metricsNames.routerSpan)
 
 	debugLog.WithField("source", r.routerType.String()).Logf("Accepting span from batch for collection into a trace")
 	return nil
