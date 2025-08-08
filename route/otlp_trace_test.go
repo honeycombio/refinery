@@ -666,6 +666,124 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, "my-user-agent", event.Data.MetaRefineryIncomingUserAgent)
 	})
 
+	t.Run("postOTLPTrace error cases", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+
+		t.Run("unsupported content type", func(t *testing.T) {
+			body, err := proto.Marshal(req)
+			require.NoError(t, err)
+
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/xml") // Unsupported content type
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusUnsupportedMediaType, w.Code)
+			assert.Contains(t, w.Body.String(), "unsupported content-type")
+		})
+
+		t.Run("malformed protobuf body", func(t *testing.T) {
+			// Send invalid protobuf data
+			invalidBody := []byte("this is not valid protobuf data")
+
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(invalidBody))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/protobuf")
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
+
+		t.Run("malformed JSON body", func(t *testing.T) {
+			// Send invalid JSON data
+			invalidBody := []byte(`{"invalid": json syntax}`)
+
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(invalidBody))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
+
+		t.Run("empty body", func(t *testing.T) {
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader([]byte{}))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
+
+		t.Run("oversized request body", func(t *testing.T) {
+			// Create a very large request that exceeds defaultMaxRequestBodySize (20MB)
+			largeSpans := make([]*trace.Span, 0)
+			// Create many spans with large attribute values to exceed the limit
+			for i := 0; i < 1000; i++ {
+				largeValue := strings.Repeat("x", 50000) // 50KB per span
+				span := &trace.Span{
+					Name: "large-span",
+					Attributes: []*common.KeyValue{{
+						Key:   "large_attr",
+						Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: largeValue}},
+					}},
+				}
+				largeSpans = append(largeSpans, span)
+			}
+
+			largeReq := &collectortrace.ExportTraceServiceRequest{
+				ResourceSpans: []*trace.ResourceSpans{{
+					ScopeSpans: []*trace.ScopeSpans{{
+						Spans: largeSpans,
+					}},
+				}},
+			}
+
+			body, err := protojson.Marshal(largeReq)
+			require.NoError(t, err)
+
+			// Verify the body is actually large enough
+			require.Greater(t, len(body), defaultMaxRequestBodySize, "Test body should exceed max request size")
+
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
+	})
+
 	t.Run("use SendKeyMode override", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
