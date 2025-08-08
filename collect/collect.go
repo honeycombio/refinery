@@ -218,7 +218,7 @@ func (i *InMemCollector) Start() error {
 		}
 	}
 
-	if !i.Config.GetCollectionConfig().DisableRedistribution {
+	if !i.Config.GetDisableRedistribution() {
 		i.Peers.RegisterUpdatedPeersCallback(i.redistributeTimer.Reset)
 	}
 
@@ -1109,7 +1109,7 @@ func (i *InMemCollector) Stop() error {
 		sampler.Stop()
 	}
 
-	if !i.Config.GetCollectionConfig().DisableRedistribution {
+	if !i.Config.GetDisableRedistribution() {
 		peers, err := i.Peers.GetPeers()
 		if err != nil {
 			i.Logger.Error().Logf("unable to get peer list with error %s", err.Error())
