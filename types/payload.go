@@ -36,11 +36,6 @@ const (
 	MetaRefineryProbe             = "meta.refinery.probe"
 	MetaRefineryRoot              = "meta.refinery.root"
 	MetaRefineryIncomingUserAgent = "meta.refinery.incoming_user_agent"
-	MetaRefinerySendBy            = "meta.refinery.send_by"
-	MetaRefinerySpanDataSize      = "meta.refinery.span_data_size"
-	MetaRefineryMinSpan           = "meta.refinery.min_span"
-	MetaRefineryForwarded         = "meta.refinery.forwarded"
-	MetaRefineryExpiredTrace      = "meta.refinery.expired_trace"
 
 	// These fields are not used by the refinery itself for sampling decisions.
 	// They are used to pass information from refinery to honeycomb.
@@ -53,7 +48,6 @@ const (
 	MetaSpanCount                  = "meta.span_count"
 	MetaEventCount                 = "meta.event_count"
 	MetaRefineryOriginalSampleRate = "meta.refinery.original_sample_rate"
-	MetaRefineryShutdownSend       = "meta.refinery.shutdown_send"
 	MetaRefinerySampleKey          = "meta.refinery.sample_key"
 )
 
@@ -81,11 +75,6 @@ var metadataFields = map[string]metadataField{
 	MetaRefineryProbe:             boolField(MetaRefineryProbe, func(p *Payload) *nullableBool { return &p.MetaRefineryProbe }),
 	MetaRefineryRoot:              boolField(MetaRefineryRoot, func(p *Payload) *nullableBool { return &p.MetaRefineryRoot }),
 	MetaRefineryIncomingUserAgent: stringField(MetaRefineryIncomingUserAgent, func(p *Payload) *string { return &p.MetaRefineryIncomingUserAgent }),
-	MetaRefinerySendBy:            int64Field(MetaRefinerySendBy, func(p *Payload) *int64 { return &p.MetaRefinerySendBy }),
-	MetaRefinerySpanDataSize:      int64Field(MetaRefinerySpanDataSize, func(p *Payload) *int64 { return &p.MetaRefinerySpanDataSize }),
-	MetaRefineryMinSpan:           boolField(MetaRefineryMinSpan, func(p *Payload) *nullableBool { return &p.MetaRefineryMinSpan }),
-	MetaRefineryForwarded:         stringField(MetaRefineryForwarded, func(p *Payload) *string { return &p.MetaRefineryForwarded }),
-	MetaRefineryExpiredTrace:      boolField(MetaRefineryExpiredTrace, func(p *Payload) *nullableBool { return &p.MetaRefineryExpiredTrace }),
 
 	MetaRefineryLocalHostname:      stringField(MetaRefineryLocalHostname, func(p *Payload) *string { return &p.MetaRefineryLocalHostname }),
 	MetaStressed:                   boolField(MetaStressed, func(p *Payload) *nullableBool { return &p.MetaStressed }),
@@ -96,7 +85,6 @@ var metadataFields = map[string]metadataField{
 	MetaSpanCount:                  int64Field(MetaSpanCount, func(p *Payload) *int64 { return &p.MetaSpanCount }),
 	MetaEventCount:                 int64Field(MetaEventCount, func(p *Payload) *int64 { return &p.MetaEventCount }),
 	MetaRefineryOriginalSampleRate: int64Field(MetaRefineryOriginalSampleRate, func(p *Payload) *int64 { return &p.MetaRefineryOriginalSampleRate }),
-	MetaRefineryShutdownSend:       boolField(MetaRefineryShutdownSend, func(p *Payload) *nullableBool { return &p.MetaRefineryShutdownSend }),
 	MetaRefinerySampleKey:          stringField(MetaRefinerySampleKey, func(p *Payload) *string { return &p.MetaRefinerySampleKey }),
 }
 
@@ -259,11 +247,6 @@ type Payload struct {
 	MetaRefineryProbe             nullableBool // meta.refinery.probe
 	MetaRefineryRoot              nullableBool // meta.refinery.root
 	MetaRefineryIncomingUserAgent string       // meta.refinery.incoming_user_agent
-	MetaRefinerySendBy            int64        // meta.refinery.send_by (Unix timestamp)
-	MetaRefinerySpanDataSize      int64        // meta.refinery.span_data_size
-	MetaRefineryMinSpan           nullableBool // meta.refinery.min_span
-	MetaRefineryForwarded         string       // meta.refinery.forwarded
-	MetaRefineryExpiredTrace      nullableBool // meta.refinery.expired_trace
 
 	MetaRefineryLocalHostname      string       // meta.refinery.local_hostname
 	MetaStressed                   nullableBool // meta.stressed
@@ -274,7 +257,6 @@ type Payload struct {
 	MetaSpanCount                  int64        // meta.span_count
 	MetaEventCount                 int64        // meta.event_count
 	MetaRefineryOriginalSampleRate int64        // meta.refinery.original_sample_rate
-	MetaRefineryShutdownSend       nullableBool // meta.refinery.shutdown_send
 	MetaRefinerySampleKey          string       // meta.refinery.sample_key
 }
 

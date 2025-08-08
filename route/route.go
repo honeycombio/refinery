@@ -743,41 +743,37 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	isProbe := false
 	if r.Collector.Stressed() {
 		// only process spans that are not decision spans through stress relief
-		if !span.IsDecisionSpan() {
-			processed, kept := r.Collector.ProcessSpanImmediately(span)
+		processed, kept := r.Collector.ProcessSpanImmediately(span)
 
-			if processed {
-				if !kept {
-					return nil
+		if processed {
+			if !kept {
+				return nil
 
-				}
-
-				// If the span was kept, we want to generate a probe that we'll forward
-				// to a peer IF this span would have been forwarded.
-				ev.Data.MetaRefineryProbe.Set(true)
-				isProbe = true
 			}
+
+			// If the span was kept, we want to generate a probe that we'll forward
+			// to a peer IF this span would have been forwarded.
+			ev.Data.MetaRefineryProbe.Set(true)
+			isProbe = true
 		}
 	}
 
-	if r.Config.GetCollectionConfig().TraceLocalityEnabled() {
-		// Figure out if we should handle this span locally or pass on to a peer
-		targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
-		if !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Metrics.Increment(r.metricsNames.routerPeer)
-			debugLog.
-				WithString("peer", targetShard.GetAddress()).
-				WithField("isprobe", isProbe).
-				Logf("Sending span from batch to peer")
+	// Figure out if we should handle this span locally or pass on to a peer
+	targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
+	if !targetShard.Equals(r.Sharder.MyShard()) {
+		r.Metrics.Increment(r.metricsNames.routerPeer)
+		debugLog.
+			WithString("peer", targetShard.GetAddress()).
+			WithField("isprobe", isProbe).
+			Logf("Sending span from batch to peer")
 
-			ev.APIHost = targetShard.GetAddress()
+		ev.APIHost = targetShard.GetAddress()
 
-			// Unfortunately this doesn't tell us if the event was actually
-			// enqueued; we need to watch the response channel to find out, at
-			// which point it's too late to tell the client.
-			r.PeerTransmission.EnqueueEvent(ev)
-			return nil
-		}
+		// Unfortunately this doesn't tell us if the event was actually
+		// enqueued; we need to watch the response channel to find out, at
+		// which point it's too late to tell the client.
+		r.PeerTransmission.EnqueueEvent(ev)
+		return nil
 	}
 
 	if isProbe {
