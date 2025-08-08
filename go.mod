@@ -15,7 +15,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/honeycombio/dynsampler-go v0.6.3
 	github.com/honeycombio/hpsf v0.14.0
-	github.com/honeycombio/husky v0.37.1-0.20250730154742-ddf9db5b5fe7
+	github.com/honeycombio/husky v0.38.0
 	github.com/honeycombio/libhoney-go v1.25.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jonboulle/clockwork v0.5.0
@@ -64,7 +64,7 @@ require (
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.131.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.130.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.131.0 // indirect
 	github.com/otiai10/copy v1.10.0 // indirect
 	github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c // indirect
 	github.com/sergi/go-diff v1.2.0 // indirect

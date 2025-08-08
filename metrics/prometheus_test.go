@@ -11,7 +11,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var testPrometheusMultipleRegistrationsOnce sync.Once
+
 func Test_Prometheus_MultipleRegistrations(t *testing.T) {
+	// Unfortunately the prometheus SDK panics if given duplicate metrics
+	// registrations, which are global. This means this test will panic if run
+	// more than once.
+	var doTest bool
+	testPrometheusMultipleRegistrationsOnce.Do(func() {
+		doTest = true
+	})
+	if !doTest {
+		t.Skip("PromMetrics can only be initialized once")
+	}
+
 	p := &PromMetrics{
 		Logger: &logger.MockLogger{},
 		Config: &config.MockConfig{},
@@ -32,7 +45,18 @@ func Test_Prometheus_MultipleRegistrations(t *testing.T) {
 	})
 }
 
+var testPrometheusRacinessOnce sync.Once
+
 func Test_Prometheus_Raciness(t *testing.T) {
+	// As above, we can only run this test once.
+	var doTest bool
+	testPrometheusRacinessOnce.Do(func() {
+		doTest = true
+	})
+	if !doTest {
+		t.Skip("PromMetrics can only be initialized once")
+	}
+
 	p := &PromMetrics{
 		Logger: &logger.MockLogger{},
 		Config: &config.MockConfig{},
