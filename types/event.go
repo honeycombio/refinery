@@ -2,10 +2,7 @@ package types
 
 import (
 	"context"
-	"slices"
 	"time"
-
-	"github.com/honeycombio/refinery/config"
 )
 
 const (
@@ -66,8 +63,7 @@ type Trace struct {
 	keptReason       uint
 	DeciderShardAddr string
 
-	SendBy  time.Time
-	Retried bool
+	SendBy time.Time
 
 	// ArrivalTime is the server time when the first span arrived for this trace.
 	// Used to calculate how long traces spend sitting in Refinery
@@ -124,12 +120,6 @@ func (t *Trace) CacheImpact(traceTimeout time.Duration) int {
 // GetSpans returns the list of descendants in this trace
 func (t *Trace) GetSpans() []*Span {
 	return t.spans
-}
-
-func (t *Trace) RemoveDecisionSpans() {
-	t.spans = slices.DeleteFunc(t.spans, func(sp *Span) bool {
-		return sp.IsDecisionSpan()
-	})
 }
 
 func (t *Trace) ID() string {
@@ -225,53 +215,10 @@ type Span struct {
 	annotationType SpanAnnotationType
 }
 
-// IsDecicionSpan returns true if the span is a decision span based on
-// a flag set in the span's metadata.
-func (sp *Span) IsDecisionSpan() bool {
-	return sp.Data.MetaRefineryMinSpan.Value
-}
-
-// ExtractDecisionContext returns a new Event that contains only the data that is
-// relevant to the decision-making process.
-func (sp *Span) ExtractDecisionContext(config config.Config) *Event {
-	decisionCtx := sp.Event
-	dataSize := sp.Event.GetDataSize()
-
-	// Create a new empty payload and set metadata fields directly
-	decisionCtx.Data = NewPayload(config, nil)
-	// use the configured trace ID field name to set the trace ID
-	decisionCtx.Data.Set(config.GetTraceIdFieldNames()[0], sp.TraceID)
-	decisionCtx.Data.MetaRefineryRoot.Set(sp.IsRoot)
-	decisionCtx.Data.MetaRefineryMinSpan.Set(true)
-	decisionCtx.Data.MetaAnnotationType = sp.AnnotationType().String()
-	decisionCtx.Data.MetaRefinerySpanDataSize = int64(dataSize)
-
-	if sp.Data.MetaRefinerySendBy > 0 {
-		decisionCtx.Data.MetaRefinerySendBy = sp.Data.MetaRefinerySendBy
-	}
-
-	return &decisionCtx
-}
-
-func (sp *Span) SetSendBy(sendBy time.Time) {
-	sp.Data.MetaRefinerySendBy = sendBy.Unix()
-}
-
-func (sp *Span) GetSendBy() (time.Time, bool) {
-	if sp.Data.MetaRefinerySendBy == 0 {
-		return time.Time{}, false
-	}
-	return time.Unix(sp.Data.MetaRefinerySendBy, 0), true
-}
-
 // GetDataSize computes the size of the Data element of the Span.
 // Note that it's not the full size of the span, but we're mainly using this for
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
-	if sp.IsDecisionSpan() {
-		return int(sp.Data.MetaRefinerySpanDataSize)
-	}
-
 	return sp.Event.GetDataSize()
 }
 
