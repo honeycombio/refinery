@@ -374,9 +374,13 @@ func TestOTLPRequest(t *testing.T) {
 	mockTransmission := &transmit.MockTransmission{}
 	mockTransmission.Start()
 	router := &Router{
-		Config:               &config.MockConfig{},
+		Config: &config.MockConfig{
+			TraceIdFieldNames:  []string{"trace.trace_id"},
+			ParentIdFieldNames: []string{"trace.parent_id"},
+		},
 		Metrics:              &mockMetrics,
 		UpstreamTransmission: mockTransmission,
+		routerType:           types.RouterTypeIncoming,
 		iopLogger: iopLogger{
 			Logger:         &logger.MockLogger{},
 			incomingOrPeer: "incoming",
@@ -384,7 +388,13 @@ func TestOTLPRequest(t *testing.T) {
 		Logger:           &logger.MockLogger{},
 		environmentCache: newEnvironmentCache(time.Second, nil),
 		Tracer:           noop.Tracer{},
+		Collector:        collect.NewMockCollector(),
+		Sharder: &sharder.MockSharder{
+			Self: &sharder.TestShard{Addr: "http://test"},
+		},
 	}
+
+	router.registerMetricNames()
 
 	muxxer := mux.NewRouter()
 	muxxer.Use(router.apiKeyProcessor)
@@ -404,16 +414,22 @@ func TestOTLPRequest(t *testing.T) {
 		t.Error(err)
 	}
 
-	for _, tracePath := range []string{"/v1/traces", "/v1/traces/"} {
-		req, _ := http.NewRequest("POST", server.URL+tracePath, bytes.NewReader(body))
-		req.Header = http.Header{}
-		req.Header.Set("content-type", "application/json")
-		req.Header.Set("x-honeycomb-team", legacyAPIKey)
-		req.Header.Set("x-honeycomb-dataset", "dataset")
+	for i, tracePath := range []string{"/v1/traces", "/v1/traces/"} {
+		t.Run(tracePath, func(t *testing.T) {
+			req, _ := http.NewRequest("POST", server.URL+tracePath, bytes.NewReader(body))
+			req.Header = http.Header{}
+			req.Header.Set("content-type", "application/json")
+			req.Header.Set("x-honeycomb-team", legacyAPIKey)
+			req.Header.Set("x-honeycomb-dataset", "dataset")
 
-		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+
+			v, ok := mockMetrics.Get("incoming_router_span")
+			require.True(t, ok)
+			require.Equal(t, float64(i+1)*2, v, "each request should contain 2 spans")
+		})
 	}
 }
 
@@ -1097,6 +1113,7 @@ func TestRouterBatch(t *testing.T) {
 	mockMetrics := router.Metrics.(*metrics.MockMetrics)
 	assert.Equal(t, int64(1), mockMetrics.CounterIncrements["incoming_router_batch"])
 	assert.Equal(t, int64(3), mockMetrics.CounterIncrements["incoming_router_batch_events"])
+	assert.Equal(t, int64(3), mockMetrics.CounterIncrements["incoming_router_span"])
 
 	var spans []*types.Span
 	for len(spans) < len(batch.events) {

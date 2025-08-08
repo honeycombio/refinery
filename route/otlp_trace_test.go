@@ -875,6 +875,9 @@ func helperOTLPRequestSpansWithStatus() []*trace.Span {
 	now := time.Now()
 	return []*trace.Span{
 		{
+			TraceId:           []byte{0, 0, 0, 0, 1},
+			SpanId:            []byte{1, 0, 0, 0, 0},
+			Name:              "span_with_event",
 			StartTimeUnixNano: uint64(now.UnixNano()),
 			Events: []*trace.Span_Event{
 				{
