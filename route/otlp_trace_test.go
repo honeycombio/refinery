@@ -705,7 +705,7 @@ func TestOTLPHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.postOTLPTrace(w, request)
 
-			assert.Equal(t, http.StatusInternalServerError, w.Code)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
 			assert.NotEmpty(t, w.Body.String())
 		})
 
@@ -722,7 +722,7 @@ func TestOTLPHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.postOTLPTrace(w, request)
 
-			assert.Equal(t, http.StatusInternalServerError, w.Code)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
 			assert.NotEmpty(t, w.Body.String())
 		})
 
@@ -736,7 +736,7 @@ func TestOTLPHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.postOTLPTrace(w, request)
 
-			assert.Equal(t, http.StatusInternalServerError, w.Code)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
 			assert.NotEmpty(t, w.Body.String())
 		})
 
@@ -779,7 +779,7 @@ func TestOTLPHandler(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.postOTLPTrace(w, request)
 
-			assert.Equal(t, http.StatusInternalServerError, w.Code)
+			assert.Equal(t, http.StatusBadRequest, w.Code)
 			assert.NotEmpty(t, w.Body.String())
 		})
 	})

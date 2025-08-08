@@ -14,8 +14,12 @@ import (
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 )
 
-// copied from husky
-var defaultMaxRequestBodySize = 20 * 1024 * 1024 // 20MiB
+var (
+	// copied from husky
+	defaultMaxRequestBodySize = 20 * 1024 * 1024 // 20MiB
+	ErrFailedParseBody        = errors.New("failed to parse request body")
+	ErrTranslateTraceRequest  = errors.New("failed to translate trace request")
+)
 
 func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	ctx, span := otelutil.StartSpan(req.Context(), r.Tracer, "postOTLPTrace")
@@ -56,7 +60,18 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err != nil {
-		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
+		switch {
+		case errors.Is(err, ErrFailedParseBody):
+			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrFailedParseBody)
+		case errors.Is(err, ErrTranslateTraceRequest):
+			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusBadRequest})
+		case errors.Is(err, huskyotlp.ErrInvalidContentType):
+			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrInvalidContentType)
+		case errors.Is(err, huskyotlp.ErrMissingAPIKeyHeader), errors.Is(err, huskyotlp.ErrMissingDatasetHeader):
+			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
+		default:
+			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
+		}
 		return
 	}
 	err = huskyotlp.WriteOtlpHttpTraceSuccessResponse(w, req)
@@ -69,7 +84,18 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 func (r *Router) processOTLPRequestWithMsgp(ctx context.Context, w http.ResponseWriter, req *http.Request, ri huskyotlp.RequestInfo, keyToUse string) error {
 	result, err := huskyotlp.TranslateTraceRequestFromReaderSizedWithMsgp(ctx, req.Body, ri, int64(defaultMaxRequestBodySize))
 	if err != nil {
-		return err
+		// Check for specific error types from husky to provide better error handling to caller
+		switch {
+		case errors.Is(err, huskyotlp.ErrInvalidContentType):
+			return err
+		case errors.Is(err, huskyotlp.ErrFailedParseBody):
+			return errors.Join(ErrFailedParseBody, err)
+		case errors.Is(err, huskyotlp.ErrMissingAPIKeyHeader), errors.Is(err, huskyotlp.ErrMissingDatasetHeader):
+			return err
+		default:
+			// For any other translate errors (parsing, unmarshaling, etc.), wrap with specific error
+			return errors.Join(ErrTranslateTraceRequest, err)
+		}
 	}
 
 	if err := r.processOTLPRequestBatchMsgp(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
