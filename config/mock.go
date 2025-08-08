@@ -117,13 +117,6 @@ func (m *MockConfig) GetCollectionConfig() CollectionConfig {
 	return m.GetCollectionConfigVal
 }
 
-func (m *MockConfig) GetDisableRedistribution() bool {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetCollectionConfigVal.DisableRedistribution.Get()
-}
-
 func (m *MockConfig) GetHealthCheckTimeout() time.Duration {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
