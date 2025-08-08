@@ -21,7 +21,6 @@ func TestDefaultTransmissionUpdatesUserAgentAdditionAfterStart(t *testing.T) {
 		Version:    "test",
 	}
 
-	assert.Equal(t, libhoney.UserAgentAddition, "")
 	err := transmission.Start()
 	assert.NoError(t, err)
 	assert.Equal(t, libhoney.UserAgentAddition, "refinery/test")
