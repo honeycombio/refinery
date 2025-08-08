@@ -557,11 +557,6 @@ func TestDirectTransmission(t *testing.T) {
 		event.Data.MetaRefineryProbe.Set(true)
 		event.Data.MetaRefineryRoot.Set(true)
 		event.Data.MetaRefineryIncomingUserAgent = "refinery"
-		event.Data.MetaRefinerySendBy = 10
-		event.Data.MetaRefinerySpanDataSize = 20
-		event.Data.MetaRefineryMinSpan.Set(true)
-		event.Data.MetaRefineryForwarded = "host"
-		event.Data.MetaRefineryExpiredTrace.Set(false)
 
 		allEvents = append(allEvents, event)
 	}
@@ -676,11 +671,6 @@ func TestDirectTransmission(t *testing.T) {
 		assert.Equal(t, true, event.Data[types.MetaRefineryProbe])
 		assert.Equal(t, true, event.Data[types.MetaRefineryRoot])
 		assert.Equal(t, "refinery", event.Data[types.MetaRefineryIncomingUserAgent])
-		assert.Equal(t, int64(10), event.Data[types.MetaRefinerySendBy])
-		assert.Equal(t, int64(20), event.Data[types.MetaRefinerySpanDataSize])
-		assert.Equal(t, true, event.Data[types.MetaRefineryMinSpan])
-		assert.Equal(t, "host", event.Data[types.MetaRefineryForwarded])
-		assert.Equal(t, false, event.Data[types.MetaRefineryExpiredTrace])
 	}
 
 	datasetB := eventsByDataset["dataset-b"]
