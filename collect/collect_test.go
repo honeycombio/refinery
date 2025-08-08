@@ -76,11 +76,7 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 			Metrics: s,
 			Logger:  &logger.NullLogger{},
 		},
-		done:                 make(chan struct{}),
-		keptDecisionMessages: make(chan string, 50),
-		dropDecisionMessages: make(chan string, 50),
-		dropDecisionBuffer:   make(chan TraceDecision, 5),
-		keptDecisionBuffer:   make(chan TraceDecision, 5),
+		done: make(chan struct{}),
 		Peers: &peer.MockPeers{
 			Peers: []string{"api1", "api2"},
 			ID:    "api1",
@@ -94,10 +90,6 @@ func newTestCollector(conf config.Config, transmission transmit.Transmission, pe
 				TraceIDs: peerTraceIDs,
 			},
 		},
-	}
-
-	if !conf.GetCollectionConfig().TraceLocalityEnabled() {
-		localPubSub.Subscribe(context.Background(), keptTraceDecisionTopic, c.signalKeptTraceDecisions)
 	}
 
 	return c
@@ -181,56 +173,6 @@ func TestAddRootSpan(t *testing.T) {
 	assert.Equal(t, "aoeu", events[0].Dataset, "sending a root span should immediately send that span via transmission")
 
 	assert.Nil(t, coll.getFromCache(traceID1), "after sending the span, it should be removed from the cache")
-
-	conf.Mux.Lock()
-	collectionCfg := conf.GetCollectionConfigVal
-	collectionCfg.TraceLocalityMode = "distributed"
-	conf.GetCollectionConfigVal = collectionCfg
-	conf.Mux.Unlock()
-
-	decisionSpanTraceID := "decision_root_span"
-	span = &types.Span{
-		TraceID: decisionSpanTraceID,
-		Event: types.Event{
-			Dataset: "aoeu",
-			APIKey:  legacyAPIKey,
-			Data: types.NewPayload(coll.Config, map[string]interface{}{
-				"meta.refinery.min_span": true,
-			}),
-		},
-		IsRoot: true,
-	}
-	span.Event.Data.ExtractMetadata()
-
-	coll.AddSpanFromPeer(span)
-	// adding one root decision span with no parent ID should:
-	// * create the trace in the cache
-	// * send the trace
-	// * remove the trace from the cache
-	assert.Eventually(t, func() bool {
-		return coll.getFromCache(decisionSpanTraceID) == nil
-	}, time.Second*1, time.Millisecond*100, "after sending the span, it should be removed from the cache")
-
-	events = transmission.GetBlock(0)
-	assert.Equal(t, 0, len(events), "adding a root decision span should send the trace but not the decision span itself")
-
-	peerSpan := &types.Span{
-		TraceID: peerTraceIDs[0],
-		Event: types.Event{
-			Dataset: "aoeu",
-			APIKey:  legacyAPIKey,
-		},
-		IsRoot: true,
-	}
-	coll.AddSpan(peerSpan)
-
-	// adding one span that belongs to peer with no parent ID should:
-	// * create the trace in the cache
-	// * a decision span is forwarded to peer
-	peerEvents := peerTransmission.GetBlock(1)
-	assert.Equal(t, 1, len(peerEvents), "adding a root span should send the span")
-	assert.Equal(t, "aoeu", peerEvents[0].Dataset, "sending a root span should immediately send that span via transmission")
-	assert.NotNil(t, coll.getFromCache(peerTraceIDs[0]), "trace belongs to peers should stay in current node cache")
 }
 
 // #490, SampleRate getting stomped could cause confusion if sampling was
@@ -431,6 +373,7 @@ func TestAddSpan(t *testing.T) {
 		Event: types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
+				"trace.trace_id":  traceID,
 				"trace.parent_id": "unused",
 			}),
 			APIKey: legacyAPIKey,
@@ -491,7 +434,6 @@ func TestDryRunMode(t *testing.T) {
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
-			TraceLocalityMode: "distributed",
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
 		},
@@ -958,7 +900,6 @@ func TestAddCountsToRoot(t *testing.T) {
 		switch i {
 		case 0, 1:
 			span.Data.MetaAnnotationType = "span_event"
-			span.Data.MetaRefineryMinSpan.Set(true)
 		case 2:
 			span.Data.MetaAnnotationType = "link"
 		}
@@ -998,7 +939,7 @@ func TestAddCountsToRoot(t *testing.T) {
 	}
 
 	assert.NotNil(t, rootEvent, "should have found a root span")
-	assert.Equal(t, 2, len(childEvents), "should have found 2 child spans")
+	assert.Equal(t, 4, len(childEvents), "should have found 4 child spans")
 
 	// Check child spans don't have counts
 	for _, child := range childEvents {
@@ -1073,14 +1014,13 @@ func TestLateRootGetsCounts(t *testing.T) {
 			span.Data.MetaAnnotationType = "span_event"
 		case 2:
 			span.Data.MetaAnnotationType = "link"
-			span.Data.MetaRefineryMinSpan.Set(true)
 		}
 
 		coll.AddSpanFromPeer(span)
 	}
 
-	childSpans := transmission.GetBlock(3)
-	assert.Equal(t, 3, len(childSpans), "adding a non-root span and waiting should send the span")
+	childSpans := transmission.GetBlock(4)
+	assert.Equal(t, 4, len(childSpans), "adding a non-root span and waiting should send the span")
 	assert.Equal(t, nil, childSpans[0].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
 	assert.Equal(t, nil, childSpans[1].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
 	assert.Equal(t, nil, childSpans[1].Data.Get("meta.span_event_count"), "child span metadata should NOT be populated with span event count")
@@ -1160,21 +1100,8 @@ func TestAddSpanCount(t *testing.T) {
 		},
 	}
 	span.Data.ExtractMetadata()
-	decisionSpan := &types.Span{
-		TraceID: traceID,
-		Event: types.Event{
-			Dataset: "aoeu",
-			Data: types.NewPayload(coll.Config, map[string]interface{}{
-				"trace.parent_id":        "unused",
-				"meta.refinery.min_span": true,
-			}),
-			APIKey: legacyAPIKey,
-		},
-	}
-	decisionSpan.Data.ExtractMetadata()
 
 	coll.AddSpanFromPeer(span)
-	coll.AddSpanFromPeer(decisionSpan)
 
 	assert.EventuallyWithT(t,
 		func(cT *assert.CollectT) {
@@ -1204,7 +1131,7 @@ func TestAddSpanCount(t *testing.T) {
 	events := transmission.GetBlock(2)
 	assert.Equal(t, 2, len(events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, nil, events[0].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
-	assert.Equal(t, int64(3), events[1].Data.Get("meta.span_count"), "root span metadata should be populated with span count")
+	assert.Equal(t, int64(2), events[1].Data.Get("meta.span_count"), "root span metadata should be populated with span count")
 	assert.Nil(t, coll.getFromCache(traceID), "after adding a leaf and root span, it should be removed from the cache")
 }
 
@@ -1806,268 +1733,6 @@ func TestBigTracesGoEarly(t *testing.T) {
 	assert.Equal(t, "deterministic/chance - late arriving span", rootEvents[0].Data.Get("meta.refinery.reason"), "the late root span should have meta.refinery.reason set to rules + late arriving span.")
 	assert.EqualValues(t, 2, rootEvents[0].SampleRate, "the late root span should sample rate set")
 	assert.Equal(t, "trace_send_late_span", rootEvents[0].Data.Get("meta.refinery.send_reason"), "send reason should indicate span count exceeded")
-
-}
-
-func TestCreateDecisionSpan(t *testing.T) {
-	conf := &config.MockConfig{
-		GetTracesConfigVal: config.TracesConfig{
-			SendTicker:   config.Duration(2 * time.Millisecond),
-			SendDelay:    config.Duration(1 * time.Millisecond),
-			TraceTimeout: config.Duration(5 * time.Millisecond),
-			MaxBatchSize: 500,
-		},
-		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-	}
-
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
-	defer transmission.Stop()
-	peerTransmission := &transmit.MockTransmission{}
-	peerTransmission.Start()
-	defer peerTransmission.Stop()
-	coll := newTestCollector(conf, transmission, peerTransmission)
-
-	mockSampler := &sample.DynamicSampler{
-		Config: &config.DynamicSamplerConfig{
-			SampleRate: 1,
-			FieldList:  []string{"http.status_code", "test"},
-		}, Logger: coll.Logger, Metrics: coll.Metrics,
-	}
-	mockSampler.Start()
-
-	coll.datasetSamplers = map[string]sample.Sampler{
-		"aoeu": mockSampler,
-	}
-
-	traceID1 := "trace1"
-	peerShard := &sharder.TestShard{Addr: "peer-address"}
-
-	nonrootSpan := &types.Span{
-		TraceID: traceID1,
-		Event: types.Event{
-			Dataset: "aoeu",
-			Data: types.NewPayload(coll.Config, map[string]interface{}{
-				"trace.parent_id":        "unused",
-				"http.status_code":       200,
-				"test":                   1,
-				"should-not-be-included": 123,
-			}),
-			APIKey: legacyAPIKey,
-		},
-	}
-
-	trace := &types.Trace{
-		TraceID: traceID1,
-		Dataset: "aoeu",
-		APIKey:  legacyAPIKey,
-	}
-	ds := coll.createDecisionSpan(nonrootSpan, trace, peerShard)
-
-	expected := &types.Event{
-		Dataset: "aoeu",
-		APIHost: peerShard.Addr,
-		APIKey:  legacyAPIKey,
-		Data: types.NewPayload(coll.Config, map[string]interface{}{
-			"http.status_code": 200,
-			"trace.trace_id":   traceID1,
-			"test":             1,
-		}),
-	}
-	// Set metadata fields directly
-	expected.Data.MetaAnnotationType = types.SpanAnnotationTypeUnknown.String()
-	expected.Data.MetaRefineryMinSpan.Set(true)
-	expected.Data.MetaRefineryRoot.Set(false)
-	expected.Data.MetaRefinerySpanDataSize = 87
-
-	assert.Equal(t, expected.APIHost, ds.APIHost)
-	assert.Equal(t, expected.APIKey, ds.APIKey)
-	assert.Equal(t, expected.Dataset, ds.Dataset)
-	assert.Equal(t, expected.Environment, ds.Environment)
-	assert.Equal(t, expected.SampleRate, ds.SampleRate)
-	assert.Equal(t, expected.Timestamp, ds.Timestamp)
-	assert.Equal(t, expected.Data, ds.Data)
-
-	rootSpan := nonrootSpan
-	rootSpan.IsRoot = true
-
-	ds = coll.createDecisionSpan(rootSpan, trace, peerShard)
-	expected.Data.MetaRefineryRoot.Set(true)
-
-	assert.Equal(t, expected.APIHost, ds.APIHost)
-	assert.Equal(t, expected.APIKey, ds.APIKey)
-	assert.Equal(t, expected.Dataset, ds.Dataset)
-	assert.Equal(t, expected.Environment, ds.Environment)
-	assert.Equal(t, expected.SampleRate, ds.SampleRate)
-	assert.Equal(t, expected.Timestamp, ds.Timestamp)
-	assert.Equal(t, expected.Data, ds.Data)
-
-}
-
-func TestSendDropDecisions(t *testing.T) {
-	conf := &config.MockConfig{
-		GetTracesConfigVal: config.TracesConfig{
-			SendTicker:   config.Duration(2 * time.Millisecond),
-			SendDelay:    config.Duration(1 * time.Millisecond),
-			TraceTimeout: config.Duration(60 * time.Second),
-			MaxBatchSize: 500,
-		},
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
-		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
-		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay:     config.Duration(1 * time.Millisecond),
-			TraceLocalityMode: "distributed",
-		},
-	}
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
-	defer transmission.Stop()
-	peerTransmission := &transmit.MockTransmission{}
-	peerTransmission.Start()
-	defer peerTransmission.Stop()
-	coll := newTestCollector(conf, transmission, peerTransmission)
-	coll.dropDecisionBuffer = make(chan TraceDecision, 5)
-
-	messages := make(chan string, 5)
-	coll.PubSub.Subscribe(context.Background(), dropTraceDecisionTopic, func(ctx context.Context, msg string) {
-		messages <- msg
-	})
-
-	// drop decisions should be sent once the timer expires
-	collectionCfg := conf.GetCollectionConfig()
-	collectionCfg.DropDecisionSendInterval = config.Duration(2 * time.Millisecond)
-	conf.GetCollectionConfigVal = collectionCfg
-
-	closed := make(chan struct{})
-	coll.shutdownWG.Add(1)
-	go func() {
-		coll.sendDropDecisions()
-		close(closed)
-	}()
-
-	coll.dropDecisionBuffer <- TraceDecision{TraceID: "trace1"}
-	close(coll.dropDecisionBuffer)
-	droppedMessage := <-messages
-
-	// pretend we are a peer that received the message
-	decompressedData, err := newDroppedTraceDecision(droppedMessage, "another-peer")
-	assert.NoError(t, err)
-	droppedTraceID := make([]string, 0)
-	for _, td := range decompressedData {
-		droppedTraceID = append(droppedTraceID, td.TraceID)
-	}
-	assert.Equal(t, []string{"trace1"}, droppedTraceID)
-
-	<-closed
-
-	// drop decision should be sent once it reaches the batch size
-	collectionCfg = conf.GetCollectionConfig()
-	collectionCfg.DropDecisionSendInterval = config.Duration(60 * time.Second)
-	collectionCfg.MaxDropDecisionBatchSize = 5
-	conf.GetCollectionConfigVal = collectionCfg
-	coll.dropDecisionBuffer = make(chan TraceDecision, 5)
-
-	closed = make(chan struct{})
-	coll.shutdownWG.Add(1)
-	go func() {
-		coll.sendDropDecisions()
-		close(closed)
-	}()
-
-	for i := 0; i < 5; i++ {
-		coll.dropDecisionBuffer <- TraceDecision{
-			TraceID: fmt.Sprintf("trace%d", i),
-		}
-	}
-	close(coll.dropDecisionBuffer)
-	droppedMessage = <-messages
-
-	decompressedData, err = newDroppedTraceDecision(droppedMessage, "another-peer")
-	assert.NoError(t, err)
-	droppedTraceID = make([]string, 0)
-	for _, td := range decompressedData {
-		droppedTraceID = append(droppedTraceID, td.TraceID)
-	}
-	assert.Equal(t, "trace0,trace1,trace2,trace3,trace4", strings.Join(droppedTraceID, ","))
-
-	<-closed
-}
-
-func TestExpiredTracesCleanup(t *testing.T) {
-	conf := &config.MockConfig{
-		GetTracesConfigVal: config.TracesConfig{
-			SendTicker:   config.Duration(2 * time.Millisecond),
-			SendDelay:    config.Duration(1 * time.Millisecond),
-			TraceTimeout: config.Duration(500 * time.Millisecond),
-			MaxBatchSize: 1500,
-		},
-		GetCollectionConfigVal: config.CollectionConfig{
-			TraceLocalityMode: "distributed",
-		},
-		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
-		AddSpanCountToRoot:   true,
-		AddCountsToRoot:      true,
-		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
-		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
-		AddRuleReasonToTrace: true,
-	}
-
-	transmission := &transmit.MockTransmission{}
-	transmission.Start()
-	defer transmission.Stop()
-	peerTransmission := &transmit.MockTransmission{}
-	peerTransmission.Start()
-	defer peerTransmission.Stop()
-	coll := newTestCollector(conf, transmission, peerTransmission)
-
-	c := cache.NewInMemCache(&metrics.NullMetrics{}, &logger.NullLogger{})
-	coll.cache = c
-	stc, err := newCache()
-	assert.NoError(t, err, "lru cache should start")
-	coll.sampleTraceCache = stc
-
-	coll.incoming = make(chan *types.Span, 5)
-	coll.fromPeer = make(chan *types.Span, 5)
-	coll.outgoingTraces = make(chan sendableTrace, 5)
-	coll.keptDecisionBuffer = make(chan TraceDecision, 5)
-	coll.datasetSamplers = make(map[string]sample.Sampler)
-
-	for _, traceID := range peerTraceIDs {
-		trace := &types.Trace{
-			TraceID: traceID,
-			SendBy:  coll.Clock.Now(),
-		}
-		trace.AddSpan(&types.Span{
-			TraceID: trace.ID(),
-			Event: types.Event{
-				Context: context.Background(),
-			},
-		})
-		coll.cache.Set(trace)
-	}
-
-	assert.Eventually(t, func() bool {
-		return coll.cache.GetCacheEntryCount() == len(peerTraceIDs)
-	}, 200*time.Millisecond, 10*time.Millisecond)
-
-	traceTimeout := time.Duration(conf.GetTracesConfig().TraceTimeout)
-	coll.sendExpiredTracesInCache(context.Background(), coll.Clock.Now().Add(3*traceTimeout))
-
-	events := peerTransmission.GetBlock(3)
-	assert.Len(t, events, 3)
-	assert.True(t, events[0].Data.MetaRefineryExpiredTrace.HasValue)
-	assert.True(t, events[0].Data.MetaRefineryExpiredTrace.Value)
-
-	coll.sendExpiredTracesInCache(context.Background(), coll.Clock.Now().Add(5*traceTimeout))
-
-	assert.Eventually(t, func() bool {
-		return len(coll.outgoingTraces) == 3
-	}, 100*time.Millisecond, 10*time.Millisecond)
-
-	// at this point, the expired traces should have been removed from the trace cache
-	assert.Zero(t, coll.cache.GetCacheEntryCount())
 
 }
 

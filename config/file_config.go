@@ -312,8 +312,7 @@ type CollectionConfig struct {
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 
-	ShutdownDelay     Duration `yaml:"ShutdownDelay" default:"15s"`
-	TraceLocalityMode string   `yaml:"-"`
+	ShutdownDelay Duration `yaml:"ShutdownDelay" default:"15s"`
 
 	MaxDropDecisionBatchSize int      `yaml:"-"`
 	DropDecisionSendInterval Duration `yaml:"-"`
@@ -342,19 +341,6 @@ func (c CollectionConfig) GetPeerQueueSize() int {
 // The minimum value is 3x the cache capacity.
 func (c CollectionConfig) GetIncomingQueueSize() int {
 	return c.IncomingQueueSize
-}
-
-// TraceLocalityEnabled returns whether trace locality is enabled.
-func (c CollectionConfig) TraceLocalityEnabled() bool {
-	switch c.TraceLocalityMode {
-	case "concentrated":
-		return true
-	case "distributed":
-		return false
-	default:
-		//  Default to true for backwards compatibility
-		return true
-	}
 }
 
 type SpecializedConfig struct {
