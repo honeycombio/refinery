@@ -17,7 +17,6 @@ import (
 var (
 	// copied from husky
 	defaultMaxRequestBodySize = 20 * 1024 * 1024 // 20MiB
-	ErrFailedParseBody        = errors.New("failed to parse request body")
 	ErrTranslateTraceRequest  = errors.New("failed to translate trace request")
 )
 
@@ -61,7 +60,7 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrFailedParseBody):
+		case errors.Is(err, huskyotlp.ErrFailedParseBody):
 			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrFailedParseBody)
 		case errors.Is(err, ErrTranslateTraceRequest):
 			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusBadRequest})
@@ -89,7 +88,7 @@ func (r *Router) processOTLPRequestWithMsgp(ctx context.Context, w http.Response
 		case errors.Is(err, huskyotlp.ErrInvalidContentType):
 			return err
 		case errors.Is(err, huskyotlp.ErrFailedParseBody):
-			return errors.Join(ErrFailedParseBody, err)
+			return err
 		case errors.Is(err, huskyotlp.ErrMissingAPIKeyHeader), errors.Is(err, huskyotlp.ErrMissingDatasetHeader):
 			return err
 		default:
