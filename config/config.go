@@ -88,9 +88,6 @@ type Config interface {
 	// GetCollectionConfig returns the config specific to the InMemCollector
 	GetCollectionConfig() CollectionConfig
 
-	// GetDisableRedistribution returns whether redistribution is disabled.
-	GetDisableRedistribution() bool
-
 	// GetHealthCheckTimeout returns the timeout for Refinery's internal health checks used in the collector
 	GetHealthCheckTimeout() time.Duration
 
