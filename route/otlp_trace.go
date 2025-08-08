@@ -49,11 +49,11 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	var err error
 	switch ri.ContentType {
 	case "application/json":
-		r.Metrics.Increment(r.metricsNames.routerOtlpHttpJson)
-		err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
+    r.Metrics.Increment(r.metricsNames.routerOtlpTraceHttpJson)
+    err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
 	case "application/x-protobuf", "application/protobuf":
-		r.Metrics.Increment(r.metricsNames.routerOtlpHttpProto)
-		err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
+		r.Metrics.Increment(r.metricsNames.routerOtlpTraceHttpProto)
+    err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
 	default:
 		err = errors.New("unsupported content type")
 	}
@@ -128,6 +128,8 @@ func (t *TraceServer) ExportTraceData(
 ) (*collectortrace.ExportTraceServiceResponse, error) {
 	ctx, span := otelutil.StartSpan(ctx, t.router.Tracer, "ExportOTLPTrace")
 	defer span.End()
+
+	t.router.Metrics.Increment(t.router.metricsNames.routerOtlpTraceGrpc)
 
 	// Perform final authentication check (key processing already done in handler)
 	apicfg := t.router.Config.GetAccessKeyConfig()

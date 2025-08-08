@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-07-15 at 17:41:46 UTC.
+It was automatically generated on 2025-08-07 at 21:56:06 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -89,16 +89,22 @@ Metrics in this table don't contain their expected prefixes. This is because the
 
 | Name | Type | Unit | Description |
 |------|------|------|-------------|
-| _num_dropped_by_drop_rule | Counter | Dimensionless | Number of traces dropped by the drop rule |
 | _num_dropped | Counter | Dimensionless | Number of traces dropped by configured sampler |
 | _num_kept | Counter | Dimensionless | Number of traces kept by configured sampler |
 | _sample_rate | Histogram | Dimensionless | Sample rate for traces |
 | _sampler_key_cardinality | Histogram | Dimensionless | Number of unique keys being tracked by the sampler |
-| enqueue_errors | Counter | Dimensionless | The number of errors encountered when enqueueing events |
-| response_20x | Counter | Dimensionless | The number of successful responses from Honeycomb |
-| response_errors | Counter | Dimensionless | The number of errors encountered when sending events to Honeycomb |
-| queued_items | UpDown | Dimensionless | The number of events queued for transmission to Honeycomb |
-| queue_time | Histogram | Microseconds | The time spent in the queue before being sent to Honeycomb |
+| rulebased_num_dropped_by_drop_rule | Counter | Dimensionless | Number of traces dropped by the drop rule |
+| _enqueue_errors | Counter | Dimensionless | The number of errors encountered when enqueueing events |
+| _response_20x | Counter | Dimensionless | The number of successful responses from Honeycomb |
+| _response_errors | Counter | Dimensionless | The number of errors encountered when sending events to Honeycomb |
+| _queued_items | UpDown | Dimensionless | The number of events queued for transmission to Honeycomb |
+| _queue_time | Histogram | Microseconds | The time spent in the queue before being sent to Honeycomb |
+| _queue_length | Gauge | Dimensionless | number of events waiting to be sent to destination |
+| _send_errors | Counter | Dimensionless | number of errors encountered while sending a batch of events to destination |
+| _send_retries | Counter | Dimensionless | number of times a batch of events was retried |
+| _batches_sent | Counter | Dimensionless | number of batches of events sent to destination |
+| _messages_sent | Counter | Dimensionless | number of messages sent to destination |
+| _response_decode_errors | Counter | Dimensionless | number of errors encountered while decoding responses from destination |
 | _router_proxied | Counter | Dimensionless | the number of events proxied to another refinery |
 | _router_event | Counter | Dimensionless | the number of events received |
 | _router_event_bytes | Histogram | Bytes | the number of bytes per event received |
@@ -108,14 +114,12 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _router_peer | Counter | Dimensionless | the number of spans proxied to a peer |
 | _router_batch | Counter | Dimensionless | the number of batches of events received |
 | _router_batch_events | Counter | Dimensionless | the number of events received in batches |
-| _router_otlp | Counter | Dimensionless | the number of otlp requests received |
 | _router_otlp_events | Counter | Dimensionless | the number of events received in otlp requests |
+| _router_otlp_log_http_proto | Counter | Dimensionless | the number of otlp log http/protobuf requests received |
+| _router_otlp_log_http_json | Counter | Dimensionless | the number of otlp log http/json requests received |
+| _router_otlp_log_grpc | Counter | Dimensionless | the number of otlp log grpc requests received |
+| _router_otlp_trace_http_proto | Counter | Dimensionless | the number of otlp trace http/protobuf requests received |
+| _router_otlp_trace_http_json | Counter | Dimensionless | the number of otlp trace http/json requests received |
+| _router_otlp_trace_grpc | Counter | Dimensionless | the number of otlp trace grpc requests received |
 | bytes_received_traces | Counter | Bytes | the number of bytes received in trace events |
 | bytes_received_logs | Counter | Bytes | the number of bytes received in log events |
-| queue_length | Gauge | Dimensionless | number of events waiting to be sent to destination |
-| queue_overflow | Counter | Dimensionless | number of events dropped due to queue overflow |
-| send_errors | Counter | Dimensionless | number of errors encountered while sending events to destination |
-| send_retries | Counter | Dimensionless | number of times a batch of events was retried |
-| batches_sent | Counter | Dimensionless | number of batches of events sent to destination |
-| messages_sent | Counter | Dimensionless | number of messages sent to destination |
-| response_decode_errors | Counter | Dimensionless | number of errors encountered while decoding responses from destination |
