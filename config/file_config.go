@@ -319,9 +319,6 @@ type CollectionConfig struct {
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 
-	DisableRedistribution *DefaultTrue `yaml:"DisableRedistribution" default:"true"` // Avoid pointer woe on access, use GetDisableRedistribution() instead.
-	RedistributionDelay   Duration     `yaml:"RedistributionDelay" default:"30s"`
-
 	ShutdownDelay     Duration `yaml:"ShutdownDelay" default:"15s"`
 	TraceLocalityMode string   `yaml:"TraceLocalityMode" default:"concentrated"`
 
@@ -980,13 +977,6 @@ func (f *fileConfig) GetCollectionConfig() CollectionConfig {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Collection
-}
-
-func (f *fileConfig) GetDisableRedistribution() bool {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.Collection.DisableRedistribution.Get()
 }
 
 func (f *fileConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
