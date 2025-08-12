@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/metrics"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestKeptReasonCache(t *testing.T) {

@@ -2,8 +2,10 @@ package cache
 
 import (
 	"math/rand"
+	"sync"
 
 	"github.com/dgryski/go-wyhash"
+
 	"github.com/honeycombio/refinery/metrics"
 )
 
@@ -11,11 +13,12 @@ import (
 // It acts as a mapping between the string representation of send reason
 // and a uint.
 // This is used to reduce the memory footprint of the trace cache.
-// It is not concurrency-safe.
+// It is now concurrency-safe.
 
 type KeptReasonsCache struct {
 	Metrics metrics.Metrics
 
+	mu   sync.RWMutex
 	data []string
 	keys map[uint64]uint32
 
@@ -45,6 +48,9 @@ func (c *KeptReasonsCache) Set(key string) uint {
 	// generate a hash
 	hash := wyhash.Hash([]byte(key), c.hashSeed)
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	val, ok := c.keys[hash]
 	if !ok {
 		c.data = append(c.data, key)
@@ -58,6 +64,11 @@ func (c *KeptReasonsCache) Set(key string) uint {
 // Get returns a reason from the cache, if it exists.
 func (c *KeptReasonsCache) Get(key uint) (string, bool) {
 	if key == 0 {
+		return "", false
+	}
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if int(key) > len(c.data) {
 		return "", false
 	}
 	return c.data[key-1], true

@@ -4,8 +4,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/honeycombio/refinery/metrics"
 	cuckoo "github.com/panmari/cuckoofilter"
+
+	"github.com/honeycombio/refinery/metrics"
 )
 
 // These are the names of metrics tracked for the cuckoo filter
