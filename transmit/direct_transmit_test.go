@@ -509,11 +509,11 @@ func TestDirectTransmission(t *testing.T) {
 	require.NoError(t, err)
 	defer dt.Stop()
 	dt.RegisterMetrics()
-	assert.Equal(t, "upstream_queued_items", dt.metricKeys.updownQueuedItems)
-	assert.Equal(t, "upstream_response_20x", dt.metricKeys.counterResponse20x)
-	assert.Equal(t, "upstream_response_errors", dt.metricKeys.counterResponseErrors)
-	assert.Equal(t, "upstream_enqueue_errors", dt.metricKeys.counterEnqueueErrors)
-	assert.Equal(t, "upstream_queue_time", dt.metricKeys.histogramQueueTime)
+	assert.Equal(t, "libhoney_upstream_queued_items", dt.metricKeys.updownQueuedItems)
+	assert.Equal(t, "libhoney_upstream_response_20x", dt.metricKeys.counterResponse20x)
+	assert.Equal(t, "libhoney_upstream_response_errors", dt.metricKeys.counterResponseErrors)
+	assert.Equal(t, "libhoney_upstream_enqueue_errors", dt.metricKeys.counterEnqueueErrors)
+	assert.Equal(t, "libhoney_upstream_queue_time", dt.metricKeys.histogramQueueTime)
 
 	assert.Equal(t, "libhoney_upstream_send_errors", dt.metricKeys.counterSendErrors)
 	assert.Equal(t, "libhoney_upstream_send_retries", dt.metricKeys.counterSendRetries)
@@ -1126,9 +1126,9 @@ func TestDirectTransmissionRetryLogic(t *testing.T) {
 			requestMutex.Unlock()
 
 			if tt.expectSuccess {
-				assert.Contains(t, mockMetrics.CounterIncrements, "upstream_response_20x")
+				assert.Contains(t, mockMetrics.CounterIncrements, "libhoney_upstream_response_20x")
 			} else {
-				assert.Contains(t, mockMetrics.CounterIncrements, "upstream_response_errors")
+				assert.Contains(t, mockMetrics.CounterIncrements, "libhoney_upstream_response_errors")
 			}
 		})
 	}
