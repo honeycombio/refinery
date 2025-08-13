@@ -247,7 +247,7 @@ func (d *DirectTransmission) EnqueueSpan(sp *types.Span) {
 // it should be called after the metrics object has been created.
 func (d *DirectTransmission) RegisterMetrics() {
 	for _, m := range transmissionMetrics {
-		fullName := d.transmitType.String() + m.Name
+		fullName := "libhoney_" + d.transmitType.String() + m.Name
 		switch m.Name {
 		case updownQueuedItems:
 			d.metricKeys.updownQueuedItems = fullName
@@ -259,25 +259,17 @@ func (d *DirectTransmission) RegisterMetrics() {
 			d.metricKeys.counterResponse20x = fullName
 		case counterResponseErrors:
 			d.metricKeys.counterResponseErrors = fullName
-		// Below are metrics previously associated with the libhoney transmission used to send data upstream or to peers.
-		// Even though libhoney isn't used, include the prefix in these metric names to avoid breaking existing Refinery operations boards & queries.
 		case gaugeQueueLength:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.gaugeQueueLength = fullName
 		case counterSendErrors:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterSendErrors = fullName
 		case counterSendRetries:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterSendRetries = fullName
 		case counterBatchesSent:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterBatchesSent = fullName
 		case counterMessagesSent:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterMessagesSent = fullName
 		case counterResponseDecodeErrors:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterResponseDecodeErrors = fullName
 		}
 		m.Name = fullName // Update the metric name to include the transmit type
