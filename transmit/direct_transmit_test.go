@@ -522,6 +522,8 @@ func TestDirectTransmission(t *testing.T) {
 	assert.Equal(t, "libhoney_upstream_queue_length", dt.metricKeys.gaugeQueueLength)
 	assert.Equal(t, "libhoney_upstream_response_decode_errors", dt.metricKeys.counterResponseDecodeErrors)
 
+	assert.Equal(t, "libhoney_upstream_stale_dispatch_time", dt.metricKeys.staleDispatchTime)
+
 	now := time.Now().UTC()
 	cfg := &config.MockConfig{
 		TraceIdFieldNames: []string{"trace.trace_id"},
@@ -747,6 +749,8 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Queue length may not be exactly 0 due to gauge update timing
 	assert.LessOrEqual(t, queueLength, float64(expectedEvents), "Queue length should be reasonable")
+
+	assert.Equal(t, 2, mockMetrics.GetHistogramCount(dt.metricKeys.staleDispatchTime))
 }
 
 func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
