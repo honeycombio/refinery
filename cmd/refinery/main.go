@@ -346,7 +346,8 @@ func main() {
 	sig := <-exitWait
 	// unregister ourselves before we go
 	close(done)
-	time.Sleep(100 * time.Millisecond)
+	// wait for at least 2x the batch timeout to allow in-flight requests from peers to complete
+	time.Sleep(c.GetTracesConfig().GetBatchTimeout() * 2)
 	a.Logger.Error().WithField("signal", sig).Logf("Caught OS signal")
 
 	// these are the subsystems that might not shut down properly, so we're
