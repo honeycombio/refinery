@@ -1109,14 +1109,12 @@ func (i *InMemCollector) Stop() error {
 		sampler.Stop()
 	}
 
-	if !i.Config.GetDisableRedistribution() {
-		peers, err := i.Peers.GetPeers()
-		if err != nil {
-			i.Logger.Error().Logf("unable to get peer list with error %s", err.Error())
-		}
-		if len(peers) > 0 {
-			i.sendTracesOnShutdown()
-		}
+	peers, err := i.Peers.GetPeers()
+	if err != nil {
+		i.Logger.Error().Logf("unable to get peer list with error %s", err.Error())
+	}
+	if len(peers) > 0 {
+		i.sendTracesOnShutdown()
 	}
 
 	i.sampleTraceCache.Stop()
