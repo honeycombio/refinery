@@ -125,8 +125,7 @@ type DirectTransmission struct {
 	Logger  logger.Logger `inject:""`
 	Version string        `inject:"version"`
 
-	// constructed, not injected
-	Metrics   metrics.Metrics
+	Metrics   metrics.Metrics `inject:"metrics"`
 	Transport *http.Transport
 	Clock     clockwork.Clock
 
@@ -151,7 +150,6 @@ type DirectTransmission struct {
 }
 
 func NewDirectTransmission(
-	m metrics.Metrics,
 	transmitType types.TransmitType,
 	transport *http.Transport,
 	maxBatchSize int,
@@ -159,7 +157,6 @@ func NewDirectTransmission(
 	enableCompression bool,
 ) *DirectTransmission {
 	return &DirectTransmission{
-		Metrics:           m,
 		Transport:         transport,
 		Clock:             clockwork.NewRealClock(),
 		transmitType:      transmitType,
@@ -179,9 +176,9 @@ func (d *DirectTransmission) Start() error {
 		Timeout:   10 * time.Second,
 	}
 
+	d.registerMetrics() // Ensure metrics are registered
 	// Create a pool for concurrent batch sending
 	d.dispatchPool = pool.New().WithMaxGoroutines(maxConcurrentBatches)
-
 	d.stopWG.Add(1)
 	go d.dispatchStaleBatches()
 
@@ -247,9 +244,9 @@ func (d *DirectTransmission) EnqueueSpan(sp *types.Span) {
 	d.EnqueueEvent(&sp.Event)
 }
 
-// RegisterMetrics registers the metrics used by the DirectTransmission.
+// registerMetrics registers the metrics used by the DirectTransmission.
 // it should be called after the metrics object has been created.
-func (d *DirectTransmission) RegisterMetrics() {
+func (d *DirectTransmission) registerMetrics() {
 	for _, m := range transmissionMetrics {
 		fullName := "libhoney_" + d.transmitType.String() + m.Name
 		switch m.Name {

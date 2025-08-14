@@ -167,7 +167,6 @@ func main() {
 
 	stressRelief := &collect.StressRelief{Done: done}
 	upstreamTransmission := transmit.NewDirectTransmission(
-		metricsSingleton,
 		types.TransmitTypeUpstream,
 		upstreamTransport,
 		int(c.GetTracesConfig().GetMaxBatchSize()),
@@ -175,7 +174,6 @@ func main() {
 		true,
 	)
 	peerTransmission := transmit.NewDirectTransmission(
-		metricsSingleton,
 		types.TransmitTypePeer,
 		peerTransport,
 		int(c.GetTracesConfig().GetMaxBatchSize()),
@@ -296,10 +294,6 @@ func main() {
 		fmt.Printf("failed to start peer management: %v\n", err)
 		os.Exit(1)
 	}
-
-	// Register metrics after the metrics object has been created
-	peerTransmission.RegisterMetrics()
-	upstreamTransmission.RegisterMetrics()
 
 	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
 	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
