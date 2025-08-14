@@ -125,8 +125,7 @@ type DirectTransmission struct {
 	Logger  logger.Logger `inject:""`
 	Version string        `inject:"version"`
 
-	// constructed, not injected
-	Metrics   metrics.Metrics
+	Metrics   metrics.Metrics `inject:"metrics"`
 	Transport *http.Transport
 	Clock     clockwork.Clock
 
@@ -145,14 +144,12 @@ type DirectTransmission struct {
 	stop         chan struct{}
 	stopWG       sync.WaitGroup
 
-	httpClient        *http.Client
-	userAgent         string
-	metricKeys        metricKeys
-	metricsRegistered sync.Once
+	httpClient *http.Client
+	userAgent  string
+	metricKeys metricKeys
 }
 
 func NewDirectTransmission(
-	m metrics.Metrics,
 	transmitType types.TransmitType,
 	transport *http.Transport,
 	maxBatchSize int,
@@ -160,7 +157,6 @@ func NewDirectTransmission(
 	enableCompression bool,
 ) *DirectTransmission {
 	return &DirectTransmission{
-		Metrics:           m,
 		Transport:         transport,
 		Clock:             clockwork.NewRealClock(),
 		transmitType:      transmitType,
@@ -180,9 +176,9 @@ func (d *DirectTransmission) Start() error {
 		Timeout:   10 * time.Second,
 	}
 
+	d.registerMetrics() // Ensure metrics are registered
 	// Create a pool for concurrent batch sending
 	d.dispatchPool = pool.New().WithMaxGoroutines(maxConcurrentBatches)
-
 	d.stopWG.Add(1)
 	go d.dispatchStaleBatches()
 
@@ -195,7 +191,6 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 		WithString("api_host", ev.APIHost).
 		WithString("dataset", ev.Dataset).
 		Logf("transmit sending event")
-	d.RegisterMetrics() // Ensure metrics are registered
 
 	// Store enqueue time for queue time metrics
 	ev.EnqueuedUnixMicro = d.Clock.Now().UnixMicro()
@@ -249,42 +244,40 @@ func (d *DirectTransmission) EnqueueSpan(sp *types.Span) {
 	d.EnqueueEvent(&sp.Event)
 }
 
-// RegisterMetrics registers the metrics used by the DirectTransmission.
+// registerMetrics registers the metrics used by the DirectTransmission.
 // it should be called after the metrics object has been created.
-func (d *DirectTransmission) RegisterMetrics() {
-	d.metricsRegistered.Do(func() {
-		for _, m := range transmissionMetrics {
-			fullName := "libhoney_" + d.transmitType.String() + m.Name
-			switch m.Name {
-			case updownQueuedItems:
-				d.metricKeys.updownQueuedItems = fullName
-			case histogramQueueTime:
-				d.metricKeys.histogramQueueTime = fullName
-			case counterEnqueueErrors:
-				d.metricKeys.counterEnqueueErrors = fullName
-			case counterResponse20x:
-				d.metricKeys.counterResponse20x = fullName
-			case counterResponseErrors:
-				d.metricKeys.counterResponseErrors = fullName
-			case gaugeQueueLength:
-				d.metricKeys.gaugeQueueLength = fullName
-			case counterSendErrors:
-				d.metricKeys.counterSendErrors = fullName
-			case counterSendRetries:
-				d.metricKeys.counterSendRetries = fullName
-			case counterBatchesSent:
-				d.metricKeys.counterBatchesSent = fullName
-			case counterMessagesSent:
-				d.metricKeys.counterMessagesSent = fullName
-			case counterResponseDecodeErrors:
-				d.metricKeys.counterResponseDecodeErrors = fullName
-			case staleDispatchTime:
-				d.metricKeys.staleDispatchTime = fullName
-			}
-			m.Name = fullName // Update the metric name to include the transmit type
-			d.Metrics.Register(m)
+func (d *DirectTransmission) registerMetrics() {
+	for _, m := range transmissionMetrics {
+		fullName := "libhoney_" + d.transmitType.String() + m.Name
+		switch m.Name {
+		case updownQueuedItems:
+			d.metricKeys.updownQueuedItems = fullName
+		case histogramQueueTime:
+			d.metricKeys.histogramQueueTime = fullName
+		case counterEnqueueErrors:
+			d.metricKeys.counterEnqueueErrors = fullName
+		case counterResponse20x:
+			d.metricKeys.counterResponse20x = fullName
+		case counterResponseErrors:
+			d.metricKeys.counterResponseErrors = fullName
+		case gaugeQueueLength:
+			d.metricKeys.gaugeQueueLength = fullName
+		case counterSendErrors:
+			d.metricKeys.counterSendErrors = fullName
+		case counterSendRetries:
+			d.metricKeys.counterSendRetries = fullName
+		case counterBatchesSent:
+			d.metricKeys.counterBatchesSent = fullName
+		case counterMessagesSent:
+			d.metricKeys.counterMessagesSent = fullName
+		case counterResponseDecodeErrors:
+			d.metricKeys.counterResponseDecodeErrors = fullName
+		case staleDispatchTime:
+			d.metricKeys.staleDispatchTime = fullName
 		}
-	})
+		m.Name = fullName // Update the metric name to include the transmit type
+		d.Metrics.Register(m)
+	}
 }
 
 func (d *DirectTransmission) Stop() error {
@@ -292,7 +285,6 @@ func (d *DirectTransmission) Stop() error {
 		close(d.stop)
 	}
 	d.stopWG.Wait()
-	d.RegisterMetrics() // Ensure metrics are registered
 
 	// Dispatch all remaining batches; we don't need locks here since no
 	// further enqueues are possible.
@@ -318,7 +310,6 @@ func (d *DirectTransmission) Stop() error {
 
 // handleBatchFailure handles metrics updates when the entire batch fails
 func (d *DirectTransmission) handleBatchFailure(batch []*types.Event) {
-	d.RegisterMetrics() // Ensure metrics are registered
 	d.Metrics.Increment(d.metricKeys.counterSendErrors)
 	for range batch {
 		d.Metrics.Down(d.metricKeys.updownQueuedItems)
@@ -629,7 +620,6 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 	defer metricsTicker.Stop()
 
 	var keys []transmitKey
-	d.RegisterMetrics() // Ensure metrics are registered
 
 	for {
 		select {
