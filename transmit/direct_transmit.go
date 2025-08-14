@@ -48,6 +48,7 @@ const (
 	counterBatchesSent          = "_batches_sent"
 	counterMessagesSent         = "_messages_sent"
 	counterResponseDecodeErrors = "_response_decode_errors"
+	staleDispatchTime           = "_stale_dispatch_time"
 )
 
 // Instantiating a new encoder is expensive, so use a global one.
@@ -81,6 +82,7 @@ var transmissionMetrics = []metrics.Metadata{
 	{Name: counterBatchesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of batches of events sent to destination"},
 	{Name: counterMessagesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of messages sent to destination"},
 	{Name: counterResponseDecodeErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of errors encountered while decoding responses from destination"},
+	{Name: staleDispatchTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent per iteration of the stale batch dispatch loop"},
 }
 
 type metricKeys struct {
@@ -96,6 +98,8 @@ type metricKeys struct {
 	counterBatchesSent          string
 	counterMessagesSent         string
 	counterResponseDecodeErrors string
+
+	staleDispatchTime string
 }
 
 type transmitKey struct {
@@ -271,6 +275,8 @@ func (d *DirectTransmission) RegisterMetrics() {
 			d.metricKeys.counterMessagesSent = fullName
 		case counterResponseDecodeErrors:
 			d.metricKeys.counterResponseDecodeErrors = fullName
+		case staleDispatchTime:
+			d.metricKeys.staleDispatchTime = fullName
 		}
 		m.Name = fullName // Update the metric name to include the transmit type
 		d.Metrics.Register(m)
@@ -621,7 +627,7 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 	for {
 		select {
 		case <-batchTicker.Chan():
-			now := d.Clock.Now()
+			dispatchStart := d.Clock.Now()
 
 			// Get a snapshot of all keys
 			keys = keys[:0]
@@ -643,7 +649,7 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 
 				batch.mutex.Lock()
 				batchCount := len(batch.events)
-				if batchCount > 0 && now.Sub(batch.startTime) >= d.batchTimeout {
+				if batchCount > 0 && dispatchStart.Sub(batch.startTime) >= d.batchTimeout {
 					events := batch.events
 					batch.events = nil
 					batch.mutex.Unlock()
@@ -655,6 +661,7 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 					batch.mutex.Unlock()
 				}
 			}
+			d.Metrics.Histogram(d.metricKeys.staleDispatchTime, float64(d.Clock.Now().UnixMicro()-dispatchStart.UnixMicro()))
 
 		case <-metricsTicker.Chan():
 			// Calculate current pending count for metrics
