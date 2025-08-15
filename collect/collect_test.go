@@ -970,8 +970,8 @@ func TestAddCountsToRoot(t *testing.T) {
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
-			IncomingQueueSize: 3,
-			PeerQueueSize:     3,
+			IncomingQueueSize: 9,
+			PeerQueueSize:     9,
 		},
 	}
 

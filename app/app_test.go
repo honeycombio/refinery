@@ -240,6 +240,8 @@ func defaultConfigWithGRPC(basePort int, redisDB int, apiURL string, enableGRPC 
 		GetCollectionConfigVal: config.CollectionConfig{
 			ShutdownDelay:      config.Duration(1 * time.Second),
 			HealthCheckTimeout: config.Duration(3 * time.Second),
+			IncomingQueueSize:  30000,
+			PeerQueueSize:      30000,
 		},
 		TraceIdFieldNames:  []string{"trace.trace_id"},
 		ParentIdFieldNames: []string{"trace.parent_id"},
