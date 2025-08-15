@@ -312,8 +312,6 @@ type RedisPeerManagementConfig struct {
 }
 
 type CollectionConfig struct {
-	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
 	PeerQueueSize       int        `yaml:"PeerQueueSize"`
 	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`

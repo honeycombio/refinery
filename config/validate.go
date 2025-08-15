@@ -259,6 +259,9 @@ func (m *Metadata) Validate(data map[string]any) []string {
 			errors = append(errors, fmt.Sprintf("unknown field %s; did you mean %s?", k, guesses))
 			continue
 		}
+		if field.LastVersion != "" {
+			errors = append(errors, fmt.Sprintf("WARNING: field %s is deprecated since version %s. Please update your configuration.", k, field.LastVersion))
+		}
 		if e := validateDatatype(k, v, field.Type); e != "" {
 			errors = append(errors, e)
 			continue // if type is wrong we can't validate further
