@@ -28,7 +28,6 @@ type TotalThroughputSampler struct {
 	key                      *traceKey
 	keyMu                    sync.Mutex
 	clusterMu                sync.Mutex
-	dynsamplerMu             sync.Mutex
 	keyFields, nonRootFields []string
 
 	dynsampler      *dynsampler.TotalThroughput
@@ -84,11 +83,8 @@ func (d *TotalThroughputSampler) SetClusterSize(size int) {
 	if d.useClusterSize {
 		d.clusterMu.Lock()
 		d.clusterSize = size
-		d.clusterMu.Unlock()
-
-		d.dynsamplerMu.Lock()
 		d.dynsampler.GoalThroughputPerSec = d.goalThroughputPerSec / size
-		d.dynsamplerMu.Unlock()
+		d.clusterMu.Unlock()
 	}
 }
 
@@ -102,14 +98,12 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, k
 	}
 	count := int(trace.DescendantCount())
 
-	d.dynsamplerMu.Lock()
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1
 	}
 	shouldKeep := rand.Intn(int(rate)) == 0
 	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
-	d.dynsamplerMu.Unlock()
 
 	d.Logger.Debug().WithFields(map[string]interface{}{
 		"sample_key":  key,
