@@ -6,15 +6,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jonboulle/clockwork"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
-	"github.com/jonboulle/clockwork"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestStressRelief_Monitor tests that the Stressed method returns the correct value
@@ -135,6 +136,7 @@ func TestStressRelief_Peer(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
 }
 
+// TestStressRelief_OverallStressLevel tests overall stress level calculation across multiple peers
 func TestStressRelief_OverallStressLevel(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	sr, stop := newStressRelief(t, clock, nil)
@@ -224,7 +226,7 @@ func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub)
 	metric.Start()
 
 	if clock == nil {
-		clock = clockwork.NewRealClock()
+		clock = clockwork.NewFakeClock()
 	}
 
 	if channel == nil {

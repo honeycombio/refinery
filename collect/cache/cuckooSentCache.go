@@ -5,6 +5,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/metrics"
