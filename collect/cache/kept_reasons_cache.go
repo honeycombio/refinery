@@ -13,7 +13,6 @@ import (
 // It acts as a mapping between the string representation of send reason
 // and a uint.
 // This is used to reduce the memory footprint of the trace cache.
-// It is now concurrency-safe.
 
 type KeptReasonsCache struct {
 	Metrics metrics.Metrics

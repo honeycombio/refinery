@@ -397,7 +397,8 @@ func TestParallelCollectRaceConditions(t *testing.T) {
 }
 
 // TestMemoryPressureWithConcurrency tests the collector's behavior under memory pressure
-// with concurrent operations
+// with concurrent operations. This seems like a silly test in that it doesn't assert
+// much, but it can reveal deadlocks or races around checkAlloc.
 func TestMemoryPressureWithConcurrency(t *testing.T) {
 	const (
 		numTraces     = 500
@@ -409,7 +410,7 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(100 * time.Millisecond),
 			SendDelay:    config.Duration(50 * time.Millisecond),
-			TraceTimeout: config.Duration(2 * time.Second),
+			TraceTimeout: config.Duration(2 * time.Hour),
 			MaxBatchSize: 500,
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
@@ -432,20 +433,12 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 
 	var wg sync.WaitGroup
 	spansAdded := int32(0)
-	spansEvicted := int32(0)
 
-	// Monitor spans being sent (which indicates eviction) by advancing fake clock
-	wg.Add(1)
+	// Drain the transmission channel; we're sending a lot of events here and we
+	// don't want it to back up.
 	go func() {
-		defer wg.Done()
-		if fakeClock, ok := collector.Clock.(*clockwork.FakeClock); ok {
-			for i := 0; i < 50; i++ { // Check 50 times
-				fakeClock.Advance(100 * time.Millisecond) // Advance fake clock
-				count := len(transmission.Events)
-				if count > 0 {
-					atomic.StoreInt32(&spansEvicted, int32(count))
-				}
-			}
+		// This will terminate after we stop transmission and close the channel.
+		for range transmission.Events {
 		}
 	}()
 
@@ -481,7 +474,7 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 						atomic.AddInt32(&spansAdded, 1)
 					}
 
-					// Removed microsecond sleep to speed up test
+					clock.Advance(10 * time.Millisecond)
 				}
 			}
 		}(g)
@@ -491,7 +484,6 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 
 	// Verify the collector handled memory pressure
 	assert.Greater(t, atomic.LoadInt32(&spansAdded), int32(0), "Should have added spans")
-	// Note: Eviction might not always happen depending on actual memory usage
 }
 
 // TestCoordinatedReload verifies config reload coordination across loops
