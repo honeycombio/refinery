@@ -667,7 +667,7 @@ func TestSampleConfigReload(t *testing.T) {
 		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
 		TraceIdFieldNames:      []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
-		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10, ShutdownDelay: config.Duration(1 * time.Millisecond)},
+		GetCollectionConfigVal: config.CollectionConfig{IncomingQueueSize: 10, ShutdownDelay: config.Duration(1 * time.Millisecond)},
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
 			DroppedSize:       100,
@@ -875,8 +875,9 @@ func TestAddSpanNoBlock(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
-			CacheCapacity: 10,
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 10,
+			PeerQueueSize:     10,
 		},
 	}
 
@@ -888,7 +889,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
+	c := cache.NewInMemCache(&metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
@@ -968,8 +969,9 @@ func TestAddCountsToRoot(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
-			CacheCapacity: 3,
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 3,
+			PeerQueueSize:     3,
 		},
 	}
 
@@ -1772,10 +1774,13 @@ func TestRedistributeTraces(t *testing.T) {
 			TraceTimeout: config.Duration(1 * time.Minute),
 			SendTicker:   config.Duration(2 * time.Millisecond),
 		},
-		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
-		TraceIdFieldNames:      []string{"trace.trace_id", "traceId"},
-		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
-		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
+		},
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
 			DroppedSize:       100,
@@ -1976,8 +1981,9 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(100 * time.Millisecond),
-			CacheCapacity: 3,
+			ShutdownDelay:     config.Duration(100 * time.Millisecond),
+			IncomingQueueSize: 5,
+			PeerQueueSize:     5,
 		},
 	}
 	transmission := &transmit.MockTransmission{}
@@ -1994,7 +2000,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		Other: &sharder.TestShard{Addr: "api2", TraceIDs: []string{"traceID1", "traceID2"}},
 	}
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	c := cache.NewInMemCache(&metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
@@ -2414,7 +2420,7 @@ func TestExpiredTracesCleanup(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(3, &metrics.NullMetrics{}, &logger.NullLogger{})
+	c := cache.NewInMemCache(&metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	stc, err := newCache()
 	assert.NoError(t, err, "lru cache should start")
@@ -2492,7 +2498,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	defer peerTransmission.Stop()
 	coll := newTestCollector(conf, transmission, peerTransmission)
 
-	c := cache.NewInMemCache(10, &metrics.NullMetrics{}, &logger.NullLogger{})
+	c := cache.NewInMemCache(&metrics.NullMetrics{}, &logger.NullLogger{})
 	coll.cache = c
 	sampleTraceCache, err := newCache()
 	require.NoError(t, err, "lru cache should start")

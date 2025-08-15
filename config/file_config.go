@@ -346,9 +346,6 @@ func (c CollectionConfig) GetMaxAlloc() MemorySize {
 // If PeerBufferCapacity is not set, it uses 3x the cache capacity.
 // The minimum value is 3x the cache capacity.
 func (c CollectionConfig) GetPeerQueueSize() int {
-	if c.PeerQueueSize == 0 || c.PeerQueueSize < c.CacheCapacity*3 {
-		return c.CacheCapacity * 3
-	}
 	return c.PeerQueueSize
 }
 
@@ -356,9 +353,6 @@ func (c CollectionConfig) GetPeerQueueSize() int {
 // If IncomingBufferCapacity is not set, it uses 3x the cache capacity.
 // The minimum value is 3x the cache capacity.
 func (c CollectionConfig) GetIncomingQueueSize() int {
-	if c.IncomingQueueSize == 0 || c.IncomingQueueSize < c.CacheCapacity*3 {
-		return c.CacheCapacity * 3
-	}
 	return c.IncomingQueueSize
 }
 

@@ -238,7 +238,6 @@ func defaultConfigWithGRPC(basePort int, redisDB int, apiURL string, enableGRPC 
 		GetPeerListenAddrVal:     "127.0.0.1:" + strconv.Itoa(basePort+1),
 		GetHoneycombAPIVal:       apiURL,
 		GetCollectionConfigVal: config.CollectionConfig{
-			CacheCapacity:      10000,
 			ShutdownDelay:      config.Duration(1 * time.Second),
 			HealthCheckTimeout: config.Duration(3 * time.Second),
 		},
