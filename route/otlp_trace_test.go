@@ -103,8 +103,9 @@ func TestOTLPHandler(t *testing.T) {
 		},
 		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
 		GetCollectionConfigVal: config.CollectionConfig{
-			CacheCapacity: 100,
-			MaxAlloc:      100,
+			PeerQueueSize:     100,
+			IncomingQueueSize: 100,
+			MaxAlloc:          100,
 		},
 	}
 

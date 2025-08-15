@@ -182,7 +182,7 @@ func (i *InMemCollector) Start() error {
 	i.Logger.Debug().Logf("Starting InMemCollector")
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
 	imcConfig := i.Config.GetCollectionConfig()
-	i.cache = cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
+	i.cache = cache.NewInMemCache(i.Metrics, i.Logger)
 	i.StressRelief.UpdateFromConfig()
 
 	// listen for config reloads
