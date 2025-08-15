@@ -340,6 +340,10 @@ hasprefix:
       type: Counter
       unit: Dimensionless
       description: number of errors encountered while decoding responses from destination
+    - name: _stale_dispatch_time
+      type: Histogram
+      unit: Microseconds
+      description: The time spent per iteration of the stale batch dispatch loop
     - name: _router_proxied
       type: Counter
       unit: Dimensionless

@@ -263,6 +263,9 @@ func (m *Metadata) Validate(data map[string]any) []string {
 			errors = append(errors, e)
 			continue // if type is wrong we can't validate further
 		}
+		if field.LastVersion != "" {
+			errors = append(errors, fmt.Sprintf("WARNING: field %s is deprecated since version %s. Please update your configuration.", k, field.LastVersion))
+		}
 		switch field.Type {
 		case "object":
 			// if it's an object, we need to recurse

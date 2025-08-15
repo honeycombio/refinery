@@ -304,16 +304,14 @@ type RedisPeerManagementConfig struct {
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
-	Prefix         string   `yaml:"Prefix" default:"refinery"`
-	Database       int      `yaml:"Database"`
+	Prefix         string   `yaml:"Prefix,omitempty"`
+	Database       int      `yaml:"Database,omitempty"`
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
 }
 
 type CollectionConfig struct {
-	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
 	PeerQueueSize       int        `yaml:"PeerQueueSize"`
 	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`

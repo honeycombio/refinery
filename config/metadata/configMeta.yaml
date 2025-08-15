@@ -1255,6 +1255,7 @@ groups:
         v1name: CacheCapacity
         type: int
         valuetype: nondefault
+        lastversion: v2.9.7
         default: 10_000
         reload: true
         validations:

@@ -183,6 +183,12 @@ groups:
           - type: conflictsWith
             arg: FieldA
 
+  - name: LastVersion
+    fields:
+     - name: FieldA
+       type: int
+       lastversion: v1.0
+
   - name: Traces
     fields:
       - name: MaxBatchSize
@@ -219,7 +225,6 @@ groups:
         validations:
           - type: elementType
             arg: string
-
 `
 
 // helper function to build a nested map from a dotted name
@@ -318,6 +323,7 @@ func Test_validate(t *testing.T) {
 		{"bad map elementType", mm("Traces.AStringMap", map[string]any{"k": 1}), "field Traces.AStringMap[k] must be a string"},
 		{"bad peer url", mm("PeerManagement.Peers", []any{"0.0.0.0:8082", "http://192.168.1.1:8088"}), "must be a valid UR"},
 		{"good peer url", mm("PeerManagement.Peers", []any{"http://0.0.0.0:8082", "http://192.168.1.1:8088"}), ""},
+		{"deprecated field warning", mm("LastVersion.FieldA", 1000), "WARNING: field LastVersion.FieldA is deprecated since version v1.0. Please update your configuration."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
