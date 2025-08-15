@@ -125,7 +125,7 @@ func TestEMAThroughputSamplerConcurrency(t *testing.T) {
 					if i == spanCount-1 && userID != "" {
 						data["user_id"] = userID
 					}
-					
+
 					span := &types.Span{
 						Event: types.Event{
 							Data: types.NewPayload(mockCfg, data),
@@ -163,11 +163,11 @@ func TestEMAThroughputSamplerConcurrency(t *testing.T) {
 							assert.NotZero(t, rate, "rate should be positive")
 							assert.Equal(t, "emathroughput", reason)
 							assert.NotEmpty(t, key, "key should not be empty")
-							
+
 							// Verify deterministic parts for same trace
 							rate2, _, reason2, key2 := sampler.GetSampleRate(trace)
 							assert.Equal(t, rate, rate2, "rate should be deterministic")
-							assert.Equal(t, reason, reason2, "reason should be deterministic")  
+							assert.Equal(t, reason, reason2, "reason should be deterministic")
 							assert.Equal(t, key, key2, "key should be deterministic")
 						}
 
@@ -180,20 +180,20 @@ func TestEMAThroughputSamplerConcurrency(t *testing.T) {
 							goroutineID%3+1,
 							(j%7)+1,
 						)
-						
+
 						rate, _, reason, key := sampler.GetSampleRate(randomTrace)
 						assert.NotZero(t, rate)
 						assert.Equal(t, "emathroughput", reason)
 						assert.NotEmpty(t, key)
-						
+
 						// Test trace length functionality if enabled
 						if sampler.Config.UseTraceLength {
 							shortTrace := createTrace(fmt.Sprintf("svc-%d", goroutineID), "200", "short", "user123", 1, 1)
 							longTrace := createTrace(fmt.Sprintf("svc-%d", goroutineID), "200", "long", "user123", 1, 12)
-							
+
 							_, _, _, shortKey := sampler.GetSampleRate(shortTrace)
 							_, _, _, longKey := sampler.GetSampleRate(longTrace)
-							
+
 							assert.NotEqual(t, shortKey, longKey, "UseTraceLength should make keys different for different span counts")
 						}
 					}
@@ -206,7 +206,7 @@ func TestEMAThroughputSamplerConcurrency(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					for i := 0; i < 20; i++ {
-						clusterSize := (i%5) + 1 // Cluster sizes 1-5
+						clusterSize := (i % 5) + 1 // Cluster sizes 1-5
 						sampler.SetClusterSize(clusterSize)
 						time.Sleep(time.Millisecond) // Small delay to allow interleaving
 					}

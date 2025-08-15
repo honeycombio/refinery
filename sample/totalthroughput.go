@@ -95,7 +95,7 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, k
 	d.keyMu.Lock()
 	key, n := d.key.build(trace)
 	d.keyMu.Unlock()
-	
+
 	if n == maxKeyLength {
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
 	}

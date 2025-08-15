@@ -153,7 +153,7 @@ func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) 
 func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint, numTraceKey int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	for name, val := range sampler.GetMetrics(d.dynPrefix) {
 		m := d.lastMetrics[name]
 		switch m.metricType {

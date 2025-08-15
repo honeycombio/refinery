@@ -123,7 +123,7 @@ func TestDynamicSamplerConcurrency(t *testing.T) {
 					if i == spanCount-1 && operationName != "" {
 						data["operation_name"] = operationName
 					}
-					
+
 					span := &types.Span{
 						Event: types.Event{
 							Data: types.NewPayload(mockCfg, data),
@@ -160,7 +160,7 @@ func TestDynamicSamplerConcurrency(t *testing.T) {
 							assert.NotZero(t, rate, "rate should be positive")
 							assert.Equal(t, "dynamic", reason)
 							assert.NotEmpty(t, key, "key should not be empty")
-							
+
 							// Verify deterministic parts for same trace (rate, reason, key should be same)
 							rate2, _, reason2, key2 := sampler.GetSampleRate(trace)
 							assert.Equal(t, rate, rate2, "rate should be deterministic")
@@ -176,21 +176,21 @@ func TestDynamicSamplerConcurrency(t *testing.T) {
 							fmt.Sprintf("op-%d", j),
 							(j%5)+1,
 						)
-						
+
 						rate, _, reason, key := sampler.GetSampleRate(randomTrace)
 						assert.NotZero(t, rate)
 						assert.Equal(t, "dynamic", reason)
 						assert.NotEmpty(t, key)
-						
+
 						// Test trace length functionality
 						if sampler.Config.UseTraceLength {
 							// With UseTraceLength, different span counts should affect the key
 							shortTrace := createTrace(fmt.Sprintf("service-%d", goroutineID), "200", "short-op", 1)
 							longTrace := createTrace(fmt.Sprintf("service-%d", goroutineID), "200", "long-op", 10)
-							
+
 							_, _, _, shortKey := sampler.GetSampleRate(shortTrace)
 							_, _, _, longKey := sampler.GetSampleRate(longTrace)
-							
+
 							// Keys should be different due to span count difference
 							assert.NotEqual(t, shortKey, longKey, "UseTraceLength should make keys different for different span counts")
 						}

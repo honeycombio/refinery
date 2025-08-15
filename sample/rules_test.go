@@ -2920,7 +2920,7 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 						},
 					},
 					{
-						Name: "ema_throughput_rule", 
+						Name: "ema_throughput_rule",
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "team.id",
@@ -2961,7 +2961,7 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 					{
 						Name:       "long_operations",
 						SampleRate: 3,
-						Scope:      "span", 
+						Scope:      "span",
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
 								Field:    "duration_ms",
@@ -3006,7 +3006,7 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 						"error":            hasError,
 						"duration_ms":      duration,
 					}
-					
+
 					span := &types.Span{
 						Event: types.Event{
 							Data: types.NewPayload(mockCfg, data),
@@ -3045,11 +3045,11 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 							assert.NotZero(t, rate, "rate should be positive")
 							assert.NotEmpty(t, reason, "reason should not be empty")
 							// Note: key can be empty for rules-based sampler without downstream samplers
-							
+
 							// Verify deterministic parts for same trace
 							rate2, _, reason2, key2 := sampler.GetSampleRate(trace)
 							assert.Equal(t, rate, rate2, "rate should be deterministic")
-							assert.Equal(t, reason, reason2, "reason should be deterministic")  
+							assert.Equal(t, reason, reason2, "reason should be deterministic")
 							assert.Equal(t, key, key2, "key should be deterministic")
 						}
 
@@ -3059,11 +3059,11 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 							fmt.Sprintf("%d", 200+(j%4)*100),
 							fmt.Sprintf("team-%d", goroutineID%3),
 							fmt.Sprintf("user-%d-%d", goroutineID, j),
-							j%7 == 0, // Occasionally has error
+							j%7 == 0,       // Occasionally has error
 							100+(j%20)*100, // Duration 100-2000ms
 							(j%5)+1,
 						)
-						
+
 						rate, _, reason, _ := sampler.GetSampleRate(randomTrace)
 						assert.NotZero(t, rate)
 						assert.NotEmpty(t, reason)
@@ -3096,7 +3096,7 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 				go func() {
 					defer wg.Done()
 					for i := 0; i < 20; i++ {
-						clusterSize := (i%5) + 1 // Cluster sizes 1-5
+						clusterSize := (i % 5) + 1 // Cluster sizes 1-5
 						sampler.SetClusterSize(clusterSize)
 						time.Sleep(time.Millisecond) // Small delay to allow interleaving
 					}

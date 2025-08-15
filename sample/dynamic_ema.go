@@ -82,7 +82,7 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	d.keyMu.Lock()
 	key, n := d.key.build(trace)
 	d.keyMu.Unlock()
-	
+
 	if n == maxKeyLength {
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
 	}

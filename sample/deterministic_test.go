@@ -75,22 +75,22 @@ func TestDeterministicSamplerConcurrency(t *testing.T) {
 
 	// Test traces with known outcomes
 	testTraces := []*types.Trace{
-		{TraceID: "abc123"},  // false
-		{TraceID: "def456"},  // true 
-		{TraceID: "ghi789"},  // false
+		{TraceID: "abc123"}, // false
+		{TraceID: "def456"}, // true
+		{TraceID: "ghi789"}, // false
 	}
 	expectedResults := []bool{false, true, false}
 
 	const numGoroutines = 10
 	const iterationsPerGoroutine = 100
-	
+
 	var wg sync.WaitGroup
 
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(goroutineID int) {
 			defer wg.Done()
-			
+
 			for j := 0; j < iterationsPerGoroutine; j++ {
 				// Test known traces
 				for idx, trace := range testTraces {
@@ -100,14 +100,14 @@ func TestDeterministicSamplerConcurrency(t *testing.T) {
 					assert.Equal(t, "deterministic/chance", reason)
 					assert.Equal(t, "", key)
 				}
-				
+
 				// Test random trace for deterministic behavior
 				randomTraceID := fmt.Sprintf("random-trace-%d-%d", goroutineID, j)
 				randomTrace := &types.Trace{TraceID: randomTraceID}
-				
+
 				rate1, keep1, reason1, key1 := ds.GetSampleRate(randomTrace)
 				rate2, keep2, reason2, key2 := ds.GetSampleRate(randomTrace)
-				
+
 				assert.Equal(t, uint(10), rate1)
 				assert.Equal(t, "deterministic/chance", reason1)
 				assert.Equal(t, "", key1)
@@ -120,7 +120,7 @@ func TestDeterministicSamplerConcurrency(t *testing.T) {
 	}
 
 	wg.Wait()
-	
+
 	// Test sample rate 1 case (always sample)
 	dsAlways := &DeterministicSampler{
 		Config: &config.DeterministicSamplerConfig{
@@ -128,19 +128,19 @@ func TestDeterministicSamplerConcurrency(t *testing.T) {
 		},
 		Logger: &logger.NullLogger{},
 	}
-	
+
 	err = dsAlways.Start()
 	assert.NoError(t, err)
-	
+
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(goroutineID int) {
 			defer wg.Done()
-			
+
 			for j := 0; j < 50; j++ {
 				trace := &types.Trace{TraceID: fmt.Sprintf("always-trace-%d-%d", goroutineID, j)}
 				rate, keep, reason, key := dsAlways.GetSampleRate(trace)
-				
+
 				assert.Equal(t, uint(1), rate)
 				assert.True(t, keep)
 				assert.Equal(t, "deterministic/always", reason)
@@ -148,6 +148,6 @@ func TestDeterministicSamplerConcurrency(t *testing.T) {
 			}
 		}(i)
 	}
-	
+
 	wg.Wait()
 }
