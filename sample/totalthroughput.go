@@ -83,11 +83,12 @@ func (d *TotalThroughputSampler) Stop() {
 func (d *TotalThroughputSampler) SetClusterSize(size int) {
 	if d.useClusterSize {
 		d.clusterMu.Lock()
-		d.dynsamplerMu.Lock()
 		d.clusterSize = size
+		d.clusterMu.Unlock()
+
+		d.dynsamplerMu.Lock()
 		d.dynsampler.GoalThroughputPerSec = d.goalThroughputPerSec / size
 		d.dynsamplerMu.Unlock()
-		d.clusterMu.Unlock()
 	}
 }
 
@@ -100,13 +101,16 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, k
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
 	}
 	count := int(trace.DescendantCount())
+
 	d.dynsamplerMu.Lock()
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
-	d.dynsamplerMu.Unlock()
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1
 	}
 	shouldKeep := rand.Intn(int(rate)) == 0
+	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
+	d.dynsamplerMu.Unlock()
+
 	d.Logger.Debug().WithFields(map[string]interface{}{
 		"sample_key":  key,
 		"sample_rate": rate,
@@ -115,9 +119,6 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, k
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
 
-	d.dynsamplerMu.Lock()
-	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
-	d.dynsamplerMu.Unlock()
 	return rate, shouldKeep, d.prefix, key
 }
 
