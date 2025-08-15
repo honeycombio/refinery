@@ -106,9 +106,10 @@ type InMemCollector struct {
 
 	sampleTraceCache cache.TraceSentCache
 
-	shutdownWG     sync.WaitGroup
+	houseKeepingWG sync.WaitGroup
 	collectLoopsWG sync.WaitGroup // Separate WaitGroup for collect loops
-	reload         chan struct{}  // Channel for config reload signals
+	sendTracesWG   sync.WaitGroup
+	reload         chan struct{} // Channel for config reload signals
 	outgoingTraces chan sendableTrace
 	done           chan struct{}
 
@@ -231,10 +232,10 @@ func (i *InMemCollector) Start() error {
 		go loop.collect()
 	}
 
-	i.shutdownWG.Add(1)
+	i.sendTracesWG.Add(1)
 	go i.sendTraces()
 
-	i.shutdownWG.Add(1)
+	i.houseKeepingWG.Add(1)
 	go i.houseKeeping()
 
 	return nil
@@ -320,7 +321,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 
 // houseKeeping listens for reload signals and calls reloadConfigs
 func (i *InMemCollector) houseKeeping() {
-	defer i.shutdownWG.Done()
+	defer i.houseKeepingWG.Done()
 
 	ctx := context.Background()
 
@@ -550,6 +551,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 }
 
 // this is only called when a trace decision is received
+// TODO it may be desirable to move this and sendTraes() into the CollectLoop.
 func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
@@ -612,15 +614,7 @@ func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	}
 
-	// Check if we're shutting down before sending
-	select {
-	case <-i.done:
-		// We're shutting down, don't send
-		i.Logger.Debug().Logf("Not sending trace during shutdown")
-		return
-	case i.outgoingTraces <- trace:
-		// Successfully sent
-	}
+	i.outgoingTraces <- trace
 }
 
 func (i *InMemCollector) Stop() error {
@@ -632,6 +626,10 @@ func (i *InMemCollector) Stop() error {
 	// signal the health system to not be ready and
 	// stop liveness check so that no new traces are accepted
 	i.Health.Unregister(CollectorHealthKey)
+
+	// Stop housekeeping first - we want to make sure we don't start a checkAlloc
+	// after shutting down the collect loops.
+	i.houseKeepingWG.Wait()
 
 	// Close all loop input channels, which will cause the loops to stop.
 	for idx, loop := range i.collectLoops {
@@ -656,11 +654,7 @@ func (i *InMemCollector) Stop() error {
 	// Now it's safe to close the outgoing traces channel
 	// No more traces will be sent to it
 	close(i.outgoingTraces)
-
-	// Wait for remaining goroutines (sendTraces, recordQueueMetrics) to finish
-	i.Logger.Debug().Logf("Waiting for all goroutines to finish")
-
-	i.shutdownWG.Wait()
+	i.sendTracesWG.Wait()
 
 	i.Logger.Debug().Logf("InMemCollector shutdown complete")
 	return nil
@@ -680,7 +674,7 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 }
 
 func (i *InMemCollector) sendTraces() {
-	defer i.shutdownWG.Done()
+	defer i.sendTracesWG.Done()
 
 	for t := range i.outgoingTraces {
 		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))

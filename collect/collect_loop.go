@@ -138,8 +138,9 @@ func (cl *CollectLoop) collect() {
 			case <-ticker.Chan():
 				cl.sendExpiredTracesInCache(ctx, cl.parent.Clock.Now())
 
-				// Report per-loop metrics
-				cl.reportLoopMetrics()
+				// Note latest cache size for GetCacheSize()
+				cacheSize := cl.cache.GetCacheEntryCount()
+				cl.lastCacheSize.Store(int64(cacheSize))
 			case sp, ok := <-cl.incoming:
 				if !ok {
 					// channel's been closed; we should shut down.
@@ -367,9 +368,4 @@ func (cl *CollectLoop) sendTracesEarly(ctx context.Context, sendEarlyBytes int) 
 // GetCacheSize returns the most recently recorded count of traces in this loop's cache
 func (cl *CollectLoop) GetCacheSize() int {
 	return int(cl.lastCacheSize.Load())
-}
-
-func (cl *CollectLoop) reportLoopMetrics() {
-	cacheSize := cl.cache.GetCacheEntryCount()
-	cl.lastCacheSize.Store(int64(cacheSize))
 }

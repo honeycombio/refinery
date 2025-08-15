@@ -28,6 +28,7 @@ func (m *MockTransmission) Stop() error {
 		select {
 		case <-m.Events:
 		default:
+			close(m.Events)
 			return nil
 		}
 	}
