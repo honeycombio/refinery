@@ -58,7 +58,6 @@ var collectCacheMetrics = []metrics.Metadata{
 }
 
 func NewInMemCache(
-	capacity int,
 	met metrics.Metrics,
 	logger logger.Logger,
 ) *DefaultInMemCache {

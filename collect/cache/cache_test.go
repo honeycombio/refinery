@@ -18,7 +18,7 @@ import (
 func TestCacheSetGet(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
-	c := NewInMemCache(10, s, &logger.NullLogger{})
+	c := NewInMemCache(s, &logger.NullLogger{})
 
 	trace := &types.Trace{
 		TraceID: "abc123",
@@ -31,7 +31,7 @@ func TestCacheSetGet(t *testing.T) {
 func TestTakeExpiredTraces(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
-	c := NewInMemCache(10, s, &logger.NullLogger{})
+	c := NewInMemCache(s, &logger.NullLogger{})
 
 	now := time.Now()
 	traces := []*types.Trace{
@@ -63,7 +63,7 @@ func TestTakeExpiredTraces(t *testing.T) {
 func TestRemoveSentTraces(t *testing.T) {
 	s := &metrics.MockMetrics{}
 	s.Start()
-	c := NewInMemCache(10, s, &logger.NullLogger{})
+	c := NewInMemCache(s, &logger.NullLogger{})
 
 	now := time.Now()
 	traces := []*types.Trace{
@@ -90,7 +90,7 @@ func BenchmarkCache_Set(b *testing.B) {
 	metrics.Start()
 	_, traces := generateTraces(b.N)
 
-	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
+	c := NewInMemCache(metrics, &logger.NullLogger{})
 
 	// setup is expensive, so reset timer and report allocations
 	b.ReportAllocs()
@@ -105,7 +105,7 @@ func BenchmarkCache_Get(b *testing.B) {
 	metrics.Start()
 	_, traces := generateTraces(b.N)
 
-	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
+	c := NewInMemCache(metrics, &logger.NullLogger{})
 	populateCache(c, traces)
 
 	// setup is expensive, so reset timer and report allocations
@@ -123,7 +123,7 @@ func BenchmarkCache_TakeExpiredTracesWithoutFilter(b *testing.B) {
 	metrics.Start()
 	now, traces := generateTraces(b.N)
 
-	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
+	c := NewInMemCache(metrics, &logger.NullLogger{})
 	populateCache(c, traces)
 
 	// setup is expensive, so reset timer and report allocations
@@ -140,7 +140,7 @@ func BenchmarkCache_TakeExpiredTracesWithFilter(b *testing.B) {
 	metrics.Start()
 	now, traces := generateTraces(b.N)
 
-	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
+	c := NewInMemCache(metrics, &logger.NullLogger{})
 	populateCache(c, traces)
 
 	// setup is expensive, so reset timer and report allocations
@@ -166,7 +166,7 @@ func BenchmarkCache_RemoveTraces(b *testing.B) {
 		deletes.Add("trace" + fmt.Sprint(i))
 	}
 
-	c := NewInMemCache(b.N, metrics, &logger.NullLogger{})
+	c := NewInMemCache(metrics, &logger.NullLogger{})
 	populateCache(c, traces)
 
 	// setup is expensive, so reset timer and report allocations

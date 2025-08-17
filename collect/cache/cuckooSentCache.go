@@ -227,6 +227,7 @@ func (c *cuckooSentCache) monitor() {
 func (c *cuckooSentCache) Stop() {
 	close(c.done)
 	c.dropped.Stop()
+	c.shutdownWG.Wait()
 }
 
 func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {

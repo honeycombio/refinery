@@ -53,14 +53,13 @@ type CollectLoop struct {
 func NewCollectLoop(
 	id int,
 	parent *InMemCollector,
-	cacheCapacity int,
 	incomingSize int,
 	peerSize int,
 ) *CollectLoop {
 	return &CollectLoop{
 		ID:        id,
 		parent:    parent,
-		cache:     cache.NewInMemCache(cacheCapacity, parent.Metrics, parent.Logger),
+		cache:     cache.NewInMemCache(parent.Metrics, parent.Logger),
 		incoming:  make(chan *types.Span, incomingSize),
 		fromPeer:  make(chan *types.Span, peerSize),
 		sendEarly: make(chan sendEarly, 1),
@@ -340,15 +339,6 @@ func (cl *CollectLoop) sendTracesEarly(ctx context.Context, sendEarlyBytes int) 
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
 	for _, trace := range allTraces {
-		// only eject traces that belong to this peer or the trace is an orphan
-		if _, ok := cl.parent.IsMyTrace(trace.ID()); !ok && !trace.IsOrphan(traceTimeout, cl.parent.Clock.Now()) {
-			cl.parent.Logger.Debug().WithFields(map[string]interface{}{
-				"trace_id": trace.ID(),
-			}).Logf("cannot eject trace that does not belong to this peer")
-
-			continue
-		}
-
 		t, err := cl.parent.makeDecision(ctx, trace, TraceSendEjectedMemsize)
 		if err != nil {
 			continue
