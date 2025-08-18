@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	"sort"
 	"sync"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/dgryski/go-wyhash"
+	"github.com/jonboulle/clockwork"
+	"github.com/sirupsen/logrus"
 
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
@@ -26,8 +27,6 @@ import (
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
-	"github.com/jonboulle/clockwork"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -36,10 +35,11 @@ const (
 	decisionMessageBufferSize         = 10_000
 	defaultDropDecisionTickerInterval = 1 * time.Second
 	defaultKeptDecisionTickerInterval = 1 * time.Second
+
+	collectorHealthKey = "collector"
 )
 
 var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
-var CollectorHealthKey = "collector"
 
 type Collector interface {
 	// AddSpan adds a span to be collected, buffered, and merged into a trace.
@@ -76,7 +76,7 @@ type sendableTrace struct {
 	samplerSelector string
 }
 
-// InMemCollector is a single threaded collector.
+// InMemCollector is a collector that can use multiple concurrent collection loops.
 type InMemCollector struct {
 	Config  config.Config   `inject:""`
 	Logger  logger.Logger   `inject:""`
@@ -97,20 +97,21 @@ type InMemCollector struct {
 	TestMode       bool
 	BlockOnAddSpan bool
 
+	// Parallel collection support
+	collectLoops []*CollectLoop
+
 	// mutex must be held whenever non-channel internal fields are accessed.
-	// This exists to avoid data races in tests and startup/shutdown.
 	mutex sync.RWMutex
-	cache cache.Cache
 
 	datasetSamplers map[string]sample.Sampler
 
 	sampleTraceCache cache.TraceSentCache
 
-	shutdownWG     sync.WaitGroup
-	incoming       chan *types.Span
-	fromPeer       chan *types.Span
+	houseKeepingWG sync.WaitGroup
+	collectLoopsWG sync.WaitGroup // Separate WaitGroup for collect loops
+	sendTracesWG   sync.WaitGroup
+	reload         chan struct{} // Channel for config reload signals
 	outgoingTraces chan sendableTrace
-	reload         chan struct{}
 	done           chan struct{}
 
 	hostname string
@@ -175,13 +176,19 @@ func (i *InMemCollector) Start() error {
 	i.Logger.Debug().Logf("Starting InMemCollector")
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
 	imcConfig := i.Config.GetCollectionConfig()
-	i.cache = cache.NewInMemCache(imcConfig.CacheCapacity, i.Metrics, i.Logger)
+
+	numLoops := imcConfig.GetNumCollectLoops()
+
+	i.Logger.Info().WithField("num_loops", numLoops).Logf("Starting InMemCollector with %d collection loops", numLoops)
+
 	i.StressRelief.UpdateFromConfig()
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
 
-	i.Health.Register(CollectorHealthKey, i.Config.GetHealthCheckTimeout())
+	// Find or create a test, make sure we signal health based (somehow)
+	// on all the collect loops running.
+	i.Health.Register(collectorHealthKey, i.Config.GetHealthCheckTimeout())
 
 	for _, metric := range inMemCollectorMetrics {
 		i.Metrics.Register(metric)
@@ -194,15 +201,10 @@ func (i *InMemCollector) Start() error {
 		return err
 	}
 
-	i.incoming = make(chan *types.Span, imcConfig.GetIncomingQueueSize())
-	i.fromPeer = make(chan *types.Span, imcConfig.GetPeerQueueSize())
 	i.outgoingTraces = make(chan sendableTrace, 100_000)
-	i.Metrics.Store("INCOMING_CAP", float64(cap(i.incoming)))
-	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
+	i.done = make(chan struct{})
 	i.reload = make(chan struct{}, 1)
-	i.done = make(chan struct{})
-	i.datasetSamplers = make(map[string]sample.Sampler)
-	i.done = make(chan struct{})
+	i.datasetSamplers = make(map[string]sample.Sampler) // Initialize for makeDecision
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -210,15 +212,26 @@ func (i *InMemCollector) Start() error {
 		}
 	}
 
-	// spin up one collector because this is a single threaded collector
-	i.shutdownWG.Add(1)
-	go i.collect()
+	i.collectLoops = make([]*CollectLoop, numLoops)
 
-	i.shutdownWG.Add(1)
+	// Divide queue sizes among loops
+	incomingPerLoop := imcConfig.GetIncomingQueueSize() / numLoops
+	peerPerLoop := imcConfig.GetPeerQueueSize() / numLoops
+
+	for loopID := range i.collectLoops {
+		loop := NewCollectLoop(loopID, i, incomingPerLoop, peerPerLoop)
+		i.collectLoops[loopID] = loop
+
+		// Start the collect goroutine for this loop
+		i.collectLoopsWG.Add(1)
+		go loop.collect()
+	}
+
+	i.sendTracesWG.Add(1)
 	go i.sendTraces()
 
-	i.shutdownWG.Add(1)
-	go i.recordQueueMetrics()
+	i.houseKeepingWG.Add(1)
+	go i.houseKeeping()
 
 	return nil
 }
@@ -243,7 +256,9 @@ func (i *InMemCollector) reloadConfigs() {
 
 	// clear out any samplers that we have previously created
 	// so that the new configuration will be propagated
+	i.mutex.Lock()
 	i.datasetSamplers = make(map[string]sample.Sampler)
+	i.mutex.Unlock()
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
@@ -268,62 +283,29 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	// Because our impact numbers are only the data size, reducing by enough to reach
 	// max alloc will actually do more than that.
 	totalToRemove := mem.Alloc - uint64(maxAlloc)
+	perLoopToRemove := int(totalToRemove) / len(i.collectLoops)
 
-	// The size of the cache exceeds the user's intended allocation, so we're going to
-	// remove the traces from the cache that have had the most impact on allocation.
-	// To do this, we sort the traces by their CacheImpact value and then remove traces
-	// until the total size is less than the amount to which we want to shrink.
-	allTraces := i.cache.GetAll()
-	span.SetAttributes(attribute.Int("cache_size", len(allTraces)))
-
-	timeout := i.Config.GetTracesConfig().GetTraceTimeout()
-	if timeout == 0 {
-		timeout = 60 * time.Second
-	} // Sort traces by CacheImpact, heaviest first
-	sort.Slice(allTraces, func(i, j int) bool {
-		return allTraces[i].CacheImpact(timeout) > allTraces[j].CacheImpact(timeout)
-	})
-
-	// Now start removing the biggest traces, by summing up DataSize for
-	// successive traces until we've crossed the totalToRemove threshold
-	// or just run out of traces to delete.
-
-	cacheSize := len(allTraces)
-	i.Metrics.Gauge("collector_cache_size", float64(cacheSize))
-
-	totalDataSizeSent := 0
-	tracesSent := generics.NewSet[string]()
-	// Send the traces we can't keep.
-	traceTimeout := i.Config.GetTracesConfig().GetTraceTimeout()
-	for _, trace := range allTraces {
-		// only eject traces that belong to this peer or the trace is an orphan
-		if _, ok := i.IsMyTrace(trace.ID()); !ok && !trace.IsOrphan(traceTimeout, i.Clock.Now()) {
-			i.Logger.Debug().WithFields(map[string]interface{}{
-				"trace_id": trace.ID(),
-			}).Logf("cannot eject trace that does not belong to this peer")
-
-			continue
-		}
-		t, err := i.makeDecision(ctx, trace, TraceSendEjectedMemsize)
-		if err != nil {
-			continue
-		}
-		tracesSent.Add(trace.TraceID)
-		totalDataSizeSent += trace.DataSize
-		i.send(ctx, t)
-		if totalDataSizeSent > int(totalToRemove) {
-			break
+	var wg sync.WaitGroup
+	var cacheSizeBefore, cacheSizeAfter int
+	wg.Add(len(i.collectLoops))
+	for _, loop := range i.collectLoops {
+		cacheSizeBefore += loop.GetCacheSize()
+		loop.sendEarly <- sendEarly{
+			wg:          &wg,
+			bytesToSend: perLoopToRemove,
 		}
 	}
-	i.cache.RemoveTraces(tracesSent)
+	wg.Wait()
+
+	for _, loop := range i.collectLoops {
+		cacheSizeAfter += loop.GetCacheSize()
+	}
 
 	// Treat any MaxAlloc overage as an error so we know it's happening
 	i.Logger.Warn().
-		WithField("cache_size", cacheSize).
 		WithField("alloc", mem.Alloc).
-		WithField("num_traces_sent", len(tracesSent)).
-		WithField("datasize_sent", totalDataSizeSent).
-		WithField("new_trace_count", i.cache.GetCacheEntryCount()).
+		WithField("old_trace_count", cacheSizeBefore).
+		WithField("new_trace_count", cacheSizeAfter).
 		Logf("Making some trace decisions early due to memory overrun.")
 
 	// Manually GC here - without this we can easily end up evicting more than we
@@ -332,14 +314,75 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	return
 }
 
-// AddSpan accepts the incoming span to a queue and returns immediately
-func (i *InMemCollector) AddSpan(sp *types.Span) error {
-	return i.add(sp, i.incoming)
+// houseKeeping listens for reload signals and calls reloadConfigs
+func (i *InMemCollector) houseKeeping() {
+	defer i.houseKeepingWG.Done()
+
+	ctx := context.Background()
+
+	ticker := i.Clock.NewTicker(100 * time.Millisecond)
+	i.Health.Ready(collectorHealthKey, true)
+	for {
+		select {
+		case <-ticker.Chan():
+			i.Health.Ready(collectorHealthKey, true)
+
+			// Aggregate metrics
+			totalIncoming := 0
+			totalPeer := 0
+			totalCacheSize := 0
+
+			for _, loop := range i.collectLoops {
+				totalIncoming += len(loop.incoming)
+				totalPeer += len(loop.fromPeer)
+				totalCacheSize += loop.GetCacheSize()
+			}
+
+			i.Metrics.Histogram("collector_incoming_queue", float64(totalIncoming))
+			i.Metrics.Histogram("collector_peer_queue", float64(totalPeer))
+			i.Metrics.Gauge("collector_incoming_queue_length", float64(totalIncoming))
+			i.Metrics.Gauge("collector_peer_queue_length", float64(totalPeer))
+			i.Metrics.Gauge("collector_cache_size", float64(totalCacheSize))
+			i.Metrics.Gauge("collector_num_loops", float64(len(i.collectLoops)))
+
+			// Send traces early if we're over memory budget
+			i.checkAlloc(ctx)
+		case <-i.reload:
+			i.reloadConfigs()
+		case <-i.done:
+			ticker.Stop()
+			return
+		}
+	}
+}
+
+// getLoopForTrace determines which CollectLoop should handle a given trace ID
+// using consistent hashing to ensure all spans for a trace go to the same loop
+func (i *InMemCollector) getLoopForTrace(traceID string) int {
+	// Hash with a seed so that we don't align with any other hashes of this
+	// trace. We use a different algorithm to assign traces to nodes, but we
+	// still want to minimize the risk of any synchronization beteween that
+	// distribution and this one.
+	hash := wyhash.Hash([]byte(traceID), 7215963184435617557)
+
+	// Map to loop index
+	loopIndex := int(hash % uint64(len(i.collectLoops)))
+
+	return loopIndex
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
+func (i *InMemCollector) AddSpan(sp *types.Span) error {
+	// Route to the appropriate loop
+	loopIndex := i.getLoopForTrace(sp.TraceID)
+	return i.collectLoops[loopIndex].addSpan(sp)
+}
+
+// AddSpanFromPeer accepts the incoming span from a peer to a queue and returns immediately
 func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) error {
-	return i.add(sp, i.fromPeer)
+	// Route to the appropriate loop
+	loopIndex := i.getLoopForTrace(sp.TraceID)
+	return i.collectLoops[loopIndex].addSpanFromPeer(sp)
 }
 
 // Stressed returns true if the collector is undergoing significant stress
@@ -349,261 +392,6 @@ func (i *InMemCollector) Stressed() bool {
 
 func (i *InMemCollector) GetStressedSampleRate(traceID string) (rate uint, keep bool, reason string) {
 	return i.StressRelief.GetSampleRate(traceID)
-}
-
-func (i *InMemCollector) add(sp *types.Span, ch chan<- *types.Span) error {
-	if i.BlockOnAddSpan {
-		ch <- sp
-		i.Metrics.Increment("span_received")
-		i.Metrics.Up("spans_waiting")
-		return nil
-	}
-
-	select {
-	case ch <- sp:
-		i.Metrics.Increment("span_received")
-		i.Metrics.Up("spans_waiting")
-		return nil
-	default:
-		return ErrWouldBlock
-	}
-}
-
-// collect handles both accepting spans that have been handed to it and sending
-// the complete traces. These are done with channels in order to keep collecting
-// single threaded so we don't need any locks. Actions taken from this select
-// block is the only place we are allowed to modify any running data
-// structures.
-func (i *InMemCollector) collect() {
-	defer i.shutdownWG.Done()
-
-	tickerDuration := i.Config.GetTracesConfig().GetSendTickerValue()
-	ticker := time.NewTicker(tickerDuration)
-	defer ticker.Stop()
-
-	// mutex is normally held by this goroutine at all times.
-	// It is unlocked once per ticker cycle for tests.
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
-
-	for {
-		ctx, span := otelutil.StartSpan(context.Background(), i.Tracer, "collect")
-		startTime := time.Now()
-
-		i.Health.Ready(CollectorHealthKey, true)
-		// Always drain peer channel before doing anything else. By processing peer
-		// traffic preferentially we avoid the situation where the cluster essentially
-		// deadlocks because peers are waiting to get their events handed off to each
-		// other.
-		select {
-		case <-i.done:
-			span.End()
-			return
-		case sp, ok := <-i.fromPeer:
-			if !ok {
-				// channel's been closed; we should shut down.
-				span.End()
-				return
-			}
-			i.processSpan(ctx, sp, types.RouterTypePeer)
-		default:
-			select {
-			case <-ticker.C:
-				i.sendExpiredTracesInCache(ctx, i.Clock.Now())
-				i.checkAlloc(ctx)
-
-				// Briefly unlock the cache, to allow test access.
-				if i.TestMode {
-					// This is a bit of a hack, but it allows us to test
-					// the collector without having to worry about the
-					// cache being locked.
-					_, goSchedSpan := otelutil.StartSpan(ctx, i.Tracer, "Gosched")
-					i.mutex.Unlock()
-					runtime.Gosched()
-					i.mutex.Lock()
-					goSchedSpan.End()
-				}
-			case sp, ok := <-i.incoming:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processSpan(ctx, sp, types.RouterTypeIncoming)
-			case sp, ok := <-i.fromPeer:
-				if !ok {
-					// channel's been closed; we should shut down.
-					span.End()
-					return
-				}
-				i.processSpan(ctx, sp, types.RouterTypePeer)
-			case <-i.reload:
-				i.reloadConfigs()
-			}
-		}
-
-		i.Metrics.Histogram("collector_collect_loop_duration_ms", float64(time.Now().Sub(startTime).Milliseconds()))
-		span.End()
-	}
-}
-
-func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.Time) {
-	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTracesInCache")
-	startTime := time.Now()
-	defer func() {
-		i.Metrics.Histogram("collector_send_expired_traces_in_cache_dur_ms", float64(time.Since(startTime).Milliseconds()))
-		span.End()
-	}()
-
-	traces := i.cache.TakeExpiredTraces(now, int(i.Config.GetTracesConfig().MaxExpiredTraces), nil)
-
-	dur := time.Now().Sub(startTime)
-
-	span.SetAttributes(attribute.Int("num_traces_to_expire", len(traces)), attribute.Int64("take_expired_traces_duration_ms", dur.Milliseconds()))
-
-	spanLimit := uint32(i.Config.GetTracesConfig().SpanLimit)
-
-	var totalSpansSent int64
-
-	for _, t := range traces {
-		ctx, sendExpiredTraceSpan := otelutil.StartSpan(ctx, i.Tracer, "sendExpiredTrace")
-		totalSpansSent += int64(t.DescendantCount())
-
-		if t.RootSpan != nil {
-			tr, err := i.makeDecision(ctx, t, TraceSendGotRoot)
-			if err != nil {
-				sendExpiredTraceSpan.End()
-				continue
-			}
-			i.send(ctx, tr)
-		} else {
-			if spanLimit > 0 && t.DescendantCount() > spanLimit {
-				tr, err := i.makeDecision(ctx, t, TraceSendSpanLimit)
-				if err != nil {
-					sendExpiredTraceSpan.End()
-					continue
-				}
-				i.send(ctx, tr)
-			} else {
-				tr, err := i.makeDecision(ctx, t, TraceSendExpired)
-				if err != nil {
-					sendExpiredTraceSpan.End()
-					continue
-				}
-				i.send(ctx, tr)
-			}
-		}
-		sendExpiredTraceSpan.End()
-	}
-
-	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
-}
-
-// processSpan does all the stuff necessary to take an incoming span and add it
-// to (or create a new placeholder for) a trace.
-func (i *InMemCollector) processSpan(ctx context.Context, sp *types.Span, source types.RouterType) {
-	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "processSpan")
-	defer func() {
-		i.Metrics.Increment("span_processed")
-		i.Metrics.Down("spans_waiting")
-		span.End()
-	}()
-
-	var (
-		targetShard sharder.Shard
-	)
-
-	targetShard = i.Sharder.WhichShard(sp.TraceID)
-	if !targetShard.Equals(i.Sharder.MyShard()) {
-		sp.APIHost = targetShard.GetAddress()
-		i.PeerTransmission.EnqueueSpan(sp)
-		return
-	}
-
-	tcfg := i.Config.GetTracesConfig()
-
-	trace := i.cache.Get(sp.TraceID)
-	if trace == nil {
-		// if the trace has already been sent, just pass along the span
-		if sr, keptReason, found := i.sampleTraceCache.CheckSpan(sp); found {
-			i.Metrics.Increment("trace_sent_cache_hit")
-			// bump the count of records on this trace -- if the root span isn't
-			// the last late span, then it won't be perfect, but it will be better than
-			// having none at all
-			i.dealWithSentTrace(ctx, sr, keptReason, sp)
-			return
-		}
-
-		// trace hasn't already been sent (or this span is really old); let's
-		// create a new trace to hold it
-		i.Metrics.Increment("trace_accepted")
-
-		timeout := tcfg.GetTraceTimeout()
-		if timeout == 0 {
-			timeout = 60 * time.Second
-		}
-
-		now := i.Clock.Now()
-
-		trace = &types.Trace{
-			APIHost:          sp.APIHost,
-			APIKey:           sp.APIKey,
-			Dataset:          sp.Dataset,
-			Environment:      sp.Environment,
-			TraceID:          sp.TraceID,
-			ArrivalTime:      now,
-			DeciderShardAddr: targetShard.GetAddress(),
-			SendBy:           now.Add(timeout),
-		}
-		trace.SetSampleRate(sp.SampleRate) // if it had a sample rate, we want to keep it
-		// push this into the cache and if we eject an unsent trace, send it ASAP
-		i.cache.Set(trace)
-	}
-	// if the trace we got back from the cache has already been sent, deal with the
-	// span.
-	if trace.Sent {
-		if sr, reason, found := i.sampleTraceCache.CheckSpan(sp); found {
-			i.Metrics.Increment("trace_sent_cache_hit")
-			i.dealWithSentTrace(ctx, sr, reason, sp)
-			return
-		}
-		// trace has already been sent, but this is not in the sent cache.
-		// we will just use the default late span reason as the sent reason which is
-		// set inside the dealWithSentTrace function
-		i.dealWithSentTrace(ctx, cache.NewKeptTraceCacheEntry(trace), "", sp)
-		return
-	}
-
-	// great! trace is live. add the span.
-	trace.AddSpan(sp)
-
-	// we may override these values in conditions below
-	var markTraceForSending bool
-	timeout := tcfg.GetSendDelay()
-	if timeout == 0 {
-		timeout = 2 * time.Second // a sensible default
-	}
-
-	// if this is a root span, say so and send the trace
-	if sp.IsRoot {
-		markTraceForSending = true
-		trace.RootSpan = sp
-	}
-
-	// if the span count has exceeded our SpanLimit, send the trace immediately
-	if tcfg.SpanLimit > 0 && uint(trace.DescendantCount()) > tcfg.SpanLimit {
-		markTraceForSending = true
-		timeout = 0 // don't use a timeout in this case; this is an "act fast" situation
-	}
-
-	if markTraceForSending {
-		updatedSendBy := i.Clock.Now().Add(timeout)
-		// if the trace has already timed out, we should not update the send_by time
-		if trace.SendBy.After(updatedSendBy) {
-			trace.SendBy = updatedSendBy
-			i.cache.Set(trace)
-		}
-	}
 }
 
 // ProcessSpanImmediately is an escape hatch used under stressful conditions --
@@ -667,6 +455,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
+// This method is made public so CollectLoop can access it.
 func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSentRecord, keptReason string, sp *types.Span) {
 	_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]interface{}{
 		"trace_id":    sp.TraceID,
@@ -758,6 +547,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 }
 
 // this is only called when a trace decision is received
+// TODO it may be desirable to move this and sendTraes() into the CollectLoop.
 func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
@@ -819,33 +609,50 @@ func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	} else {
 		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	}
-	i.Logger.Info().WithFields(logFields).Logf("Sending trace")
+
 	i.outgoingTraces <- trace
 }
 
 func (i *InMemCollector) Stop() error {
-	close(i.done)
-	// signal the health system to not be ready and
-	// stop liveness check
-	// so that no new traces are accepted
-	i.Health.Unregister(CollectorHealthKey)
-	i.mutex.Lock()
+	i.Logger.Debug().Logf("Starting InMemCollector shutdown")
 
+	// Signal shutdown to all components
+	close(i.done)
+
+	// signal the health system to not be ready and
+	// stop liveness check so that no new traces are accepted
+	i.Health.Unregister(collectorHealthKey)
+
+	// Stop housekeeping first - we want to make sure we don't start a checkAlloc
+	// after shutting down the collect loops.
+	i.houseKeepingWG.Wait()
+
+	// Close all loop input channels, which will cause the loops to stop.
+	for idx, loop := range i.collectLoops {
+		i.Logger.Debug().WithField("loop_id", idx).Logf("closing loop channels")
+		close(loop.incoming)
+		close(loop.fromPeer)
+	}
+	i.collectLoopsWG.Wait()
+
+	// Stop shared samplers
+	i.mutex.Lock()
 	for _, sampler := range i.datasetSamplers {
 		sampler.Stop()
 	}
-
-	// TODO:we probably still should have some logic to drain the in-flight traces on shutdown
-
-	i.sampleTraceCache.Stop()
 	i.mutex.Unlock()
 
-	close(i.incoming)
-	close(i.fromPeer)
+	// Stop the sample trace cache
+	if i.sampleTraceCache != nil {
+		i.sampleTraceCache.Stop()
+	}
+
+	// Now it's safe to close the outgoing traces channel
+	// No more traces will be sent to it
 	close(i.outgoingTraces)
+	i.sendTracesWG.Wait()
 
-	i.shutdownWG.Wait()
-
+	i.Logger.Debug().Logf("InMemCollector shutdown complete")
 	return nil
 }
 
@@ -856,13 +663,6 @@ type sentRecord struct {
 	reason string
 }
 
-// Convenience method for tests.
-func (i *InMemCollector) getFromCache(traceID string) *types.Trace {
-	i.mutex.Lock()
-	defer i.mutex.Unlock()
-	return i.cache.Get(traceID)
-}
-
 func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 	for k, v := range i.Config.GetAdditionalAttributes() {
 		sp.Data.Set(k, v)
@@ -870,7 +670,7 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 }
 
 func (i *InMemCollector) sendTraces() {
-	defer i.shutdownWG.Done()
+	defer i.sendTracesWG.Done()
 
 	for t := range i.outgoingTraces {
 		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
@@ -950,10 +750,13 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	samplerSelector := i.Config.DetermineSamplerKey(trace.APIKey, trace.Environment, trace.Dataset)
 
 	// use sampler key to find sampler; create and cache if not found
+	// Need to lock when accessing/modifying the shared datasetSamplers map
+	i.mutex.Lock()
 	if sampler, found = i.datasetSamplers[samplerSelector]; !found {
 		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector)
 		i.datasetSamplers[samplerSelector] = sampler
 	}
+	i.mutex.Unlock()
 
 	// prepopulate spans with key fields
 	allFields, nonRootFields := sampler.GetKeyFields()
@@ -1015,22 +818,4 @@ func (i *InMemCollector) IsMyTrace(traceID string) (sharder.Shard, bool) {
 
 	return targeShard, i.Sharder.MyShard().Equals(targeShard)
 
-}
-
-func (i *InMemCollector) recordQueueMetrics() {
-	defer i.shutdownWG.Done()
-
-	ticker := time.NewTicker(100 * time.Millisecond)
-	for {
-		select {
-		case <-ticker.C:
-			i.Metrics.Histogram("collector_incoming_queue", float64(len(i.incoming)))
-			i.Metrics.Histogram("collector_peer_queue", float64(len(i.fromPeer)))
-			i.Metrics.Gauge("collector_incoming_queue_length", float64(len(i.incoming)))
-			i.Metrics.Gauge("collector_peer_queue_length", float64(len(i.fromPeer)))
-		case <-i.done:
-			ticker.Stop()
-			return
-		}
-	}
 }

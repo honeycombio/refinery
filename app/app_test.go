@@ -239,6 +239,7 @@ func defaultConfigWithGRPC(basePort int, redisDB int, apiURL string, enableGRPC 
 		GetHoneycombAPIVal:       apiURL,
 		GetCollectionConfigVal: config.CollectionConfig{
 			CacheCapacity:      10000,
+			NumCollectLoops:    8,
 			ShutdownDelay:      config.Duration(1 * time.Second),
 			HealthCheckTimeout: config.Duration(3 * time.Second),
 		},

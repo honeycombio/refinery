@@ -1454,6 +1454,21 @@ groups:
         description: >
           Sets the time interval for sending accumulated kept decisions in batches. This ensures that kept decisions are processed at regular intervals, improving efficiency by reducing the frequency of network transmissions. If the maximum batch size (MaxKeptDecisionBatchSize) is reached before this interval elapses, the batch will be sent immediately.
 
+      - name: NumCollectLoops
+        type: int
+        valuetype: nondefault
+        default: 8
+        reload: false
+        validations:
+          - type: minimum
+            arg: 1
+        summary: is the number of parallel collection loops to run for trace processing.
+        description: >
+          Controls the number of parallel collection loops used for processing traces.
+          Each loop processes a subset of traces independently using consistent hashing.
+          Values greater than 1 enable parallel processing which can improve throughput
+          on multi-core systems.
+
   - name: BufferSizes
     title: "Buffer Sizes"
     description: >

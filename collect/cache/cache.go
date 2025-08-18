@@ -4,12 +4,13 @@ import (
 	"math"
 	"time"
 
+	"github.com/rdleal/go-priorityq/kpq"
+	"golang.org/x/exp/maps"
+
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
-	"github.com/rdleal/go-priorityq/kpq"
-	"golang.org/x/exp/maps"
 )
 
 // Cache is a non-threadsafe cache. It must not be used for concurrent access.
@@ -57,7 +58,6 @@ var collectCacheMetrics = []metrics.Metadata{
 }
 
 func NewInMemCache(
-	capacity int,
 	met metrics.Metrics,
 	logger logger.Logger,
 ) *DefaultInMemCache {
