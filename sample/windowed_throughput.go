@@ -2,6 +2,7 @@ package sample
 
 import (
 	"math/rand"
+	"sync"
 	"time"
 
 	dynsampler "github.com/honeycombio/dynsampler-go"
@@ -26,6 +27,8 @@ type WindowedThroughputSampler struct {
 	prefix               string
 
 	key                      *traceKey
+	keyMu                    sync.Mutex
+	clusterMu                sync.Mutex
 	keyFields, nonRootFields []string
 
 	dynsampler      *dynsampler.WindowedThroughput
@@ -74,22 +77,30 @@ func (d *WindowedThroughputSampler) Stop() {
 
 func (d *WindowedThroughputSampler) SetClusterSize(size int) {
 	if d.useClusterSize {
+		d.clusterMu.Lock()
 		d.clusterSize = size
 		d.dynsampler.GoalThroughputPerSec = float64(d.goalThroughputPerSec) / float64(size)
+		d.clusterMu.Unlock()
 	}
 }
 
 func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
+	d.keyMu.Lock()
 	key, n := d.key.build(trace)
+	d.keyMu.Unlock()
+
 	if n == maxKeyLength {
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
 	}
 	count := int(trace.DescendantCount())
+
 	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
 	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
 		rate = 1
 	}
 	shouldKeep := rand.Intn(int(rate)) == 0
+	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
+
 	d.Logger.Debug().WithFields(map[string]interface{}{
 		"sample_key":  key,
 		"sample_rate": rate,
@@ -97,7 +108,6 @@ func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint
 		"trace_id":    trace.TraceID,
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
-	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
 
 	return rate, shouldKeep, d.prefix, key
 }
