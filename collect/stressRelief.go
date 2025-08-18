@@ -11,13 +11,14 @@ import (
 
 	"github.com/dgryski/go-wyhash"
 	"github.com/facebookgo/startstop"
+	"github.com/jonboulle/clockwork"
+
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
-	"github.com/jonboulle/clockwork"
 )
 
 const stressReliefTopic = "refinery-stress-relief"

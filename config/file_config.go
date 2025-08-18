@@ -318,6 +318,11 @@ type CollectionConfig struct {
 	DropDecisionSendInterval Duration `yaml:"-"`
 	MaxKeptDecisionBatchSize int      `yaml:"-"`
 	KeptDecisionSendInterval Duration `yaml:"-"`
+
+	// NumCollectLoops controls the number of parallel collection loops.
+	// Each loop processes a subset of traces independently.
+	// Higher values can improve throughput on multi-core systems.
+	NumCollectLoops int `yaml:"NumCollectLoops" default:"8"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
@@ -341,6 +346,12 @@ func (c CollectionConfig) GetPeerQueueSize() int {
 // The minimum value is 3x the cache capacity.
 func (c CollectionConfig) GetIncomingQueueSize() int {
 	return c.IncomingQueueSize
+}
+
+// GetNumCollectLoops returns the number of parallel collection loops.
+// Ensures the value is at least 1.
+func (c CollectionConfig) GetNumCollectLoops() int {
+	return max(c.NumCollectLoops, 1)
 }
 
 type SpecializedConfig struct {
