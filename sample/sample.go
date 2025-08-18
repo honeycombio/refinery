@@ -3,6 +3,7 @@ package sample
 import (
 	"os"
 	"strings"
+	"sync"
 
 	dynsampler "github.com/honeycombio/dynsampler-go"
 	"github.com/honeycombio/refinery/config"
@@ -126,6 +127,7 @@ type dynsamplerMetricsRecorder struct {
 	dynPrefix string // Used for accessing metrics from dynsampler-go
 	// Stores the last recorded internal metrics produced by dynsampler-go
 	lastMetrics map[string]internalDysamplerMetric
+	mu          sync.Mutex
 	met         metrics.Metrics
 	metricNames samplerMetricNames
 }
@@ -149,6 +151,9 @@ func (d *dynsamplerMetricsRecorder) RegisterMetrics(sampler dynsampler.Sampler) 
 }
 
 func (d *dynsamplerMetricsRecorder) RecordMetrics(sampler dynsampler.Sampler, kept bool, rate uint, numTraceKey int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
 	for name, val := range sampler.GetMetrics(d.dynPrefix) {
 		m := d.lastMetrics[name]
 		switch m.metricType {
