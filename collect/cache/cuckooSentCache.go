@@ -5,6 +5,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/metrics"
@@ -226,6 +227,7 @@ func (c *cuckooSentCache) monitor() {
 func (c *cuckooSentCache) Stop() {
 	close(c.done)
 	c.dropped.Stop()
+	c.shutdownWG.Wait()
 }
 
 func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
