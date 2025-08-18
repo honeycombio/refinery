@@ -3,6 +3,7 @@ package collect
 import (
 	"context"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/types"
 )
+
+const collectorLoopHealthPrefix = "collector-loop-"
 
 type sendEarly struct {
 	wg          *sync.WaitGroup
@@ -113,10 +116,15 @@ func (cl *CollectLoop) addSpanFromPeer(sp *types.Span) error {
 func (cl *CollectLoop) collect() {
 	defer cl.parent.collectLoopsWG.Done()
 
+	healthKey := collectorLoopHealthPrefix + strconv.Itoa(cl.ID)
+	cl.parent.Health.Register(healthKey, cl.parent.Config.GetHealthCheckTimeout())
+	defer cl.parent.Health.Unregister(healthKey)
+
 	tickerDuration := cl.parent.Config.GetTracesConfig().GetSendTickerValue()
 	ticker := cl.parent.Clock.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
+	cl.parent.Health.Ready(healthKey, true)
 	for {
 		ctx, span := otelutil.StartSpanWith(context.Background(), cl.parent.Tracer, "collect_loop", "loop_id", cl.ID)
 		startTime := cl.parent.Clock.Now()
@@ -136,6 +144,7 @@ func (cl *CollectLoop) collect() {
 		default:
 			select {
 			case <-ticker.Chan():
+				cl.parent.Health.Ready(healthKey, true)
 				cl.sendExpiredTracesInCache(ctx, cl.parent.Clock.Now())
 
 				// Note latest cache size for GetCacheSize()

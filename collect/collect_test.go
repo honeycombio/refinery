@@ -290,13 +290,8 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	})
 	require.NoError(t, err, "must be able to add the span")
 
-	// Wait for the event to be processed and sent
-	require.Eventually(t, func() bool {
-		return len(transmission.Events) > 1 // Should have the first event plus this one
-	}, 5*time.Second, 10*time.Millisecond, "event with no upstream sampling should be sent")
-
 	// Now get the events and find the one we want
-	events = transmission.GetBlock(0)
+	events = transmission.GetBlock(2)
 	var noUpstreamSampleRateEvent *types.Event
 	for _, event := range events {
 		if event.Dataset == "no-upstream-sampling" {
@@ -885,13 +880,8 @@ func TestAddCountsToRoot(t *testing.T) {
 	}
 	coll.AddSpan(rootSpan)
 
-	// Wait for the trace to be processed and events sent
-	assert.Eventually(t, func() bool {
-		return len(transmission.Events) >= 5 // Expecting 5 spans total (4 child + 1 root)
-	}, 5*time.Second, 50*time.Millisecond, "Should have sent events to transmission")
-
 	// Try to get all available events
-	events := transmission.GetBlock(0) // 0 means get all available
+	events := transmission.GetBlock(5) // 0 means get all available
 
 	// Find the root span - it's the one without trace.parent_id
 	var rootEvent *types.Event
@@ -1267,11 +1257,6 @@ func TestAddAdditionalAttributes(t *testing.T) {
 		IsRoot: true,
 	}
 	coll.AddSpan(rootSpan)
-
-	// Wait for events to be transmitted
-	assert.Eventually(t, func() bool {
-		return len(transmission.Events) >= 2
-	}, 5*time.Second, 50*time.Millisecond, "Should have transmitted 2 events")
 
 	events := transmission.GetBlock(2)
 	assert.Equal(t, 2, len(events), "should be some events transmitted")

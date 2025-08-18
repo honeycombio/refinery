@@ -35,10 +35,11 @@ const (
 	decisionMessageBufferSize         = 10_000
 	defaultDropDecisionTickerInterval = 1 * time.Second
 	defaultKeptDecisionTickerInterval = 1 * time.Second
+
+	collectorHealthKey = "collector"
 )
 
 var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
-var CollectorHealthKey = "collector"
 
 type Collector interface {
 	// AddSpan adds a span to be collected, buffered, and merged into a trace.
@@ -187,7 +188,7 @@ func (i *InMemCollector) Start() error {
 
 	// Find or create a test, make sure we signal health based (somehow)
 	// on all the collect loops running.
-	i.Health.Register(CollectorHealthKey, i.Config.GetHealthCheckTimeout())
+	i.Health.Register(collectorHealthKey, i.Config.GetHealthCheckTimeout())
 
 	for _, metric := range inMemCollectorMetrics {
 		i.Metrics.Register(metric)
@@ -325,11 +326,12 @@ func (i *InMemCollector) houseKeeping() {
 
 	ctx := context.Background()
 
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := i.Clock.NewTicker(100 * time.Millisecond)
+	i.Health.Ready(collectorHealthKey, true)
 	for {
 		select {
-		case <-ticker.C:
-			i.Health.Ready(CollectorHealthKey, true)
+		case <-ticker.Chan():
+			i.Health.Ready(collectorHealthKey, true)
 
 			// Aggregate metrics
 			totalIncoming := 0
@@ -625,7 +627,7 @@ func (i *InMemCollector) Stop() error {
 
 	// signal the health system to not be ready and
 	// stop liveness check so that no new traces are accepted
-	i.Health.Unregister(CollectorHealthKey)
+	i.Health.Unregister(collectorHealthKey)
 
 	// Stop housekeeping first - we want to make sure we don't start a checkAlloc
 	// after shutting down the collect loops.

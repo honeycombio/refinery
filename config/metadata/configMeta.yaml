@@ -1458,7 +1458,7 @@ groups:
         type: int
         valuetype: nondefault
         default: 8
-        reload: true
+        reload: false
         validations:
           - type: minimum
             arg: 1

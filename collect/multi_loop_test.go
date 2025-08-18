@@ -13,6 +13,7 @@ import (
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/transmit"
 	"github.com/honeycombio/refinery/types"
@@ -43,12 +44,12 @@ func TestMultiLoopProcessing(t *testing.T) {
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(100 * time.Millisecond),
 			SendDelay:    config.Duration(50 * time.Millisecond),
-			TraceTimeout: config.Duration(5 * time.Second), // Longer timeout for test
+			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			CacheCapacity: 10000,
-			MaxAlloc:      0,
+			CacheCapacity:      10000,
+			HealthCheckTimeout: config.Duration(time.Second),
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -69,6 +70,10 @@ func TestMultiLoopProcessing(t *testing.T) {
 
 			// Verify loops were created
 			assert.Equal(t, numLoops, len(collector.collectLoops))
+
+			assert.Eventually(t, func() bool {
+				return collector.Health.(health.Reporter).IsReady()
+			}, 5*time.Second, 10*time.Millisecond)
 
 			// Send spans to different traces (should go to different loops)
 			numTraces := 100
@@ -120,8 +125,7 @@ func TestMultiLoopProcessing(t *testing.T) {
 			}
 
 			// All loops should have been used (with high probability)
-			assert.Equal(t, numLoops, len(loopUsage),
-				"All loops should be used with %d traces", numTraces)
+			assert.Equal(t, numLoops, len(loopUsage))
 
 			// Wait for all spans to be processed into traces
 			assert.Eventually(t, func() bool {
@@ -138,19 +142,19 @@ func TestMultiLoopProcessing(t *testing.T) {
 				}
 
 				// We should find most traces (some may have expired)
-				return foundCount >= numTraces/2
+				return foundCount == numTraces
 			}, 5*time.Second, 500*time.Millisecond) // Check less frequently since each check is now fast
 
 			met := collector.Metrics.(*metrics.MockMetrics)
 			count, ok := met.Get("span_received")
 			assert.True(t, ok)
-			assert.Equal(t, float64(1000), count)
+			assert.Equal(t, float64(spansPerTrace*numTraces), count)
 			count, ok = met.Get("span_processed")
 			assert.True(t, ok)
-			assert.Equal(t, float64(1000), count)
+			assert.Equal(t, float64(spansPerTrace*numTraces), count)
 			count, ok = met.Get("trace_accepted")
 			assert.True(t, ok)
-			assert.Equal(t, float64(100), count)
+			assert.Equal(t, float64(numTraces), count)
 
 			// These metrics are nondeterministic, but we can at least confirm they were reported
 			for _, name := range []string{
@@ -381,6 +385,7 @@ func TestParallelCollectRaceConditions(t *testing.T) {
 	wg.Wait()
 
 	// Now that all the events have been enqueued, advance time to allow transmisison.
+	clock.BlockUntilContext(t.Context(), conf.GetCollectionConfig().NumCollectLoops+1)
 	clock.Advance(time.Second)
 
 	// Wait for spans to be processed and sent
@@ -390,7 +395,7 @@ func TestParallelCollectRaceConditions(t *testing.T) {
 		events := transmission.GetBlock(0)
 		totalSent += len(events)
 
-		// Sample rate of 2 in the confix means we expect roughly half of our
+		// Sample rate of 2 in the config means we expect roughly half of our
 		// events to actually be sent. Make sure we get at least 45%
 		return float64(totalSent) >= float64(len(allSpans))*0.45
 	}, 2*time.Second, transmission.WaitTime, "Should have sent some spans to transmission")
@@ -403,7 +408,7 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 	const (
 		numTraces     = 500
 		spansPerTrace = 100
-		maxAlloc      = 10 * 1024 * 1024 // 10MB limit
+		maxAlloc      = 1 * 1024 * 1024 // 1MB limit
 	)
 
 	conf := &config.MockConfig{
@@ -430,6 +435,8 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	collector := newTestCollector(t, conf, clock)
 	transmission := collector.Transmission.(*transmit.MockTransmission)
+
+	clock.BlockUntilContext(t.Context(), 2)
 
 	var wg sync.WaitGroup
 	spansAdded := int32(0)
@@ -484,6 +491,11 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 
 	// Verify the collector handled memory pressure
 	assert.Greater(t, atomic.LoadInt32(&spansAdded), int32(0), "Should have added spans")
+
+	met := collector.Metrics.(*metrics.MockMetrics)
+	count, ok := met.Get("collector_cache_eviction")
+	assert.True(t, ok)
+	assert.Greater(t, count, 0.0)
 }
 
 // TestCoordinatedReload verifies config reload coordination across loops
