@@ -48,6 +48,7 @@ const (
 	counterBatchesSent          = "_batches_sent"
 	counterMessagesSent         = "_messages_sent"
 	counterResponseDecodeErrors = "_response_decode_errors"
+	staleDispatchTime           = "_stale_dispatch_time"
 )
 
 // Instantiating a new encoder is expensive, so use a global one.
@@ -81,6 +82,7 @@ var transmissionMetrics = []metrics.Metadata{
 	{Name: counterBatchesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of batches of events sent to destination"},
 	{Name: counterMessagesSent, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of messages sent to destination"},
 	{Name: counterResponseDecodeErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of errors encountered while decoding responses from destination"},
+	{Name: staleDispatchTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent per iteration of the stale batch dispatch loop"},
 }
 
 type metricKeys struct {
@@ -96,6 +98,8 @@ type metricKeys struct {
 	counterBatchesSent          string
 	counterMessagesSent         string
 	counterResponseDecodeErrors string
+
+	staleDispatchTime string
 }
 
 type transmitKey struct {
@@ -121,8 +125,7 @@ type DirectTransmission struct {
 	Logger  logger.Logger `inject:""`
 	Version string        `inject:"version"`
 
-	// constructed, not injected
-	Metrics   metrics.Metrics
+	Metrics   metrics.Metrics `inject:"metrics"`
 	Transport *http.Transport
 	Clock     clockwork.Clock
 
@@ -147,7 +150,6 @@ type DirectTransmission struct {
 }
 
 func NewDirectTransmission(
-	m metrics.Metrics,
 	transmitType types.TransmitType,
 	transport *http.Transport,
 	maxBatchSize int,
@@ -155,7 +157,6 @@ func NewDirectTransmission(
 	enableCompression bool,
 ) *DirectTransmission {
 	return &DirectTransmission{
-		Metrics:           m,
 		Transport:         transport,
 		Clock:             clockwork.NewRealClock(),
 		transmitType:      transmitType,
@@ -175,9 +176,9 @@ func (d *DirectTransmission) Start() error {
 		Timeout:   10 * time.Second,
 	}
 
+	d.registerMetrics() // Ensure metrics are registered
 	// Create a pool for concurrent batch sending
 	d.dispatchPool = pool.New().WithMaxGoroutines(maxConcurrentBatches)
-
 	d.stopWG.Add(1)
 	go d.dispatchStaleBatches()
 
@@ -243,11 +244,11 @@ func (d *DirectTransmission) EnqueueSpan(sp *types.Span) {
 	d.EnqueueEvent(&sp.Event)
 }
 
-// RegisterMetrics registers the metrics used by the DirectTransmission.
+// registerMetrics registers the metrics used by the DirectTransmission.
 // it should be called after the metrics object has been created.
-func (d *DirectTransmission) RegisterMetrics() {
+func (d *DirectTransmission) registerMetrics() {
 	for _, m := range transmissionMetrics {
-		fullName := d.transmitType.String() + m.Name
+		fullName := "libhoney_" + d.transmitType.String() + m.Name
 		switch m.Name {
 		case updownQueuedItems:
 			d.metricKeys.updownQueuedItems = fullName
@@ -259,26 +260,20 @@ func (d *DirectTransmission) RegisterMetrics() {
 			d.metricKeys.counterResponse20x = fullName
 		case counterResponseErrors:
 			d.metricKeys.counterResponseErrors = fullName
-		// Below are metrics previously associated with the libhoney transmission used to send data upstream or to peers.
-		// Even though libhoney isn't used, include the prefix in these metric names to avoid breaking existing Refinery operations boards & queries.
 		case gaugeQueueLength:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.gaugeQueueLength = fullName
 		case counterSendErrors:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterSendErrors = fullName
 		case counterSendRetries:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterSendRetries = fullName
 		case counterBatchesSent:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterBatchesSent = fullName
 		case counterMessagesSent:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterMessagesSent = fullName
 		case counterResponseDecodeErrors:
-			fullName = "libhoney_" + fullName
 			d.metricKeys.counterResponseDecodeErrors = fullName
+		case staleDispatchTime:
+			d.metricKeys.staleDispatchTime = fullName
 		}
 		m.Name = fullName // Update the metric name to include the transmit type
 		d.Metrics.Register(m)
@@ -629,7 +624,7 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 	for {
 		select {
 		case <-batchTicker.Chan():
-			now := d.Clock.Now()
+			dispatchStart := d.Clock.Now()
 
 			// Get a snapshot of all keys
 			keys = keys[:0]
@@ -651,7 +646,7 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 
 				batch.mutex.Lock()
 				batchCount := len(batch.events)
-				if batchCount > 0 && now.Sub(batch.startTime) >= d.batchTimeout {
+				if batchCount > 0 && dispatchStart.Sub(batch.startTime) >= d.batchTimeout {
 					events := batch.events
 					batch.events = nil
 					batch.mutex.Unlock()
@@ -663,6 +658,7 @@ func (d *DirectTransmission) dispatchStaleBatches() {
 					batch.mutex.Unlock()
 				}
 			}
+			d.Metrics.Histogram(d.metricKeys.staleDispatchTime, float64(d.Clock.Now().UnixMicro()-dispatchStart.UnixMicro()))
 
 		case <-metricsTicker.Chan():
 			// Calculate current pending count for metrics

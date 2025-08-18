@@ -167,7 +167,6 @@ func main() {
 
 	stressRelief := &collect.StressRelief{Done: done}
 	upstreamTransmission := transmit.NewDirectTransmission(
-		metricsSingleton,
 		types.TransmitTypeUpstream,
 		upstreamTransport,
 		int(c.GetTracesConfig().GetMaxBatchSize()),
@@ -175,7 +174,6 @@ func main() {
 		true,
 	)
 	peerTransmission := transmit.NewDirectTransmission(
-		metricsSingleton,
 		types.TransmitTypePeer,
 		peerTransport,
 		int(c.GetTracesConfig().GetMaxBatchSize()),
@@ -297,10 +295,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Register metrics after the metrics object has been created
-	peerTransmission.RegisterMetrics()
-	upstreamTransmission.RegisterMetrics()
-
 	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
 	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
 
@@ -346,7 +340,8 @@ func main() {
 	sig := <-exitWait
 	// unregister ourselves before we go
 	close(done)
-	time.Sleep(100 * time.Millisecond)
+	// wait for at least 2x the batch timeout to allow in-flight requests from peers to complete
+	time.Sleep(c.GetTracesConfig().GetBatchTimeout() * 2)
 	a.Logger.Error().WithField("signal", sig).Logf("Caught OS signal")
 
 	// these are the subsystems that might not shut down properly, so we're

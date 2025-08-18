@@ -18,8 +18,6 @@ type Transmission interface {
 	// Enqueue accepts a single event and schedules it for transmission to Honeycomb
 	EnqueueEvent(ev *types.Event)
 	EnqueueSpan(ev *types.Span)
-
-	RegisterMetrics()
 }
 
 type DefaultTransmission struct {
