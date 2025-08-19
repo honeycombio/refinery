@@ -247,6 +247,8 @@ func (i *InMemCollector) sendReloadSignal(cfgHash, ruleHash string) {
 func (i *InMemCollector) reloadConfigs() {
 	i.Logger.Debug().Logf("reloading in-mem collect config")
 
+	i.SamplerFactory.ClearDynsamplers()
+
 	i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
 
 	i.StressRelief.UpdateFromConfig()
@@ -636,15 +638,6 @@ func (i *InMemCollector) Stop() error {
 	}
 	i.collectLoopsWG.Wait()
 
-	// Stop samplers in each collect loop
-	for _, loop := range i.collectLoops {
-		loop.samplersMutex.RLock()
-		for _, sampler := range loop.datasetSamplers {
-			sampler.Stop()
-		}
-		loop.samplersMutex.RUnlock()
-	}
-
 	// Stop the sample trace cache
 	if i.sampleTraceCache != nil {
 		i.sampleTraceCache.Stop()
@@ -730,7 +723,6 @@ func (i *InMemCollector) sendTraces() {
 		span.End()
 	}
 }
-
 
 func (i *InMemCollector) IsMyTrace(traceID string) (sharder.Shard, bool) {
 	// if trace locality is disabled, we should only process

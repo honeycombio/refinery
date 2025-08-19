@@ -5,7 +5,6 @@ import (
 	"slices"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
@@ -2989,7 +2988,6 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 
 			err := sampler.Start()
 			assert.NoError(t, err)
-			defer sampler.Stop()
 
 			// Create test traces with different characteristics
 			mockCfg := &config.MockConfig{}
@@ -3072,36 +3070,7 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 				}(i)
 			}
 
-			// Test concurrent SetClusterSize calls if any rules have downstream samplers with UseClusterSize
-			hasClusterSizer := false
-			for _, rule := range tc.config.Rules {
-				if rule.Sampler != nil {
-					if rule.Sampler.EMAThroughputSampler != nil && rule.Sampler.EMAThroughputSampler.UseClusterSize {
-						hasClusterSizer = true
-						break
-					}
-					if rule.Sampler.WindowedThroughputSampler != nil && rule.Sampler.WindowedThroughputSampler.UseClusterSize {
-						hasClusterSizer = true
-						break
-					}
-					if rule.Sampler.TotalThroughputSampler != nil && rule.Sampler.TotalThroughputSampler.UseClusterSize {
-						hasClusterSizer = true
-						break
-					}
-				}
-			}
-
-			if hasClusterSizer {
-				wg.Add(1)
-				go func() {
-					defer wg.Done()
-					for i := 0; i < 20; i++ {
-						clusterSize := (i % 5) + 1 // Cluster sizes 1-5
-						sampler.SetClusterSize(clusterSize)
-						time.Sleep(time.Millisecond) // Small delay to allow interleaving
-					}
-				}()
-			}
+			// Cluster size management is now handled by the SamplerFactory
 
 			wg.Wait()
 		})

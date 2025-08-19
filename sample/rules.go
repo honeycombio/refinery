@@ -12,7 +12,6 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-var _ ClusterSizer = (*RulesBasedSampler)(nil)
 
 type RulesBasedSampler struct {
 	Config        *config.RulesBasedSamplerConfig
@@ -45,6 +44,7 @@ func (s *RulesBasedSampler) Start() error {
 			}
 		}
 		// Check if any rule has a downstream sampler and create it
+		// TODO this seems broken, we should be setting dynsamplers
 		if rule.Sampler != nil {
 			var sampler Sampler
 			if rule.Sampler.DynamicSampler != nil {
@@ -79,21 +79,6 @@ func (s *RulesBasedSampler) Start() error {
 	return nil
 }
 
-func (s *RulesBasedSampler) Stop() {
-	for _, sampler := range s.samplers {
-		if sampler != nil {
-			sampler.Stop()
-		}
-	}
-}
-
-func (s *RulesBasedSampler) SetClusterSize(size int) {
-	for _, sampler := range s.samplers {
-		if sampler, ok := sampler.(ClusterSizer); ok {
-			sampler.SetClusterSize(size)
-		}
-	}
-}
 
 func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	logger := s.Logger.Debug().WithFields(map[string]interface{}{

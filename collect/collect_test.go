@@ -564,10 +564,14 @@ func TestSampleConfigReload(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
-		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
-		TraceIdFieldNames:      []string{"trace.trace_id", "traceId"},
-		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
-		GetCollectionConfigVal: config.CollectionConfig{CacheCapacity: 10, ShutdownDelay: config.Duration(1 * time.Millisecond)},
+		// Start with DynamicSampler with low sample rate to test config changes
+		GetSamplerTypeVal:  &config.DynamicSamplerConfig{SampleRate: 2, FieldList: []string{"service.name"}},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			CacheCapacity: 10,
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
+		},
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
 			DroppedSize:       100,
@@ -577,61 +581,97 @@ func TestSampleConfigReload(t *testing.T) {
 
 	coll := newTestCollector(t, conf)
 
+	// Start the SamplerFactory to initialize its maps
+	err := coll.SamplerFactory.Start()
+	require.NoError(t, err)
+
+	// Just one loop keep things intelligible.
+	loop := coll.collectLoops[0]
+
 	dataset := "aoeu"
 
+	// Create a test trace for consistent results
+	createTestTrace := func(traceID string) *types.Trace {
+		mockCfg := &config.MockConfig{}
+		trace := &types.Trace{TraceID: traceID}
+		trace.AddSpan(&types.Span{
+			Event: types.Event{
+				Data: types.NewPayload(mockCfg, map[string]interface{}{
+					"service.name": "test-service",
+				}),
+			},
+		})
+		return trace
+	}
+
+	// Sending a span should cause the sampler to be loaded.
 	span := &types.Span{
 		TraceID: "1",
-		Event: types.Event{
-			Dataset: dataset,
-			APIKey:  legacyAPIKey,
-		},
-		IsRoot: true,
+		Event:   types.Event{Dataset: dataset, APIKey: legacyAPIKey, Data: types.NewPayload(&config.MockConfig{}, map[string]interface{}{"service.name": "test-service"})},
+		IsRoot:  true,
 	}
-
 	coll.AddSpan(span)
 
+	// Wait for the sampler to be loaded and test initial sample rate
+	var initialRate uint
 	assert.Eventually(t, func() bool {
-		// Check all loops for the dataset sampler
-		for _, loop := range coll.collectLoops {
-			if loop.HasSampler(dataset) {
+		ch := make(chan struct{})
+		defer close(ch)
+
+		loop.pause <- ch
+		if sampler := loop.datasetSamplers[dataset]; sampler != nil {
+			testTrace := createTestTrace("test-trace-1")
+			rate, _, reason, _ := sampler.GetSampleRate(testTrace)
+			if reason == "dynamic" && rate > 0 {
+				initialRate = rate
 				return true
 			}
 		}
 		return false
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
+	assert.Equal(t, uint(2), initialRate)
 
+	// Change the configuration to a higher sample rate
+	conf.Mux.Lock()
+	conf.GetSamplerTypeVal = &config.DynamicSamplerConfig{SampleRate: 10, FieldList: []string{"service.name"}}
+	conf.Mux.Unlock()
+
+	// Reloading the config should clear the sampler.
 	conf.Reload()
-
 	assert.Eventually(t, func() bool {
-		// Check that no loops have the dataset sampler after reload
-		for _, loop := range coll.collectLoops {
-			if loop.HasSampler(dataset) {
-				return false
-			}
-		}
-		return true
+		ch := make(chan struct{})
+		defer close(ch)
+
+		loop.pause <- ch
+		return loop.datasetSamplers[dataset] == nil
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 
+	// Another span, it gets loaded again with new configuration.
 	span = &types.Span{
 		TraceID: "2",
-		Event: types.Event{
-			Dataset: dataset,
-			APIKey:  legacyAPIKey,
-		},
-		IsRoot: true,
+		Event:   types.Event{Dataset: dataset, APIKey: legacyAPIKey, Data: types.NewPayload(&config.MockConfig{}, map[string]interface{}{"service.name": "test-service"})},
+		IsRoot:  true,
 	}
-
 	coll.AddSpan(span)
 
+	// Wait for the new sampler to be loaded and test the updated sample rate
+	var newRate uint
 	assert.Eventually(t, func() bool {
-		// Check all loops for the dataset sampler
-		for _, loop := range coll.collectLoops {
-			if loop.HasSampler(dataset) {
+		ch := make(chan struct{})
+		defer close(ch)
+
+		loop.pause <- ch
+		if sampler := loop.datasetSamplers[dataset]; sampler != nil {
+			testTrace := createTestTrace("test-trace-2")
+			rate, _, reason, _ := sampler.GetSampleRate(testTrace)
+			if reason == "dynamic" && rate > 0 {
+				newRate = rate
 				return true
 			}
 		}
 		return false
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
+	assert.Equal(t, uint(10), newRate)
 }
 
 // TestStableMaxAlloc tests memory pressure handling and cache eviction when memory allocation limits are exceeded

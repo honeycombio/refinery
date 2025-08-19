@@ -53,9 +53,8 @@ type CollectLoop struct {
 	// there is no way to safely access this directly from the outside.
 	cache cache.Cache
 
-	// Our local sampler cache - mutex protects access from other goroutines (e.g., tests)
+	// Our local samplers.
 	datasetSamplers map[string]sample.Sampler
-	samplersMutex   sync.RWMutex
 
 	// For reporting cache size asynchronously.
 	lastCacheSize atomic.Int64
@@ -181,9 +180,7 @@ func (cl *CollectLoop) collect() {
 				sendEarly.wg.Done()
 			case <-cl.reload:
 				// Clear samplers on config reload
-				cl.samplersMutex.Lock()
-				cl.datasetSamplers = make(map[string]sample.Sampler)
-				cl.samplersMutex.Unlock()
+				clear(cl.datasetSamplers)
 			case ch := <-cl.pause:
 				// We got a pause signal, wait until it unblocks.
 				<-ch
@@ -387,15 +384,6 @@ func (cl *CollectLoop) GetCacheSize() int {
 	return int(cl.lastCacheSize.Load())
 }
 
-// HasSampler returns true if this loop has a sampler for the given key.
-// This is safe to call from other goroutines.
-func (cl *CollectLoop) HasSampler(samplerKey string) bool {
-	cl.samplersMutex.RLock()
-	defer cl.samplersMutex.RUnlock()
-	_, exists := cl.datasetSamplers[samplerKey]
-	return exists
-}
-
 func (cl *CollectLoop) makeDecision(ctx context.Context, trace *types.Trace, sendReason string) (s sendableTrace, err error) {
 	if trace.Sent {
 		return s, errors.New("trace already sent")
@@ -418,18 +406,9 @@ func (cl *CollectLoop) makeDecision(ctx context.Context, trace *types.Trace, sen
 	samplerSelector := cl.parent.Config.DetermineSamplerKey(trace.APIKey, trace.Environment, trace.Dataset)
 
 	// use sampler key to find sampler; create and cache if not found
-	cl.samplersMutex.RLock()
 	if sampler, found = cl.datasetSamplers[samplerSelector]; !found {
-		cl.samplersMutex.RUnlock()
-		// TODO: Throughput-based samplers now have their limits fractioned across multiple loops.
-		// This means a configured GoalThroughputPerSec of 100 with 4 loops effectively becomes
-		// ~25 per loop. This will be addressed in a future change.
 		sampler = cl.parent.SamplerFactory.GetSamplerImplementationForKey(samplerSelector)
-		cl.samplersMutex.Lock()
 		cl.datasetSamplers[samplerSelector] = sampler
-		cl.samplersMutex.Unlock()
-	} else {
-		cl.samplersMutex.RUnlock()
 	}
 
 	// prepopulate spans with key fields
