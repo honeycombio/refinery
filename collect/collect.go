@@ -103,8 +103,6 @@ type InMemCollector struct {
 	// mutex must be held whenever non-channel internal fields are accessed.
 	mutex sync.RWMutex
 
-	datasetSamplers map[string]sample.Sampler
-
 	sampleTraceCache cache.TraceSentCache
 
 	houseKeepingWG sync.WaitGroup
@@ -204,7 +202,6 @@ func (i *InMemCollector) Start() error {
 	i.outgoingTraces = make(chan sendableTrace, 100_000)
 	i.done = make(chan struct{})
 	i.reload = make(chan struct{}, 1)
-	i.datasetSamplers = make(map[string]sample.Sampler) // Initialize for makeDecision
 
 	if i.Config.GetAddHostMetadataToTrace() {
 		if hostname, err := os.Hostname(); err == nil && hostname != "" {
@@ -254,11 +251,15 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.StressRelief.UpdateFromConfig()
 
-	// clear out any samplers that we have previously created
+	// Send reload signals to all collect loops to clear their local samplers
 	// so that the new configuration will be propagated
-	i.mutex.Lock()
-	i.datasetSamplers = make(map[string]sample.Sampler)
-	i.mutex.Unlock()
+	for _, loop := range i.collectLoops {
+		select {
+		case loop.reload <- struct{}{}:
+		default:
+			// Channel already has a signal pending, skip
+		}
+	}
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
@@ -635,12 +636,14 @@ func (i *InMemCollector) Stop() error {
 	}
 	i.collectLoopsWG.Wait()
 
-	// Stop shared samplers
-	i.mutex.Lock()
-	for _, sampler := range i.datasetSamplers {
-		sampler.Stop()
+	// Stop samplers in each collect loop
+	for _, loop := range i.collectLoops {
+		loop.samplersMutex.RLock()
+		for _, sampler := range loop.datasetSamplers {
+			sampler.Stop()
+		}
+		loop.samplersMutex.RUnlock()
 	}
-	i.mutex.Unlock()
 
 	// Stop the sample trace cache
 	if i.sampleTraceCache != nil {
@@ -728,88 +731,6 @@ func (i *InMemCollector) sendTraces() {
 	}
 }
 
-func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, sendReason string) (s sendableTrace, err error) {
-	if trace.Sent {
-		return s, errors.New("trace already sent")
-	}
-
-	ctx, span := otelutil.StartSpan(ctx, i.Tracer, "makeDecision")
-	defer span.End()
-	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
-
-	otelutil.AddSpanFields(span, map[string]interface{}{
-		"trace_id": trace.ID(),
-		"root":     trace.RootSpan,
-		"send_by":  trace.SendBy,
-		"arrival":  trace.ArrivalTime,
-	})
-
-	var sampler sample.Sampler
-	var found bool
-	// get sampler key (dataset for legacy keys, environment for new keys)
-	samplerSelector := i.Config.DetermineSamplerKey(trace.APIKey, trace.Environment, trace.Dataset)
-
-	// use sampler key to find sampler; create and cache if not found
-	// Need to lock when accessing/modifying the shared datasetSamplers map
-	i.mutex.Lock()
-	if sampler, found = i.datasetSamplers[samplerSelector]; !found {
-		sampler = i.SamplerFactory.GetSamplerImplementationForKey(samplerSelector)
-		i.datasetSamplers[samplerSelector] = sampler
-	}
-	i.mutex.Unlock()
-
-	// prepopulate spans with key fields
-	allFields, nonRootFields := sampler.GetKeyFields()
-	for _, sp := range trace.GetSpans() {
-		if sp.IsRoot {
-			sp.Data.MemoizeFields(allFields...)
-		} else {
-			sp.Data.MemoizeFields(nonRootFields...)
-		}
-	}
-
-	startGetSampleRate := i.Clock.Now()
-	// make sampling decision and update the trace
-	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
-	i.Metrics.Histogram("get_sample_rate_duration_ms", float64(time.Since(startGetSampleRate).Milliseconds()))
-
-	trace.SetSampleRate(rate)
-	trace.KeepSample = shouldSend
-	// This will observe sample rate attempts even if the trace is dropped
-	i.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
-
-	i.sampleTraceCache.Record(trace, shouldSend, reason)
-
-	var hasRoot bool
-	if trace.RootSpan != nil {
-		i.Metrics.Increment("trace_send_has_root")
-		hasRoot = true
-	} else {
-		i.Metrics.Increment("trace_send_no_root")
-	}
-
-	otelutil.AddSpanFields(span, map[string]interface{}{
-		"kept":        shouldSend,
-		"reason":      reason,
-		"sampler":     key,
-		"selector":    samplerSelector,
-		"rate":        rate,
-		"send_reason": sendReason,
-		"hasRoot":     hasRoot,
-	})
-	i.Logger.Debug().WithField("key", key).Logf("making decision for trace")
-	s = sendableTrace{
-		Trace:           trace,
-		reason:          reason,
-		sampleKey:       key,
-		samplerSelector: samplerSelector,
-		rate:            rate,
-		sendReason:      sendReason,
-		shouldSend:      shouldSend,
-	}
-
-	return s, nil
-}
 
 func (i *InMemCollector) IsMyTrace(traceID string) (sharder.Shard, bool) {
 	// if trace locality is disabled, we should only process

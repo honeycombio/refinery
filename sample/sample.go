@@ -32,9 +32,13 @@ type SamplerFactory struct {
 	Peers     peer.Peers      `inject:""`
 	peerCount int
 	samplers  []Sampler
+	mutex     sync.Mutex
 }
 
 func (s *SamplerFactory) updatePeerCounts() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	
 	if s.Peers != nil {
 		peers, err := s.Peers.GetPeers()
 		// Only update the stored count if there were no errors
@@ -96,7 +100,9 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampl
 
 	s.Logger.Debug().WithField("dataset", samplerKey).Logf("created implementation for sampler type %T", c)
 	// call this every time we add a sampler
+	s.mutex.Lock()
 	s.samplers = append(s.samplers, sampler)
+	s.mutex.Unlock()
 	s.updatePeerCounts()
 
 	return sampler

@@ -591,20 +591,25 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		_, ok := coll.datasetSamplers[dataset]
-		coll.mutex.Unlock()
-
-		return ok
+		// Check all loops for the dataset sampler
+		for _, loop := range coll.collectLoops {
+			if loop.HasSampler(dataset) {
+				return true
+			}
+		}
+		return false
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 
 	conf.Reload()
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		_, ok := coll.datasetSamplers[dataset]
-		coll.mutex.Unlock()
-		return !ok
+		// Check that no loops have the dataset sampler after reload
+		for _, loop := range coll.collectLoops {
+			if loop.HasSampler(dataset) {
+				return false
+			}
+		}
+		return true
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 
 	span = &types.Span{
@@ -619,10 +624,13 @@ func TestSampleConfigReload(t *testing.T) {
 	coll.AddSpan(span)
 
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		_, ok := coll.datasetSamplers[dataset]
-		coll.mutex.Unlock()
-		return ok
+		// Check all loops for the dataset sampler
+		for _, loop := range coll.collectLoops {
+			if loop.HasSampler(dataset) {
+				return true
+			}
+		}
+		return false
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 }
 
@@ -759,7 +767,6 @@ func TestAddSpanNoBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	coll.sampleTraceCache = stc
-	coll.datasetSamplers = make(map[string]sample.Sampler)
 
 	// Block the collect loop so nothing gets processed
 	ch := make(chan struct{})
