@@ -407,6 +407,7 @@ func TestValidateDeprecationWarnings(t *testing.T) {
 				},
 			},
 			currentVersion: "v2.8.0",
+			expected:       []string{},
 		},
 		{
 			name: "deprecated field used, current version before lastversion",
