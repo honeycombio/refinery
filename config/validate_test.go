@@ -322,7 +322,7 @@ func Test_validate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := metadata.Validate(tt.data)
+			_, got := metadata.Validate(tt.data)
 			if tt.want == "" && len(got) != 0 {
 				t.Errorf("validate() = %v, want empty", got)
 			}
@@ -470,7 +470,8 @@ func TestValidateDeprecationWarnings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			allErrors := metadata.Validate(tt.data, tt.currentVersion)
+			warnings, errors := metadata.Validate(tt.data, tt.currentVersion)
+			allErrors := append(warnings, errors...)
 
 			// Sort both slices to ensure consistent comparison
 			sort.Strings(tt.expected)

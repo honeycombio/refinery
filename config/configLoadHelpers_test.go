@@ -267,7 +267,7 @@ func Test_validateConfigs(t *testing.T) {
 			opts := &CmdEnv{ConfigLocations: cfgfiles}
 			configs, err := getConfigDataForLocations(cfgfiles)
 			require.NoError(t, err)
-			got, err := validateConfigs(configs, opts)
+			_, got, err := validateConfigs(configs, opts)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("validateConfigs() error = %v, wantErr %v", err, tt.wantErr)
 				return

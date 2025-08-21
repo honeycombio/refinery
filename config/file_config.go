@@ -466,7 +466,7 @@ func newConfigAndRules(opts *CmdEnv) ([]configData, []configData, error) {
 func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion ...string) (*fileConfig, error) {
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfigs(cData, opts, currentVersion...)
+		cfgWarnings, cfgErrors, err := validateConfigs(cData, opts, currentVersion...)
 		if err != nil {
 			return nil, err
 		}
@@ -476,13 +476,27 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 			return nil, err
 		}
 
-		if len(cfgFails) > 0 || len(ruleFails) > 0 {
+		// Only fail validation on errors, not warnings
+		if len(cfgErrors) > 0 || len(ruleFails) > 0 {
+			// Combine all failures (errors and warnings) for error message
 			return nil, &FileConfigError{
 				ConfigLocations: opts.ConfigLocations,
-				ConfigFailures:  cfgFails,
+				ConfigFailures:  cfgErrors,
 				RulesLocations:  opts.RulesLocations,
 				RulesFailures:   ruleFails,
 			}
+		}
+
+		// Log warnings if present but don't fail
+		if len(cfgWarnings) > 0 {
+			warning := &FileConfigError{
+				ConfigLocations: opts.ConfigLocations,
+				ConfigFailures:  cfgWarnings,
+				RulesLocations:  opts.RulesLocations,
+				RulesFailures:   ruleFails,
+			}
+
+			fmt.Println(warning.Error())
 		}
 	}
 

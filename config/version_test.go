@@ -59,7 +59,6 @@ func TestCompareVersions(t *testing.T) {
 		{"2.9.7", "v2.9.7", 0, false},   // with and without v prefix
 		{"invalid", "v2.9.7", 0, true},  // invalid current version
 		{"v2.9.7", "invalid", 0, true},  // invalid target version
-		{"dev", "v3.0.0", 1, false},     // dev version should always be latest
 	}
 
 	for _, tt := range tests {
@@ -95,4 +94,3 @@ func TestIsVersionBefore(t *testing.T) {
 		})
 	}
 }
-

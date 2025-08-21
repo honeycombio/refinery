@@ -236,8 +236,9 @@ func maskString(s string) string {
 // recursively to validate the sub-object.
 // Note that the flatten function returns only 2 levels.
 
-func (m *Metadata) Validate(data map[string]any, currentVersion ...string) []string {
-	errors := make([]string, 0)
+func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warnings []string, errors []string) {
+	errors = make([]string, 0)
+	warnings = make([]string, 0)
 	// check for unknown groups in the userdata
 	for k := range data {
 		if m.GetGroup(k) == nil {
@@ -274,7 +275,7 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) []str
 				} else {
 					message = fmt.Sprintf("WARNING: field %s is deprecated since version %s. Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/", k, field.LastVersion)
 				}
-				errors = append(errors, message)
+				warnings = append(warnings, message)
 			} else {
 				// Current version is equal to or after the last version - fail validation
 				comparison, err := compareVersions(currentVersion[0], field.LastVersion)
@@ -293,7 +294,7 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) []str
 		case "object":
 			// if it's an object, we need to recurse
 			if _, ok := v.(map[string]any); ok {
-				suberrors := m.Validate(v.(map[string]any), currentVersion...)
+				_, suberrors := m.Validate(v.(map[string]any), currentVersion...)
 				for _, e := range suberrors {
 					errors = append(errors, fmt.Sprintf("Within field %s: %s", k, e))
 				}
@@ -305,7 +306,7 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) []str
 				for i, a := range arr {
 					subname := strings.Split(k, ".")[1]
 					rulesmap := map[string]any{subname: a}
-					suberrors := m.Validate(rulesmap, currentVersion...)
+					_, suberrors := m.Validate(rulesmap, currentVersion...)
 					for _, e := range suberrors {
 						errors = append(errors, fmt.Sprintf("Within field %s[%d]: %s", k, i, e))
 					}
@@ -460,7 +461,7 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) []str
 		}
 	}
 
-	return errors
+	return warnings, errors
 }
 
 // ValidateRules checks that the given data (which is expected to be a
@@ -522,7 +523,7 @@ func (m *Metadata) ValidateRules(data map[string]any) []string {
 	// now validate the individual samplers
 	samplers := data["Samplers"].(map[string]any)
 	for k, v := range samplers {
-		suberrors := m.Validate(v.(map[string]any))
+		_, suberrors := m.Validate(v.(map[string]any))
 		for _, e := range suberrors {
 			errors = append(errors, fmt.Sprintf("Within sampler %s: %s", k, e))
 		}

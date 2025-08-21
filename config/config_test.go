@@ -72,12 +72,9 @@ Samplers:
 		NoValidate:      false, // Make sure validation runs
 	}
 
-	t.Run("shows deprecation warning for old version", func(t *testing.T) {
+	t.Run("allows startup with deprecation warning for old version", func(t *testing.T) {
 		_, err := config.NewConfig(opts, "v2.8.0")
-		require.Error(t, err, "Expected validation error due to deprecation warning, but got nil")
-
-		errStr := err.Error()
-		assert.Contains(t, errStr, "WARNING", "Expected error to contain deprecation warning, but got: %s", errStr)
+		require.NoError(t, err, "Config should be created successfully even with deprecation warnings")
 	})
 
 	// Test with version after deprecation should fail validation

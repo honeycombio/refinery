@@ -45,10 +45,6 @@ func parseVersion(version string) (major, minor, patch int, err error) {
 //	 1 if current > target
 //	error if versions are malformed
 func compareVersions(current, target string) (int, error) {
-	if current == "dev" {
-		return 1, nil
-	}
-
 	currentMajor, currentMinor, currentPatch, err := parseVersion(current)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse current version %s: %w", current, err)
@@ -85,7 +81,6 @@ func compareVersions(current, target string) (int, error) {
 
 // isVersionBefore returns true if current version is before the target version
 func isVersionBefore(current, target string) bool {
-	fmt.Println("current", current)
 	result, err := compareVersions(current, target)
 	if err != nil {
 		// If we can't parse versions, assume we should show the warning
