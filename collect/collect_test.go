@@ -88,6 +88,14 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 	}
 	localPubSub.Start()
 
+	sf := &sample.SamplerFactory{
+		Config:  conf,
+		Metrics: s,
+		Logger:  &logger.NullLogger{},
+	}
+	err = sf.Start()
+	require.NoError(t, err)
+
 	c := &InMemCollector{
 		TestMode:         true,
 		Config:           conf,
@@ -100,17 +108,8 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 		PubSub:           localPubSub,
 		Metrics:          s,
 		StressRelief:     &MockStressReliever{},
-		SamplerFactory: func() *sample.SamplerFactory {
-			sf := &sample.SamplerFactory{
-				Config:  conf,
-				Metrics: s,
-				Logger:  &logger.NullLogger{},
-			}
-			err := sf.Start()
-			require.NoError(t, err)
-			return sf
-		}(),
-		done: make(chan struct{}),
+		SamplerFactory:   sf,
+		done:             make(chan struct{}),
 		Peers: &peer.MockPeers{
 			Peers: []string{"api1", "api2"},
 			ID:    "api1",
@@ -138,6 +137,8 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 		assert.NoError(t, err)
 		err = healthReporter.Stop()
 		assert.NoError(t, err)
+
+		sf.Stop()
 	})
 
 	return c
@@ -601,7 +602,7 @@ func TestSampleConfigReload(t *testing.T) {
 		trace := &types.Trace{TraceID: traceID}
 		trace.AddSpan(&types.Span{
 			Event: types.Event{
-				Data: types.NewPayload(mockCfg, map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]any{
 					"service.name": "test-service",
 				}),
 			},
@@ -612,8 +613,15 @@ func TestSampleConfigReload(t *testing.T) {
 	// Sending a span should cause the sampler to be loaded.
 	span := &types.Span{
 		TraceID: "1",
-		Event:   types.Event{Dataset: dataset, APIKey: legacyAPIKey, Data: types.NewPayload(&config.MockConfig{}, map[string]interface{}{"service.name": "test-service"})},
-		IsRoot:  true,
+		Event: types.Event{
+			Dataset: dataset,
+			APIKey:  legacyAPIKey,
+			Data: types.NewPayload(
+				&config.MockConfig{},
+				map[string]any{"service.name": "test-service"},
+			),
+		},
+		IsRoot: true,
 	}
 	coll.AddSpan(span)
 
@@ -654,7 +662,7 @@ func TestSampleConfigReload(t *testing.T) {
 	// Another span, it gets loaded again with new configuration.
 	span = &types.Span{
 		TraceID: "2",
-		Event:   types.Event{Dataset: dataset, APIKey: legacyAPIKey, Data: types.NewPayload(&config.MockConfig{}, map[string]interface{}{"service.name": "test-service"})},
+		Event:   types.Event{Dataset: dataset, APIKey: legacyAPIKey, Data: types.NewPayload(&config.MockConfig{}, map[string]any{"service.name": "test-service"})},
 		IsRoot:  true,
 	}
 	coll.AddSpan(span)
