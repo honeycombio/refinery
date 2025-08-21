@@ -391,7 +391,7 @@ func loadConfigsIntoMap(dest map[string]any, configs []configData) error {
 // validateConfigs gets the configs from the given location and validates them.
 // It returns a list of failures; if the list is empty, the config is valid.
 // err is non-nil only for significant errors like a missing file.
-func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
+func validateConfigs(configs []configData, opts *CmdEnv, currentVersion ...string) ([]string, error) {
 	// first process the configs into a map so we can validate them
 	userData := make(map[string]any)
 	err := loadConfigsIntoMap(userData, configs)
@@ -406,7 +406,7 @@ func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 		return nil, err
 	}
 
-	failures := metadata.Validate(userData)
+	failures := metadata.Validate(userData, currentVersion...)
 	if len(failures) > 0 {
 		return failures, nil
 	}
@@ -459,7 +459,7 @@ func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 	rewrittenUserData = expandEnvVarsInValues(rewrittenUserData, envGetterFunc)
 
 	// and finally validate the rewritten config
-	failures = metadata.Validate(rewrittenUserData)
+	failures = metadata.Validate(rewrittenUserData, currentVersion...)
 	return failures, nil
 }
 

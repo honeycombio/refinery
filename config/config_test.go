@@ -47,6 +47,65 @@ func createTempConfigs(t *testing.T, configBody, rulesBody string) (string, stri
 	return configFile.Name(), rulesFile.Name()
 }
 
+func TestDeprecationWarnings(t *testing.T) {
+	configYAML := `
+General:
+  ConfigurationVersion: 2
+Collection:
+  CacheCapacity: 10000  # This field is deprecated in v2.9.7
+  PeerQueueSize: 30000
+`
+
+	rulesYAML := `
+RulesVersion: 2
+Samplers:
+  __default__:
+    DeterministicSampler:
+      SampleRate: 1
+`
+
+	cfg, rules := createTempConfigs(t, configYAML, rulesYAML)
+
+	opts := &config.CmdEnv{
+		ConfigLocations: []string{cfg},
+		RulesLocations:  []string{rules},
+		NoValidate:      false, // Make sure validation runs
+	}
+
+	t.Run("shows deprecation warning for old version", func(t *testing.T) {
+		_, err := config.NewConfig(opts, "v2.8.0")
+		require.Error(t, err, "Expected validation error due to deprecation warning, but got nil")
+
+		errStr := err.Error()
+		assert.Contains(t, errStr, "WARNING", "Expected error to contain deprecation warning, but got: %s", errStr)
+	})
+
+	// Test with version after deprecation should fail validation
+	t.Run("fails validation for version newer than lastversion", func(t *testing.T) {
+		_, err := config.NewConfig(opts, "v2.10.0")
+		require.Error(t, err, "Expected validation error due to deprecated config being used with newer version")
+
+		errStr := err.Error()
+		assert.Contains(t, errStr, "ERROR", "Expected error to contain ERROR for deprecated config with newer version, but got: %s", errStr)
+		assert.Contains(t, errStr, "no longer supported", "Expected error to indicate config is no longer supported, but got: %s", errStr)
+	})
+
+	// Test with version equal to lastversion should fail validation
+	t.Run("fails validation for version equal to lastversion", func(t *testing.T) {
+		_, err := config.NewConfig(opts, "v2.9.7")
+		require.Error(t, err, "Expected validation error due to deprecated config being used with equal version")
+
+		errStr := err.Error()
+		assert.Contains(t, errStr, "ERROR", "Expected error to contain ERROR for deprecated config with equal version, but got: %s", errStr)
+	})
+
+	// Test without version - should not show deprecation warnings or errors
+	t.Run("does not show deprecation warning when no version provided", func(t *testing.T) {
+		_, err := config.NewConfig(opts)
+		require.NoError(t, err)
+	})
+}
+
 func setMap(m map[string]any, key string, value any) {
 	if strings.Contains(key, ".") {
 		parts := strings.Split(key, ".")

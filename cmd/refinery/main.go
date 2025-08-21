@@ -98,7 +98,7 @@ func main() {
 		Version: version,
 	}
 
-	c, err := config.NewConfig(opts)
+	c, err := config.NewConfig(opts, version)
 	if err != nil {
 		fmt.Printf("%+v\n", err)
 		os.Exit(1)

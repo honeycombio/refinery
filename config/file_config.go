@@ -304,16 +304,14 @@ type RedisPeerManagementConfig struct {
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
-	Prefix         string   `yaml:"Prefix" default:"refinery"`
-	Database       int      `yaml:"Database"`
+	Prefix         string   `yaml:"Prefix,omitempty"`
+	Database       int      `yaml:"Database,omitempty"`
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
 }
 
 type CollectionConfig struct {
-	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
 	PeerQueueSize       int        `yaml:"PeerQueueSize"`
 	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
@@ -465,10 +463,10 @@ func newConfigAndRules(opts *CmdEnv) ([]configData, []configData, error) {
 // It's used by both the main init as well as the reload code.
 // In order to do proper validation, we actually process the data twice -- once as
 // a map, and once as the actual config object.
-func newFileConfig(opts *CmdEnv, cData, rulesData []configData) (*fileConfig, error) {
+func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion ...string) (*fileConfig, error) {
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfigs(cData, opts)
+		cfgFails, err := validateConfigs(cData, opts, currentVersion...)
 		if err != nil {
 			return nil, err
 		}
@@ -528,13 +526,13 @@ func writeYAMLToFile(data any, filename string) error {
 // nil, it uses the command line arguments.
 // It also dumps the config and rules to the given files, if specified, which
 // will cause the program to exit.
-func NewConfig(opts *CmdEnv) (Config, error) {
+func NewConfig(opts *CmdEnv, currentVersion ...string) (Config, error) {
 	cData, rData, err := newConfigAndRules(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg, err := newFileConfig(opts, cData, rData)
+	cfg, err := newFileConfig(opts, cData, rData, currentVersion...)
 	// only exit if we have no config at all; if it fails validation, we'll
 	// do the rest and return it anyway
 	if err != nil && cfg == nil {

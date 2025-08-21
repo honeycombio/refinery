@@ -235,7 +235,8 @@ func maskString(s string) string {
 // If a field name is of type "object" then this function is called
 // recursively to validate the sub-object.
 // Note that the flatten function returns only 2 levels.
-func (m *Metadata) Validate(data map[string]any) []string {
+
+func (m *Metadata) Validate(data map[string]any, currentVersion ...string) []string {
 	errors := make([]string, 0)
 	// check for unknown groups in the userdata
 	for k := range data {
@@ -263,11 +264,36 @@ func (m *Metadata) Validate(data map[string]any) []string {
 			errors = append(errors, e)
 			continue // if type is wrong we can't validate further
 		}
+		// Check for deprecation warnings/errors if current version is provided
+		if len(currentVersion) > 0 && field.LastVersion != "" {
+			if isVersionBefore(currentVersion[0], field.LastVersion) {
+				// Current version is before the last version - show warning
+				message := ""
+				if field.DeprecationText != "" {
+					message = fmt.Sprintf("WARNING: %s", field.DeprecationText)
+				} else {
+					message = fmt.Sprintf("WARNING: field %s is deprecated since version %s. Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/", k, field.LastVersion)
+				}
+				errors = append(errors, message)
+			} else {
+				// Current version is equal to or after the last version - fail validation
+				comparison, err := compareVersions(currentVersion[0], field.LastVersion)
+				if err != nil || comparison >= 0 {
+					message := ""
+					if field.DeprecationText != "" {
+						message = fmt.Sprintf("ERROR: %s", field.DeprecationText)
+					} else {
+						message = fmt.Sprintf("ERROR: field %s was deprecated in version %s and is no longer supported in version %s. Please remove it from your configuration and update following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/", k, field.LastVersion, currentVersion[0])
+					}
+					errors = append(errors, message)
+				}
+			}
+		}
 		switch field.Type {
 		case "object":
 			// if it's an object, we need to recurse
 			if _, ok := v.(map[string]any); ok {
-				suberrors := m.Validate(v.(map[string]any))
+				suberrors := m.Validate(v.(map[string]any), currentVersion...)
 				for _, e := range suberrors {
 					errors = append(errors, fmt.Sprintf("Within field %s: %s", k, e))
 				}
@@ -279,7 +305,7 @@ func (m *Metadata) Validate(data map[string]any) []string {
 				for i, a := range arr {
 					subname := strings.Split(k, ".")[1]
 					rulesmap := map[string]any{subname: a}
-					suberrors := m.Validate(rulesmap)
+					suberrors := m.Validate(rulesmap, currentVersion...)
 					for _, e := range suberrors {
 						errors = append(errors, fmt.Sprintf("Within field %s[%d]: %s", k, i, e))
 					}
