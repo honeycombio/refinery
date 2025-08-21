@@ -1497,6 +1497,7 @@ groups:
         valuetype: nondefault
         default: 10_000
         reload: true
+        lastversion: v2.9.7
         validations:
           - type: minimum
             arg: 1_000
@@ -1512,6 +1513,7 @@ groups:
         valuetype: nondefault
         default: 100_000
         reload: true
+        lastversion: v2.9.7
         validations:
           - type: minimum
             arg: 10_000
