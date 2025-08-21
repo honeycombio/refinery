@@ -68,7 +68,6 @@ func (d *TotalThroughputSampler) Start() error {
 	return nil
 }
 
-
 func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	d.keyMu.Lock()
 	key, n := d.key.build(trace)

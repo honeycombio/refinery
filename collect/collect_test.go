@@ -100,11 +100,16 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 		PubSub:           localPubSub,
 		Metrics:          s,
 		StressRelief:     &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config:  conf,
-			Metrics: s,
-			Logger:  &logger.NullLogger{},
-		},
+		SamplerFactory: func() *sample.SamplerFactory {
+			sf := &sample.SamplerFactory{
+				Config:  conf,
+				Metrics: s,
+				Logger:  &logger.NullLogger{},
+			}
+			err := sf.Start()
+			require.NoError(t, err)
+			return sf
+		}(),
 		done: make(chan struct{}),
 		Peers: &peer.MockPeers{
 			Peers: []string{"api1", "api2"},

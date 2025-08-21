@@ -2,6 +2,7 @@ package sample
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"strings"
 
@@ -17,6 +18,7 @@ type RulesBasedSampler struct {
 	Config        *config.RulesBasedSamplerConfig
 	Logger        logger.Logger
 	Metrics       metrics.Metrics
+	SamplerFactory *SamplerFactory
 	samplers      map[string]Sampler
 	keyFields     []string
 	nonRootFields []string
@@ -43,34 +45,21 @@ func (s *RulesBasedSampler) Start() error {
 				continue
 			}
 		}
-		// Check if any rule has a downstream sampler and create it
-		// TODO this seems broken, we should be setting dynsamplers
+		// Check if any rule has a downstream sampler and create it using SamplerFactory
 		if rule.Sampler != nil {
-			var sampler Sampler
-			if rule.Sampler.DynamicSampler != nil {
-				sampler = &DynamicSampler{Config: rule.Sampler.DynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
-			} else if rule.Sampler.EMADynamicSampler != nil {
-				sampler = &EMADynamicSampler{Config: rule.Sampler.EMADynamicSampler, Logger: s.Logger, Metrics: s.Metrics}
-			} else if rule.Sampler.TotalThroughputSampler != nil {
-				sampler = &TotalThroughputSampler{Config: rule.Sampler.TotalThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
-			} else if rule.Sampler.EMAThroughputSampler != nil {
-				sampler = &EMAThroughputSampler{Config: rule.Sampler.EMAThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
-			} else if rule.Sampler.WindowedThroughputSampler != nil {
-				sampler = &WindowedThroughputSampler{Config: rule.Sampler.WindowedThroughputSampler, Logger: s.Logger, Metrics: s.Metrics}
-			} else if rule.Sampler.DeterministicSampler != nil {
-				sampler = &DeterministicSampler{Config: rule.Sampler.DeterministicSampler, Logger: s.Logger, Metrics: s.Metrics}
-			} else {
-				s.Logger.Debug().WithFields(map[string]interface{}{
+			if s.SamplerFactory == nil {
+				s.Logger.Error().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,
-				}).Logf("invalid or missing downstream sampler")
-				continue
+				}).Logf("SamplerFactory is required for rules with downstream samplers")
+				return fmt.Errorf("SamplerFactory is required for rules with downstream samplers")
 			}
 
-			err := sampler.Start()
-			if err != nil {
+			// Use SamplerFactory to create downstream sampler with shared dynsamplers
+			sampler := s.SamplerFactory.GetDownstreamSampler("rules-based", rule.Sampler)
+			if sampler == nil {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,
-				}).Logf("error creating downstream sampler: %s", err)
+				}).Logf("failed to create downstream sampler via SamplerFactory")
 				continue
 			}
 			s.samplers[rule.String()] = sampler

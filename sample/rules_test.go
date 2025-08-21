@@ -853,6 +853,9 @@ func TestRules(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, d := range data {
 		for _, rule := range d.Rules.Rules {
 			for _, cond := range rule.Conditions {
@@ -863,7 +866,7 @@ func TestRules(t *testing.T) {
 		sampler := &RulesBasedSampler{
 			Config:  d.Rules,
 			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
+			Metrics: testMetrics,
 		}
 
 		trace := &types.Trace{}
@@ -1064,6 +1067,9 @@ func TestRulesWithNestedFields(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, d := range data {
 		t.Run(d.Rules.Rules[0].Name, func(t *testing.T) {
 			for _, rule := range d.Rules.Rules {
@@ -1075,7 +1081,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			sampler := &RulesBasedSampler{
 				Config:  d.Rules,
 				Logger:  &logger.NullLogger{},
-				Metrics: &metrics.NullMetrics{},
+				Metrics: testMetrics,
 			}
 
 			trace := &types.Trace{}
@@ -1162,10 +1168,23 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
-		sampler := &RulesBasedSampler{
-			Config:  d.Rules,
+		
+		// Create SamplerFactory for downstream samplers
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		samplerFactory := &SamplerFactory{
 			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
+			Metrics: mockMetrics,
+		}
+		err := samplerFactory.Start()
+		require.NoError(t, err)
+		defer samplerFactory.Stop()
+		
+		sampler := &RulesBasedSampler{
+			Config:         d.Rules,
+			Logger:         &logger.NullLogger{},
+			Metrics:        mockMetrics,
+			SamplerFactory: samplerFactory,
 		}
 
 		trace := &types.Trace{}
@@ -1255,10 +1274,23 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
-		sampler := &RulesBasedSampler{
-			Config:  d.Rules,
+		
+		// Create SamplerFactory for downstream samplers
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		samplerFactory := &SamplerFactory{
 			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
+			Metrics: mockMetrics,
+		}
+		err := samplerFactory.Start()
+		require.NoError(t, err)
+		defer samplerFactory.Stop()
+		
+		sampler := &RulesBasedSampler{
+			Config:         d.Rules,
+			Logger:         &logger.NullLogger{},
+			Metrics:        mockMetrics,
+			SamplerFactory: samplerFactory,
 		}
 
 		trace := &types.Trace{}
@@ -1348,6 +1380,9 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			for _, scope := range []string{"span", "trace"} {
@@ -1379,7 +1414,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 						},
 					},
 					Logger:  &logger.NullLogger{},
-					Metrics: &metrics.NullMetrics{},
+					Metrics: testMetrics,
 				}
 				for _, s := range sampler.samplers {
 					for _, rule := range s.(*RulesBasedSampler).Config.Rules {
@@ -1964,12 +1999,15 @@ func TestRulesDatatypes(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, d := range data {
 		t.Run(d.Rules.Rules[0].Name, func(t *testing.T) {
 			sampler := &RulesBasedSampler{
 				Config:  d.Rules,
 				Logger:  &logger.NullLogger{},
-				Metrics: &metrics.NullMetrics{},
+				Metrics: testMetrics,
 			}
 
 			sampler.Start()
@@ -2009,6 +2047,9 @@ func TestRegexpRules(t *testing.T) {
 		{`[a-z+`, "/foo/bar/123", 1, true},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for i, d := range testdata {
 		name := fmt.Sprintf("regexp-%d", i)
 		t.Run(name, func(t *testing.T) {
@@ -2037,7 +2078,7 @@ func TestRegexpRules(t *testing.T) {
 			sampler := &RulesBasedSampler{
 				Config:  rules,
 				Logger:  &logger.NullLogger{},
-				Metrics: &metrics.NullMetrics{},
+				Metrics: testMetrics,
 			}
 
 			sampler.Start()
@@ -2117,10 +2158,23 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
-		sampler := &RulesBasedSampler{
-			Config:  d.Rules,
+		
+		// Create SamplerFactory for downstream samplers
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		samplerFactory := &SamplerFactory{
 			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
+			Metrics: mockMetrics,
+		}
+		err := samplerFactory.Start()
+		require.NoError(t, err)
+		defer samplerFactory.Stop()
+		
+		sampler := &RulesBasedSampler{
+			Config:         d.Rules,
+			Logger:         &logger.NullLogger{},
+			Metrics:        mockMetrics,
+			SamplerFactory: samplerFactory,
 		}
 
 		trace := &types.Trace{}
@@ -2822,12 +2876,15 @@ func TestRulesRootSpanContext(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, d := range data {
 		t.Run(d.Rules.Rules[0].Name, func(t *testing.T) {
 			sampler := &RulesBasedSampler{
 				Config:  d.Rules,
 				Logger:  &logger.NullLogger{},
-				Metrics: &metrics.NullMetrics{},
+				Metrics: testMetrics,
 			}
 
 			sampler.Start()
@@ -2975,18 +3032,27 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			metrics := &metrics.MockMetrics{}
-			metrics.Start()
+			samplerFactory := &SamplerFactory{
+				Logger:  &logger.NullLogger{},
+				Metrics: testMetrics,
+			}
+			err := samplerFactory.Start()
+			require.NoError(t, err)
+			defer samplerFactory.Stop()
 
 			sampler := &RulesBasedSampler{
-				Config:  tc.config,
-				Logger:  &logger.NullLogger{},
-				Metrics: metrics,
+				Config:         tc.config,
+				Logger:         &logger.NullLogger{},
+				Metrics:        testMetrics,
+				SamplerFactory: samplerFactory,
 			}
 
-			err := sampler.Start()
+			err = sampler.Start()
 			assert.NoError(t, err)
 
 			// Create test traces with different characteristics
@@ -3076,3 +3142,140 @@ func TestRulesBasedSamplerConcurrency(t *testing.T) {
 		})
 	}
 }
+
+// TestRulesBasedSamplerWithSharedDynsamplers tests that RulesBasedSampler properly
+// shares dynsamplers when using a SamplerFactory
+func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
+	mockCfg := &config.MockConfig{}
+
+	// Create a SamplerFactory for shared dynsampler management
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+	samplerFactory := &SamplerFactory{
+		Logger:  &logger.NullLogger{},
+		Metrics: mockMetrics,
+	}
+	err := samplerFactory.Start()
+	require.NoError(t, err)
+	defer samplerFactory.Stop()
+
+	// Create two identical downstream sampler configs
+	downstreamConfig := &config.RulesBasedDownstreamSampler{
+		DynamicSampler: &config.DynamicSamplerConfig{
+			SampleRate: 10,
+			FieldList:  []string{"service.name"},
+		},
+	}
+
+	// Create the first downstream sampler
+	sampler1 := samplerFactory.GetDownstreamSampler("test-key", downstreamConfig)
+	require.NotNil(t, sampler1)
+	
+	// Create the second downstream sampler with identical config
+	sampler2 := samplerFactory.GetDownstreamSampler("test-key", downstreamConfig)
+	require.NotNil(t, sampler2)
+
+	// Both samplers should be different instances (they are wrapper structs)
+	assert.NotSame(t, sampler1, sampler2)
+
+	// But they should share the same underlying dynsampler
+	dynamicSampler1, ok1 := sampler1.(*DynamicSampler)
+	require.True(t, ok1, "sampler1 should be a DynamicSampler")
+	
+	dynamicSampler2, ok2 := sampler2.(*DynamicSampler)
+	require.True(t, ok2, "sampler2 should be a DynamicSampler")
+
+	// The underlying dynsamplers should be the same instance (shared)
+	assert.Same(t, dynamicSampler1.dynsampler, dynamicSampler2.dynsampler,
+		"Both DynamicSamplers should share the same underlying dynsampler")
+
+	// Test that RulesBasedSampler uses shared dynsamplers
+	rulesConfig := &config.RulesBasedSamplerConfig{
+		Rules: []*config.RulesBasedSamplerRule{
+			{
+				Name: "test-rule-1",
+				Conditions: []*config.RulesBasedSamplerCondition{
+					{
+						Field:    "rule_test",
+						Operator: config.EQ,
+						Value:    int64(1),
+					},
+				},
+				Sampler: downstreamConfig,
+			},
+			{
+				Name: "test-rule-2", 
+				Conditions: []*config.RulesBasedSamplerCondition{
+					{
+						Field:    "rule_test",
+						Operator: config.EQ,
+						Value:    int64(2),
+					},
+				},
+				Sampler: downstreamConfig, // Same config as rule-1
+			},
+		},
+	}
+
+	// Create RulesBasedSampler with SamplerFactory
+	rulesSampler := &RulesBasedSampler{
+		Config:         rulesConfig,
+		Logger:         &logger.NullLogger{},
+		Metrics:        mockMetrics,
+		SamplerFactory: samplerFactory,
+	}
+
+	// Initialize conditions
+	for _, rule := range rulesConfig.Rules {
+		for _, cond := range rule.Conditions {
+			err := cond.Init()
+			require.NoError(t, err)
+		}
+	}
+
+	err = rulesSampler.Start()
+	require.NoError(t, err)
+
+	// Create test trace that will match rule-1
+	trace1 := &types.Trace{}
+	span1 := &types.Span{
+		Event: types.Event{
+			Data: types.NewPayload(mockCfg, map[string]interface{}{
+				"rule_test":    int64(1),
+				"service.name": "test-service",
+			}),
+		},
+	}
+	trace1.AddSpan(span1)
+
+	// Create test trace that will match rule-2
+	trace2 := &types.Trace{}
+	span2 := &types.Span{
+		Event: types.Event{
+			Data: types.NewPayload(mockCfg, map[string]interface{}{
+				"rule_test":    int64(2),
+				"service.name": "test-service",
+			}),
+		},
+	}
+	trace2.AddSpan(span2)
+
+	// Both rules should work and return sample rates
+	rate1, keep1, reason1, key1 := rulesSampler.GetSampleRate(trace1)
+	assert.Greater(t, rate1, uint(0))
+	assert.Contains(t, reason1, "test-rule-1")
+	assert.Equal(t, "test-service•,", key1)
+
+	rate2, keep2, reason2, key2 := rulesSampler.GetSampleRate(trace2)
+	assert.Greater(t, rate2, uint(0))
+	assert.Contains(t, reason2, "test-rule-2")
+	assert.Equal(t, "test-service•,", key2)
+
+	// Since both rules use the same downstream sampler config,
+	// they should get the same sample rates (shared dynsampler state)
+	assert.Equal(t, rate1, rate2, "Both rules should get the same sample rate due to shared dynsampler")
+
+	t.Logf("Rule 1: rate=%d, keep=%v, reason=%s", rate1, keep1, reason1)
+	t.Logf("Rule 2: rate=%d, keep=%v, reason=%s", rate2, keep2, reason2)
+}
+
