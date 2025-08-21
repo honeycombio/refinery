@@ -419,6 +419,27 @@ type FileConfigError struct {
 	RulesFailures   []string
 }
 
+type FileConfigWarning struct {
+	ConfigLocations []string
+	ConfigWarnings  []string
+}
+
+func (e *FileConfigWarning) Error() string {
+	var msg strings.Builder
+	if len(e.ConfigWarnings) > 0 {
+		loc := strings.Join(e.ConfigLocations, ", ")
+		msg.WriteString("Configuration warnings for [")
+		msg.WriteString(loc)
+		msg.WriteString("]:\n")
+		for _, warning := range e.ConfigWarnings {
+			msg.WriteString("  ")
+			msg.WriteString(warning)
+			msg.WriteString("\n")
+		}
+	}
+	return msg.String()
+}
+
 func (e *FileConfigError) Error() string {
 	var msg strings.Builder
 	if len(e.ConfigFailures) > 0 {
@@ -464,6 +485,8 @@ func newConfigAndRules(opts *CmdEnv) ([]configData, []configData, error) {
 // In order to do proper validation, we actually process the data twice -- once as
 // a map, and once as the actual config object.
 func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion ...string) (*fileConfig, error) {
+	var warningErr error
+
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
 		cfgWarnings, cfgErrors, err := validateConfigs(cData, opts, currentVersion...)
@@ -479,24 +502,21 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 		// Only fail validation on errors, not warnings
 		if len(cfgErrors) > 0 || len(ruleFails) > 0 {
 			// Combine all failures (errors and warnings) for error message
+			allErrors := append(cfgErrors, cfgWarnings...)
 			return nil, &FileConfigError{
 				ConfigLocations: opts.ConfigLocations,
-				ConfigFailures:  cfgErrors,
+				ConfigFailures:  allErrors,
 				RulesLocations:  opts.RulesLocations,
 				RulesFailures:   ruleFails,
 			}
 		}
 
-		// Log warnings if present but don't fail
+		// Store warnings to return later if config creation succeeds
 		if len(cfgWarnings) > 0 {
-			warning := &FileConfigError{
+			warningErr = &FileConfigWarning{
 				ConfigLocations: opts.ConfigLocations,
-				ConfigFailures:  cfgWarnings,
-				RulesLocations:  opts.RulesLocations,
-				RulesFailures:   ruleFails,
+				ConfigWarnings:  cfgWarnings,
 			}
-
-			fmt.Println(warning.Error())
 		}
 	}
 
@@ -521,6 +541,10 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 		opts:        opts,
 	}
 
+	// Return warning error if there were warnings but no real errors
+	if warningErr != nil {
+		return cfg, warningErr
+	}
 	return cfg, nil
 }
 
