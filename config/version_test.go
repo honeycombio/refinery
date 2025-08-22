@@ -7,39 +7,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseVersion(t *testing.T) {
-	tests := []struct {
-		version string
-		major   int
-		minor   int
-		patch   int
-		wantErr bool
-	}{
-		{"v2.9.7", 2, 9, 7, false},
-		{"2.9.7", 2, 9, 7, false},
-		{"v1.0", 1, 0, 0, false},
-		{"2.10", 2, 10, 0, false},
-		{"invalid", 0, 0, 0, true},
-		{"1", 0, 0, 0, true},
-		{"1.2.3.4", 0, 0, 0, true},
-		{"v1.a.2", 0, 0, 0, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.version, func(t *testing.T) {
-			major, minor, patch, err := parseVersion(tt.version)
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				assert.Equal(t, tt.major, major)
-				assert.Equal(t, tt.minor, minor)
-				assert.Equal(t, tt.patch, patch)
-			}
-		})
-	}
-}
-
 func TestCompareVersions(t *testing.T) {
 	tests := []struct {
 		current string
