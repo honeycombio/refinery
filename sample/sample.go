@@ -112,17 +112,24 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	case *config.TotalThroughputSamplerConfig:
 		dynsamplerKey := fmt.Sprintf("%s:totalthroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForTotalThroughputSampler)
+		// Store goal throughput config under mutex protection
+		s.mutex.Lock()
 		s.goalThroughputConfigs[dynsamplerKey] = c.GoalThroughputPerSec
+		s.mutex.Unlock()
 		sampler = &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.EMAThroughputSamplerConfig:
 		dynsamplerKey := fmt.Sprintf("%s:emathroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForEMAThroughputSampler)
+		s.mutex.Lock()
 		s.goalThroughputConfigs[dynsamplerKey] = c.GoalThroughputPerSec
+		s.mutex.Unlock()
 		sampler = &EMAThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.WindowedThroughputSamplerConfig:
 		dynsamplerKey := fmt.Sprintf("%s:windowedthroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForWindowedThroughputSampler)
+		s.mutex.Lock()
 		s.goalThroughputConfigs[dynsamplerKey] = c.GoalThroughputPerSec
+		s.mutex.Unlock()
 		sampler = &WindowedThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	default:
 		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
