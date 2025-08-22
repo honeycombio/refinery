@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/honeycombio/refinery/config"
 	"html/template"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/honeycombio/refinery/config"
 )
 
 // This file contains template helper functions, which must be listed in this
@@ -522,4 +523,65 @@ func _getStringsFrom(value any) []string {
 		}
 	}
 	return result
+}
+
+// removeDeprecated removes deprecated config options from the provided data map.
+// It returns the cleaned data and a list of removed options.
+// If dryRun is true, it returns the original data unchanged but still identifies what would be removed.
+func removeDeprecated(data map[string]any, dryRun bool) (map[string]any, []string) {
+	metadata := loadConfigMetadata()
+	var removedItems []string
+
+	// Check each group and field in metadata for deprecated items
+	for _, group := range metadata.Groups {
+		for _, field := range group.Fields {
+			if field.LastVersion != "" { // This field is deprecated
+				// Build the key path to look for
+				var keyToCheck string
+				if field.V1Group != "" && field.V1Name != "" {
+					keyToCheck = field.V1Group + "." + field.V1Name
+				} else if field.V1Name != "" {
+					keyToCheck = field.V1Name
+				} else {
+					keyToCheck = group.Name + "." + field.Name
+				}
+
+				// Check if this deprecated field exists in the data
+				if _, exists := _fetch(data, keyToCheck); exists {
+					removedItems = append(removedItems, fmt.Sprintf("%s (deprecated in %s)", keyToCheck, field.LastVersion))
+
+					// If not dry-run, actually remove it
+					if !dryRun {
+						removeField(data, keyToCheck)
+					}
+				}
+			}
+		}
+	}
+
+	return data, removedItems
+}
+
+// removeField removes a field from the data map using dot notation
+func removeField(data map[string]any, key string) {
+	if !strings.Contains(key, ".") {
+		delete(data, key)
+		return
+	}
+
+	parts := strings.SplitN(key, ".", 2)
+	groups := strings.Split(parts[0], "/")
+
+	for _, g := range groups {
+		if value, ok := data[g]; ok {
+			if submap, ok := value.(map[string]any); ok {
+				if strings.Contains(parts[1], ".") {
+					removeField(submap, parts[1])
+				} else {
+					delete(submap, parts[1])
+				}
+				return
+			}
+		}
+	}
 }
