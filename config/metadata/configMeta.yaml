@@ -1255,6 +1255,8 @@ groups:
         v1name: CacheCapacity
         type: int
         valuetype: nondefault
+        lastversion: v2.9.7
+        deprecationtext: CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.
         default: 10_000
         reload: true
         validations:

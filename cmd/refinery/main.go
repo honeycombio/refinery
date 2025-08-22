@@ -98,10 +98,15 @@ func main() {
 		Version: version,
 	}
 
-	c, err := config.NewConfig(opts)
+	c, err := config.NewConfig(opts, version)
 	if err != nil {
-		fmt.Printf("%+v\n", err)
-		os.Exit(1)
+		// Check if it's just warnings - log but don't exit
+		if _, isWarning := err.(*config.FileConfigWarning); isWarning {
+			fmt.Printf("%+v\n", err)
+		} else {
+			fmt.Printf("%+v\n", err)
+			os.Exit(1)
+		}
 	}
 	if opts.Validate {
 		fmt.Println("Config and Rules validated successfully.")

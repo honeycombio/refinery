@@ -235,8 +235,10 @@ func maskString(s string) string {
 // If a field name is of type "object" then this function is called
 // recursively to validate the sub-object.
 // Note that the flatten function returns only 2 levels.
-func (m *Metadata) Validate(data map[string]any) []string {
-	errors := make([]string, 0)
+
+func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warnings []string, errors []string) {
+	errors = make([]string, 0)
+	warnings = make([]string, 0)
 	// check for unknown groups in the userdata
 	for k := range data {
 		if m.GetGroup(k) == nil {
@@ -263,11 +265,39 @@ func (m *Metadata) Validate(data map[string]any) []string {
 			errors = append(errors, e)
 			continue // if type is wrong we can't validate further
 		}
+		// Check for deprecation warnings/errors if current version is provided
+		if len(currentVersion) > 0 && field.LastVersion != "" {
+			if isVersionBefore(currentVersion[0], field.LastVersion) {
+				// Current version is before the last version - show warning
+				message := ""
+				if field.DeprecationText != "" {
+					message = fmt.Sprintf("WARNING: %s", field.DeprecationText)
+				} else {
+					message = fmt.Sprintf("WARNING: field %s is deprecated since version %s. Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/", k, field.LastVersion)
+				}
+				warnings = append(warnings, message)
+			} else {
+				// Current version is equal to or after the last version - fail validation
+				comparison, err := compareVersions(currentVersion[0], field.LastVersion)
+				if err != nil || comparison >= 0 {
+					message := ""
+					if field.DeprecationText != "" {
+						message = fmt.Sprintf("ERROR: %s", field.DeprecationText)
+					} else {
+						message = fmt.Sprintf("ERROR: field %s was deprecated in version %s and is no longer supported in version %s. Please remove it from your configuration and update following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/", k, field.LastVersion, currentVersion[0])
+					}
+					// TODO: once we are ready to officially deprecate all older configs, we should return error here
+					// returning errors here will cause Refinery fail to start if there's any deprecated configs in
+					// customer's config file
+					warnings = append(warnings, message)
+				}
+			}
+		}
 		switch field.Type {
 		case "object":
 			// if it's an object, we need to recurse
 			if _, ok := v.(map[string]any); ok {
-				suberrors := m.Validate(v.(map[string]any))
+				_, suberrors := m.Validate(v.(map[string]any), currentVersion...)
 				for _, e := range suberrors {
 					errors = append(errors, fmt.Sprintf("Within field %s: %s", k, e))
 				}
@@ -279,7 +309,7 @@ func (m *Metadata) Validate(data map[string]any) []string {
 				for i, a := range arr {
 					subname := strings.Split(k, ".")[1]
 					rulesmap := map[string]any{subname: a}
-					suberrors := m.Validate(rulesmap)
+					_, suberrors := m.Validate(rulesmap, currentVersion...)
 					for _, e := range suberrors {
 						errors = append(errors, fmt.Sprintf("Within field %s[%d]: %s", k, i, e))
 					}
@@ -434,7 +464,7 @@ func (m *Metadata) Validate(data map[string]any) []string {
 		}
 	}
 
-	return errors
+	return warnings, errors
 }
 
 // ValidateRules checks that the given data (which is expected to be a
@@ -496,7 +526,7 @@ func (m *Metadata) ValidateRules(data map[string]any) []string {
 	// now validate the individual samplers
 	samplers := data["Samplers"].(map[string]any)
 	for k, v := range samplers {
-		suberrors := m.Validate(v.(map[string]any))
+		_, suberrors := m.Validate(v.(map[string]any))
 		for _, e := range suberrors {
 			errors = append(errors, fmt.Sprintf("Within sampler %s: %s", k, e))
 		}
