@@ -532,10 +532,9 @@ func removeDeprecated(data map[string]any, dryRun bool) (map[string]any, []strin
 	metadata := loadConfigMetadata()
 	var removedItems []string
 
-	// Check each group and field in metadata for deprecated items
 	for _, group := range metadata.Groups {
 		for _, field := range group.Fields {
-			if field.LastVersion != "" { // This field is deprecated
+			if field.LastVersion != "" {
 				// Build the key path to look for
 				var keyToCheck string
 				if field.V1Group != "" && field.V1Name != "" {
@@ -546,11 +545,9 @@ func removeDeprecated(data map[string]any, dryRun bool) (map[string]any, []strin
 					keyToCheck = group.Name + "." + field.Name
 				}
 
-				// Check if this deprecated field exists in the data
 				if _, exists := _fetch(data, keyToCheck); exists {
 					removedItems = append(removedItems, fmt.Sprintf("%s (deprecated in %s)", keyToCheck, field.LastVersion))
 
-					// If not dry-run, actually remove it
 					if !dryRun {
 						removeField(data, keyToCheck)
 					}
