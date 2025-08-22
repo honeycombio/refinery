@@ -367,10 +367,7 @@ func (c CollectionConfig) TraceLocalityEnabled() bool {
 	}
 }
 
-type BufferSizeConfig struct {
-	UpstreamBufferSize int `yaml:"UpstreamBufferSize" default:"10_000"`
-	PeerBufferSize     int `yaml:"PeerBufferSize" default:"100_000"`
-}
+type BufferSizeConfig struct{}
 
 type SpecializedConfig struct {
 	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
@@ -982,20 +979,6 @@ func (f *fileConfig) GetOTelMetricsConfig() OTelMetricsConfig {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.OTelMetrics
-}
-
-func (f *fileConfig) GetUpstreamBufferSize() int {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.BufferSizes.UpstreamBufferSize
-}
-
-func (f *fileConfig) GetPeerBufferSize() int {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.BufferSizes.PeerBufferSize
 }
 
 func (f *fileConfig) GetDebugServiceAddr() string {
