@@ -286,7 +286,10 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 					} else {
 						message = fmt.Sprintf("ERROR: field %s was deprecated in version %s and is no longer supported in version %s. Please remove it from your configuration and update following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/", k, field.LastVersion, currentVersion[0])
 					}
-					errors = append(errors, message)
+					// TODO: once we are ready to officially deprecate all older configs, we should return error here
+					// returning errors here will cause Refinery fail to start if there's any deprecated configs in
+					// customer's config file
+					warnings = append(warnings, message)
 				}
 			}
 		}
