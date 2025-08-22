@@ -295,9 +295,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	metricsSingleton.Store("UPSTREAM_BUFFER_SIZE", float64(c.GetUpstreamBufferSize()))
-	metricsSingleton.Store("PEER_BUFFER_SIZE", float64(c.GetPeerBufferSize()))
-
 	// set up signal channel to exit, and allow a second try to kill everything
 	// immediately.
 	sigsToExit := make(chan os.Signal, 1)

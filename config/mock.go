@@ -37,8 +37,6 @@ type MockConfig struct {
 	GetOpAmpConfigVal                OpAMPConfig
 	GetOTelMetricsConfigVal          OTelMetricsConfig
 	GetOTelTracingConfigVal          OTelTracingConfig
-	GetUpstreamBufferSizeVal         int
-	GetPeerBufferSizeVal             int
 	IdentifierInterfaceName          string
 	UseIPV6Identifier                bool
 	RedisIdentifier                  string
@@ -297,20 +295,6 @@ func (m *MockConfig) GetAllSamplerRules() *V2SamplerConfig {
 	}
 
 	return v
-}
-
-func (m *MockConfig) GetUpstreamBufferSize() int {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetUpstreamBufferSizeVal
-}
-
-func (m *MockConfig) GetPeerBufferSize() int {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetPeerBufferSizeVal
 }
 
 func (m *MockConfig) GetIdentifierInterfaceName() string {
