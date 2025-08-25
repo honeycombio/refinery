@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+
 	"golang.org/x/mod/semver"
 )
 
@@ -13,19 +14,12 @@ import (
 //	 1 if current > target
 //	error if versions are malformed
 func compareVersions(current, target string) (int, error) {
-	// Ensure versions have 'v' prefix for semver package
 	if !semver.IsValid(current) {
-		current = "v" + current
-		if !semver.IsValid(current) {
-			return 0, fmt.Errorf("invalid version format: %s", current)
-		}
+		return 0, fmt.Errorf("invalid version format: %s", current)
 	}
 
 	if !semver.IsValid(target) {
-		target = "v" + target
-		if !semver.IsValid(target) {
-			return 0, fmt.Errorf("invalid version format: %s", target)
-		}
+		return 0, fmt.Errorf("invalid version format: %s", target)
 	}
 
 	return semver.Compare(current, target), nil

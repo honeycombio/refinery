@@ -23,7 +23,6 @@ func TestCompareVersions(t *testing.T) {
 		{"v2.10.0", "v2.9.9", 1, false}, // minor version higher
 		{"v2.9.6", "v2.9.7", -1, false}, // patch version lower
 		{"v2.9.8", "v2.9.7", 1, false},  // patch version higher
-		{"2.9.7", "v2.9.7", 0, false},   // with and without v prefix
 		{"invalid", "v2.9.7", 0, true},  // invalid current version
 		{"v2.9.7", "invalid", 0, true},  // invalid target version
 	}
