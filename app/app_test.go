@@ -1393,6 +1393,423 @@ func BenchmarkTraces(b *testing.B) {
 	}
 }
 
+// MockPeersWithUpdates extends MockPeers to support dynamic peer list updates
+type MockPeersWithUpdates struct {
+	peers     []string
+	id        string
+	callbacks []func()
+	mutex     sync.RWMutex
+}
+
+func (p *MockPeersWithUpdates) GetPeers() ([]string, error) {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.peers, nil
+}
+
+func (p *MockPeersWithUpdates) GetInstanceID() (string, error) {
+	p.mutex.RLock()
+	defer p.mutex.RUnlock()
+	return p.id, nil
+}
+
+func (p *MockPeersWithUpdates) RegisterUpdatedPeersCallback(callback func()) {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	p.callbacks = append(p.callbacks, callback)
+}
+
+func (p *MockPeersWithUpdates) Start() error {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+	if len(p.id) == 0 && len(p.peers) > 0 {
+		p.id = p.peers[0]
+	}
+	return nil
+}
+
+func (p *MockPeersWithUpdates) Ready() error {
+	return nil
+}
+
+// UpdatePeers changes the peer list and triggers callbacks
+func (p *MockPeersWithUpdates) UpdatePeers(newPeers []string) {
+	p.mutex.Lock()
+	p.peers = newPeers
+	if len(newPeers) > 0 && p.id == "" {
+		p.id = newPeers[0]
+	}
+	callbacks := make([]func(), len(p.callbacks))
+	copy(callbacks, p.callbacks)
+	p.mutex.Unlock()
+
+	// Trigger callbacks outside the lock
+	for _, callback := range callbacks {
+		callback()
+	}
+}
+
+// createRulesBasedConfig creates a mock config with rules-based sampler containing downstream samplers
+func createRulesBasedConfig(port, redisDB int, apiURL string, throughputGoal int) *config.MockConfig {
+	cfg := defaultConfig(port, redisDB, apiURL)
+
+	// Configure rules-based sampler with selective rules
+	cfg.GetSamplerTypeVal = &config.RulesBasedSamplerConfig{
+		Rules: []*config.RulesBasedSamplerRule{
+			{
+				Name: "drop-errors-rule",
+				Conditions: []*config.RulesBasedSamplerCondition{
+					{
+						Field:    "http.status_code",
+						Operator: config.EQ,
+						Value:    "500",
+					},
+				},
+				Drop: true, // Drop all 500 errors initially
+			},
+			{
+				Name: "high-throughput-rule",
+				Conditions: []*config.RulesBasedSamplerCondition{
+					{
+						Field:    "service.name",
+						Operator: config.EQ,
+						Value:    "test-service",
+					},
+					{
+						Field:    "http.status_code",
+						Operator: config.EQ,
+						Value:    "200",
+					},
+				},
+				Sampler: &config.RulesBasedDownstreamSampler{
+					TotalThroughputSampler: &config.TotalThroughputSamplerConfig{
+						GoalThroughputPerSec: throughputGoal,
+						UseClusterSize:       true,
+						FieldList:            []string{"http.status_code"},
+					},
+				},
+			},
+			{
+				Name: "fallback-rule",
+				Conditions: []*config.RulesBasedSamplerCondition{
+					{
+						Field:    "service.name",
+						Operator: config.NEQ,
+						Value:    "test-service",
+					},
+				},
+				SampleRate: 10, // Static sampling for non-matching spans
+			},
+		},
+	}
+
+	return cfg
+}
+
+// createTestSpan creates a test span with the given service name and status code
+func createTestSpan(serviceName, statusCode, traceID string) string {
+	data, _ := json.Marshal(map[string]interface{}{
+		"time":       now.Format(time.RFC3339Nano),
+		"samplerate": 1,
+		"data": map[string]interface{}{
+			"trace.trace_id":   traceID,
+			"trace.span_id":    uuid.NewString(),
+			"trace.parent_id":  "0000000000",
+			"service.name":     serviceName,
+			"http.status_code": statusCode,
+		},
+	})
+	return string(data)
+}
+
+// TestRulesBasedSamplerWithDownstreamAndClusterChanges tests integration of:
+// 1. Rules-based sampler with downstream samplers (TotalThroughputSampler)
+// 2. Config reload functionality
+// 3. Cluster size changes affecting throughput calculations
+func TestRulesBasedSamplerWithDownstreamAndClusterChanges(t *testing.T) {
+	t.Parallel()
+	port := 20000
+	redisDB := 12
+
+	testServer := newTestAPIServer(t)
+
+	// Phase 1: Initial setup with single-node cluster
+	mockPeers := &MockPeersWithUpdates{
+		peers: []string{"http://localhost:20001"}, // Single peer initially
+		id:    "http://localhost:20001",
+	}
+
+	cfg := createRulesBasedConfig(port, redisDB, testServer.server.URL, 100)
+	_, graph := newStartedApp(t, nil, mockPeers, cfg)
+	defer startstop.Stop(graph.Objects(), nil)
+
+	// Send mixed test spans: some should be kept (200s), some dropped (500s)
+	spanRequests := []struct {
+		serviceName, statusCode, traceID string
+		shouldKeep                       bool
+	}{
+		{"test-service", "200", "trace-init-keep-1", true},  // Should be kept: matches high-throughput rule
+		{"test-service", "500", "trace-init-drop-1", false}, // Should be dropped: matches drop-errors rule
+		{"test-service", "200", "trace-init-keep-2", true},  // Should be kept: matches high-throughput rule
+		{"other-service", "200", "trace-init-other", false}, // Should be dropped: fallback with sample rate 10 (low probability)
+		{"test-service", "200", "trace-init-keep-3", true},  // Should be kept: matches high-throughput rule
+	}
+
+	for _, span := range spanRequests {
+		spanData := createTestSpan(span.serviceName, span.statusCode, span.traceID)
+		req := httptest.NewRequest(
+			"POST",
+			fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+			strings.NewReader(fmt.Sprintf("[%s]", spanData)),
+		)
+		req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultTransport.RoundTrip(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.Body.Close()
+	}
+
+	// Wait for initial spans to be processed
+	// Expected: 3 test-service 200s (deterministic keep) + 0 test-service 500s (deterministic drop) + 0-1 other-service 200s (fallback rule)
+	var initialEvents []*types.Event
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := testServer.getEvents()
+		initialEvents = events
+		// Should have 3-4 events total (3 deterministic + 0-1 from fallback)
+		assert.True(collect, len(events) >= 3 && len(events) <= 4, "Should have 3-4 initial spans (3 deterministic + 0-1 fallback)")
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Verify deterministic behavior: test-service 200s kept, test-service 500s dropped
+	var testService200Count, testService500Count, otherService200Count int
+	for _, event := range initialEvents {
+		serviceName := event.Data.Get("service.name")
+		statusCode := event.Data.Get("http.status_code")
+
+		if serviceName == "test-service" && statusCode == "200" {
+			testService200Count++
+		} else if serviceName == "test-service" && statusCode == "500" {
+			testService500Count++
+		} else if serviceName == "other-service" && statusCode == "200" {
+			otherService200Count++
+		}
+	}
+
+	assert.Equal(t, 3, testService200Count, "Should have exactly 3 test-service 200s (deterministic keep)")
+	assert.Equal(t, 0, testService500Count, "Should have 0 test-service 500s (deterministic drop - key test)")
+	assert.True(t, otherService200Count >= 0 && otherService200Count <= 1, "Should have 0-1 other-service 200s (non-deterministic fallback)")
+
+	// Phase 2: Cluster size change (scale to 3 nodes)
+	mockPeers.UpdatePeers([]string{
+		"http://localhost:20001",
+		"http://localhost:20003",
+		"http://localhost:20005",
+	})
+
+	// Send more mixed spans after cluster size change
+	clusterSpanRequests := []struct {
+		serviceName, statusCode, traceID string
+		shouldKeep                       bool
+	}{
+		{"test-service", "200", "trace-cluster-keep-1", true},  // Should be kept
+		{"test-service", "500", "trace-cluster-drop-1", false}, // Should be dropped
+		{"test-service", "200", "trace-cluster-keep-2", true},  // Should be kept
+	}
+
+	for _, span := range clusterSpanRequests {
+		spanData := createTestSpan(span.serviceName, span.statusCode, span.traceID)
+		req := httptest.NewRequest(
+			"POST",
+			fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+			strings.NewReader(fmt.Sprintf("[%s]", spanData)),
+		)
+		req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultTransport.RoundTrip(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.Body.Close()
+	}
+
+	// Wait for more spans to be processed after cluster change
+	// Should add exactly 2 more test-service 200s (deterministic)
+	var clusterEvents []*types.Event
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := testServer.getEvents()
+		clusterEvents = events
+		expectedMin := len(initialEvents) + 2 // At least 2 more deterministic keeps
+		expectedMax := len(initialEvents) + 2 // Exactly 2 more (no fallback spans in cluster phase)
+		assert.True(collect, len(events) >= expectedMin && len(events) <= expectedMax,
+			fmt.Sprintf("Should have %d-%d spans after cluster change (added 2 deterministic)", expectedMin, expectedMax))
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Phase 3: Config reload with different rules - now KEEP 500s instead of dropping them
+	// Change the drop rule to keep 500s with throughput sampling instead
+	cfg.GetSamplerTypeVal.(*config.RulesBasedSamplerConfig).Rules[0] = &config.RulesBasedSamplerRule{
+		Name: "keep-errors-rule", // Changed from drop-errors-rule
+		Conditions: []*config.RulesBasedSamplerCondition{
+			{
+				Field:    "http.status_code",
+				Operator: config.EQ,
+				Value:    "500",
+			},
+		},
+		Sampler: &config.RulesBasedDownstreamSampler{
+			TotalThroughputSampler: &config.TotalThroughputSamplerConfig{
+				GoalThroughputPerSec: 50, // Lower throughput for errors
+				UseClusterSize:       true,
+				FieldList:            []string{"http.status_code"},
+			},
+		},
+	}
+	// Also update the existing rule's throughput
+	cfg.GetSamplerTypeVal.(*config.RulesBasedSamplerConfig).Rules[1].Sampler.TotalThroughputSampler.GoalThroughputPerSec = 300
+
+	// Trigger config reload
+	err := cfg.Reload()
+	assert.NoError(t, err)
+
+	// Send spans after config reload - now 500s should be KEPT instead of dropped
+	reloadSpanRequests := []struct {
+		serviceName, statusCode, traceID string
+		shouldKeep                       bool
+	}{
+		{"test-service", "200", "trace-reload-keep-200", true}, // Should be kept: high-throughput rule
+		{"test-service", "500", "trace-reload-keep-500", true}, // Should NOW be kept: changed rule
+		{"test-service", "200", "trace-reload-keep-2", true},   // Should be kept: high-throughput rule
+	}
+
+	for _, span := range reloadSpanRequests {
+		spanData := createTestSpan(span.serviceName, span.statusCode, span.traceID)
+		req := httptest.NewRequest(
+			"POST",
+			fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+			strings.NewReader(fmt.Sprintf("[%s]", spanData)),
+		)
+		req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultTransport.RoundTrip(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.Body.Close()
+	}
+
+	// Wait for more spans to be processed after config reload
+	// Should add exactly 3 more spans: 2 test-service 200s + 1 test-service 500 (now kept instead of dropped)
+	var reloadEvents []*types.Event
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := testServer.getEvents()
+		reloadEvents = events
+		expectedMin := len(clusterEvents) + 3 // Exactly 3 more deterministic spans
+		expectedMax := len(clusterEvents) + 3
+		assert.True(collect, len(events) >= expectedMin && len(events) <= expectedMax,
+			fmt.Sprintf("Should have %d-%d spans after config reload (added 3 deterministic)", expectedMin, expectedMax))
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Verify the key behavior change: 500s are now kept (deterministic)
+	var totalTestService200Count, totalTestService500Count int
+	for _, event := range reloadEvents {
+		serviceName := event.Data.Get("service.name")
+		statusCode := event.Data.Get("http.status_code")
+
+		if serviceName == "test-service" && statusCode == "200" {
+			totalTestService200Count++
+		} else if serviceName == "test-service" && statusCode == "500" {
+			totalTestService500Count++
+		}
+	}
+
+	assert.Equal(t, 7, totalTestService200Count, "Should have exactly 7 test-service 200s total (3+2+2 from all phases)")
+	assert.Equal(t, 1, totalTestService500Count, "Should have exactly 1 test-service 500 (key test: 500s now kept after config change)")
+
+	// Phase 4: Combined changes - cluster size reduction and verify final behavior
+	// Reduce cluster size to 2 nodes
+	mockPeers.UpdatePeers([]string{
+		"http://localhost:20001",
+		"http://localhost:20003",
+	})
+
+	// Update throughput goals for both rules
+	cfg.GetSamplerTypeVal.(*config.RulesBasedSamplerConfig).Rules[0].Sampler.TotalThroughputSampler.GoalThroughputPerSec = 25  // Lower for 500s
+	cfg.GetSamplerTypeVal.(*config.RulesBasedSamplerConfig).Rules[1].Sampler.TotalThroughputSampler.GoalThroughputPerSec = 200 // Moderate for 200s
+	err = cfg.Reload()
+	assert.NoError(t, err)
+
+	// Send final mixed test spans
+	finalSpanRequests := []struct {
+		serviceName, statusCode, traceID string
+		shouldKeep                       bool
+	}{
+		{"test-service", "200", "trace-final-200-1", true}, // Should be kept: 200 rule
+		{"test-service", "500", "trace-final-500-1", true}, // Should be kept: 500 rule (now keeps)
+		{"test-service", "200", "trace-final-200-2", true}, // Should be kept: 200 rule
+	}
+
+	for _, span := range finalSpanRequests {
+		spanData := createTestSpan(span.serviceName, span.statusCode, span.traceID)
+		req := httptest.NewRequest(
+			"POST",
+			fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+			strings.NewReader(fmt.Sprintf("[%s]", spanData)),
+		)
+		req.Header.Set("X-Honeycomb-Team", legacyAPIKey)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultTransport.RoundTrip(req)
+		assert.NoError(t, err)
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		resp.Body.Close()
+	}
+
+	// Wait for final spans to be processed
+	// Should add exactly 3 more spans: 2 test-service 200s + 1 test-service 500 (both deterministic now)
+	var finalEvents []*types.Event
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := testServer.getEvents()
+		finalEvents = events
+		expectedMin := len(reloadEvents) + 3 // Exactly 3 more deterministic spans
+		expectedMax := len(reloadEvents) + 3
+		assert.True(collect, len(events) >= expectedMin && len(events) <= expectedMax,
+			fmt.Sprintf("Should have %d-%d spans after final changes (added 3 deterministic)", expectedMin, expectedMax))
+	}, 2*time.Second, 10*time.Millisecond)
+
+	// Final verification: check deterministic counts
+	var finalTestService200Count, finalTestService500Count int
+	for _, event := range finalEvents {
+		serviceName := event.Data.Get("service.name")
+		statusCode := event.Data.Get("http.status_code")
+
+		if serviceName == "test-service" && statusCode == "200" {
+			finalTestService200Count++
+		} else if serviceName == "test-service" && statusCode == "500" {
+			finalTestService500Count++
+		}
+	}
+
+	assert.Equal(t, 9, finalTestService200Count, "Should have exactly 9 test-service 200s total (3+2+2+2 from all phases)")
+	assert.Equal(t, 2, finalTestService500Count, "Should have exactly 2 test-service 500s total (0+0+1+1 from all phases)")
+
+	// Verify that events contain expected fields for rules-based sampling
+	for _, event := range finalEvents {
+		assert.Equal(t, "dataset", event.Dataset)
+
+		serviceName := event.Data.Get("service.name")
+		statusCode := event.Data.Get("http.status_code")
+
+		// Most events should be from test-service (deterministic rules), but some may be from other-service (fallback rule)
+		assert.Contains(t, []string{"test-service", "other-service"}, serviceName, "Should only have test-service or other-service events")
+		assert.Contains(t, []string{"200", "500"}, statusCode, "Should only have 200 or 500 status codes")
+
+		// If it's other-service, it must be 200 (we only sent other-service 200s to the fallback rule)
+		if serviceName == "other-service" {
+			assert.Equal(t, "200", statusCode, "other-service events should only have status 200")
+		}
+	}
+}
+
 func BenchmarkDistributedTraces(b *testing.B) {
 	sender := &countingTransmission{}
 
