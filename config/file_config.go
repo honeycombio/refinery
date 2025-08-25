@@ -469,7 +469,7 @@ func (e *FileConfigError) Error() string {
 
 	if len(e.RulesResults) > 0 {
 		loc := strings.Join(e.RulesLocations, ", ")
-		msg.WriteString("Validation failed for rules [")
+		msg.WriteString("ERROR: Validation failed for rules [")
 		msg.WriteString(loc)
 		msg.WriteString("]:\n")
 		for _, result := range e.RulesResults {
