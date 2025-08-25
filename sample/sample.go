@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -17,11 +18,10 @@ type Sampler interface {
 	GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string)
 	GetKeyFields() ([]string, []string)
 	Start() error
-	Stop()
 }
 
-type ClusterSizer interface {
-	SetClusterSize(size int)
+type CanSetGoalThroughputPerSec interface {
+	SetGoalThroughputPerSec(int)
 }
 
 // SamplerFactory is used to create new samplers with common (injected) resources
@@ -31,10 +31,21 @@ type SamplerFactory struct {
 	Metrics   metrics.Metrics `inject:"metrics"`
 	Peers     peer.Peers      `inject:""`
 	peerCount int
-	samplers  []Sampler
+	mutex     sync.Mutex
+
+	// Shared dynsampler instances to maintain global throughput tracking
+	sharedDynsamplers map[string]any
+
+	// Store original GoalThroughputPerSec values for cluster size calculations.
+	// We need this to recalculate goal throughput values when the cluster size
+	// changes, which does not trigger a full config reload.
+	goalThroughputConfigs map[string]int
 }
 
 func (s *SamplerFactory) updatePeerCounts() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	if s.Peers != nil {
 		peers, err := s.Peers.GetPeers()
 		// Only update the stored count if there were no errors
@@ -43,63 +54,161 @@ func (s *SamplerFactory) updatePeerCounts() {
 		}
 	}
 
-	// all the samplers who want it should use the stored count
-	for _, sampler := range s.samplers {
-		if clusterSizer, ok := sampler.(ClusterSizer); ok {
-			clusterSizer.SetClusterSize(s.peerCount)
-		} else {
-			s.Logger.Debug().Logf("sampler does not implement ClusterSizer")
+	// Update goal throughput for all throughput-based dynsamplers
+	for dynsamplerKey, dynsamplerInstance := range s.sharedDynsamplers {
+		if hasThroughput, ok := dynsamplerInstance.(CanSetGoalThroughputPerSec); ok {
+			// Calculate new throughput based on cluster size
+			newThroughput := max(s.goalThroughputConfigs[dynsamplerKey]/s.peerCount, 1)
+			hasThroughput.SetGoalThroughputPerSec(newThroughput)
 		}
 	}
 }
 
 func (s *SamplerFactory) Start() error {
 	s.peerCount = 1
+	s.sharedDynsamplers = make(map[string]any)
+	s.goalThroughputConfigs = make(map[string]int)
 	if s.Peers != nil {
 		s.Peers.RegisterUpdatedPeersCallback(s.updatePeerCounts)
 	}
 	return nil
 }
 
-// GetSamplerImplementationForKey returns the sampler implementation for the given
-// samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined
-func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampler {
-	c, name := s.Config.GetSamplerConfigForDestName(samplerKey)
+func getSharedDynsampler[ST any, CT any](
+	s *SamplerFactory,
+	dynsamplerKey string,
+	config CT,
+	create func(config CT) ST,
+) ST {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 
+	var ok bool
+	var dynsamplerInstance ST
+	if dynsamplerInstance, ok = s.sharedDynsamplers[dynsamplerKey].(ST); !ok {
+		dynsamplerInstance = create(config)
+		s.sharedDynsamplers[dynsamplerKey] = dynsamplerInstance
+	}
+	return dynsamplerInstance
+}
+
+// createSampler creates a sampler with shared dynsamplers based on the config type
+func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	var sampler Sampler
 
 	switch c := c.(type) {
 	case *config.DeterministicSamplerConfig:
 		sampler = &DeterministicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.DynamicSamplerConfig:
-		sampler = &DynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+		dynsamplerKey := fmt.Sprintf("%s:dynamic:%d:%v", keyPrefix, c.SampleRate, c.FieldList)
+		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForDynamicSampler)
+		sampler = &DynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.EMADynamicSamplerConfig:
-		sampler = &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+		dynsamplerKey := fmt.Sprintf("%s:emadynamic:%d:%v", keyPrefix, c.GoalSampleRate, c.FieldList)
+		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForEMADynamicSampler)
+		sampler = &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.RulesBasedSamplerConfig:
-		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, SamplerFactory: s}
 	case *config.TotalThroughputSamplerConfig:
-		sampler = &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+		dynsamplerKey := fmt.Sprintf("%s:totalthroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
+		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForTotalThroughputSampler)
+		// Store goal throughput config under mutex protection
+		s.mutex.Lock()
+		s.goalThroughputConfigs[dynsamplerKey] = c.GoalThroughputPerSec
+		s.mutex.Unlock()
+		sampler = &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.EMAThroughputSamplerConfig:
-		sampler = &EMAThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+		dynsamplerKey := fmt.Sprintf("%s:emathroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
+		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForEMAThroughputSampler)
+		s.mutex.Lock()
+		s.goalThroughputConfigs[dynsamplerKey] = c.GoalThroughputPerSec
+		s.mutex.Unlock()
+		sampler = &EMAThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.WindowedThroughputSamplerConfig:
-		sampler = &WindowedThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
+		dynsamplerKey := fmt.Sprintf("%s:windowedthroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
+		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForWindowedThroughputSampler)
+		s.mutex.Lock()
+		s.goalThroughputConfigs[dynsamplerKey] = c.GoalThroughputPerSec
+		s.mutex.Unlock()
+		sampler = &WindowedThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	default:
-		s.Logger.Error().Logf("can not continue with an unknown sampler type %T with name %s. Exiting.", c, name)
+		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
 		os.Exit(1)
+		return nil
 	}
 
 	err := sampler.Start()
 	if err != nil {
-		s.Logger.Debug().WithField("dataset", samplerKey).Logf("failed to start sampler")
+		s.Logger.Debug().WithField("dataset", keyPrefix).Logf("failed to start sampler")
 		return nil
 	}
 
-	s.Logger.Debug().WithField("dataset", samplerKey).Logf("created implementation for sampler type %T", c)
-	// call this every time we add a sampler
-	s.samplers = append(s.samplers, sampler)
+	s.Logger.Debug().WithField("dataset", keyPrefix).Logf("created implementation for sampler type %T", c)
+	// Update peer counts after creating a sampler
 	s.updatePeerCounts()
 
 	return sampler
+}
+
+// GetSamplerImplementationForKey returns the sampler implementation for the given
+// samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined
+func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampler {
+	c, _ := s.Config.GetSamplerConfigForDestName(samplerKey)
+
+	return s.createSampler(c, samplerKey)
+}
+
+// GetDownstreamSampler creates a downstream sampler for use in rules-based sampling,
+// ensuring it participates in the shared dynsampler system
+func (s *SamplerFactory) GetDownstreamSampler(
+	parentSamplerKey string,
+	downstreamConfig *config.RulesBasedDownstreamSampler,
+) Sampler {
+	keyPrefix := fmt.Sprintf("rules:%s:", parentSamplerKey)
+
+	// Extract the actual config from the downstream wrapper
+	var actualConfig any
+	switch {
+	case downstreamConfig.DynamicSampler != nil:
+		actualConfig = downstreamConfig.DynamicSampler
+	case downstreamConfig.EMADynamicSampler != nil:
+		actualConfig = downstreamConfig.EMADynamicSampler
+	case downstreamConfig.TotalThroughputSampler != nil:
+		actualConfig = downstreamConfig.TotalThroughputSampler
+	case downstreamConfig.EMAThroughputSampler != nil:
+		actualConfig = downstreamConfig.EMAThroughputSampler
+	case downstreamConfig.WindowedThroughputSampler != nil:
+		actualConfig = downstreamConfig.WindowedThroughputSampler
+	case downstreamConfig.DeterministicSampler != nil:
+		actualConfig = downstreamConfig.DeterministicSampler
+	default:
+		s.Logger.Error().Logf("can not continue with an unknown sampler type. Exiting.")
+		os.Exit(1)
+	}
+
+	return s.createSampler(actualConfig, keyPrefix)
+}
+
+// When the config changes, all our shared dynsamplers are invalid. This stops and clears
+// them so they can be re-created when the samplers are rebuilt.
+func (s *SamplerFactory) ClearDynsamplers() {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	// Stop all shared dynsamplers
+	for _, dynsampler := range s.sharedDynsamplers {
+		if stopper, ok := dynsampler.(interface{ Stop() }); ok {
+			stopper.Stop()
+		}
+	}
+
+	clear(s.sharedDynsamplers)
+	clear(s.goalThroughputConfigs)
+}
+
+// Stop cleans up all shared dynsamplers
+func (s *SamplerFactory) Stop() {
+	s.ClearDynsamplers()
 }
 
 var samplerMetrics = []metrics.Metadata{

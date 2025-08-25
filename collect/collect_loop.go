@@ -2,6 +2,7 @@ package collect
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strconv"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"github.com/honeycombio/refinery/collect/cache"
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/internal/otelutil"
+	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -44,9 +46,15 @@ type CollectLoop struct {
 	// waits for the received channel to unblock, then resumes.
 	pause chan chan struct{}
 
+	// Channel for config reload signals
+	reload chan struct{}
+
 	// Our local trace cache. This deliberatly does not have a mutex around it;
 	// there is no way to safely access this directly from the outside.
 	cache cache.Cache
+
+	// Our local samplers.
+	datasetSamplers map[string]sample.Sampler
 
 	// For reporting cache size asynchronously.
 	lastCacheSize atomic.Int64
@@ -70,6 +78,10 @@ func NewCollectLoop(
 		// Important that this be unbuffered, so the sender blocks until the
 		// signal has been received.
 		pause: make(chan chan struct{}),
+
+		// Initialize local sampler cache and reload channel
+		datasetSamplers: make(map[string]sample.Sampler),
+		reload:          make(chan struct{}, 1),
 	}
 }
 
@@ -166,6 +178,9 @@ func (cl *CollectLoop) collect() {
 			case sendEarly := <-cl.sendEarly:
 				cl.sendTracesEarly(ctx, sendEarly.bytesToSend)
 				sendEarly.wg.Done()
+			case <-cl.reload:
+				// Clear samplers on config reload
+				clear(cl.datasetSamplers)
 			case ch := <-cl.pause:
 				// We got a pause signal, wait until it unblocks.
 				<-ch
@@ -298,7 +313,7 @@ func (cl *CollectLoop) sendExpiredTracesInCache(ctx context.Context, now time.Ti
 		totalSpansSent += int64(t.DescendantCount())
 
 		if t.RootSpan != nil {
-			tr, err := cl.parent.makeDecision(ctx, t, TraceSendGotRoot)
+			tr, err := cl.makeDecision(ctx, t, TraceSendGotRoot)
 			if err != nil {
 				sendExpiredTraceSpan.End()
 				continue
@@ -306,14 +321,14 @@ func (cl *CollectLoop) sendExpiredTracesInCache(ctx context.Context, now time.Ti
 			cl.parent.send(ctx, tr)
 		} else {
 			if spanLimit > 0 && t.DescendantCount() > spanLimit {
-				tr, err := cl.parent.makeDecision(ctx, t, TraceSendSpanLimit)
+				tr, err := cl.makeDecision(ctx, t, TraceSendSpanLimit)
 				if err != nil {
 					sendExpiredTraceSpan.End()
 					continue
 				}
 				cl.parent.send(ctx, tr)
 			} else {
-				tr, err := cl.parent.makeDecision(ctx, t, TraceSendExpired)
+				tr, err := cl.makeDecision(ctx, t, TraceSendExpired)
 				if err != nil {
 					sendExpiredTraceSpan.End()
 					continue
@@ -348,7 +363,7 @@ func (cl *CollectLoop) sendTracesEarly(ctx context.Context, sendEarlyBytes int) 
 	tracesSent := generics.NewSet[string]()
 	// Send the traces we can't keep.
 	for _, trace := range allTraces {
-		t, err := cl.parent.makeDecision(ctx, trace, TraceSendEjectedMemsize)
+		t, err := cl.makeDecision(ctx, trace, TraceSendEjectedMemsize)
 		if err != nil {
 			continue
 		}
@@ -367,4 +382,84 @@ func (cl *CollectLoop) sendTracesEarly(ctx context.Context, sendEarlyBytes int) 
 // GetCacheSize returns the most recently recorded count of traces in this loop's cache
 func (cl *CollectLoop) GetCacheSize() int {
 	return int(cl.lastCacheSize.Load())
+}
+
+func (cl *CollectLoop) makeDecision(ctx context.Context, trace *types.Trace, sendReason string) (s sendableTrace, err error) {
+	if trace.Sent {
+		return s, errors.New("trace already sent")
+	}
+
+	ctx, span := otelutil.StartSpan(ctx, cl.parent.Tracer, "makeDecision")
+	defer span.End()
+	cl.parent.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
+
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"trace_id": trace.ID(),
+		"root":     trace.RootSpan,
+		"send_by":  trace.SendBy,
+		"arrival":  trace.ArrivalTime,
+	})
+
+	var sampler sample.Sampler
+	var found bool
+	// get sampler key (dataset for legacy keys, environment for new keys)
+	samplerSelector := cl.parent.Config.DetermineSamplerKey(trace.APIKey, trace.Environment, trace.Dataset)
+
+	// use sampler key to find sampler; create and cache if not found
+	if sampler, found = cl.datasetSamplers[samplerSelector]; !found {
+		sampler = cl.parent.SamplerFactory.GetSamplerImplementationForKey(samplerSelector)
+		cl.datasetSamplers[samplerSelector] = sampler
+	}
+
+	// prepopulate spans with key fields
+	allFields, nonRootFields := sampler.GetKeyFields()
+	for _, sp := range trace.GetSpans() {
+		if sp.IsRoot {
+			sp.Data.MemoizeFields(allFields...)
+		} else {
+			sp.Data.MemoizeFields(nonRootFields...)
+		}
+	}
+
+	startGetSampleRate := cl.parent.Clock.Now()
+	// make sampling decision and update the trace
+	rate, shouldSend, reason, key := sampler.GetSampleRate(trace)
+	cl.parent.Metrics.Histogram("get_sample_rate_duration_ms", float64(time.Since(startGetSampleRate).Milliseconds()))
+
+	trace.SetSampleRate(rate)
+	trace.KeepSample = shouldSend
+	// This will observe sample rate attempts even if the trace is dropped
+	cl.parent.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
+
+	cl.parent.sampleTraceCache.Record(trace, shouldSend, reason)
+
+	var hasRoot bool
+	if trace.RootSpan != nil {
+		cl.parent.Metrics.Increment("trace_send_has_root")
+		hasRoot = true
+	} else {
+		cl.parent.Metrics.Increment("trace_send_no_root")
+	}
+
+	otelutil.AddSpanFields(span, map[string]interface{}{
+		"kept":        shouldSend,
+		"reason":      reason,
+		"sampler":     key,
+		"selector":    samplerSelector,
+		"rate":        rate,
+		"send_reason": sendReason,
+		"hasRoot":     hasRoot,
+	})
+	cl.parent.Logger.Debug().WithField("key", key).Logf("making decision for trace")
+	s = sendableTrace{
+		Trace:           trace,
+		reason:          reason,
+		sampleKey:       key,
+		samplerSelector: samplerSelector,
+		rate:            rate,
+		sendReason:      sendReason,
+		shouldSend:      shouldSend,
+	}
+
+	return s, nil
 }

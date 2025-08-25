@@ -13,26 +13,35 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// createDynForEMAThroughputSampler creates a dynsampler for EMAThroughputSampler
+func createDynForEMAThroughputSampler(c *config.EMAThroughputSamplerConfig) *dynsampler.EMAThroughput {
+	maxKeys := c.MaxKeys
+	if maxKeys == 0 {
+		maxKeys = 500
+	}
+	clusterSize := 1 // Will be updated by SetClusterSize if needed
+
+	dynsamplerInstance := &dynsampler.EMAThroughput{
+		GoalThroughputPerSec: c.GoalThroughputPerSec / clusterSize,
+		InitialSampleRate:    c.InitialSampleRate,
+		AdjustmentInterval:   time.Duration(c.AdjustmentInterval),
+		Weight:               c.Weight,
+		AgeOutValue:          c.AgeOutValue,
+		BurstDetectionDelay:  c.BurstDetectionDelay,
+		BurstMultiple:        c.BurstMultiple,
+		MaxKeys:              maxKeys,
+	}
+	dynsamplerInstance.Start()
+	return dynsamplerInstance
+}
+
 type EMAThroughputSampler struct {
 	Config  *config.EMAThroughputSamplerConfig
 	Logger  logger.Logger
 	Metrics metrics.Metrics
 
-	adjustmentInterval   config.Duration
-	weight               float64
-	initialSampleRate    int
-	goalThroughputPerSec int
-	clusterSize          int
-	useClusterSize       bool
-	ageOutValue          float64
-	burstMultiple        float64
-	burstDetectionDelay  uint
-	maxKeys              int
-	prefix               string
-
 	key                      *traceKey
 	keyMu                    sync.Mutex
-	clusterMu                sync.Mutex
 	keyFields, nonRootFields []string
 
 	dynsampler      *dynsampler.EMAThroughput
@@ -42,41 +51,18 @@ type EMAThroughputSampler struct {
 func (d *EMAThroughputSampler) Start() error {
 	d.Logger.Debug().Logf("Starting EMAThroughputSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting EMAThroughputSampler") }()
-	d.initialSampleRate = d.Config.InitialSampleRate
-	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
-	d.useClusterSize = d.Config.UseClusterSize
-	if d.clusterSize == 0 {
-		d.clusterSize = 1
-	}
-	d.adjustmentInterval = d.Config.AdjustmentInterval
-	d.weight = d.Config.Weight
-	d.ageOutValue = d.Config.AgeOutValue
-	d.burstMultiple = d.Config.BurstMultiple
-	d.burstDetectionDelay = d.Config.BurstDetectionDelay
-	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
-	d.maxKeys = d.Config.MaxKeys
-	if d.maxKeys == 0 {
-		d.maxKeys = 500
-	}
-	d.prefix = "emathroughput"
 
-	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
-	// spin up the actual dynamic sampler
-	d.dynsampler = &dynsampler.EMAThroughput{
-		GoalThroughputPerSec: d.goalThroughputPerSec / d.clusterSize,
-		InitialSampleRate:    d.initialSampleRate,
-		AdjustmentInterval:   time.Duration(d.adjustmentInterval),
-		Weight:               d.weight,
-		AgeOutValue:          d.ageOutValue,
-		BurstDetectionDelay:  d.burstDetectionDelay,
-		BurstMultiple:        d.burstMultiple,
-		MaxKeys:              d.maxKeys,
+	// If dynsampler is not set (e.g., in tests), create it
+	if d.dynsampler == nil {
+		d.dynsampler = createDynForEMAThroughputSampler(d.Config)
 	}
-	d.dynsampler.Start()
+
+	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
+	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
 	// Register statistics this package will produce
 	d.metricsRecorder = &dynsamplerMetricsRecorder{
-		prefix: d.prefix,
+		prefix: "emathroughput",
 		met:    d.Metrics,
 	}
 	d.metricsRecorder.RegisterMetrics(d.dynsampler)
@@ -84,18 +70,6 @@ func (d *EMAThroughputSampler) Start() error {
 	return nil
 }
 
-func (d *EMAThroughputSampler) Stop() {
-	d.dynsampler.Stop()
-}
-
-func (d *EMAThroughputSampler) SetClusterSize(size int) {
-	if d.useClusterSize {
-		d.clusterMu.Lock()
-		d.clusterSize = size
-		d.dynsampler.GoalThroughputPerSec = d.goalThroughputPerSec / size
-		d.clusterMu.Unlock()
-	}
-}
 
 func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	d.keyMu.Lock()
@@ -119,7 +93,7 @@ func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
 	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
-	return rate, shouldKeep, d.prefix, key
+	return rate, shouldKeep, "emathroughput", key
 }
 
 func (d *EMAThroughputSampler) GetKeyFields() ([]string, []string) {
