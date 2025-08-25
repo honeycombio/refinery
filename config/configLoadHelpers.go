@@ -391,24 +391,24 @@ func loadConfigsIntoMap(dest map[string]any, configs []configData) error {
 // validateConfigs gets the configs from the given location and validates them.
 // It returns a list of failures; if the list is empty, the config is valid.
 // err is non-nil only for significant errors like a missing file.
-func validateConfigs(configs []configData, opts *CmdEnv, currentVersion ...string) (warnings []string, errors []string, err error) {
+func validateConfigs(configs []configData, opts *CmdEnv, currentVersion ...string) (result ValidationResults, err error) {
 	// first process the configs into a map so we can validate them
 	userData := make(map[string]any)
 	err = loadConfigsIntoMap(userData, configs)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	// now expand environment variables in the userData map
 	userData = expandEnvVarsInValues(userData, envGetterFunc)
 
 	metadata, err := LoadConfigMetadata()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	warnings, errors = metadata.Validate(userData, currentVersion...)
-	if len(errors) > 0 {
-		return warnings, errors, nil
+	result = metadata.Validate(userData, currentVersion...)
+	if result.HasErrors() {
+		return result, nil
 	}
 
 	// Basic validation worked. Now we need to reload everything into our struct so that
@@ -416,17 +416,17 @@ func validateConfigs(configs []configData, opts *CmdEnv, currentVersion ...strin
 	var config configContents
 	_, err = loadConfigsInto(&config, configs)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// apply defaults and options
 	if err := defaults.Set(&config); err != nil {
-		return nil, nil, fmt.Errorf("loadConfigsInto unable to apply defaults: %w", err)
+		return nil, fmt.Errorf("loadConfigsInto unable to apply defaults: %w", err)
 	}
 
 	// apply command line options
 	if err := opts.ApplyTags(reflect.ValueOf(&config)); err != nil {
-		return nil, nil, fmt.Errorf("loadConfigsInto unable to apply command line options: %w", err)
+		return nil, fmt.Errorf("loadConfigsInto unable to apply command line options: %w", err)
 	}
 
 	// possibly inject some keys to keep the validator happy
@@ -447,25 +447,25 @@ func validateConfigs(configs []configData, opts *CmdEnv, currentVersion ...strin
 	// yaml bytes for an easy conversion to map[string]any.
 	data, err := yaml.Marshal(config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("loadConfigsInto unable to remarshal config: %w", err)
+		return nil, fmt.Errorf("loadConfigsInto unable to remarshal config: %w", err)
 	}
 
 	var rewrittenUserData map[string]any
 	if err := load(data, FormatYAML, &rewrittenUserData); err != nil {
-		return nil, nil, fmt.Errorf("validateConfig unable to reload hydrated config from buffer: %w", err)
+		return nil, fmt.Errorf("validateConfig unable to reload hydrated config from buffer: %w", err)
 	}
 
 	// now expand environment variables in the rewrittenUserData map
 	rewrittenUserData = expandEnvVarsInValues(rewrittenUserData, envGetterFunc)
 
 	// and finally validate the rewritten config
-	finalWarnings, finalErrors := metadata.Validate(rewrittenUserData, currentVersion...)
-	// Combine warnings from both validation passes
-	allWarnings := append(warnings, finalWarnings...)
-	return allWarnings, finalErrors, nil
+	finalResults := metadata.Validate(rewrittenUserData, currentVersion...)
+	// Combine results from both validation passes
+	result = append(result, finalResults...)
+	return result, nil
 }
 
-func validateRules(configs []configData) ([]string, error) {
+func validateRules(configs []configData) (ValidationResults, error) {
 	// first process the configs into a map so we can validate them
 	userData := make(map[string]any)
 	err := loadConfigsIntoMap(userData, configs)
@@ -478,8 +478,7 @@ func validateRules(configs []configData) ([]string, error) {
 		return nil, err
 	}
 
-	failures := metadata.ValidateRules(userData)
-	return failures, nil
+	return metadata.ValidateRules(userData), nil
 }
 
 // applyConfigInto applies the given configs to the given struct.

@@ -75,11 +75,12 @@ Samplers:
 	t.Run("allows startup with deprecation warning for old version", func(t *testing.T) {
 		cfg, err := config.NewConfig(opts, "v2.8.0")
 		require.NotNil(t, cfg, "Config should be created successfully even with deprecation warnings")
-		
+
 		// Should return a warning error, not a fatal error
 		if err != nil {
-			_, isWarning := err.(*config.FileConfigWarning)
-			require.True(t, isWarning, "Error should be a warning, not a fatal error")
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
 			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
 		}
 	})

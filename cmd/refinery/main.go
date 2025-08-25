@@ -100,12 +100,11 @@ func main() {
 
 	c, err := config.NewConfig(opts, version)
 	if err != nil {
-		// Check if it's just warnings - log but don't exit
-		if _, isWarning := err.(*config.FileConfigWarning); isWarning {
-			fmt.Printf("%+v\n", err)
-		} else {
+		if configErr, isConfigErr := err.(*config.FileConfigError); isConfigErr && configErr.HasErrors() {
 			fmt.Printf("%+v\n", err)
 			os.Exit(1)
+		} else {
+			fmt.Printf("%+v\n", err)
 		}
 	}
 	if opts.Validate {

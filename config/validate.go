@@ -228,6 +228,36 @@ func maskString(s string) string {
 	return "****" + s[len(s)-4:]
 }
 
+type severity int
+
+const (
+	Warning severity = iota
+	Error
+)
+
+// ValidationResult
+type ValidationResult struct {
+	Message  string
+	Severity severity
+}
+
+func (v ValidationResult) isError() bool {
+	return v.Severity == Error
+}
+
+type ValidationResults []ValidationResult
+
+func (v ValidationResults) HasErrors() bool {
+	hasErrors := false
+	for _, r := range v {
+		if r.isError() {
+			hasErrors = true
+			break
+		}
+	}
+	return hasErrors
+}
+
 // Validate checks that the given data is valid according to the metadata.
 // It returns a list of errors, or an empty list if there are no errors.
 // The errors are strings that are suitable for showing to the user.
@@ -235,16 +265,18 @@ func maskString(s string) string {
 // If a field name is of type "object" then this function is called
 // recursively to validate the sub-object.
 // Note that the flatten function returns only 2 levels.
-
-func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warnings []string, errors []string) {
-	errors = make([]string, 0)
-	warnings = make([]string, 0)
+func (m *Metadata) Validate(data map[string]any, currentVersion ...string) ValidationResults {
+	var results ValidationResults
+	deprecatedByVersion := make(map[string][]string)
 	// check for unknown groups in the userdata
 	for k := range data {
 		if m.GetGroup(k) == nil {
 			possibilities := m.ClosestNamesTo(k)
 			guesses := strings.Join(possibilities, " or ")
-			errors = append(errors, fmt.Sprintf("unknown group %s; did you mean %s?", k, guesses))
+			results = append(results, ValidationResult{
+				Message:  fmt.Sprintf("unknown group %s; did you mean %s?", k, guesses),
+				Severity: Error,
+			})
 		}
 	}
 
@@ -258,24 +290,34 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 			}
 			possibilities := m.ClosestNamesTo(k)
 			guesses := strings.Join(possibilities, " or ")
-			errors = append(errors, fmt.Sprintf("unknown field %s; did you mean %s?", k, guesses))
+			results = append(results, ValidationResult{
+				Message:  fmt.Sprintf("unknown field %s; did you mean %s?", k, guesses),
+				Severity: Error,
+			})
 			continue
 		}
 		if e := validateDatatype(k, v, field.Type); e != "" {
-			errors = append(errors, e)
+			results = append(results, ValidationResult{
+				Message:  e,
+				Severity: Error,
+			})
 			continue // if type is wrong we can't validate further
 		}
 		// Check for deprecation warnings/errors if current version is provided
 		if len(currentVersion) > 0 && field.LastVersion != "" {
 			if isVersionBefore(currentVersion[0], field.LastVersion) {
-				// Current version is before the last version - show warning
-				message := ""
+				// Current version is before the last version - collect for grouped warning
 				if field.DeprecationText != "" {
-					message = fmt.Sprintf("WARNING: %s", field.DeprecationText)
+					// Handle custom deprecation text separately
+					message := fmt.Sprintf("WARNING: %s", field.DeprecationText)
+					results = append(results, ValidationResult{
+						Message:  message,
+						Severity: Warning,
+					})
 				} else {
-					message = fmt.Sprintf("WARNING: field %s is deprecated since version %s. Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/", k, field.LastVersion)
+					// Group standard deprecation warnings by version
+					deprecatedByVersion[field.LastVersion] = append(deprecatedByVersion[field.LastVersion], k)
 				}
-				warnings = append(warnings, message)
 			} else {
 				// Current version is equal to or after the last version - fail validation
 				comparison, err := compareVersions(currentVersion[0], field.LastVersion)
@@ -289,7 +331,10 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 					// TODO: once we are ready to officially deprecate all older configs, we should return error here
 					// returning errors here will cause Refinery fail to start if there's any deprecated configs in
 					// customer's config file
-					warnings = append(warnings, message)
+					results = append(results, ValidationResult{
+						Message:  message,
+						Severity: Warning,
+					})
 				}
 			}
 		}
@@ -297,9 +342,12 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 		case "object":
 			// if it's an object, we need to recurse
 			if _, ok := v.(map[string]any); ok {
-				_, suberrors := m.Validate(v.(map[string]any), currentVersion...)
-				for _, e := range suberrors {
-					errors = append(errors, fmt.Sprintf("Within field %s: %s", k, e))
+				subresults := m.Validate(v.(map[string]any), currentVersion...)
+				for _, result := range subresults {
+					results = append(results, ValidationResult{
+						Message:  fmt.Sprintf("Within field %s: %s", k, result.Message),
+						Severity: result.Severity,
+					})
 				}
 			}
 		case "objectarray":
@@ -309,9 +357,12 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 				for i, a := range arr {
 					subname := strings.Split(k, ".")[1]
 					rulesmap := map[string]any{subname: a}
-					_, suberrors := m.Validate(rulesmap, currentVersion...)
-					for _, e := range suberrors {
-						errors = append(errors, fmt.Sprintf("Within field %s[%d]: %s", k, i, e))
+					subresults := m.Validate(rulesmap, currentVersion...)
+					for _, result := range subresults {
+						results = append(results, ValidationResult{
+							Message:  fmt.Sprintf("Within field %s[%d]: %s", k, i, result.Message),
+							Severity: result.Severity,
+						})
 					}
 				}
 			}
@@ -321,7 +372,10 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 			switch validation.Type {
 			case "choice":
 				if !(isString(v) && slices.Contains(field.Choices, v.(string))) {
-					errors = append(errors, fmt.Sprintf("field %s (%v) must be one of %v", k, v, field.Choices))
+					results = append(results, ValidationResult{
+						Message:  fmt.Sprintf("field %s (%v) must be one of %v", k, v, field.Choices),
+						Severity: Error,
+					})
 				}
 			case "format":
 				var pat *regexp.Regexp
@@ -351,45 +405,70 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 				default:
 					panic("unknown pattern type " + validation.Arg.(string))
 				}
+
 				if !(isString(v) && pat.MatchString(v.(string))) {
 					if mask {
 						v = maskString(v.(string))
 					}
-					errors = append(errors, fmt.Sprintf(format, k, v))
+					results = append(results, ValidationResult{
+						Message:  fmt.Sprintf(format, k, v),
+						Severity: Error,
+					})
 				}
 			case "minimum":
 				fv, msg := asFloat(v)
 				if msg != "" {
-					errors = append(errors, msg)
+					results = append(results, ValidationResult{
+						Message:  msg,
+						Severity: Error,
+					})
 				} else {
 					fm := mustFloat(validation.Arg)
 					if fv < fm {
-						errors = append(errors, fmt.Sprintf("field %s (%v) must be at least %v", k, v, validation.Arg))
+						results = append(results, ValidationResult{
+							Message:  fmt.Sprintf("field %s (%v) must be at least %v", k, v, validation.Arg),
+							Severity: Error,
+						})
 					}
 				}
 			case "minOrZero":
 				fv, msg := asFloat(v)
 				if msg != "" {
-					errors = append(errors, msg)
+					results = append(results, ValidationResult{
+						Message:  msg,
+						Severity: Error,
+					})
 				} else {
 					fm := mustFloat(validation.Arg)
 					if fv != 0 && fv < fm {
-						errors = append(errors, fmt.Sprintf("field %s must be at least %v, or zero", k, validation.Arg))
+						results = append(results, ValidationResult{
+							Message:  fmt.Sprintf("field %s must be at least %v, or zero", k, validation.Arg),
+							Severity: Error,
+						})
 					}
 				}
 			case "maximum":
 				fv, msg := asFloat(v)
 				if msg != "" {
-					errors = append(errors, msg)
+					results = append(results, ValidationResult{
+						Message:  msg,
+						Severity: Error,
+					})
 				} else {
 					fm := mustFloat(validation.Arg)
 					if fv > fm {
-						errors = append(errors, fmt.Sprintf("field %s (%v) must be at most %v", k, v, validation.Arg))
+						results = append(results, ValidationResult{
+							Message:  fmt.Sprintf("field %s (%v) must be at most %v", k, v, validation.Arg),
+							Severity: Error,
+						})
 					}
 				}
 			case "notempty":
 				if isString(v) && v.(string) == "" {
-					errors = append(errors, fmt.Sprintf("field %s must not be empty", k))
+					results = append(results, ValidationResult{
+						Message:  fmt.Sprintf("field %s must not be empty", k),
+						Severity: Error,
+					})
 				}
 			case "elementType":
 				switch val := v.(type) {
@@ -397,24 +476,36 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 					for i, vv := range val {
 						e := validateDatatype(fmt.Sprintf("%s[%d]", k, i), vv, validation.Arg.(string))
 						if e != "" {
-							errors = append(errors, e)
+							results = append(results, ValidationResult{
+								Message:  e,
+								Severity: Error,
+							})
 						}
 					}
 				case map[string]any:
 					for kk, vv := range val {
 						e := validateDatatype(fmt.Sprintf("%s[%s]", k, kk), vv, validation.Arg.(string))
 						if e != "" {
-							errors = append(errors, e)
+							results = append(results, ValidationResult{
+								Message:  e,
+								Severity: Error,
+							})
 						}
 					}
 				default:
-					errors = append(errors, fmt.Sprintf("field %s must be a map or array", k))
+					results = append(results, ValidationResult{
+						Message:  fmt.Sprintf("field %s must be a map or array", k),
+						Severity: Error,
+					})
 				}
 			case "validChildren":
 				if _, ok := v.(map[string]any); ok {
 					for kk := range v.(map[string]any) {
 						if !slices.Contains(validation.GetArgAsStringSlice(), kk) {
-							errors = append(errors, fmt.Sprintf("field %s contains unknown key %s", k, kk))
+							results = append(results, ValidationResult{
+								Message:  fmt.Sprintf("field %s contains unknown key %s", k, kk),
+								Severity: Error,
+							})
 						}
 					}
 				}
@@ -433,13 +524,19 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 				switch validation.Type {
 				case "required":
 					if _, ok := flatdata[group.Name+"."+field.Name]; !ok {
-						errors = append(errors, fmt.Sprintf("missing required field %s.%s", group.Name, field.Name))
+						results = append(results, ValidationResult{
+							Message:  fmt.Sprintf("missing required field %s.%s", group.Name, field.Name),
+							Severity: Error,
+						})
 					}
 				case "requiredInGroup":
 					// if we have the group but don't have the field, that's an error
 					if _, ok := data[group.Name]; ok {
 						if _, ok := flatdata[group.Name+"."+field.Name]; !ok {
-							errors = append(errors, fmt.Sprintf("the group %s is missing its required field %s", group.Name, field.Name))
+							results = append(results, ValidationResult{
+								Message:  fmt.Sprintf("the group %s is missing its required field %s", group.Name, field.Name),
+								Severity: Error,
+							})
 						}
 					}
 				case "requiredWith":
@@ -447,7 +544,10 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 					otherName := validation.Arg.(string)
 					if _, ok := flatdata[group.Name+"."+otherName]; ok {
 						if _, ok := flatdata[group.Name+"."+field.Name]; !ok && m.GetField(group.Name+"."+field.Name).Default == nil {
-							errors = append(errors, fmt.Sprintf("the group %s includes %s, which also requires %s", group.Name, otherName, field.Name))
+							results = append(results, ValidationResult{
+								Message:  fmt.Sprintf("the group %s includes %s, which also requires %s", group.Name, otherName, field.Name),
+								Severity: Error,
+							})
 						}
 					}
 				case "conflictsWith":
@@ -456,7 +556,10 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 					otherName := validation.Arg.(string)
 					if _, ok := flatdata[group.Name+"."+otherName]; ok {
 						if _, ok := flatdata[group.Name+"."+field.Name]; ok {
-							errors = append(errors, fmt.Sprintf("the group %s includes %s, which conflicts with %s", group.Name, otherName, field.Name))
+							results = append(results, ValidationResult{
+								Message:  fmt.Sprintf("the group %s includes %s, which conflicts with %s", group.Name, otherName, field.Name),
+								Severity: Error,
+							})
 						}
 					}
 				}
@@ -464,18 +567,53 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) (warn
 		}
 	}
 
-	return warnings, errors
+	// Generate consolidated deprecation warnings
+	results = append(results, generateDeprecationWarnings(deprecatedByVersion)...)
+
+	return results
+}
+
+// generateDeprecationWarnings creates consolidated warning messages for deprecated fields
+// grouped by version, with a single documentation URL at the end
+func generateDeprecationWarnings(deprecatedByVersion map[string][]string) ValidationResults {
+	var warnings ValidationResults
+
+	// Generate one warning per version group
+	for version, fields := range deprecatedByVersion {
+		if len(fields) > 0 {
+			var message string
+			if len(fields) == 1 {
+				message = fmt.Sprintf("WARNING: field %s is deprecated since version %s", fields[0], version)
+			} else {
+				message = fmt.Sprintf("WARNING: the following fields are deprecated since version %s: %s", version, strings.Join(fields, ", "))
+			}
+			warnings = append(warnings, ValidationResult{
+				Message:  message,
+				Severity: Warning,
+			})
+		}
+	}
+
+	// Add documentation URL once if there are any grouped deprecation warnings
+	if len(deprecatedByVersion) > 0 {
+		warnings = append(warnings, ValidationResult{
+			Message:  "Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/",
+			Severity: Warning,
+		})
+	}
+
+	return warnings
 }
 
 // ValidateRules checks that the given data (which is expected to be a
 // rules file) is valid according to the metadata.
-// It returns a list of errors, or an empty list if there are no errors.
-// The errors are strings that are suitable for showing to the user.
+// It returns a list of validation results, or an empty list if there are no errors.
+// The validation results are structured with messages and severity levels.
 // This function isn't the same as a normal Validate because the rules
 // file is a map of user-supplied names as keys, and we can't validate
 // those as groups because they're not groups.
-func (m *Metadata) ValidateRules(data map[string]any) []string {
-	errors := make([]string, 0)
+func (m *Metadata) ValidateRules(data map[string]any) ValidationResults {
+	var results ValidationResults
 
 	hasVersion := false
 	hasSamplers := false
@@ -484,53 +622,85 @@ func (m *Metadata) ValidateRules(data map[string]any) []string {
 		switch k {
 		case "RulesVersion":
 			if i, ok := v.(int); !ok {
-				errors = append(errors, fmt.Sprintf("RulesVersion must be an int, but %v is %T", v, v))
+				results = append(results, ValidationResult{
+					Message:  fmt.Sprintf("RulesVersion must be an int, but %v is %T", v, v),
+					Severity: Error,
+				})
 			} else if i != 2 {
-				errors = append(errors, fmt.Sprintf("RulesVersion must be 2, but it is %d", i))
+				results = append(results, ValidationResult{
+					Message:  fmt.Sprintf("RulesVersion must be 2, but it is %d", i),
+					Severity: Error,
+				})
 			}
 			hasVersion = true
 		case "Samplers":
 			if samplers, ok := v.(map[string]any); !ok {
-				errors = append(errors, fmt.Sprintf("Samplers must be a collection of samplers, but %v is %T", v, v))
+				results = append(results, ValidationResult{
+					Message:  fmt.Sprintf("Samplers must be a collection of samplers, but %v is %T", v, v),
+					Severity: Error,
+				})
 			} else {
 				foundDefault := false
 				for k, v := range samplers {
 					if _, ok := v.(map[string]any); !ok {
-						errors = append(errors, fmt.Sprintf("Sampler %s must be a map, but %v is %T", k, v, v))
+						results = append(results, ValidationResult{
+							Message:  fmt.Sprintf("Sampler %s must be a map, but %v is %T", k, v, v),
+							Severity: Error,
+						})
 					}
 					if k == "__default__" {
 						foundDefault = true
 					}
 				}
 				if !foundDefault {
-					errors = append(errors, "Samplers must include a __default__ sampler")
+					results = append(results, ValidationResult{
+						Message:  "Samplers must include a __default__ sampler",
+						Severity: Error,
+					})
 				}
 			}
 			hasSamplers = true
 		default:
-			errors = append(errors, fmt.Sprintf("unknown top-level key %s", k))
+			results = append(results, ValidationResult{
+				Message:  fmt.Sprintf("unknown top-level key %s", k),
+				Severity: Error,
+			})
 		}
 	}
 	if !hasVersion {
-		errors = append(errors, "RulesVersion is required")
+		results = append(results, ValidationResult{
+			Message:  "RulesVersion is required",
+			Severity: Error,
+		})
 	}
 	if !hasSamplers {
-		errors = append(errors, "Samplers is required")
+		results = append(results, ValidationResult{
+			Message:  "Samplers is required",
+			Severity: Error,
+		})
 	}
 
 	// bail if there are any errors at this level -- we don't know what we're working with
-	if len(errors) > 0 {
-		return errors
+	if len(results) > 0 {
+		// Check if there are any error-level results
+		for _, r := range results {
+			if r.Severity == Error {
+				return results
+			}
+		}
 	}
 
 	// now validate the individual samplers
 	samplers := data["Samplers"].(map[string]any)
 	for k, v := range samplers {
-		_, suberrors := m.Validate(v.(map[string]any))
-		for _, e := range suberrors {
-			errors = append(errors, fmt.Sprintf("Within sampler %s: %s", k, e))
+		subresults := m.Validate(v.(map[string]any))
+		for _, result := range subresults {
+			results = append(results, ValidationResult{
+				Message:  fmt.Sprintf("Within sampler %s: %s", k, result.Message),
+				Severity: result.Severity,
+			})
 		}
 	}
 
-	return errors
+	return results
 }

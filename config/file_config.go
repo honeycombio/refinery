@@ -411,53 +411,41 @@ type StressReliefConfig struct {
 
 type FileConfigError struct {
 	ConfigLocations []string
-	ConfigFailures  []string
+	ConfigResults   ValidationResults
 	RulesLocations  []string
-	RulesFailures   []string
+	RulesResults    ValidationResults
 }
 
-type FileConfigWarning struct {
-	ConfigLocations []string
-	ConfigWarnings  []string
-}
-
-func (e *FileConfigWarning) Error() string {
-	var msg strings.Builder
-	if len(e.ConfigWarnings) > 0 {
-		loc := strings.Join(e.ConfigLocations, ", ")
-		msg.WriteString("Configuration warnings for [")
-		msg.WriteString(loc)
-		msg.WriteString("]:\n")
-		for _, warning := range e.ConfigWarnings {
-			msg.WriteString("  ")
-			msg.WriteString(warning)
-			msg.WriteString("\n")
-		}
-	}
-	return msg.String()
+// HasErrors returns true if this error contains any actual errors (not just warnings)
+func (e *FileConfigError) HasErrors() bool {
+	return e.ConfigResults.HasErrors() || e.RulesResults.HasErrors()
 }
 
 func (e *FileConfigError) Error() string {
 	var msg strings.Builder
-	if len(e.ConfigFailures) > 0 {
+	if len(e.ConfigResults) > 0 {
 		loc := strings.Join(e.ConfigLocations, ", ")
-		msg.WriteString("Validation failed for config [")
+		if !e.HasErrors() {
+			msg.WriteString("Configuration warnings for [")
+		} else {
+			msg.WriteString("Validation failed for config [")
+		}
 		msg.WriteString(loc)
 		msg.WriteString("]:\n")
-		for _, fail := range e.ConfigFailures {
+		for _, result := range e.ConfigResults {
 			msg.WriteString("  ")
-			msg.WriteString(fail)
+			msg.WriteString(result.Message)
 			msg.WriteString("\n")
 		}
 	}
-	if len(e.RulesFailures) > 0 {
+	if len(e.RulesResults) > 0 {
 		loc := strings.Join(e.RulesLocations, ", ")
-		msg.WriteString("Validation failed for config [")
+		msg.WriteString("Validation failed for rules [")
 		msg.WriteString(loc)
 		msg.WriteString("]:\n")
-		for _, fail := range e.RulesFailures {
+		for _, result := range e.RulesResults {
 			msg.WriteString("  ")
-			msg.WriteString(fail)
+			msg.WriteString(result.Message)
 			msg.WriteString("\n")
 		}
 	}
@@ -486,7 +474,7 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgWarnings, cfgErrors, err := validateConfigs(cData, opts, currentVersion...)
+		cfgResults, err := validateConfigs(cData, opts, currentVersion...)
 		if err != nil {
 			return nil, err
 		}
@@ -496,23 +484,35 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 			return nil, err
 		}
 
+		// Separate warnings and errors from config validation results
+		var cfgWarnings, cfgErrors ValidationResults
+		for _, result := range cfgResults {
+			if result.isError() {
+				cfgErrors = append(cfgErrors, result)
+			} else {
+				cfgWarnings = append(cfgWarnings, result)
+			}
+		}
+
 		// Only fail validation on errors, not warnings
-		if len(cfgErrors) > 0 || len(ruleFails) > 0 {
+		if len(cfgErrors) > 0 || ruleFails.HasErrors() {
 			// Combine all failures (errors and warnings) for error message
 			allErrors := append(cfgErrors, cfgWarnings...)
 			return nil, &FileConfigError{
 				ConfigLocations: opts.ConfigLocations,
-				ConfigFailures:  allErrors,
+				ConfigResults:   allErrors,
 				RulesLocations:  opts.RulesLocations,
-				RulesFailures:   ruleFails,
+				RulesResults:    ruleFails,
 			}
 		}
 
 		// Store warnings to return later if config creation succeeds
 		if len(cfgWarnings) > 0 {
-			warningErr = &FileConfigWarning{
+			warningErr = &FileConfigError{
 				ConfigLocations: opts.ConfigLocations,
-				ConfigWarnings:  cfgWarnings,
+				ConfigResults:   cfgWarnings,
+				RulesLocations:  []string{},
+				RulesResults:    ValidationResults{},
 			}
 		}
 	}
