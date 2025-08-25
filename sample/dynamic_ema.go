@@ -13,19 +13,30 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// createDynForEMADynamicSampler creates a dynsampler for EMADynamicSampler
+func createDynForEMADynamicSampler(c *config.EMADynamicSamplerConfig) *dynsampler.EMASampleRate {
+	maxKeys := c.MaxKeys
+	if maxKeys == 0 {
+		maxKeys = 500
+	}
+
+	dynsampler := &dynsampler.EMASampleRate{
+		GoalSampleRate:             c.GoalSampleRate,
+		AdjustmentIntervalDuration: time.Duration(c.AdjustmentInterval),
+		Weight:                     c.Weight,
+		AgeOutValue:                c.AgeOutValue,
+		BurstDetectionDelay:        c.BurstDetectionDelay,
+		BurstMultiple:              c.BurstMultiple,
+		MaxKeys:                    maxKeys,
+	}
+	dynsampler.Start()
+	return dynsampler
+}
+
 type EMADynamicSampler struct {
 	Config  *config.EMADynamicSamplerConfig
 	Logger  logger.Logger
 	Metrics metrics.Metrics
-
-	goalSampleRate      int
-	adjustmentInterval  config.Duration
-	weight              float64
-	ageOutValue         float64
-	burstMultiple       float64
-	burstDetectionDelay uint
-	maxKeys             int
-	prefix              string
 
 	key                      *traceKey
 	keyMu                    sync.Mutex
@@ -38,44 +49,22 @@ type EMADynamicSampler struct {
 func (d *EMADynamicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting EMADynamicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting EMADynamicSampler") }()
-	d.goalSampleRate = d.Config.GoalSampleRate
-	d.adjustmentInterval = d.Config.AdjustmentInterval
-	d.weight = d.Config.Weight
-	d.ageOutValue = d.Config.AgeOutValue
-	d.burstMultiple = d.Config.BurstMultiple
-	d.burstDetectionDelay = d.Config.BurstDetectionDelay
-	d.maxKeys = d.Config.MaxKeys
-	if d.maxKeys == 0 {
-		d.maxKeys = 500
+
+	// If dynsampler is not set (e.g., in tests), create it
+	if d.dynsampler == nil {
+		d.dynsampler = createDynForEMADynamicSampler(d.Config)
 	}
-	d.prefix = "emadynamic"
+
 	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 
-	// spin up the actual dynamic sampler
-	d.dynsampler = &dynsampler.EMASampleRate{
-		GoalSampleRate:             d.goalSampleRate,
-		AdjustmentIntervalDuration: time.Duration(d.adjustmentInterval),
-		Weight:                     d.weight,
-		AgeOutValue:                d.ageOutValue,
-		BurstDetectionDelay:        d.burstDetectionDelay,
-		BurstMultiple:              d.burstMultiple,
-		MaxKeys:                    d.maxKeys,
-	}
-	d.dynsampler.Start()
-
 	// Register statistics this package will produce
 	d.metricsRecorder = &dynsamplerMetricsRecorder{
-		prefix: d.prefix,
+		prefix: "emadynamic",
 		met:    d.Metrics,
 	}
-
 	d.metricsRecorder.RegisterMetrics(d.dynsampler)
 	return nil
-}
-
-func (d *EMADynamicSampler) Stop() {
-	d.dynsampler.Stop()
 }
 
 func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
@@ -101,7 +90,7 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	}).Logf("got sample rate and decision")
 	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
 
-	return rate, shouldKeep, d.prefix, key
+	return rate, shouldKeep, "emadynamic", key
 }
 
 func (d *EMADynamicSampler) GetKeyFields() ([]string, []string) {

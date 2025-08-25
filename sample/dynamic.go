@@ -13,15 +13,30 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// createDynForDynamicSampler creates a dynsampler for DynamicSampler
+func createDynForDynamicSampler(c *config.DynamicSamplerConfig) dynsampler.Sampler {
+	maxKeys := c.MaxKeys
+	if maxKeys == 0 {
+		maxKeys = 500
+	}
+	clearFreq := c.ClearFrequency
+	if clearFreq == 0 {
+		clearFreq = config.Duration(30 * time.Second)
+	}
+
+	dynsamplerInstance := &dynsampler.AvgSampleRate{
+		GoalSampleRate:         int(c.SampleRate),
+		ClearFrequencyDuration: time.Duration(clearFreq),
+		MaxKeys:                maxKeys,
+	}
+	dynsamplerInstance.Start()
+	return dynsamplerInstance
+}
+
 type DynamicSampler struct {
 	Config  *config.DynamicSamplerConfig
 	Logger  logger.Logger
 	Metrics metrics.Metrics
-
-	sampleRate     int64
-	clearFrequency config.Duration
-	maxKeys        int
-	prefix         string
 
 	key                      *traceKey
 	keyMu                    sync.Mutex
@@ -34,39 +49,23 @@ type DynamicSampler struct {
 func (d *DynamicSampler) Start() error {
 	d.Logger.Debug().Logf("Starting DynamicSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting DynamicSampler") }()
-	d.sampleRate = d.Config.SampleRate
-	if d.Config.ClearFrequency == 0 {
-		d.Config.ClearFrequency = config.Duration(30 * time.Second)
-	}
-	d.clearFrequency = d.Config.ClearFrequency
-	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
-	d.maxKeys = d.Config.MaxKeys
-	if d.maxKeys == 0 {
-		d.maxKeys = 500
-	}
-	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
-	d.prefix = "dynamic"
-	// spin up the actual dynamic sampler
-	d.dynsampler = &dynsampler.AvgSampleRate{
-		GoalSampleRate:         int(d.sampleRate),
-		ClearFrequencyDuration: time.Duration(d.clearFrequency),
-		MaxKeys:                d.maxKeys,
+	// If dynsampler is not set (e.g., in tests), create it
+	if d.dynsampler == nil {
+		d.dynsampler = createDynForDynamicSampler(d.Config)
 	}
-	d.dynsampler.Start()
+
+	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
+	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
 	// Register statistics from the dynsampler-go package
 	d.metricsRecorder = dynsamplerMetricsRecorder{
 		met:    d.Metrics,
-		prefix: d.prefix,
+		prefix: "dynamic",
 	}
 	d.metricsRecorder.RegisterMetrics(d.dynsampler)
 
 	return nil
-}
-
-func (d *DynamicSampler) Stop() {
-	d.dynsampler.Stop()
 }
 
 func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
@@ -91,7 +90,7 @@ func (d *DynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
 	d.metricsRecorder.RecordMetrics(d.dynsampler, shouldKeep, rate, n)
-	return rate, shouldKeep, d.prefix, key
+	return rate, shouldKeep, "dynamic", key
 }
 
 func (d *DynamicSampler) GetKeyFields() ([]string, []string) {

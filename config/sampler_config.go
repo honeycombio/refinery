@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/honeycombio/refinery/generics"
 )
@@ -289,6 +290,9 @@ func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
 		}
 
 		for _, condition := range rule.Conditions {
+			// Ensure Init() has been called to prevent races when reading Fields
+			condition.Init()
+
 			// Field and Fields are mutually exclusive, so we only need to check one.
 			if condition.Fields != nil {
 				fields.Add(condition.Fields...)
@@ -376,20 +380,28 @@ type RulesBasedSamplerCondition struct {
 	Value    any                               `json:"value" yaml:"Value" `
 	Datatype string                            `json:"datatype" yaml:"Datatype,omitempty"`
 	Matches  func(value any, exists bool) bool `json:"-" yaml:"-"`
+
+	// initOnce ensures Init() runs only once to prevent races
+	initOnce sync.Once `json:"-" yaml:"-"`
 }
 
 func (r *RulesBasedSamplerCondition) Init() error {
-	// if Field is specified, we move it into Fields so that we don't have to deal with checking both.
-	if r.Field != "" {
-		// we're going to check that both aren't defined -- this should have been caught by validation
-		// but we'll also check here just in case.
-		if len(r.Fields) > 0 {
-			return fmt.Errorf("both Field and Fields are defined in a single condition")
+	var err error
+	r.initOnce.Do(func() {
+		// if Field is specified, we move it into Fields so that we don't have to deal with checking both.
+		if r.Field != "" {
+			// we're going to check that both aren't defined -- this should have been caught by validation
+			// but we'll also check here just in case.
+			if len(r.Fields) > 0 {
+				err = fmt.Errorf("both Field and Fields are defined in a single condition")
+				return
+			}
+			// now we know it's safe to move Field into Fields
+			r.Fields = []string{r.Field}
 		}
-		// now we know it's safe to move Field into Fields
-		r.Fields = []string{r.Field}
-	}
-	return r.setMatchesFunction()
+		err = r.setMatchesFunction()
+	})
+	return err
 }
 
 func (r *RulesBasedSamplerCondition) String() string {
