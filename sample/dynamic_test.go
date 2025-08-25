@@ -108,7 +108,6 @@ func TestDynamicSamplerConcurrency(t *testing.T) {
 
 			err := sampler.Start()
 			assert.NoError(t, err)
-			defer sampler.Stop()
 
 			// Create test traces with different characteristics
 			mockCfg := &config.MockConfig{}
