@@ -118,8 +118,8 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 h1:5ZPtiqj0JL5oKWmcsq4VMaAW5uk
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3/go.mod h1:ndYquD05frm2vACXE1nsccT4oJzjhw2arTS2cpUD1PI=
 github.com/hashicorp/golang-lru/v2 v2.0.7 h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs4luLUK2k=
 github.com/hashicorp/golang-lru/v2 v2.0.7/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
-github.com/honeycombio/dynsampler-go v0.6.4-0.20250815182641-97915ed9d635 h1:uXnU6voKiTXzVEGjvtTmvoJcFKk2FaLvd7KZ22Wt6ks=
-github.com/honeycombio/dynsampler-go v0.6.4-0.20250815182641-97915ed9d635/go.mod h1:mqCYD3JbAEgRvxu52Q0doTO3wKEUvEott8H8VMEpnQ0=
+github.com/honeycombio/dynsampler-go v0.6.4-0.20250820210241-78025e5898ce h1:nHhlDfwSQRJocHvTTrby12DTIrCWjQXff0h5pTTviLE=
+github.com/honeycombio/dynsampler-go v0.6.4-0.20250820210241-78025e5898ce/go.mod h1:mqCYD3JbAEgRvxu52Q0doTO3wKEUvEott8H8VMEpnQ0=
 github.com/honeycombio/hpsf v0.5.1-0.20250605195630-9b072f9dbd61 h1:cll8fstVhA805sKS5xjIVw/hKOz40qHpVvgAkg/h4hw=
 github.com/honeycombio/hpsf v0.5.1-0.20250605195630-9b072f9dbd61/go.mod h1:29/tpyeKw7tbT7mw1WCjMR6lqul7tmtNpuO0RICwzXk=
 github.com/honeycombio/husky v0.37.1-0.20250730154742-ddf9db5b5fe7 h1:KRqxHheX+nN15lUhQwKNW1xBBpcgEEDvZWZ/MX1m1AI=

@@ -13,21 +13,34 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// createDynForTotalThroughputSampler creates a dynsampler for TotalThroughputSampler
+func createDynForTotalThroughputSampler(c *config.TotalThroughputSamplerConfig) *dynsampler.TotalThroughput {
+	maxKeys := c.MaxKeys
+	if maxKeys == 0 {
+		maxKeys = 500
+	}
+	clearFreq := c.ClearFrequency
+	if clearFreq == 0 {
+		clearFreq = config.Duration(30 * time.Second)
+	}
+	clusterSize := 1 // Will be updated by SetClusterSize if needed
+
+	dynsampler := &dynsampler.TotalThroughput{
+		GoalThroughputPerSec:   c.GoalThroughputPerSec / clusterSize,
+		ClearFrequencyDuration: time.Duration(clearFreq),
+		MaxKeys:                maxKeys,
+	}
+	dynsampler.Start()
+	return dynsampler
+}
+
 type TotalThroughputSampler struct {
 	Config  *config.TotalThroughputSamplerConfig
 	Logger  logger.Logger
 	Metrics metrics.Metrics
 
-	goalThroughputPerSec int
-	clusterSize          int
-	useClusterSize       bool
-	clearFrequency       config.Duration
-	maxKeys              int
-	prefix               string
-
 	key                      *traceKey
 	keyMu                    sync.Mutex
-	clusterMu                sync.Mutex
 	keyFields, nonRootFields []string
 
 	dynsampler      *dynsampler.TotalThroughput
@@ -37,55 +50,22 @@ type TotalThroughputSampler struct {
 func (d *TotalThroughputSampler) Start() error {
 	d.Logger.Debug().Logf("Starting TotalThroughputSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting TotalThroughputSampler") }()
-	if d.Config.GoalThroughputPerSec < 1 {
-		d.Logger.Debug().Logf("configured sample rate for dynamic sampler was %d; forcing to 100", d.Config.GoalThroughputPerSec)
-		d.Config.GoalThroughputPerSec = 100
-	}
-	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
-	d.useClusterSize = d.Config.UseClusterSize
-	if d.clusterSize == 0 {
-		d.clusterSize = 1
-	}
-	if d.Config.ClearFrequency == 0 {
-		d.Config.ClearFrequency = config.Duration(30 * time.Second)
-	}
-	d.clearFrequency = d.Config.ClearFrequency
-	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
-	d.maxKeys = d.Config.MaxKeys
-	if d.maxKeys == 0 {
-		d.maxKeys = 500
-	}
-	d.prefix = "totalthroughput"
-	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
-	// spin up the actual dynamic sampler
-	d.dynsampler = &dynsampler.TotalThroughput{
-		GoalThroughputPerSec:   d.goalThroughputPerSec / d.clusterSize,
-		ClearFrequencyDuration: time.Duration(d.clearFrequency),
-		MaxKeys:                d.maxKeys,
+	// If dynsampler is not set (e.g., in tests), create it
+	if d.dynsampler == nil {
+		d.dynsampler = createDynForTotalThroughputSampler(d.Config)
 	}
-	d.dynsampler.Start()
+
+	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
+	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
 	// Register statistics this package will produce
 	d.metricsRecorder = &dynsamplerMetricsRecorder{
-		prefix: d.prefix,
+		prefix: "totalthroughput",
 		met:    d.Metrics,
 	}
 	d.metricsRecorder.RegisterMetrics(d.dynsampler)
 	return nil
-}
-
-func (d *TotalThroughputSampler) Stop() {
-	d.dynsampler.Stop()
-}
-
-func (d *TotalThroughputSampler) SetClusterSize(size int) {
-	if d.useClusterSize {
-		d.clusterMu.Lock()
-		d.clusterSize = size
-		d.dynsampler.GoalThroughputPerSec = d.goalThroughputPerSec / size
-		d.clusterMu.Unlock()
-	}
 }
 
 func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
@@ -113,7 +93,7 @@ func (d *TotalThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, k
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
 
-	return rate, shouldKeep, d.prefix, key
+	return rate, shouldKeep, "totalthroughput", key
 }
 
 func (d *TotalThroughputSampler) GetKeyFields() ([]string, []string) {

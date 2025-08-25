@@ -13,22 +13,31 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// createDynForWindowedThroughputSampler creates a dynsampler for WindowedThroughputSampler
+func createDynForWindowedThroughputSampler(c *config.WindowedThroughputSamplerConfig) *dynsampler.WindowedThroughput {
+	maxKeys := c.MaxKeys
+	if maxKeys == 0 {
+		maxKeys = 500
+	}
+	clusterSize := 1 // Will be updated by SetClusterSize if needed
+
+	dynsamplerInstance := &dynsampler.WindowedThroughput{
+		GoalThroughputPerSec:      float64(c.GoalThroughputPerSec) / float64(clusterSize),
+		UpdateFrequencyDuration:   time.Duration(c.UpdateFrequency),
+		LookbackFrequencyDuration: time.Duration(c.LookbackFrequency),
+		MaxKeys:                   maxKeys,
+	}
+	dynsamplerInstance.Start()
+	return dynsamplerInstance
+}
+
 type WindowedThroughputSampler struct {
 	Config  *config.WindowedThroughputSamplerConfig
 	Logger  logger.Logger
 	Metrics metrics.Metrics
 
-	updatefrequency      config.Duration
-	lookbackfrequency    config.Duration
-	goalThroughputPerSec int
-	clusterSize          int
-	useClusterSize       bool
-	maxKeys              int
-	prefix               string
-
 	key                      *traceKey
 	keyMu                    sync.Mutex
-	clusterMu                sync.Mutex
 	keyFields, nonRootFields []string
 
 	dynsampler      *dynsampler.WindowedThroughput
@@ -38,51 +47,24 @@ type WindowedThroughputSampler struct {
 func (d *WindowedThroughputSampler) Start() error {
 	d.Logger.Debug().Logf("Starting WindowedThroughputSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting WindowedThroughputSampler") }()
-	d.goalThroughputPerSec = d.Config.GoalThroughputPerSec
-	d.useClusterSize = d.Config.UseClusterSize
-	if d.clusterSize == 0 {
-		d.clusterSize = 1
-	}
-	d.updatefrequency = d.Config.UpdateFrequency
-	d.lookbackfrequency = d.Config.LookbackFrequency
-	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
-	d.maxKeys = d.Config.MaxKeys
-	if d.maxKeys == 0 {
-		d.maxKeys = 500
-	}
-	d.prefix = "windowedthroughput"
-	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
-	// spin up the actual dynamic sampler
-	d.dynsampler = &dynsampler.WindowedThroughput{
-		GoalThroughputPerSec:      float64(d.goalThroughputPerSec) / float64(d.clusterSize),
-		UpdateFrequencyDuration:   time.Duration(d.updatefrequency),
-		LookbackFrequencyDuration: time.Duration(d.lookbackfrequency),
-		MaxKeys:                   d.maxKeys,
+	// If dynsampler is not set (e.g., in tests), create it
+	if d.dynsampler == nil {
+		d.dynsampler = createDynForWindowedThroughputSampler(d.Config)
 	}
-	d.dynsampler.Start()
+
+	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
+	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
 	// Register statistics this package will produce
 	d.metricsRecorder = &dynsamplerMetricsRecorder{
-		prefix: d.prefix,
+		prefix: "windowedthroughput",
 		met:    d.Metrics,
 	}
 	d.metricsRecorder.RegisterMetrics(d.dynsampler)
 	return nil
 }
 
-func (d *WindowedThroughputSampler) Stop() {
-	d.dynsampler.Stop()
-}
-
-func (d *WindowedThroughputSampler) SetClusterSize(size int) {
-	if d.useClusterSize {
-		d.clusterMu.Lock()
-		d.clusterSize = size
-		d.dynsampler.GoalThroughputPerSec = float64(d.goalThroughputPerSec) / float64(size)
-		d.clusterMu.Unlock()
-	}
-}
 
 func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	d.keyMu.Lock()
@@ -109,7 +91,7 @@ func (d *WindowedThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint
 		"span_count":  count,
 	}).Logf("got sample rate and decision")
 
-	return rate, shouldKeep, d.prefix, key
+	return rate, shouldKeep, "windowedthroughput", key
 }
 
 func (d *WindowedThroughputSampler) GetKeyFields() ([]string, []string) {
