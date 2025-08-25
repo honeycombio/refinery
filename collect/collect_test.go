@@ -88,6 +88,14 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 	}
 	localPubSub.Start()
 
+	sf := &sample.SamplerFactory{
+		Config:  conf,
+		Metrics: s,
+		Logger:  &logger.NullLogger{},
+	}
+	err = sf.Start()
+	require.NoError(t, err)
+
 	c := &InMemCollector{
 		TestMode:         true,
 		Config:           conf,
@@ -100,12 +108,8 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 		PubSub:           localPubSub,
 		Metrics:          s,
 		StressRelief:     &MockStressReliever{},
-		SamplerFactory: &sample.SamplerFactory{
-			Config:  conf,
-			Metrics: s,
-			Logger:  &logger.NullLogger{},
-		},
-		done: make(chan struct{}),
+		SamplerFactory:   sf,
+		done:             make(chan struct{}),
 		Peers: &peer.MockPeers{
 			Peers: []string{"api1", "api2"},
 			ID:    "api1",
@@ -133,6 +137,8 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 		assert.NoError(t, err)
 		err = healthReporter.Stop()
 		assert.NoError(t, err)
+
+		sf.Stop()
 	})
 
 	return c
@@ -568,7 +574,8 @@ func TestSampleConfigReload(t *testing.T) {
 			TraceTimeout: config.Duration(60 * time.Second),
 			MaxBatchSize: 500,
 		},
-		GetSamplerTypeVal:      &config.DeterministicSamplerConfig{SampleRate: 1},
+		// Start with DynamicSampler with low sample rate to test config changes
+		GetSamplerTypeVal:      &config.DynamicSamplerConfig{SampleRate: 2, FieldList: []string{"service.name"}},
 		TraceIdFieldNames:      []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{IncomingQueueSize: 10, ShutdownDelay: config.Duration(1 * time.Millisecond)},
@@ -581,53 +588,104 @@ func TestSampleConfigReload(t *testing.T) {
 
 	coll := newTestCollector(t, conf)
 
+	// Start the SamplerFactory to initialize its maps
+	err := coll.SamplerFactory.Start()
+	require.NoError(t, err)
+
+	// Just one loop keep things intelligible.
+	loop := coll.collectLoops[0]
+
 	dataset := "aoeu"
 
+	// Create a test trace for consistent results
+	createTestTrace := func(traceID string) *types.Trace {
+		mockCfg := &config.MockConfig{}
+		trace := &types.Trace{TraceID: traceID}
+		trace.AddSpan(&types.Span{
+			Event: types.Event{
+				Data: types.NewPayload(mockCfg, map[string]any{
+					"service.name": "test-service",
+				}),
+			},
+		})
+		return trace
+	}
+
+	// Sending a span should cause the sampler to be loaded.
 	span := &types.Span{
 		TraceID: "1",
 		Event: types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
+			Data: types.NewPayload(
+				&config.MockConfig{},
+				map[string]any{"service.name": "test-service"},
+			),
 		},
 		IsRoot: true,
 	}
-
 	coll.AddSpan(span)
 
+	// Wait for the sampler to be loaded and test initial sample rate
+	var initialRate uint
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		_, ok := coll.datasetSamplers[dataset]
-		coll.mutex.Unlock()
+		ch := make(chan struct{})
+		defer close(ch)
 
-		return ok
+		loop.pause <- ch
+		if sampler := loop.datasetSamplers[dataset]; sampler != nil {
+			testTrace := createTestTrace("test-trace-1")
+			rate, _, reason, _ := sampler.GetSampleRate(testTrace)
+			if reason == "dynamic" && rate > 0 {
+				initialRate = rate
+				return true
+			}
+		}
+		return false
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
+	assert.Equal(t, uint(2), initialRate)
 
+	// Change the configuration to a higher sample rate
+	conf.Mux.Lock()
+	conf.GetSamplerTypeVal = &config.DynamicSamplerConfig{SampleRate: 10, FieldList: []string{"service.name"}}
+	conf.Mux.Unlock()
+
+	// Reloading the config should clear the sampler.
 	conf.Reload()
-
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		_, ok := coll.datasetSamplers[dataset]
-		coll.mutex.Unlock()
-		return !ok
+		ch := make(chan struct{})
+		defer close(ch)
+
+		loop.pause <- ch
+		return loop.datasetSamplers[dataset] == nil
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 
+	// Another span, it gets loaded again with new configuration.
 	span = &types.Span{
 		TraceID: "2",
-		Event: types.Event{
-			Dataset: dataset,
-			APIKey:  legacyAPIKey,
-		},
-		IsRoot: true,
+		Event:   types.Event{Dataset: dataset, APIKey: legacyAPIKey, Data: types.NewPayload(&config.MockConfig{}, map[string]any{"service.name": "test-service"})},
+		IsRoot:  true,
 	}
-
 	coll.AddSpan(span)
 
+	// Wait for the new sampler to be loaded and test the updated sample rate
+	var newRate uint
 	assert.Eventually(t, func() bool {
-		coll.mutex.Lock()
-		_, ok := coll.datasetSamplers[dataset]
-		coll.mutex.Unlock()
-		return ok
+		ch := make(chan struct{})
+		defer close(ch)
+
+		loop.pause <- ch
+		if sampler := loop.datasetSamplers[dataset]; sampler != nil {
+			testTrace := createTestTrace("test-trace-2")
+			rate, _, reason, _ := sampler.GetSampleRate(testTrace)
+			if reason == "dynamic" && rate > 0 {
+				newRate = rate
+				return true
+			}
+		}
+		return false
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
+	assert.Equal(t, uint(10), newRate)
 }
 
 // TestStableMaxAlloc tests memory pressure handling and cache eviction when memory allocation limits are exceeded
@@ -764,7 +822,6 @@ func TestAddSpanNoBlock(t *testing.T) {
 	require.NoError(t, err)
 
 	coll.sampleTraceCache = stc
-	coll.datasetSamplers = make(map[string]sample.Sampler)
 
 	// Block the collect loop so nothing gets processed
 	ch := make(chan struct{})
