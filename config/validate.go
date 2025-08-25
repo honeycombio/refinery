@@ -306,7 +306,7 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) Valid
 			})
 			continue // if type is wrong we can't validate further
 		}
-		if deprecation := generateDeprecationWarnings(k, field, currentVersion...); !deprecation.isEmpty() {
+		if deprecation := checkForDeprecation(k, field, currentVersion...); !deprecation.isEmpty() {
 			results = append(results, deprecation)
 		}
 
@@ -542,9 +542,8 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) Valid
 	return results
 }
 
-// generateDeprecationWarnings creates consolidated warning messages for deprecated fields
-// grouped by version, with a single documentation URL at the end
-func generateDeprecationWarnings(fieldPath string, field *Field, currentVersion ...string) ValidationResult {
+// checkForDeprecation returns validation results for deprecated fields
+func checkForDeprecation(fieldPath string, field *Field, currentVersion ...string) ValidationResult {
 
 	// Check for deprecation warnings/errors if current version is provided
 	message := field.DeprecationText
