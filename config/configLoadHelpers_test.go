@@ -247,13 +247,13 @@ func Test_validateConfigs(t *testing.T) {
 				makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.1.2.3:8080"),
 				makeYAML("General.ConfigReloadInterval", Duration(2*time.Second)),
 			},
-			emptyResults,
+			nil,
 			false,
 		},
 		{
 			"test3", []string{
 				makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.1.2.3:8080"),
-				makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", 7),
+				makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", "!!%"),
 			},
 			ValidationResults{{Message: "field General.DatasetPrefix must be a string but 7 is int", Severity: Error}},
 			false,

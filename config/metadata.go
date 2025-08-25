@@ -32,7 +32,7 @@ type Field struct {
 	V1Name          string       `yaml:"v1name"`
 	FirstVersion    string       `yaml:"firstversion"`
 	LastVersion     string       `yaml:"lastversion"`
-	DeprecationText string       `yaml:"deprecationText"`
+	DeprecationText string       `yaml:"deprecationtext"`
 	Type            string       `yaml:"type"`
 	ValueType       string       `yaml:"valuetype"`
 	Extra           string       `yaml:"extra"`

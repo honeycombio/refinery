@@ -5,7 +5,6 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-
 // compareVersions compares two version strings using semantic versioning
 // Returns:
 //
@@ -21,14 +20,14 @@ func compareVersions(current, target string) (int, error) {
 			return 0, fmt.Errorf("invalid version format: %s", current)
 		}
 	}
-	
+
 	if !semver.IsValid(target) {
 		target = "v" + target
 		if !semver.IsValid(target) {
 			return 0, fmt.Errorf("invalid version format: %s", target)
 		}
 	}
-	
+
 	return semver.Compare(current, target), nil
 }
 

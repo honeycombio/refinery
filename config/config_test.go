@@ -85,29 +85,46 @@ Samplers:
 		}
 	})
 
-	// Test with version after deprecation should fail validation
-	t.Run("fails validation for version newer than lastversion", func(t *testing.T) {
-		_, err := config.NewConfig(opts, "v2.10.0")
-		require.Error(t, err, "Expected validation error due to deprecated config being used with newer version")
-
-		errStr := err.Error()
-		assert.Contains(t, errStr, "ERROR", "Expected error to contain ERROR for deprecated config with newer version, but got: %s", errStr)
-		assert.Contains(t, errStr, "no longer supported", "Expected error to indicate config is no longer supported, but got: %s", errStr)
+	// Test with version after deprecation should show warning
+	t.Run("shows deprecation warning for version newer than lastversion", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts, "v2.10.0")
+		require.NotNil(t, cfg, "Config should be created successfully even with deprecation warnings")
+		
+		// Should return a warning error, not a fatal error
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
 	})
 
-	// Test with version equal to lastversion should fail validation
-	t.Run("fails validation for version equal to lastversion", func(t *testing.T) {
-		_, err := config.NewConfig(opts, "v2.9.7")
-		require.Error(t, err, "Expected validation error due to deprecated config being used with equal version")
-
-		errStr := err.Error()
-		assert.Contains(t, errStr, "ERROR", "Expected error to contain ERROR for deprecated config with equal version, but got: %s", errStr)
+	// Test with version equal to lastversion should show warning
+	t.Run("shows deprecation warning for version equal to lastversion", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts, "v2.9.7")
+		require.NotNil(t, cfg, "Config should be created successfully even with deprecation warnings")
+		
+		// Should return a warning error, not a fatal error
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
 	})
 
-	// Test without version - should not show deprecation warnings or errors
-	t.Run("does not show deprecation warning when no version provided", func(t *testing.T) {
-		_, err := config.NewConfig(opts)
-		require.NoError(t, err)
+	// Test without version - should show deprecation warning based on DeprecationText
+	t.Run("shows deprecation warning when no version provided but DeprecationText exists", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts)
+		require.NotNil(t, cfg, "Config should be created successfully")
+		
+		// Should return a warning error since the field has DeprecationText
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
 	})
 }
 

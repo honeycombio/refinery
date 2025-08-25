@@ -423,21 +423,50 @@ func (e *FileConfigError) HasErrors() bool {
 
 func (e *FileConfigError) Error() string {
 	var msg strings.Builder
-	if len(e.ConfigResults) > 0 {
-		loc := strings.Join(e.ConfigLocations, ", ")
-		if !e.HasErrors() {
-			msg.WriteString("Configuration warnings for [")
-		} else {
-			msg.WriteString("Validation failed for config [")
+	var errors []ValidationResult
+	var warnings []ValidationResult
+
+	// Filter and separate errors and warnings, removing empty messages
+	for _, result := range e.ConfigResults {
+		if result.Message != "" {
+			if result.IsError() {
+				errors = append(errors, result)
+			} else {
+				warnings = append(warnings, result)
+			}
 		}
+	}
+
+	if len(errors) > 0 {
+		loc := strings.Join(e.ConfigLocations, ", ")
+		msg.WriteString("ERROR: Validation failed for config [")
 		msg.WriteString(loc)
 		msg.WriteString("]:\n")
-		for _, result := range e.ConfigResults {
+		for _, result := range errors {
 			msg.WriteString("  ")
 			msg.WriteString(result.Message)
 			msg.WriteString("\n")
 		}
 	}
+
+	if len(warnings) > 0 {
+		loc := strings.Join(e.ConfigLocations, ", ")
+		msg.WriteString("WARNING: Configuration warnings for [")
+		msg.WriteString(loc)
+		msg.WriteString("]:\n")
+		for _, result := range warnings {
+			msg.WriteString("  ")
+			msg.WriteString(result.Message)
+			msg.WriteString("\n")
+		}
+
+		msg.WriteString("  ")
+		// Add documentation URL once if there are any grouped deprecation warnings
+		msg.WriteString("Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/")
+		msg.WriteString("\n")
+
+	}
+
 	if len(e.RulesResults) > 0 {
 		loc := strings.Join(e.RulesLocations, ", ")
 		msg.WriteString("Validation failed for rules [")
@@ -487,7 +516,7 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 		// Separate warnings and errors from config validation results
 		var cfgWarnings, cfgErrors ValidationResults
 		for _, result := range cfgResults {
-			if result.isError() {
+			if result.IsError() {
 				cfgErrors = append(cfgErrors, result)
 			} else {
 				cfgWarnings = append(cfgWarnings, result)

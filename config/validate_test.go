@@ -417,7 +417,7 @@ func TestValidateDeprecationWarnings(t *testing.T) {
 				},
 			},
 			currentVersion: "v2.8.0",
-			expected:       []string{"WARNING: CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead."},
+			expected:       []string{"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead."},
 		},
 		{
 			name: "deprecated field used, current version equals lastversion",
@@ -427,7 +427,7 @@ func TestValidateDeprecationWarnings(t *testing.T) {
 				},
 			},
 			currentVersion: "v2.9.7",
-			expected:       []string{"ERROR: CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead."},
+			expected:       []string{"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead."},
 		},
 		{
 			name: "deprecated field used, current version after lastversion",
@@ -437,7 +437,7 @@ func TestValidateDeprecationWarnings(t *testing.T) {
 				},
 			},
 			currentVersion: "v2.10.0",
-			expected:       []string{"ERROR: CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead."},
+			expected:       []string{"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead."},
 		},
 		{
 			name: "multiple deprecated fields, mixed versions",
@@ -450,8 +450,8 @@ func TestValidateDeprecationWarnings(t *testing.T) {
 			},
 			currentVersion: "v2.6.0", // After v2.5.0 but before v2.9.7
 			expected: []string{
-				"WARNING: CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.",
-				"ERROR: field Collection.OtherDeprecatedField was deprecated in version v2.5.0 and is no longer supported in version v2.6.0. Please remove it from your configuration and update following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/"},
+				"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.",
+				"field Collection.OtherDeprecatedField is deprecated since version v2.5.0"},
 		},
 		{
 			name: "old version shows all deprecated field warnings",
@@ -463,8 +463,8 @@ func TestValidateDeprecationWarnings(t *testing.T) {
 			},
 			currentVersion: "v2.4.0", // Before both deprecation versions
 			expected: []string{
-				"WARNING: CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.",
-				"WARNING: field Collection.OtherDeprecatedField is deprecated since version v2.5.0. Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/"},
+				"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.",
+				"field Collection.OtherDeprecatedField is deprecated since version v2.5.0"},
 		},
 	}
 

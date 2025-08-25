@@ -241,7 +241,11 @@ type ValidationResult struct {
 	Severity severity
 }
 
-func (v ValidationResult) isError() bool {
+func (v ValidationResult) isEmpty() bool {
+	return v.Message == ""
+}
+
+func (v ValidationResult) IsError() bool {
 	return v.Severity == Error
 }
 
@@ -250,7 +254,7 @@ type ValidationResults []ValidationResult
 func (v ValidationResults) HasErrors() bool {
 	hasErrors := false
 	for _, r := range v {
-		if r.isError() {
+		if r.IsError() {
 			hasErrors = true
 			break
 		}
@@ -267,7 +271,6 @@ func (v ValidationResults) HasErrors() bool {
 // Note that the flatten function returns only 2 levels.
 func (m *Metadata) Validate(data map[string]any, currentVersion ...string) ValidationResults {
 	var results ValidationResults
-	deprecatedByVersion := make(map[string][]string)
 	// check for unknown groups in the userdata
 	for k := range data {
 		if m.GetGroup(k) == nil {
@@ -303,41 +306,10 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) Valid
 			})
 			continue // if type is wrong we can't validate further
 		}
-		// Check for deprecation warnings/errors if current version is provided
-		if len(currentVersion) > 0 && field.LastVersion != "" {
-			if isVersionBefore(currentVersion[0], field.LastVersion) {
-				// Current version is before the last version - collect for grouped warning
-				if field.DeprecationText != "" {
-					// Handle custom deprecation text separately
-					message := fmt.Sprintf("WARNING: %s", field.DeprecationText)
-					results = append(results, ValidationResult{
-						Message:  message,
-						Severity: Warning,
-					})
-				} else {
-					// Group standard deprecation warnings by version
-					deprecatedByVersion[field.LastVersion] = append(deprecatedByVersion[field.LastVersion], k)
-				}
-			} else {
-				// Current version is equal to or after the last version - fail validation
-				comparison, err := compareVersions(currentVersion[0], field.LastVersion)
-				if err != nil || comparison >= 0 {
-					message := ""
-					if field.DeprecationText != "" {
-						message = fmt.Sprintf("ERROR: %s", field.DeprecationText)
-					} else {
-						message = fmt.Sprintf("ERROR: field %s was deprecated in version %s and is no longer supported in version %s. Please remove it from your configuration and update following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/", k, field.LastVersion, currentVersion[0])
-					}
-					// TODO: once we are ready to officially deprecate all older configs, we should return error here
-					// returning errors here will cause Refinery fail to start if there's any deprecated configs in
-					// customer's config file
-					results = append(results, ValidationResult{
-						Message:  message,
-						Severity: Warning,
-					})
-				}
-			}
+		if deprecation := generateDeprecationWarnings(k, field, currentVersion...); !deprecation.isEmpty() {
+			results = append(results, deprecation)
 		}
+
 		switch field.Type {
 		case "object":
 			// if it's an object, we need to recurse
@@ -567,42 +539,39 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) Valid
 		}
 	}
 
-	// Generate consolidated deprecation warnings
-	results = append(results, generateDeprecationWarnings(deprecatedByVersion)...)
-
 	return results
 }
 
 // generateDeprecationWarnings creates consolidated warning messages for deprecated fields
 // grouped by version, with a single documentation URL at the end
-func generateDeprecationWarnings(deprecatedByVersion map[string][]string) ValidationResults {
-	var warnings ValidationResults
+func generateDeprecationWarnings(fieldPath string, field *Field, currentVersion ...string) ValidationResult {
 
-	// Generate one warning per version group
-	for version, fields := range deprecatedByVersion {
-		if len(fields) > 0 {
-			var message string
-			if len(fields) == 1 {
-				message = fmt.Sprintf("WARNING: field %s is deprecated since version %s", fields[0], version)
-			} else {
-				message = fmt.Sprintf("WARNING: the following fields are deprecated since version %s: %s", version, strings.Join(fields, ", "))
+	// Check for deprecation warnings/errors if current version is provided
+	message := field.DeprecationText
+	if len(currentVersion) > 0 && field.LastVersion != "" {
+		if isVersionBefore(currentVersion[0], field.LastVersion) {
+			// Current version is before the last version - collect for grouped warning
+			if message == "" {
+				message = fmt.Sprintf("field %s is deprecated since version %s", fieldPath, field.LastVersion)
 			}
-			warnings = append(warnings, ValidationResult{
-				Message:  message,
-				Severity: Warning,
-			})
+		} else {
+			// Current version is equal to or after the last version - fail validation
+			comparison, err := compareVersions(currentVersion[0], field.LastVersion)
+			if err != nil || comparison >= 0 {
+				// TODO: once we are ready to officially deprecate all older configs, we should return error here
+				// returning errors here will cause Refinery fail to start if there's any deprecated configs in
+				// customer's config file
+				if message == "" {
+					message = fmt.Sprintf("field %s is deprecated since version %s", fieldPath, field.LastVersion)
+				}
+			}
 		}
 	}
 
-	// Add documentation URL once if there are any grouped deprecation warnings
-	if len(deprecatedByVersion) > 0 {
-		warnings = append(warnings, ValidationResult{
-			Message:  "Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/",
-			Severity: Warning,
-		})
+	return ValidationResult{
+		Message:  message,
+		Severity: Warning,
 	}
-
-	return warnings
 }
 
 // ValidateRules checks that the given data (which is expected to be a
