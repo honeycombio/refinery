@@ -155,7 +155,7 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampler {
 	c, _ := s.Config.GetSamplerConfigForDestName(samplerKey)
 
-	return s.createSampler(c, "")
+	return s.createSampler(c, samplerKey)
 }
 
 // GetDownstreamSampler creates a downstream sampler for use in rules-based sampling,

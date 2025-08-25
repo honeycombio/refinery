@@ -451,6 +451,49 @@ func (p *TestPeerMockWithCallback) TriggerUpdate() {
 	}
 }
 
+func TestDifferentDatasetsShouldNotShareDynsampler(t *testing.T) {
+	// This test demonstrates the bug where different datasets with identical
+	// sampler configs incorrectly share the same dynsampler instance
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/production/TotalThroughputSampler/GoalThroughputPerSec", 10,
+		"Samplers/production/TotalThroughputSampler/UseClusterSize", true,
+		"Samplers/production/TotalThroughputSampler/FieldList", []string{"service.name"},
+		"Samplers/dogfood/TotalThroughputSampler/GoalThroughputPerSec", 10,
+		"Samplers/dogfood/TotalThroughputSampler/UseClusterSize", true,
+		"Samplers/dogfood/TotalThroughputSampler/FieldList", []string{"service.name"},
+	)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	require.NoError(t, err)
+
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
+	}
+	factory.Start()
+	defer factory.Stop()
+
+	// Get samplers for both datasets
+	prodSampler := factory.GetSamplerImplementationForKey("production")
+	dogfoodSampler := factory.GetSamplerImplementationForKey("dogfood")
+
+	assert.NotNil(t, prodSampler)
+	assert.NotNil(t, dogfoodSampler)
+
+	prodImpl := prodSampler.(*TotalThroughputSampler)
+	dogfoodImpl := dogfoodSampler.(*TotalThroughputSampler)
+
+	assert.NotEqual(t, prodImpl.dynsampler, dogfoodImpl.dynsampler)
+	assert.Equal(t, prodImpl.dynsampler.GoalThroughputPerSec, dogfoodImpl.dynsampler.GoalThroughputPerSec)
+}
+
 // TestClusterSizeUpdatesSamplers verifies that the SamplerFactory properly handles dynamic peer updates
 // and their impact on throughput-based sampling behavior.
 func TestClusterSizeUpdatesSamplers(t *testing.T) {
