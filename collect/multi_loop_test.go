@@ -168,7 +168,7 @@ func TestMultiLoopProcessing(t *testing.T) {
 
 				for _, loop := range collector.collectLoops {
 					totalLocalReceived += loop.localSpanReceived.Load()
-					totalLocalProcessed += loop.localSpanProcessed.Load()
+					totalLocalProcessed += loop.localSpanProcessed
 					totalLocalWaiting += loop.localSpansWaiting.Load()
 				}
 

@@ -334,7 +334,6 @@ func (i *InMemCollector) houseKeeping() {
 			totalIncoming := 0
 			totalPeer := 0
 			totalCacheSize := 0
-			var totalProcessed int64
 			var totalWaiting int64
 			var totalReceived int64
 
@@ -343,7 +342,6 @@ func (i *InMemCollector) houseKeeping() {
 				totalPeer += len(loop.fromPeer)
 				totalCacheSize += loop.GetCacheSize()
 
-				totalProcessed += loop.localSpanProcessed.Swap(0)
 				totalWaiting += loop.localSpansWaiting.Swap(0)
 				totalReceived += loop.localSpanReceived.Swap(0)
 			}
@@ -357,7 +355,6 @@ func (i *InMemCollector) houseKeeping() {
 
 			// Report aggregated thread-local metrics
 			i.Metrics.Count("span_received", totalReceived)
-			i.Metrics.Count("span_processed", totalProcessed)
 			i.Metrics.Count("spans_waiting", totalWaiting)
 
 			// Send traces early if we're over memory budget
