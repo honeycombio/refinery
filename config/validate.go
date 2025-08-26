@@ -263,11 +263,12 @@ func (v ValidationResults) HasErrors() bool {
 }
 
 // Validate checks that the given data is valid according to the metadata.
-// It returns a list of errors, or an empty list if there are no errors.
-// The errors are strings that are suitable for showing to the user.
+// It returns a list of ValidationResults, which is empty if there are no errors.
+// Their Message fields are strings that are suitable for showing to the user.
 // The data is a map of group names to maps of field names to values.
 // If a field name is of type "object" then this function is called
 // recursively to validate the sub-object.
+// The currentVersion field is optional and will trigger evaluation of the deprecation warnings.
 // Note that the flatten function returns only 2 levels.
 func (m *Metadata) Validate(data map[string]any, currentVersion ...string) ValidationResults {
 	var results ValidationResults
