@@ -334,11 +334,18 @@ func (i *InMemCollector) houseKeeping() {
 			totalIncoming := 0
 			totalPeer := 0
 			totalCacheSize := 0
+			var totalProcessed int64
+			var totalWaiting int64
+			var totalReceived int64
 
 			for _, loop := range i.collectLoops {
 				totalIncoming += len(loop.incoming)
 				totalPeer += len(loop.fromPeer)
 				totalCacheSize += loop.GetCacheSize()
+
+				totalProcessed += loop.localSpanProcessed.Swap(0)
+				totalWaiting += loop.localSpansWaiting.Swap(0)
+				totalReceived += loop.localSpanReceived.Swap(0)
 			}
 
 			i.Metrics.Histogram("collector_incoming_queue", float64(totalIncoming))
@@ -347,6 +354,11 @@ func (i *InMemCollector) houseKeeping() {
 			i.Metrics.Gauge("collector_peer_queue_length", float64(totalPeer))
 			i.Metrics.Gauge("collector_cache_size", float64(totalCacheSize))
 			i.Metrics.Gauge("collector_num_loops", float64(len(i.collectLoops)))
+
+			// Report aggregated thread-local metrics
+			i.Metrics.Count("span_received", totalReceived)
+			i.Metrics.Count("span_processed", totalProcessed)
+			i.Metrics.Count("spans_waiting", totalWaiting)
 
 			// Send traces early if we're over memory budget
 			i.checkAlloc(ctx)

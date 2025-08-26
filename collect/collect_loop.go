@@ -58,6 +58,11 @@ type CollectLoop struct {
 
 	// For reporting cache size asynchronously.
 	lastCacheSize atomic.Int64
+
+	// Thread-local metrics counters
+	localSpanProcessed atomic.Int64
+	localSpansWaiting  atomic.Int64
+	localSpanReceived  atomic.Int64
 }
 
 // NewCollectLoop creates a new CollectLoop instance
@@ -89,15 +94,15 @@ func NewCollectLoop(
 func (cl *CollectLoop) addSpan(sp *types.Span) error {
 	if cl.parent.BlockOnAddSpan {
 		cl.incoming <- sp
-		cl.parent.Metrics.Increment("span_received")
-		cl.parent.Metrics.Up("spans_waiting")
+		cl.localSpanReceived.Add(1)
+		cl.localSpansWaiting.Add(1)
 		return nil
 	}
 
 	select {
 	case cl.incoming <- sp:
-		cl.parent.Metrics.Increment("span_received")
-		cl.parent.Metrics.Up("spans_waiting")
+		cl.localSpanReceived.Add(1)
+		cl.localSpansWaiting.Add(1)
 		return nil
 	default:
 		return ErrWouldBlock
@@ -108,15 +113,15 @@ func (cl *CollectLoop) addSpan(sp *types.Span) error {
 func (cl *CollectLoop) addSpanFromPeer(sp *types.Span) error {
 	if cl.parent.BlockOnAddSpan {
 		cl.fromPeer <- sp
-		cl.parent.Metrics.Increment("span_received")
-		cl.parent.Metrics.Up("spans_waiting")
+		cl.localSpanReceived.Add(1)
+		cl.localSpansWaiting.Add(1)
 		return nil
 	}
 
 	select {
 	case cl.fromPeer <- sp:
-		cl.parent.Metrics.Increment("span_received")
-		cl.parent.Metrics.Up("spans_waiting")
+		cl.localSpanReceived.Add(1)
+		cl.localSpansWaiting.Add(1)
 		return nil
 	default:
 		return ErrWouldBlock
@@ -196,8 +201,8 @@ func (cl *CollectLoop) collect() {
 func (cl *CollectLoop) processSpan(ctx context.Context, sp *types.Span) {
 	ctx, span := otelutil.StartSpanWith(ctx, cl.parent.Tracer, "processSpan", "loop_id", cl.ID)
 	defer func() {
-		cl.parent.Metrics.Increment("span_processed")
-		cl.parent.Metrics.Down("spans_waiting")
+		cl.localSpanProcessed.Add(1)
+		cl.localSpansWaiting.Add(-1)
 		span.End()
 	}()
 
