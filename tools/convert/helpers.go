@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/honeycombio/refinery/config"
 	"html/template"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/honeycombio/refinery/config"
 )
 
 // This file contains template helper functions, which must be listed in this
@@ -522,4 +524,178 @@ func _getStringsFrom(value any) []string {
 		}
 	}
 	return result
+}
+
+// removeDeprecated removes deprecated config options from the provided data map.
+// It returns the cleaned data and a list of removed options.
+// If dryRun is true, it returns the original data unchanged but still identifies what would be removed.
+func removeDeprecated(data map[string]any, dryRun bool) (map[string]any, []string) {
+	metadata := loadConfigMetadata()
+	var removedItems []string
+
+	// Helper function to handle field removal logic
+	handleDeprecatedField := func(keyToCheck string, lastVersion string, field config.Field, groupName string) bool {
+		if value, exists := _fetch(data, keyToCheck); exists {
+			removedItems = append(removedItems, fmt.Sprintf("%s (deprecated in %s)", keyToCheck, lastVersion))
+
+			// Apply any replacements defined in metadata
+			conversions := applyReplacements(field.Replacements, groupName, value, data, dryRun)
+			for _, conversion := range conversions {
+				removedItems = append(removedItems, fmt.Sprintf("  → %s", conversion))
+			}
+
+			if !dryRun {
+				removeField(data, keyToCheck)
+			}
+			return true
+		}
+		return false
+	}
+
+	for _, group := range metadata.Groups {
+		// Process individual deprecated fields first
+		for _, field := range group.Fields {
+			if field.LastVersion != "" {
+				// Check current location first
+				currentKey := group.Name + "." + field.Name
+				handled := handleDeprecatedField(currentKey, field.LastVersion, field, group.Name)
+
+				// Check legacy V1 location if it exists and current location wasn't found
+				if !handled && field.V1Group != "" && field.V1Name != "" {
+					legacyKey := field.V1Group + "." + field.V1Name
+					handleDeprecatedField(legacyKey, field.LastVersion, field, group.Name)
+				}
+			}
+		}
+
+		// After processing all fields, check if the group itself should be deprecated
+		// A group is deprecated if all its fields are deprecated
+		if group.IsDeprecated() {
+			if groupData, groupExists := data[group.Name]; groupExists {
+				if _, ok := groupData.(map[string]any); ok {
+					deprecationVersion := group.GetDeprecationVersion()
+					if len(deprecationVersion) == 0 {
+						continue
+					}
+					removedItems = append(removedItems, fmt.Sprintf("%s group (deprecated in %s)", group.Name, deprecationVersion))
+					if !dryRun {
+						delete(data, group.Name)
+					}
+				}
+			}
+		}
+	}
+
+	return data, removedItems
+}
+
+// removeField removes a field from the data map using dot notation
+func removeField(data map[string]any, key string) {
+	if !strings.Contains(key, ".") {
+		delete(data, key)
+		return
+	}
+
+	parts := strings.SplitN(key, ".", 2)
+	groups := strings.Split(parts[0], "/")
+
+	for _, g := range groups {
+		if value, ok := data[g]; ok {
+			if submap, ok := value.(map[string]any); ok {
+				if strings.Contains(parts[1], ".") {
+					removeField(submap, parts[1])
+				} else {
+					delete(submap, parts[1])
+				}
+				return
+			}
+		}
+	}
+}
+
+// setFieldValue sets a field value in the data map.
+// It creates the group map if it doesn't exist.
+func setFieldValue(data map[string]any, groupName string, fieldName string, value any) {
+	if _, exists := data[groupName]; !exists {
+		data[groupName] = make(map[string]any)
+	}
+
+	if groupMap, ok := data[groupName].(map[string]any); ok {
+		groupMap[fieldName] = value
+	}
+}
+
+// applyReplacements processes the replacements defined in a field's metadata.
+// It evaluates formulas and applies conditions to determine if replacement values should be set.
+func applyReplacements(replacements []config.Replacement, groupName string, deprecatedValue any, data map[string]any, dryRun bool) []string {
+	var conversions []string
+
+	for _, replacement := range replacements {
+		if message, applied := applyReplacement(replacement, groupName, deprecatedValue, data, dryRun); applied {
+			conversions = append(conversions, message)
+		}
+	}
+
+	return conversions
+}
+
+// applyReplacement handles a single replacement operation.
+func applyReplacement(replacement config.Replacement, groupName string, deprecatedValue any, data map[string]any, dryRun bool) (string, bool) {
+	targetKey := groupName + "." + replacement.Field
+	if _, exists := _fetch(data, targetKey); exists {
+		return "", false // Field already exists, skip replacement
+	}
+
+	newValue, err := evaluateFormula(replacement.Formula, deprecatedValue)
+	if err != nil {
+		return "", false
+	}
+
+	if !dryRun {
+		setFieldValue(data, groupName, replacement.Field, newValue)
+	}
+
+	return fmt.Sprintf("%s set to %v (using formula: %s)", replacement.Field, newValue, replacement.Formula), true
+}
+
+// evaluateFormula parses and evaluates simple mathematical formulas.
+// Currently supports: "value", "N * value", "value * N"
+func evaluateFormula(formula string, value any) (int64, error) {
+	formula = strings.TrimSpace(formula)
+
+	var val int64
+	switch v := value.(type) {
+	case int:
+		val = int64(v)
+	case int64:
+		val = v
+	default:
+		return 0, fmt.Errorf("unsupported value type: %T", value)
+	}
+
+	if formula == "value" {
+		return val, nil
+	}
+
+	// Handle multiplication: "N * value" or "value * N"
+	parts := strings.Split(formula, "*")
+	if len(parts) != 2 {
+		return 0, fmt.Errorf("invalid multiplication formula: %s", formula)
+	}
+
+	left := strings.TrimSpace(parts[0])
+	right := strings.TrimSpace(parts[1])
+
+	var multiPos string
+	if left == "value" {
+		multiPos = right
+	} else if right == "value" {
+		multiPos = left
+	}
+
+	multiplier, err := strconv.ParseInt(multiPos, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid multiplier: %s", right)
+	}
+	return val * multiplier, nil
 }

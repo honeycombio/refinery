@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2025-07-15 at 17:41:44 UTC
+# automatically generated on 2025-08-26 at 15:28:22 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -102,20 +102,17 @@ RedisPeerManagement:
   UseTLSInsecure: false
   Timeout: 5s
 Collection:
-  CacheCapacity: 10_000
   PeerQueueSize: 30_000
   IncomingQueueSize: 30_000
   AvailableMemory: "4.5Gb"
   MaxMemoryPercentage: 75
   MaxAlloc: 0
-  DisableRedistribution: false
+  DisableRedistribution: true
   RedistributionDelay: 30s
   ShutdownDelay: 15s
   TraceLocalityMode: concentrated
   HealthCheckTimeout: 15s
 BufferSizes:
-  UpstreamBufferSize: 10_000
-  PeerBufferSize: 100_000
 Specialized:
   EnvironmentCacheTTL: 1h
   CompressPeerCommunication: true
