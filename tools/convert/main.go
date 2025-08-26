@@ -27,9 +27,11 @@ import (
 var filesystem embed.FS
 
 type Options struct {
-	Input  string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
-	Output string `short:"o" long:"output" description:"the Refinery v2 config file to write (goes to stdout by default)"`
-	Type   string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON (in case file extension doesn't work)" choice:"Y" choice:"T" choice:"J"`
+	Input            string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
+	Output           string `short:"o" long:"output" description:"the Refinery v2 config file to write (goes to stdout by default)"`
+	Type             string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON (in case file extension doesn't work)" choice:"Y" choice:"T" choice:"J"`
+	DryRun           bool   `long:"dry-run" description:"show what would be changed without writing output"`
+	RemoveDeprecated bool   `long:"remove-deprecated" description:"remove deprecated config options during conversion"`
 }
 
 func load(r io.Reader, typ string) (map[string]any, error) {
@@ -97,6 +99,10 @@ func main() {
 	is a subcommand that can read a helm chart, extract both the rules and config from it,
 	and write them back out to a helm chart, while preserving the non-refinery portions.
 
+	Additional options:
+		--remove-deprecated: removes deprecated config options during conversion
+		--dry-run: shows what would be changed without writing output
+
 	It has other commands to help with the conversion process. Valid commands are:
 		convert config:          convert a config file
 		convert rules:           convert a rules file
@@ -110,6 +116,7 @@ func main() {
 
 	Examples:
 		convert config --input config.toml --output config.yaml
+		convert config --input config.toml --remove-deprecated --dry-run
 		convert rules --input refinery_rules.yaml --output v2rules.yaml
 		convert validate config --input config.yaml
 		convert validate rules --input v2rules.yaml
@@ -225,11 +232,11 @@ func main() {
 
 	switch args[0] {
 	case "config":
-		ConvertConfig(tmplData, output)
+		ConvertConfig(tmplData, output, &opts)
 	case "rules":
 		ConvertRules(userConfig, output)
 	case "helm":
-		ConvertHelm(tmplData, output)
+		ConvertHelm(tmplData, output, &opts)
 	case "validate":
 		if args[1] == "config" {
 			if !ValidateFromMetadata(userConfig, output) {
@@ -271,7 +278,44 @@ func loadRulesMetadata() *config.Metadata {
 	return m
 }
 
-func ConvertConfig(tmplData *configTemplateData, w io.Writer) {
+func ConvertConfig(tmplData *configTemplateData, w io.Writer, opts *Options) {
+	var removedItems []string
+	if opts.RemoveDeprecated {
+		tmplData.Data, removedItems = removeDeprecated(tmplData.Data, opts.DryRun)
+
+		if len(removedItems) > 0 {
+			if opts.DryRun {
+				fmt.Fprintf(w, "# DRY RUN: The following deprecated config options were found and would be removed:\n")
+			} else {
+				fmt.Fprintf(w, "# The following deprecated config options were removed:\n")
+			}
+			for _, item := range removedItems {
+				fmt.Fprintf(w, "# - %s\n", item)
+			}
+			fmt.Fprintf(w, "#\n")
+		}
+	}
+
+	// If dry-run mode, don't execute the template conversion
+	if opts.DryRun {
+		if len(removedItems) == 0 && opts.RemoveDeprecated {
+			fmt.Fprintf(w, "# DRY RUN: No deprecated config options found.\n")
+		}
+		return
+	}
+
+	// If remove-deprecated is used, just output the modified config as YAML
+	if opts.RemoveDeprecated {
+		encoder := yaml.NewEncoder(w)
+		err := encoder.Encode(tmplData.Data)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "YAML encoding error %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Otherwise, generate the full documented template
 	tmpl := template.New("configV2.tmpl")
 	tmpl.Funcs(helpers())
 	tmpl, err := tmpl.ParseFS(filesystem, "templates/configV2.tmpl")
@@ -301,7 +345,7 @@ func removeEmpty(m map[string]any) map[string]any {
 	return result
 }
 
-func ConvertHelm(tmplData *configTemplateData, w io.Writer) {
+func ConvertHelm(tmplData *configTemplateData, w io.Writer, opts *Options) {
 	const rulesConfigMapName = "RulesConfigMapName"
 	const liveReload = "LiveReload"
 	// convert config if we have it
@@ -322,7 +366,14 @@ func ConvertHelm(tmplData *configTemplateData, w io.Writer) {
 		config := *tmplData
 		config.Data = helmConfig
 		// convert the config into the buffer
-		ConvertConfig(&config, convertedConfig)
+		ConvertConfig(&config, convertedConfig, opts)
+
+		// If dry-run, ConvertConfig writes dry-run messages to convertedConfig, forward them to main output
+		if opts.DryRun {
+			w.Write(convertedConfig.Bytes())
+			return
+		}
+
 		// read the buffer as YAML
 		decoder := yaml.NewDecoder(convertedConfig)
 		var decodedConfig map[string]any
@@ -501,7 +552,8 @@ func ValidateFromMetadata(userData map[string]any, w io.Writer) bool {
 			fmt.Fprintf(w, "  %s\n", r.Message)
 		}
 	}
-	return results.HasErrors()
+
+	return !results.HasErrors()
 }
 
 func ValidateRules(userData map[string]any, w io.Writer) bool {
@@ -513,5 +565,5 @@ func ValidateRules(userData map[string]any, w io.Writer) bool {
 			fmt.Fprintf(w, "  %s\n", r.Message)
 		}
 	}
-	return results.HasErrors()
+	return !results.HasErrors()
 }

@@ -26,27 +26,33 @@ func (v *Validation) GetArgAsStringSlice() []string {
 	panic("shouldn't happen: validation arg is not a slice of strings")
 }
 
+type Replacement struct {
+	Field   string `yaml:"field"`   // Target field to set (e.g., "PeerQueueSize")
+	Formula string `yaml:"formula"` // Formula to calculate value (e.g., "3 * value")
+}
+
 type Field struct {
-	Name            string       `yaml:"name"`
-	V1Group         string       `yaml:"v1group"`
-	V1Name          string       `yaml:"v1name"`
-	FirstVersion    string       `yaml:"firstversion"`
-	LastVersion     string       `yaml:"lastversion"`
-	DeprecationText string       `yaml:"deprecationtext"`
-	Type            string       `yaml:"type"`
-	ValueType       string       `yaml:"valuetype"`
-	Extra           string       `yaml:"extra"`
-	Default         any          `yaml:"default,omitempty"`
-	Choices         []string     `yaml:"choices,omitempty"`
-	Example         string       `yaml:"example,omitempty"`
-	Validations     []Validation `yaml:"validations,omitempty"`
-	Reload          bool         `yaml:"reload"`
-	Summary         string       `yaml:"summary"`
-	Description     string       `yaml:"description"`
-	Pattern         string       `yaml:"pattern,omitempty"`
-	Envvar          string       `yaml:"envvar,omitempty"`
-	CommandLine     string       `yaml:"commandLine,omitempty"`
-	Unpublished     bool         `yaml:"unpublished,omitempty"`
+	Name            string        `yaml:"name"`
+	V1Group         string        `yaml:"v1group"`
+	V1Name          string        `yaml:"v1name"`
+	FirstVersion    string        `yaml:"firstversion"`
+	LastVersion     string        `yaml:"lastversion"`
+	DeprecationText string        `yaml:"deprecationtext"`
+	Replacements    []Replacement `yaml:"replacements,omitempty"`
+	Type            string        `yaml:"type"`
+	ValueType       string        `yaml:"valuetype"`
+	Extra           string        `yaml:"extra"`
+	Default         any           `yaml:"default,omitempty"`
+	Choices         []string      `yaml:"choices,omitempty"`
+	Example         string        `yaml:"example,omitempty"`
+	Validations     []Validation  `yaml:"validations,omitempty"`
+	Reload          bool          `yaml:"reload"`
+	Summary         string        `yaml:"summary"`
+	Description     string        `yaml:"description"`
+	Pattern         string        `yaml:"pattern,omitempty"`
+	Envvar          string        `yaml:"envvar,omitempty"`
+	CommandLine     string        `yaml:"commandLine,omitempty"`
+	Unpublished     bool          `yaml:"unpublished,omitempty"`
 }
 
 type Group struct {
@@ -55,6 +61,28 @@ type Group struct {
 	Description string  `yaml:"description"`
 	Fields      []Field `yaml:"fields,omitempty"`
 	SortOrder   int     `yaml:"sortorder"`
+}
+
+// IsDeprecated returns true if all fields in the group are deprecated.
+func (g *Group) IsDeprecated() bool {
+	for _, field := range g.Fields {
+		if field.LastVersion == "" {
+			return false // Found a non-deprecated field
+		}
+	}
+
+	return true // All fields are deprecated
+}
+
+// GetDeprecationVersion returns the latest deprecation version among all fields in the group.
+func (g *Group) GetDeprecationVersion() string {
+	var latestVersion string
+	for _, field := range g.Fields {
+		if field.LastVersion != "" && (latestVersion == "" || field.LastVersion > latestVersion) {
+			latestVersion = field.LastVersion
+		}
+	}
+	return latestVersion
 }
 
 type Metadata struct {
