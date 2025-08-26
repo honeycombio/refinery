@@ -494,24 +494,24 @@ func GenerateRulesMarkdown(w io.Writer, templateName string) {
 func ValidateFromMetadata(userData map[string]any, w io.Writer) bool {
 	metadata := loadConfigMetadata()
 
-	errors := metadata.Validate(userData)
-	if len(errors) > 0 {
+	results := metadata.Validate(userData)
+	if len(results) > 0 {
 		fmt.Fprintln(w, "Validation Errors in config file:")
-		for _, e := range errors {
-			fmt.Fprintf(w, "  %s\n", e)
+		for _, r := range results {
+			fmt.Fprintf(w, "  %s\n", r.Message)
 		}
 	}
-	return len(errors) == 0
+	return results.HasErrors()
 }
 
 func ValidateRules(userData map[string]any, w io.Writer) bool {
 	metadata := loadRulesMetadata()
-	errors := metadata.ValidateRules(userData)
-	if len(errors) > 0 {
+	results := metadata.ValidateRules(userData)
+	if len(results) > 0 {
 		fmt.Fprintln(w, "Validation Errors in rules file:")
-		for _, e := range errors {
-			fmt.Fprintf(w, "  %s\n", e)
+		for _, r := range results {
+			fmt.Fprintf(w, "  %s\n", r.Message)
 		}
 	}
-	return len(errors) == 0
+	return results.HasErrors()
 }

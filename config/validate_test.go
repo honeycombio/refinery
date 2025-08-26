@@ -1,10 +1,12 @@
 package config
 
 import (
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_asFloat(t *testing.T) {
@@ -219,7 +221,6 @@ groups:
         validations:
           - type: elementType
             arg: string
-
 `
 
 // helper function to build a nested map from a dotted name
@@ -328,7 +329,7 @@ func Test_validate(t *testing.T) {
 			if tt.want != "" {
 				found := false
 				for _, e := range got {
-					if strings.Contains(e, tt.want) {
+					if strings.Contains(e.Message, tt.want) {
 						found = true
 						break
 					}
@@ -362,4 +363,124 @@ func Test_flatten(t *testing.T) {
 		},
 	}
 	assert.Equal(t, expected, output)
+}
+
+func TestValidateDeprecationWarnings(t *testing.T) {
+	metadata := &Metadata{
+		Groups: []Group{
+			{
+				Name: "Collection",
+				Fields: []Field{
+					{
+						Name:            "CacheCapacity",
+						LastVersion:     "v2.9.7",
+						DeprecationText: "CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.",
+						Type:            "int",
+					},
+					{
+						Name: "PeerQueueSize",
+						Type: "int",
+						// No LastVersion, so not deprecated
+					},
+					{
+						Name:        "OtherDeprecatedField",
+						LastVersion: "v2.5.0",
+						Type:        "string",
+						// No DeprecationText, should use default message
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name           string
+		data           map[string]any
+		currentVersion string
+		expected       []string
+	}{
+		{
+			name: "no deprecated fields used",
+			data: map[string]any{
+				"Collection": map[string]any{
+					"PeerQueueSize": 30000,
+				},
+			},
+			currentVersion: "v2.8.0",
+			expected:       []string{},
+		},
+		{
+			name: "deprecated field used, current version before lastversion",
+			data: map[string]any{
+				"Collection": map[string]any{
+					"CacheCapacity": 10000,
+				},
+			},
+			currentVersion: "v2.8.0",
+			expected:       []string{"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead."},
+		},
+		{
+			name: "deprecated field used, current version equals lastversion",
+			data: map[string]any{
+				"Collection": map[string]any{
+					"CacheCapacity": 10000,
+				},
+			},
+			currentVersion: "v2.9.7",
+			expected:       []string{"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead."},
+		},
+		{
+			name: "deprecated field used, current version after lastversion",
+			data: map[string]any{
+				"Collection": map[string]any{
+					"CacheCapacity": 10000,
+				},
+			},
+			currentVersion: "v2.10.0",
+			expected:       []string{"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead."},
+		},
+		{
+			name: "multiple deprecated fields, mixed versions",
+			data: map[string]any{
+				"Collection": map[string]any{
+					"CacheCapacity":        10000,
+					"OtherDeprecatedField": "test",
+					"PeerQueueSize":        30000, // not deprecated
+				},
+			},
+			currentVersion: "v2.6.0", // After v2.5.0 but before v2.9.7
+			expected: []string{
+				"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.",
+				"field Collection.OtherDeprecatedField is deprecated since version v2.5.0"},
+		},
+		{
+			name: "old version shows all deprecated field warnings",
+			data: map[string]any{
+				"Collection": map[string]any{
+					"CacheCapacity":        10000,
+					"OtherDeprecatedField": "test",
+				},
+			},
+			currentVersion: "v2.4.0", // Before both deprecation versions
+			expected: []string{
+				"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.",
+				"field Collection.OtherDeprecatedField is deprecated since version v2.5.0"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results := metadata.Validate(tt.data, tt.currentVersion)
+			allErrors := make([]string, 0, len(results))
+			for _, result := range results {
+				allErrors = append(allErrors, result.Message)
+			}
+
+			// Sort both slices to ensure consistent comparison
+			sort.Strings(tt.expected)
+			sort.Strings(allErrors)
+
+			require.Equal(t, tt.expected, allErrors)
+		})
+	}
 }

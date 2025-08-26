@@ -304,16 +304,14 @@ type RedisPeerManagementConfig struct {
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
-	Prefix         string   `yaml:"Prefix" default:"refinery"`
-	Database       int      `yaml:"Database"`
+	Prefix         string   `yaml:"Prefix,omitempty"`
+	Database       int      `yaml:"Database,omitempty"`
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
 }
 
 type CollectionConfig struct {
-	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
 	PeerQueueSize       int        `yaml:"PeerQueueSize"`
 	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
@@ -413,32 +411,70 @@ type StressReliefConfig struct {
 
 type FileConfigError struct {
 	ConfigLocations []string
-	ConfigFailures  []string
+	ConfigResults   ValidationResults
 	RulesLocations  []string
-	RulesFailures   []string
+	RulesResults    ValidationResults
+}
+
+// HasErrors returns true if this error contains any actual errors (not just warnings)
+func (e *FileConfigError) HasErrors() bool {
+	return e.ConfigResults.HasErrors() || e.RulesResults.HasErrors()
 }
 
 func (e *FileConfigError) Error() string {
 	var msg strings.Builder
-	if len(e.ConfigFailures) > 0 {
+	var errors []ValidationResult
+	var warnings []ValidationResult
+
+	// Filter and separate errors and warnings, removing empty messages
+	for _, result := range e.ConfigResults {
+		if result.Message != "" {
+			if result.IsError() {
+				errors = append(errors, result)
+			} else {
+				warnings = append(warnings, result)
+			}
+		}
+	}
+
+	if len(errors) > 0 {
 		loc := strings.Join(e.ConfigLocations, ", ")
-		msg.WriteString("Validation failed for config [")
+		msg.WriteString("ERROR: Validation failed for config [")
 		msg.WriteString(loc)
 		msg.WriteString("]:\n")
-		for _, fail := range e.ConfigFailures {
+		for _, result := range errors {
 			msg.WriteString("  ")
-			msg.WriteString(fail)
+			msg.WriteString(result.Message)
 			msg.WriteString("\n")
 		}
 	}
-	if len(e.RulesFailures) > 0 {
-		loc := strings.Join(e.RulesLocations, ", ")
-		msg.WriteString("Validation failed for config [")
+
+	if len(warnings) > 0 {
+		loc := strings.Join(e.ConfigLocations, ", ")
+		msg.WriteString("WARNING: Configuration warnings for [")
 		msg.WriteString(loc)
 		msg.WriteString("]:\n")
-		for _, fail := range e.RulesFailures {
+		for _, result := range warnings {
 			msg.WriteString("  ")
-			msg.WriteString(fail)
+			msg.WriteString(result.Message)
+			msg.WriteString("\n")
+		}
+
+		msg.WriteString("  ")
+		// Add documentation URL once if there are any grouped deprecation warnings
+		msg.WriteString("Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/")
+		msg.WriteString("\n")
+
+	}
+
+	if len(e.RulesResults) > 0 {
+		loc := strings.Join(e.RulesLocations, ", ")
+		msg.WriteString("ERROR: Validation failed for rules [")
+		msg.WriteString(loc)
+		msg.WriteString("]:\n")
+		for _, result := range e.RulesResults {
+			msg.WriteString("  ")
+			msg.WriteString(result.Message)
 			msg.WriteString("\n")
 		}
 	}
@@ -462,10 +498,12 @@ func newConfigAndRules(opts *CmdEnv) ([]configData, []configData, error) {
 // It's used by both the main init as well as the reload code.
 // In order to do proper validation, we actually process the data twice -- once as
 // a map, and once as the actual config object.
-func newFileConfig(opts *CmdEnv, cData, rulesData []configData) (*fileConfig, error) {
+func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion ...string) (*fileConfig, error) {
+	var warningErr error
+
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfigs(cData, opts)
+		cfgResults, err := validateConfigs(cData, opts, currentVersion...)
 		if err != nil {
 			return nil, err
 		}
@@ -475,12 +513,35 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData) (*fileConfig, er
 			return nil, err
 		}
 
-		if len(cfgFails) > 0 || len(ruleFails) > 0 {
+		// Separate warnings and errors from config validation results
+		var cfgWarnings, cfgErrors ValidationResults
+		for _, result := range cfgResults {
+			if result.IsError() {
+				cfgErrors = append(cfgErrors, result)
+			} else {
+				cfgWarnings = append(cfgWarnings, result)
+			}
+		}
+
+		// Only fail validation on errors, not warnings
+		if len(cfgErrors) > 0 || ruleFails.HasErrors() {
+			// Combine all failures (errors and warnings) for error message
+			allErrors := append(cfgErrors, cfgWarnings...)
 			return nil, &FileConfigError{
 				ConfigLocations: opts.ConfigLocations,
-				ConfigFailures:  cfgFails,
+				ConfigResults:   allErrors,
 				RulesLocations:  opts.RulesLocations,
-				RulesFailures:   ruleFails,
+				RulesResults:    ruleFails,
+			}
+		}
+
+		// Store warnings to return later if config creation succeeds
+		if len(cfgWarnings) > 0 {
+			warningErr = &FileConfigError{
+				ConfigLocations: opts.ConfigLocations,
+				ConfigResults:   cfgWarnings,
+				RulesLocations:  []string{},
+				RulesResults:    ValidationResults{},
 			}
 		}
 	}
@@ -506,6 +567,10 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData) (*fileConfig, er
 		opts:        opts,
 	}
 
+	// Return warning error if there were warnings but no real errors
+	if warningErr != nil {
+		return cfg, warningErr
+	}
 	return cfg, nil
 }
 
@@ -525,13 +590,13 @@ func writeYAMLToFile(data any, filename string) error {
 // nil, it uses the command line arguments.
 // It also dumps the config and rules to the given files, if specified, which
 // will cause the program to exit.
-func NewConfig(opts *CmdEnv) (Config, error) {
+func NewConfig(opts *CmdEnv, currentVersion ...string) (Config, error) {
 	cData, rData, err := newConfigAndRules(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg, err := newFileConfig(opts, cData, rData)
+	cfg, err := newFileConfig(opts, cData, rData, currentVersion...)
 	// only exit if we have no config at all; if it fails validation, we'll
 	// do the rest and return it anyway
 	if err != nil && cfg == nil {

@@ -229,18 +229,17 @@ func Test_loadConfigsIntoMap(t *testing.T) {
 }
 
 func Test_validateConfigs(t *testing.T) {
-	emptySlice := []string{}
 	tests := []struct {
 		name    string
 		cfgs    []string
-		want    []string
+		want    ValidationResults
 		wantErr bool
 	}{
 		{
 			"test1", []string{
 				makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.1.2.3:8080"),
 			},
-			emptySlice,
+			nil,
 			false,
 		},
 		{
@@ -248,7 +247,7 @@ func Test_validateConfigs(t *testing.T) {
 				makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.1.2.3:8080"),
 				makeYAML("General.ConfigReloadInterval", Duration(2*time.Second)),
 			},
-			emptySlice,
+			nil,
 			false,
 		},
 		{
@@ -256,7 +255,7 @@ func Test_validateConfigs(t *testing.T) {
 				makeYAML("General.ConfigurationVersion", 2, "General.ConfigReloadInterval", Duration(1*time.Second), "Network.ListenAddr", "0.1.2.3:8080"),
 				makeYAML("General.ConfigReloadInterval", Duration(2*time.Second), "General.DatasetPrefix", 7),
 			},
-			[]string{"field General.DatasetPrefix must be a string but 7 is int"},
+			ValidationResults{{Message: "field General.DatasetPrefix must be a string but 7 is int", Severity: Error}},
 			false,
 		},
 	}

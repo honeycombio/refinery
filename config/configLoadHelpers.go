@@ -391,10 +391,10 @@ func loadConfigsIntoMap(dest map[string]any, configs []configData) error {
 // validateConfigs gets the configs from the given location and validates them.
 // It returns a list of failures; if the list is empty, the config is valid.
 // err is non-nil only for significant errors like a missing file.
-func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
+func validateConfigs(configs []configData, opts *CmdEnv, currentVersion ...string) (result ValidationResults, err error) {
 	// first process the configs into a map so we can validate them
 	userData := make(map[string]any)
-	err := loadConfigsIntoMap(userData, configs)
+	err = loadConfigsIntoMap(userData, configs)
 	if err != nil {
 		return nil, err
 	}
@@ -406,9 +406,9 @@ func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 		return nil, err
 	}
 
-	failures := metadata.Validate(userData)
-	if len(failures) > 0 {
-		return failures, nil
+	result = metadata.Validate(userData, currentVersion...)
+	if result.HasErrors() {
+		return result, nil
 	}
 
 	// Basic validation worked. Now we need to reload everything into our struct so that
@@ -459,11 +459,13 @@ func validateConfigs(configs []configData, opts *CmdEnv) ([]string, error) {
 	rewrittenUserData = expandEnvVarsInValues(rewrittenUserData, envGetterFunc)
 
 	// and finally validate the rewritten config
-	failures = metadata.Validate(rewrittenUserData)
-	return failures, nil
+	finalResults := metadata.Validate(rewrittenUserData, currentVersion...)
+	// Combine results from both validation passes
+	result = append(result, finalResults...)
+	return result, nil
 }
 
-func validateRules(configs []configData) ([]string, error) {
+func validateRules(configs []configData) (ValidationResults, error) {
 	// first process the configs into a map so we can validate them
 	userData := make(map[string]any)
 	err := loadConfigsIntoMap(userData, configs)
@@ -476,8 +478,7 @@ func validateRules(configs []configData) ([]string, error) {
 		return nil, err
 	}
 
-	failures := metadata.ValidateRules(userData)
-	return failures, nil
+	return metadata.ValidateRules(userData), nil
 }
 
 // applyConfigInto applies the given configs to the given struct.

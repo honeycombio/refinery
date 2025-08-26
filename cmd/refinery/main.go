@@ -98,10 +98,14 @@ func main() {
 		Version: version,
 	}
 
-	c, err := config.NewConfig(opts)
+	c, err := config.NewConfig(opts, version)
 	if err != nil {
-		fmt.Printf("%+v\n", err)
-		os.Exit(1)
+		if configErr, isConfigErr := err.(*config.FileConfigError); isConfigErr && configErr.HasErrors() {
+			fmt.Printf("%+v\n", err)
+			os.Exit(1)
+		} else {
+			fmt.Printf("%+v\n", err)
+		}
 	}
 	if opts.Validate {
 		fmt.Println("Config and Rules validated successfully.")

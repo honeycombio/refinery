@@ -47,6 +47,87 @@ func createTempConfigs(t *testing.T, configBody, rulesBody string) (string, stri
 	return configFile.Name(), rulesFile.Name()
 }
 
+func TestDeprecationWarnings(t *testing.T) {
+	configYAML := `
+General:
+  ConfigurationVersion: 2
+Collection:
+  CacheCapacity: 10000  # This field is deprecated in v2.9.7
+  PeerQueueSize: 30000
+`
+
+	rulesYAML := `
+RulesVersion: 2
+Samplers:
+  __default__:
+    DeterministicSampler:
+      SampleRate: 1
+`
+
+	cfg, rules := createTempConfigs(t, configYAML, rulesYAML)
+
+	opts := &config.CmdEnv{
+		ConfigLocations: []string{cfg},
+		RulesLocations:  []string{rules},
+		NoValidate:      false, // Make sure validation runs
+	}
+
+	t.Run("allows startup with deprecation warning for old version", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts, "v2.8.0")
+		require.NotNil(t, cfg, "Config should be created successfully even with deprecation warnings")
+
+		// Should return a warning error, not a fatal error
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
+	})
+
+	// Test with version after deprecation should show warning
+	t.Run("shows deprecation warning for version newer than lastversion", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts, "v2.10.0")
+		require.NotNil(t, cfg, "Config should be created successfully even with deprecation warnings")
+		
+		// Should return a warning error, not a fatal error
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
+	})
+
+	// Test with version equal to lastversion should show warning
+	t.Run("shows deprecation warning for version equal to lastversion", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts, "v2.9.7")
+		require.NotNil(t, cfg, "Config should be created successfully even with deprecation warnings")
+		
+		// Should return a warning error, not a fatal error
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
+	})
+
+	// Test without version - should show deprecation warning based on DeprecationText
+	t.Run("shows deprecation warning when no version provided but DeprecationText exists", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts)
+		require.NotNil(t, cfg, "Config should be created successfully")
+		
+		// Should return a warning error since the field has DeprecationText
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
+	})
+}
+
 func setMap(m map[string]any, key string, value any) {
 	if strings.Contains(key, ".") {
 		parts := strings.Split(key, ".")

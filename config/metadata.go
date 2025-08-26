@@ -27,25 +27,26 @@ func (v *Validation) GetArgAsStringSlice() []string {
 }
 
 type Field struct {
-	Name         string       `yaml:"name"`
-	V1Group      string       `yaml:"v1group"`
-	V1Name       string       `yaml:"v1name"`
-	FirstVersion string       `yaml:"firstversion"`
-	LastVersion  string       `yaml:"lastversion"`
-	Type         string       `yaml:"type"`
-	ValueType    string       `yaml:"valuetype"`
-	Extra        string       `yaml:"extra"`
-	Default      any          `yaml:"default,omitempty"`
-	Choices      []string     `yaml:"choices,omitempty"`
-	Example      string       `yaml:"example,omitempty"`
-	Validations  []Validation `yaml:"validations,omitempty"`
-	Reload       bool         `yaml:"reload"`
-	Summary      string       `yaml:"summary"`
-	Description  string       `yaml:"description"`
-	Pattern      string       `yaml:"pattern,omitempty"`
-	Envvar       string       `yaml:"envvar,omitempty"`
-	CommandLine  string       `yaml:"commandLine,omitempty"`
-	Unpublished  bool         `yaml:"unpublished,omitempty"`
+	Name            string       `yaml:"name"`
+	V1Group         string       `yaml:"v1group"`
+	V1Name          string       `yaml:"v1name"`
+	FirstVersion    string       `yaml:"firstversion"`
+	LastVersion     string       `yaml:"lastversion"`
+	DeprecationText string       `yaml:"deprecationtext"`
+	Type            string       `yaml:"type"`
+	ValueType       string       `yaml:"valuetype"`
+	Extra           string       `yaml:"extra"`
+	Default         any          `yaml:"default,omitempty"`
+	Choices         []string     `yaml:"choices,omitempty"`
+	Example         string       `yaml:"example,omitempty"`
+	Validations     []Validation `yaml:"validations,omitempty"`
+	Reload          bool         `yaml:"reload"`
+	Summary         string       `yaml:"summary"`
+	Description     string       `yaml:"description"`
+	Pattern         string       `yaml:"pattern,omitempty"`
+	Envvar          string       `yaml:"envvar,omitempty"`
+	CommandLine     string       `yaml:"commandLine,omitempty"`
+	Unpublished     bool         `yaml:"unpublished,omitempty"`
 }
 
 type Group struct {
