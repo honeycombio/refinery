@@ -147,15 +147,32 @@ func TestMultiLoopProcessing(t *testing.T) {
 			}, 5*time.Second, 500*time.Millisecond) // Check less frequently since each check is now fast
 
 			met := collector.Metrics.(*metrics.MockMetrics)
-			count, ok := met.Get("span_received")
-			assert.True(t, ok)
-			assert.Equal(t, float64(spansPerTrace*numTraces), count)
-			count, ok = met.Get("span_processed")
-			assert.True(t, ok)
-			assert.Equal(t, float64(spansPerTrace*numTraces), count)
-			count, ok = met.Get("trace_accepted")
+
+			// Wait for the housekeeping ticker to aggregate all thread-local metrics
+			assert.Eventually(t, func() bool {
+				receivedCount, receivedOk := met.Get("span_received")
+				processedCount, processedOk := met.Get("span_processed")
+
+				return receivedOk && receivedCount == float64(spansPerTrace*numTraces) &&
+					processedOk && processedCount == float64(spansPerTrace*numTraces)
+			}, 1*time.Second, 50*time.Millisecond, "All thread-local metrics should be aggregated and reported")
+
+			count, ok := met.Get("trace_accepted")
 			assert.True(t, ok)
 			assert.Equal(t, float64(numTraces), count)
+
+			// Verify that local counters are reset after reporting
+			assert.Eventually(t, func() bool {
+				totalLocalReceived := int64(0)
+				totalLocalWaiting := int64(0)
+
+				for _, loop := range collector.collectLoops {
+					totalLocalReceived += loop.localSpanReceived.Load()
+					totalLocalWaiting += loop.localSpansWaiting.Load()
+				}
+
+				return totalLocalReceived == 0 && totalLocalWaiting == 0
+			}, 500*time.Millisecond, 25*time.Millisecond, "All local counters should be reset to 0 after aggregation")
 
 			// These metrics are nondeterministic, but we can at least confirm they were reported
 			for _, name := range []string{
