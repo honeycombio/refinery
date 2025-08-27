@@ -385,6 +385,7 @@ func TestAddSpan(t *testing.T) {
 	transmission := coll.Transmission.(*transmit.MockTransmission)
 
 	var traceID = "mytrace"
+	loopIndex := coll.getLoopForTrace(traceID)
 
 	span := &types.Span{
 		TraceID: traceID,
@@ -405,6 +406,9 @@ func TestAddSpan(t *testing.T) {
 			trace := getFromCache(coll, traceID)
 			require.NotNil(cT, trace)
 			assert.Equal(cT, traceID, trace.TraceID)
+			v, ok := coll.Metrics.Get("span_processed")
+			assert.True(cT, ok)
+			assert.Equal(cT, float64(1), v)
 		},
 		conf.GetTracesConfig().GetSendTickerValue()*60, // waitFor
 		conf.GetTracesConfig().GetSendTickerValue()*2,  // tick
@@ -427,6 +431,11 @@ func TestAddSpan(t *testing.T) {
 
 	assert.Equal(t, 2, len(transmission.GetBlock(2)), "adding a root span should send all spans in the trace")
 	assert.Nil(t, getFromCache(coll, traceID), "after adding a leaf and root span, it should be removed from the cache")
+
+	ch := make(chan struct{})
+	defer close(ch)
+	coll.collectLoops[loopIndex].pause <- ch
+	assert.Equal(t, int64(0), coll.collectLoops[loopIndex].localSpanProcessed)
 }
 
 // TestDryRunMode tests that all traces are sent, regardless of sampling decision, and that the

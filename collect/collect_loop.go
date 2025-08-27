@@ -58,6 +58,13 @@ type CollectLoop struct {
 
 	// For reporting cache size asynchronously.
 	lastCacheSize atomic.Int64
+
+	// Thread-local metrics counters
+	localSpansWaiting atomic.Int64
+	localSpanReceived atomic.Int64
+	// span_processed doesn't need to be atomic because it's only accessed
+	// inside the CollectLoop
+	localSpanProcessed int64
 }
 
 // NewCollectLoop creates a new CollectLoop instance
@@ -89,15 +96,15 @@ func NewCollectLoop(
 func (cl *CollectLoop) addSpan(sp *types.Span) error {
 	if cl.parent.BlockOnAddSpan {
 		cl.incoming <- sp
-		cl.parent.Metrics.Increment("span_received")
-		cl.parent.Metrics.Up("spans_waiting")
+		cl.localSpanReceived.Add(1)
+		cl.localSpansWaiting.Add(1)
 		return nil
 	}
 
 	select {
 	case cl.incoming <- sp:
-		cl.parent.Metrics.Increment("span_received")
-		cl.parent.Metrics.Up("spans_waiting")
+		cl.localSpanReceived.Add(1)
+		cl.localSpansWaiting.Add(1)
 		return nil
 	default:
 		return ErrWouldBlock
@@ -108,15 +115,15 @@ func (cl *CollectLoop) addSpan(sp *types.Span) error {
 func (cl *CollectLoop) addSpanFromPeer(sp *types.Span) error {
 	if cl.parent.BlockOnAddSpan {
 		cl.fromPeer <- sp
-		cl.parent.Metrics.Increment("span_received")
-		cl.parent.Metrics.Up("spans_waiting")
+		cl.localSpanReceived.Add(1)
+		cl.localSpansWaiting.Add(1)
 		return nil
 	}
 
 	select {
 	case cl.fromPeer <- sp:
-		cl.parent.Metrics.Increment("span_received")
-		cl.parent.Metrics.Up("spans_waiting")
+		cl.localSpanReceived.Add(1)
+		cl.localSpansWaiting.Add(1)
 		return nil
 	default:
 		return ErrWouldBlock
@@ -156,6 +163,8 @@ func (cl *CollectLoop) collect() {
 			select {
 			case <-ticker.Chan():
 				cl.parent.Health.Ready(healthKey, true)
+				cl.parent.Metrics.Count("span_processed", cl.getLastSpanProcessed())
+
 				cl.sendExpiredTracesInCache(ctx, cl.parent.Clock.Now())
 
 				// Note latest cache size for GetCacheSize()
@@ -196,8 +205,8 @@ func (cl *CollectLoop) collect() {
 func (cl *CollectLoop) processSpan(ctx context.Context, sp *types.Span) {
 	ctx, span := otelutil.StartSpanWith(ctx, cl.parent.Tracer, "processSpan", "loop_id", cl.ID)
 	defer func() {
-		cl.parent.Metrics.Increment("span_processed")
-		cl.parent.Metrics.Down("spans_waiting")
+		cl.localSpanProcessed++
+		cl.localSpansWaiting.Add(-1)
 		span.End()
 	}()
 
@@ -382,6 +391,13 @@ func (cl *CollectLoop) sendTracesEarly(ctx context.Context, sendEarlyBytes int) 
 // GetCacheSize returns the most recently recorded count of traces in this loop's cache
 func (cl *CollectLoop) GetCacheSize() int {
 	return int(cl.lastCacheSize.Load())
+}
+
+// getLastSpanProcessed returns the latest value of span_processed and reset the current count to 0.
+func (cl *CollectLoop) getLastSpanProcessed() int64 {
+	lastValue := cl.localSpanProcessed
+	cl.localSpanProcessed = 0
+	return lastValue
 }
 
 func (cl *CollectLoop) makeDecision(ctx context.Context, trace *types.Trace, sendReason string) (s sendableTrace, err error) {
