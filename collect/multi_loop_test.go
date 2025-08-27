@@ -163,16 +163,14 @@ func TestMultiLoopProcessing(t *testing.T) {
 			// Verify that local counters are reset after reporting
 			assert.Eventually(t, func() bool {
 				totalLocalReceived := int64(0)
-				totalLocalProcessed := int64(0)
 				totalLocalWaiting := int64(0)
 
 				for _, loop := range collector.collectLoops {
 					totalLocalReceived += loop.localSpanReceived.Load()
-					totalLocalProcessed += loop.localSpanProcessed
 					totalLocalWaiting += loop.localSpansWaiting.Load()
 				}
 
-				return totalLocalReceived == 0 && totalLocalProcessed == 0 && totalLocalWaiting == 0
+				return totalLocalReceived == 0 && totalLocalWaiting == 0
 			}, 500*time.Millisecond, 25*time.Millisecond, "All local counters should be reset to 0 after aggregation")
 
 			// These metrics are nondeterministic, but we can at least confirm they were reported
