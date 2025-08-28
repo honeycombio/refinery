@@ -825,42 +825,62 @@ func recycleHTTPBodyBuffer(b *bytes.Buffer) {
 func (r *Router) readAndCloseMaybeCompressedBody(req *http.Request) (*bytes.Buffer, error) {
 	defer req.Body.Close()
 
-	var reader io.Reader
-	encodingScheme := req.Header.Get("Content-Encoding")
-	switch encodingScheme {
+	switch req.Header.Get("Content-Encoding") {
 	case "gzip":
-		gzipReader, err := gzip.NewReader(req.Body)
-		if err != nil {
-			return nil, err
-		}
-		defer gzipReader.Close()
-		reader = gzipReader
+		return r.readGzipBody(req.Body)
+	case "zstd":
+		return r.readZstdBody(req.Body)
 	default:
-		reader = req.Body
+		return r.readUncompressedBody(req.Body)
 	}
+}
 
-	buf := httpBodyBufferPool.Get().(*bytes.Buffer)
-	if _, err := io.Copy(buf, io.LimitReader(reader, HTTPMessageSizeMax)); err != nil {
-		recycleHTTPBodyBuffer(buf)
+func (r *Router) readGzipBody(body io.Reader) (*bytes.Buffer, error) {
+	gzipReader, err := gzip.NewReader(body)
+	if err != nil {
+		return nil, err
+	}
+	defer gzipReader.Close()
+
+	return r.readBodyToBuffer(gzipReader)
+}
+
+func (r *Router) readZstdBody(body io.Reader) (*bytes.Buffer, error) {
+	// First read the compressed data into a buffer
+	compressedBuf, err := r.readBodyToBuffer(body)
+	if err != nil {
+		return nil, err
+	}
+	defer recycleHTTPBodyBuffer(compressedBuf)
+
+	// Decompress the data
+	decompressedBuf := httpBodyBufferPool.Get().(*bytes.Buffer)
+	decompressed, err := r.zstdDecoder.DecodeAll(compressedBuf.Bytes(), decompressedBuf.Bytes())
+	if err != nil {
+		recycleHTTPBodyBuffer(decompressedBuf)
 		return nil, err
 	}
 
-	if encodingScheme == "zstd" {
-		decompressedBuf := httpBodyBufferPool.Get().(*bytes.Buffer)
-		decompressed, err := r.zstdDecoder.DecodeAll(buf.Bytes(), decompressedBuf.Bytes())
-		recycleHTTPBodyBuffer(buf)
-		if err != nil {
-			recycleHTTPBodyBuffer(decompressedBuf)
-			return nil, err
-		}
+	// Write decompressed data to the buffer
+	decompressedBuf.Reset()
+	decompressedBuf.Write(decompressed)
+	return decompressedBuf, nil
+}
 
-		// Update buffer with decompressed data
-		decompressedBuf.Reset()
-		decompressedBuf.Write(decompressed)
-		return decompressedBuf, nil
+func (r *Router) readUncompressedBody(body io.Reader) (*bytes.Buffer, error) {
+	return r.readBodyToBuffer(body)
+}
+
+func (r *Router) readBodyToBuffer(reader io.Reader) (*bytes.Buffer, error) {
+	buffer := httpBodyBufferPool.Get().(*bytes.Buffer)
+
+	_, err := io.Copy(buffer, io.LimitReader(reader, HTTPMessageSizeMax))
+	if err != nil {
+		recycleHTTPBodyBuffer(buffer)
+		return nil, err
 	}
 
-	return buf, nil
+	return buffer, nil
 }
 
 // getEventTime tries to guess the time format in our time header!
