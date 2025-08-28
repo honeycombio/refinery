@@ -49,12 +49,17 @@ func TestDecompression(t *testing.T) {
 	payload := "payload"
 	pReader := strings.NewReader(payload)
 
-	decoders, err := makeDecoders(numZstdDecoders)
+	zstdDecoder, err := zstd.NewReader(
+		nil,
+		zstd.WithDecoderConcurrency(1),
+		zstd.WithDecoderLowmem(true),
+		zstd.WithDecoderMaxMemory(8*1024*1024),
+	)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
 
-	router := &Router{zstdDecoders: decoders}
+	router := &Router{zstdDecoder: zstdDecoder}
 	req := &http.Request{
 		Body:   io.NopCloser(pReader),
 		Header: http.Header{},
@@ -1024,6 +1029,12 @@ func newBatchRouter(t testing.TB) *Router {
 		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
 		Tracer:               noop.Tracer{},
 	}
+	r.zstdDecoder, _ = zstd.NewReader(
+		nil,
+		zstd.WithDecoderConcurrency(1),
+		zstd.WithDecoderLowmem(true),
+		zstd.WithDecoderMaxMemory(8*1024*1024),
+	)
 	r.registerMetricNames()
 	return r
 }
@@ -1340,6 +1351,7 @@ func BenchmarkRouterBatch(b *testing.B) {
 	b.Run("batch_msgpack", func(b *testing.B) {
 		batchMsgpack, err := msgpack.Marshal(batchEvents.events)
 		require.NoError(b, err)
+		body := compressData(batchMsgpack)
 
 		// Create HTTP request directly without server
 		req, err := http.NewRequest("POST", "/1/batch/test-dataset", nil)
@@ -1348,6 +1360,7 @@ func BenchmarkRouterBatch(b *testing.B) {
 		}
 		req.Header.Set("Content-Type", "application/x-msgpack")
 		req.Header.Set("X-Honeycomb-Team", "test-api-key")
+		req.Header.Set("Content-Encoding", "zstd")
 
 		// Set up mux variables for dataset extraction
 		req = mux.SetURLVars(req, map[string]string{"datasetName": "test-dataset"})
@@ -1357,7 +1370,7 @@ func BenchmarkRouterBatch(b *testing.B) {
 
 		b.ResetTimer()
 		for b.Loop() {
-			req.Body = io.NopCloser(bytes.NewReader(batchMsgpack))
+			req.Body = io.NopCloser(bytes.NewReader(body))
 
 			router.batch(w, req)
 
