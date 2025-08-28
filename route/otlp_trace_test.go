@@ -89,12 +89,7 @@ func TestOTLPHandler(t *testing.T) {
 	mockTransmission := &transmit.MockTransmission{}
 	mockTransmission.Start()
 	defer mockTransmission.Stop()
-	zstdDecoder, err := zstd.NewReader(
-		nil,
-		zstd.WithDecoderConcurrency(1),
-		zstd.WithDecoderLowmem(true),
-		zstd.WithDecoderMaxMemory(8*1024*1024),
-	)
+	zstdDecoder, err := makeDecoders(1)
 	if err != nil {
 		t.Error(err)
 	}

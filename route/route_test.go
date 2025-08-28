@@ -49,12 +49,7 @@ func TestDecompression(t *testing.T) {
 	payload := "payload"
 	pReader := strings.NewReader(payload)
 
-	zstdDecoder, err := zstd.NewReader(
-		nil,
-		zstd.WithDecoderConcurrency(1),
-		zstd.WithDecoderLowmem(true),
-		zstd.WithDecoderMaxMemory(8*1024*1024),
-	)
+	zstdDecoder, err := makeDecoders(1)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
@@ -1029,12 +1024,11 @@ func newBatchRouter(t testing.TB) *Router {
 		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
 		Tracer:               noop.Tracer{},
 	}
-	r.zstdDecoder, _ = zstd.NewReader(
-		nil,
-		zstd.WithDecoderConcurrency(1),
-		zstd.WithDecoderLowmem(true),
-		zstd.WithDecoderMaxMemory(8*1024*1024),
-	)
+	var err error
+	r.zstdDecoder, err = makeDecoders(1)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r.registerMetricNames()
 	return r
 }

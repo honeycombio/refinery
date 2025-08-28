@@ -46,12 +46,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 	mockTransmission.Start()
 	defer mockTransmission.Stop()
 	mockCollector := collect.NewMockCollector()
-	zstdDecoder, err := zstd.NewReader(
-		nil,
-		zstd.WithDecoderConcurrency(1),
-		zstd.WithDecoderLowmem(true),
-		zstd.WithDecoderMaxMemory(8*1024*1024),
-	)
+	zstdDecoder, err := makeDecoders(1)
 	if err != nil {
 		t.Error(err)
 	}
