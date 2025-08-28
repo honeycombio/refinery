@@ -49,12 +49,12 @@ func TestDecompression(t *testing.T) {
 	payload := "payload"
 	pReader := strings.NewReader(payload)
 
-	decoders, err := makeDecoders(numZstdDecoders)
+	zstdDecoder, err := makeDecoders(1)
 	if err != nil {
 		t.Errorf("unexpected err: %s", err.Error())
 	}
 
-	router := &Router{zstdDecoders: decoders}
+	router := &Router{zstdDecoder: zstdDecoder}
 	req := &http.Request{
 		Body:   io.NopCloser(pReader),
 		Header: http.Header{},
@@ -1023,6 +1023,11 @@ func newBatchRouter(t testing.TB) *Router {
 		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: types.RouterTypeIncoming.String()},
 		environmentCache:     newEnvironmentCache(time.Second, func(key string) (string, error) { return "test", nil }),
 		Tracer:               noop.Tracer{},
+	}
+	var err error
+	r.zstdDecoder, err = makeDecoders(1)
+	if err != nil {
+		t.Fatal(err)
 	}
 	r.registerMetricNames()
 	return r

@@ -89,7 +89,7 @@ func TestOTLPHandler(t *testing.T) {
 	mockTransmission := &transmit.MockTransmission{}
 	mockTransmission.Start()
 	defer mockTransmission.Stop()
-	decoders, err := makeDecoders(1)
+	zstdDecoder, err := makeDecoders(1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -118,7 +118,7 @@ func TestOTLPHandler(t *testing.T) {
 			incomingOrPeer: "incoming",
 		},
 		Logger:           &logger.MockLogger{},
-		zstdDecoders:     decoders,
+		zstdDecoder:      zstdDecoder,
 		environmentCache: newEnvironmentCache(time.Second, nil),
 		Tracer:           noop.Tracer{},
 	}

@@ -52,10 +52,6 @@ import (
 )
 
 const (
-	// numZstdDecoders is set statically here - we may make it into a config option
-	// A normal practice might be to use some multiple of the CPUs, but that goes south
-	// in kubernetes
-	numZstdDecoders        = 4
 	traceIDShortLength     = 8
 	traceIDLongLength      = 16
 	GRPCMessageSizeMax int = 5_000_000 // 5MB
@@ -88,7 +84,7 @@ type Router struct {
 	// iopLogger is a logger that knows whether it's incoming or peer
 	iopLogger iopLogger
 
-	zstdDecoders chan *zstd.Decoder
+	zstdDecoder *zstd.Decoder
 
 	server     *http.Server
 	grpcServer *grpc.Server
@@ -231,9 +227,9 @@ func (r *Router) LnS() {
 	r.environmentCache = newEnvironmentCache(r.Config.GetEnvironmentCacheTTL(), r.lookupEnvironment)
 
 	var err error
-	r.zstdDecoders, err = makeDecoders(numZstdDecoders)
+	r.zstdDecoder, err = makeDecoders(0)
 	if err != nil {
-		r.iopLogger.Error().Logf("couldn't start zstd decoders: %s", err.Error())
+		r.iopLogger.Error().Logf("couldn't start zstd decoder: %s", err.Error())
 		return
 	}
 
@@ -829,38 +825,60 @@ func recycleHTTPBodyBuffer(b *bytes.Buffer) {
 func (r *Router) readAndCloseMaybeCompressedBody(req *http.Request) (*bytes.Buffer, error) {
 	defer req.Body.Close()
 
-	var reader io.Reader
 	switch req.Header.Get("Content-Encoding") {
 	case "gzip":
-		gzipReader, err := gzip.NewReader(req.Body)
-		if err != nil {
-			return nil, err
-		}
-		defer gzipReader.Close()
-		reader = gzipReader
+		return r.readGzipBody(req.Body)
 	case "zstd":
-		zReader := <-r.zstdDecoders
-		defer func(zReader *zstd.Decoder) {
-			zReader.Reset(nil)
-			r.zstdDecoders <- zReader
-		}(zReader)
-
-		err := zReader.Reset(req.Body)
-		if err != nil {
-			return nil, err
-		}
-		reader = zReader
+		return r.readZstdBody(req.Body)
 	default:
-		reader = req.Body
+		return r.readUncompressedBody(req.Body)
 	}
+}
 
-	buf := httpBodyBufferPool.Get().(*bytes.Buffer)
-	if _, err := io.Copy(buf, io.LimitReader(reader, HTTPMessageSizeMax)); err != nil {
-		recycleHTTPBodyBuffer(buf)
+func (r *Router) readGzipBody(body io.Reader) (*bytes.Buffer, error) {
+	gzipReader, err := gzip.NewReader(body)
+	if err != nil {
+		return nil, err
+	}
+	defer gzipReader.Close()
+
+	return r.readBodyToBuffer(gzipReader)
+}
+
+func (r *Router) readZstdBody(body io.Reader) (*bytes.Buffer, error) {
+	// First read the compressed data into a buffer
+	compressedBuf, err := r.readBodyToBuffer(body)
+	if err != nil {
+		return nil, err
+	}
+	defer recycleHTTPBodyBuffer(compressedBuf)
+
+	// Decompress the data
+	decompressedBuf := httpBodyBufferPool.Get().(*bytes.Buffer)
+	decompressed, err := r.zstdDecoder.DecodeAll(compressedBuf.Bytes(), decompressedBuf.Bytes())
+	if err != nil {
+		recycleHTTPBodyBuffer(decompressedBuf)
 		return nil, err
 	}
 
-	return buf, nil
+	decompressedBuf.Write(decompressed)
+	return decompressedBuf, nil
+}
+
+func (r *Router) readUncompressedBody(body io.Reader) (*bytes.Buffer, error) {
+	return r.readBodyToBuffer(body)
+}
+
+func (r *Router) readBodyToBuffer(reader io.Reader) (*bytes.Buffer, error) {
+	buffer := httpBodyBufferPool.Get().(*bytes.Buffer)
+
+	_, err := io.Copy(buffer, io.LimitReader(reader, HTTPMessageSizeMax))
+	if err != nil {
+		recycleHTTPBodyBuffer(buffer)
+		return nil, err
+	}
+
+	return buffer, nil
 }
 
 // getEventTime tries to guess the time format in our time header!
@@ -907,21 +925,19 @@ func getEventTime(etHeader string) time.Time {
 	return eventTime.UTC()
 }
 
-func makeDecoders(num int) (chan *zstd.Decoder, error) {
-	zstdDecoders := make(chan *zstd.Decoder, num)
-	for i := 0; i < num; i++ {
-		zReader, err := zstd.NewReader(
-			nil,
-			zstd.WithDecoderConcurrency(1),
-			zstd.WithDecoderLowmem(true),
-			zstd.WithDecoderMaxMemory(8*1024*1024),
-		)
-		if err != nil {
-			return nil, err
-		}
-		zstdDecoders <- zReader
+func makeDecoders(concurrency int) (*zstd.Decoder, error) {
+	d, err := zstd.NewReader(
+		nil,
+		// When a value of 0 is provided GOMAXPROCS will be used.
+		// By default this will be set to 4 or GOMAXPROCS, whatever is lower.
+		zstd.WithDecoderConcurrency(concurrency),
+		zstd.WithDecoderLowmem(true),
+		zstd.WithDecoderMaxMemory(8*1024*1024),
+	)
+	if err != nil {
+		return nil, err
 	}
-	return zstdDecoders, nil
+	return d, nil
 }
 
 func unmarshal(r *http.Request, data []byte, v interface{}) error {
