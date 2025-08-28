@@ -861,8 +861,6 @@ func (r *Router) readZstdBody(body io.Reader) (*bytes.Buffer, error) {
 		return nil, err
 	}
 
-	// Write decompressed data to the buffer
-	decompressedBuf.Reset()
 	decompressedBuf.Write(decompressed)
 	return decompressedBuf, nil
 }
