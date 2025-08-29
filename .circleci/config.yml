@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   aws-cli: circleci/aws-cli@3.2.0
+  aws-ecr: circleci/aws-ecr@9.3.4
 
 commands:
   go-build:
@@ -297,21 +298,15 @@ jobs:
       - restore_cache:
           keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
-      - aws-cli/setup:
+      - aws-ecr/ecr-login:
           role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
           role-session-name: "refinery"
-          aws-region: AWS_REGION
+          public-registry: true
       - run:
           name: publish docker image to aws public ecr
-          command: |
-            set -x
-
-            export ECR_HOST=public.ecr.aws
-            export KO_DOCKER_REPO=${ECR_HOST}/honeycombio
-
-            aws ecr-public get-login-password --region us-east-1 \
-              | docker login --username AWS --password-stdin "${ECR_HOST}"
-            ./build-docker.sh
+          environment:
+            KO_DOCKER_REPO: public.ecr.aws/honeycombio
+          command: ./build-docker.sh
 
 workflows:
   build:
