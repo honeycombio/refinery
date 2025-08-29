@@ -2,7 +2,7 @@ version: 2.1
 
 orbs:
   aws-cli: circleci/aws-cli@3.2.0
-  aws-ecr: circleci/aws-ecr@9.3.4
+  aws-ecr: circleci/aws-ecr@9.5.4
 
 commands:
   go-build:
