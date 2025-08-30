@@ -227,7 +227,7 @@ jobs:
           role-session-name: "refinery"
           aws-region: AWS_REGION
       - aws-ecr/ecr_login:
-          account_id: 702835727665
+          account_id: "702835727665"
       - run:
           name: publish docker image to aws ecr
           environment:
@@ -251,7 +251,7 @@ jobs:
           role-session-name: "refinery"
           aws-region: AWS_REGION
       - aws-ecr/ecr_login:
-          account_id: 017118846235
+          account_id: "017118846235"
       - run:
           name: publish docker image to aws ecr
           environment:
@@ -295,7 +295,7 @@ jobs:
           role-session-name: "refinery"
           aws-region: AWS_REGION
       - aws-ecr/ecr_login:
-          account_id: 702835727665
+          account_id: "702835727665"
           public_registry: true
       - run:
           name: publish docker image to aws public ecr
