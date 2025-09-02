@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   aws-cli: circleci/aws-cli@3.2.0
+  aws-ecr: circleci/aws-ecr@9.5.4
 
 commands:
   go-build:
@@ -225,17 +226,13 @@ jobs:
           role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
           role-session-name: "refinery"
           aws-region: AWS_REGION
+      - aws-ecr/ecr_login:
+          account_id: "702835727665"
       - run:
           name: publish docker image to aws ecr
-          command: |
-            set -x
-
-            export ECR_HOST=702835727665.dkr.ecr.us-east-1.amazonaws.com
-            export KO_DOCKER_REPO=${ECR_HOST}
-
-            aws ecr get-login-password --region us-east-1 \
-              | docker login --username AWS --password-stdin "${ECR_HOST}"
-            ./build-docker.sh
+          environment:
+            KO_DOCKER_REPO: 702835727665.dkr.ecr.us-east-1.amazonaws.com
+          command: ./build-docker.sh
 
   publish_docker_to_ecr_sippycup:
     docker:
@@ -253,17 +250,13 @@ jobs:
           role-arn: "arn:aws:iam::017118846235:role/circleci-sandbox-telemetry"
           role-session-name: "refinery"
           aws-region: AWS_REGION
+      - aws-ecr/ecr_login:
+          account_id: "017118846235"
       - run:
           name: publish docker image to aws ecr
-          command: |
-            set -x
-
-            export ECR_HOST=017118846235.dkr.ecr.us-east-1.amazonaws.com
-            export KO_DOCKER_REPO=${ECR_HOST}
-
-            aws ecr get-login-password --region us-east-1 \
-              | docker login --username AWS --password-stdin "${ECR_HOST}"
-            ./build-docker.sh
+          environment:
+            KO_DOCKER_REPO: 017118846235.dkr.ecr.us-east-1.amazonaws.com
+          command: ./build-docker.sh
 
   publish_docker_to_dockerhub:
     docker:
@@ -284,6 +277,31 @@ jobs:
           command: |
             echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
             ./build-docker.sh
+
+  publish_docker_to_public_ecr:
+    docker:
+      - image: cimg/go:1.24
+    steps:
+      - checkout
+      - setup_remote_docker
+      - restore_cache:
+          keys:
+            - v2-googleko-{{ checksum "Makefile" }}
+      - restore_cache:
+          keys:
+            - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
+      - aws-cli/setup:
+          role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
+          role-session-name: "refinery"
+          aws-region: AWS_REGION
+      - aws-ecr/ecr_login:
+          account_id: "702835727665"
+          public_registry: true
+      - run:
+          name: publish docker image to aws public ecr
+          environment:
+            KO_DOCKER_REPO: public.ecr.aws/honeycombio
+          command: ./build-docker.sh
 
 workflows:
   build:
@@ -351,6 +369,17 @@ workflows:
             branches:
               ignore: /.*/
       - publish_docker_to_dockerhub:
+          context: Honeycomb Secrets for Public Repos
+          requires:
+            - build_binaries
+            - build_docker
+            - smoke-test
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
+      - publish_docker_to_public_ecr:
           context: Honeycomb Secrets for Public Repos
           requires:
             - build_binaries
