@@ -1463,3 +1463,37 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 		})
 	}
 }
+
+func TestBuildRequestURL(t *testing.T) {
+	const apiHost = "https://test-api"
+	const apiHostResult = apiHost + "/1/batch/"
+	testcases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "url encoded string",
+			input:    "foo%20bar",
+			expected: apiHostResult + "foo%2520bar",
+		},
+		{
+			name:     "with a space",
+			input:    "foo bar",
+			expected: apiHostResult + "foo%20bar",
+		},
+		{
+			name:     "with a slash",
+			input:    "foo/bar",
+			expected: apiHostResult + "foo%2Fbar",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run("all at once/"+tc.name, func(t *testing.T) {
+			result, err := buildRequestURL(apiHost, tc.input)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
