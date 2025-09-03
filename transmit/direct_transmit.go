@@ -723,5 +723,11 @@ type httpError interface {
 }
 
 func buildRequestURL(apiHost, dataset string) (string, error) {
+	// validate the apiHost is a valid URL
+	_, err := url.Parse(apiHost)
+	if err != nil {
+		return "", err
+	}
+
 	return url.JoinPath(apiHost, "/1/batch", url.PathEscape(dataset))
 }
