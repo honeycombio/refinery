@@ -430,13 +430,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		packed = packed[5-len(header):]
 		copy(packed, header)
 
-		apiURL, err := url.Parse(apiHost)
-		if err != nil {
-			d.Logger.Error().WithField("err", err.Error()).WithString("api_host", apiHost).Logf("failed to parse API host")
-			d.handleBatchFailure(subBatch)
-			continue
-		}
-		apiURL.Path, err = url.JoinPath("/1/batch", url.PathEscape(dataset))
+		apiURL, err := buildRequestURL(apiHost, dataset)
 		if err != nil {
 			d.Logger.Error().WithField("err", err.Error()).Logf("failed to create request URL")
 			d.handleBatchFailure(subBatch)
@@ -467,7 +461,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 				readerPtr.Reset(packed)
 			}
 
-			req, err = http.NewRequest("POST", apiURL.String(), readerPtr)
+			req, err = http.NewRequest("POST", apiURL, readerPtr)
 			if err != nil {
 				d.Logger.Error().WithField("err", err.Error()).Logf("failed to create request")
 				d.handleBatchFailure(subBatch)
@@ -726,4 +720,10 @@ func (z *batchedEvent) MarshalMsg(b []byte) (o []byte, err error) {
 
 type httpError interface {
 	Timeout() bool
+}
+
+func buildRequestURL(apiHost, dataset string) (string, error) {
+	escapedDataset := url.PathEscape(dataset)
+
+	return url.JoinPath(apiHost, "/1/batch", escapedDataset)
 }

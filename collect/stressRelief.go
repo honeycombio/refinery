@@ -119,7 +119,10 @@ func (s *StressRelief) Start() error {
 	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
 
 	// register with health
-	s.Health.Register(StressReliefHealthKey, 3*time.Second)
+	// Set health check timeout to 15 seconds (3x go-redis DialTimeout of 5s).
+	// This allows the stress relief system multiple retry attempts before
+	// the health check fails, preventing premature failure during transient issues.
+	s.Health.Register(StressReliefHealthKey, 15*time.Second)
 
 	// register stress level metrics
 	for _, m := range stressReliefMetrics {
