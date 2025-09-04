@@ -143,7 +143,7 @@ func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batch
 
 	mockLogger := &logger.MockLogger{}
 
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 10, 100*time.Millisecond, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 10, 100*time.Millisecond, 10*time.Second, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 	dt.Metrics = mockMetrics
@@ -499,7 +499,7 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Use max batch size of 3 for testing
 	testServer := newTestDirectAPIServer(t, 3)
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 3, 50*time.Millisecond, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 3, 50*time.Millisecond, 10*time.Second, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 	dt.Metrics = mockMetrics
@@ -760,7 +760,7 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	mockLogger := &logger.MockLogger{}
 
 	testServer := newTestDirectAPIServer(t, 50)
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 50, 50*time.Millisecond, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 50, 50*time.Millisecond, 10*time.Second, true)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 	dt.Metrics = mockMetrics
@@ -841,7 +841,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	fakeClock := clockwork.NewFakeClock()
 
 	// Use a 400ms batch timeout for testing
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 100, 400*time.Millisecond, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 100, 400*time.Millisecond, 10*time.Second, true)
 	dt.Config = &config.MockConfig{}
 	dt.Logger = &logger.NullLogger{}
 	dt.Version = "test-version"
@@ -960,6 +960,7 @@ func TestDirectTransmissionQueueLengthGauge(t *testing.T) {
 		http.DefaultTransport.(*http.Transport),
 		10,
 		batchTimeout,
+		10*time.Second,
 		true,
 	)
 	dt.Config = &config.MockConfig{}
@@ -1359,6 +1360,7 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 					httpTransport,
 					libhoney.DefaultMaxBatchSize,
 					libhoney.DefaultBatchTimeout,
+					60*time.Second, // this is the default batch send timeout in libhoney
 					false,
 				)
 				dt.Logger = &logger.NullLogger{}

@@ -207,7 +207,6 @@ func (i *InMemCollector) Start() error {
 	i.Metrics.Store("INCOMING_CAP", float64(cap(i.incoming)))
 	i.Metrics.Store("PEER_CAP", float64(cap(i.fromPeer)))
 	i.reload = make(chan struct{}, 1)
-	i.done = make(chan struct{})
 	i.datasetSamplers = make(map[string]sample.Sampler)
 	i.done = make(chan struct{})
 	i.redistributeTimer = newRedistributeNotifier(i.Logger, i.Metrics, i.Clock, time.Duration(i.Config.GetCollectionConfig().RedistributionDelay))
