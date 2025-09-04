@@ -229,9 +229,9 @@ jobs:
       - aws-ecr/ecr_login
       - run:
           name: build and publish to private ECR
-          environment:
-            KO_DOCKER_REPO: "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
-          command: ./build-docker.sh
+          command: |
+            export KO_DOCKER_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
+            ./build-docker.sh
 
   publish_docker_to_ecr_sippycup:
     docker:
@@ -278,9 +278,8 @@ jobs:
           public_registry: true
       - run:
           name: build once and publish to all public registries
-          environment:
-            KO_DOCKER_REPOS: "${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com,honeycombio,public.ecr.aws/honeycombio,ghcr.io/honeycombio"
           command: |
+            export KO_DOCKER_REPOS="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com,honeycombio,public.ecr.aws/honeycombio,ghcr.io/honeycombio"
             echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
             echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_USERNAME}" --password-stdin
             ./build-docker.sh

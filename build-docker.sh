@@ -82,12 +82,9 @@ if [[ -n "${KO_DOCKER_REPOS:-}" ]]; then
     ./cmd/refinery)
 
   echo "Built image: $IMAGE_REF"
+  echo "Pushing to multiple registries: $KO_DOCKER_REPOS"
   
-  # Expand environment variables in KO_DOCKER_REPOS
-  EXPANDED_REPOS=$(eval echo "$KO_DOCKER_REPOS")
-  echo "Pushing to multiple registries: $EXPANDED_REPOS"
-  
-  IFS=',' read -ra REPOS <<< "$EXPANDED_REPOS"
+  IFS=',' read -ra REPOS <<< "$KO_DOCKER_REPOS"
   for REPO in "${REPOS[@]}"; do
     REPO=$(echo "$REPO" | xargs) # trim whitespace
     echo "Tagging and pushing to: $REPO"
