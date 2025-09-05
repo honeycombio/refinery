@@ -135,8 +135,9 @@ type DirectTransmission struct {
 	enableCompression bool
 
 	// Batching configuration
-	maxBatchSize int
-	batchTimeout time.Duration
+	maxBatchSize     int
+	batchTimeout     time.Duration
+	batchSendTimeout time.Duration
 
 	eventBatches map[transmitKey]*eventBatch
 	batchMutex   sync.RWMutex
@@ -154,6 +155,7 @@ func NewDirectTransmission(
 	transport *http.Transport,
 	maxBatchSize int,
 	batchTimeout time.Duration,
+	batchSendTimeout time.Duration,
 	enableCompression bool,
 ) *DirectTransmission {
 	return &DirectTransmission{
@@ -163,6 +165,7 @@ func NewDirectTransmission(
 		enableCompression: enableCompression,
 		maxBatchSize:      maxBatchSize,
 		batchTimeout:      batchTimeout,
+		batchSendTimeout:  batchSendTimeout,
 		eventBatches:      make(map[transmitKey]*eventBatch),
 		stop:              make(chan struct{}),
 	}
@@ -173,7 +176,7 @@ func (d *DirectTransmission) Start() error {
 	d.userAgent = fmt.Sprintf("refinery/%s %s (%s/%s)", d.Version, strings.Replace(runtime.Version(), "go", "go/", 1), runtime.GOOS, runtime.GOARCH)
 	d.httpClient = &http.Client{
 		Transport: d.Transport,
-		Timeout:   10 * time.Second,
+		Timeout:   d.batchSendTimeout,
 	}
 
 	d.registerMetrics() // Ensure metrics are registered

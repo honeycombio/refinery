@@ -175,6 +175,7 @@ func main() {
 		upstreamTransport,
 		int(c.GetTracesConfig().GetMaxBatchSize()),
 		time.Duration(c.GetTracesConfig().GetBatchTimeout()),
+		30*time.Second,
 		true,
 	)
 	peerTransmission := transmit.NewDirectTransmission(
@@ -182,6 +183,7 @@ func main() {
 		peerTransport,
 		int(c.GetTracesConfig().GetMaxBatchSize()),
 		time.Duration(c.GetTracesConfig().GetBatchTimeout()),
+		10*time.Second,
 		c.GetCompressPeerCommunication(),
 	)
 
