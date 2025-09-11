@@ -114,7 +114,7 @@ Samplers:
 	t.Run("shows deprecation warning when no version provided but DeprecationText exists", func(t *testing.T) {
 		cfg, err := config.NewConfig(opts)
 		require.NotNil(t, cfg, "Config should be created successfully")
-		
+
 		// Should return a warning error since the field has DeprecationText
 		if err != nil {
 			configErr, isConfigErr := err.(*config.FileConfigError)
@@ -222,7 +222,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 	}{
 		{
 			name:   "Specific env var",
-			envVar: "REFINERY_HONEYCOMB_METRICS_API_KEY",
+			envVar: "REFINERY_OTEL_METRICS_API_KEY",
 			key:    "abc123",
 		},
 		{
@@ -241,8 +241,8 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 				t.Error(err)
 			}
 
-			if d := c.GetLegacyMetricsConfig(); d.APIKey != tc.key {
-				t.Error("received", d, "expected", tc.key)
+			if d := c.GetOTelMetricsConfig(); d.APIKey != tc.key {
+				t.Error("received", d.APIKey, "expected", tc.key)
 			}
 		})
 	}
@@ -250,7 +250,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 
 func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 	const specificKey = "abc123"
-	const specificEnvVarName = "REFINERY_HONEYCOMB_METRICS_API_KEY"
+	const specificEnvVarName = "REFINERY_OTEL_METRICS_API_KEY"
 	const fallbackKey = "this should not be set in the config"
 	const fallbackEnvVarName = "REFINERY_HONEYCOMB_API_KEY"
 
@@ -260,7 +260,7 @@ func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d := c.GetLegacyMetricsConfig(); d.APIKey != specificKey {
+	if d := c.GetOTelMetricsConfig(); d.APIKey != specificKey {
 		t.Error("received", d, "expected", specificKey)
 	}
 }
@@ -273,7 +273,7 @@ func TestMetricsAPIKeyFallbackEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d := c.GetLegacyMetricsConfig(); d.APIKey != key {
+	if d := c.GetOTelMetricsConfig(); d.APIKey != key {
 		t.Error("received", d, "expected", key)
 	}
 }

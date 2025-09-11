@@ -56,7 +56,6 @@ type configContents struct {
 	HoneycombLogger      HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
 	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
 	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
-	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
 	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
 	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
 	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
@@ -262,14 +261,6 @@ type StdoutLoggerConfig struct {
 type PrometheusMetricsConfig struct {
 	Enabled    bool   `yaml:"Enabled" default:"false"`
 	ListenAddr string `yaml:"ListenAddr" default:"localhost:2112"`
-}
-
-type LegacyMetricsConfig struct {
-	Enabled           bool     `yaml:"Enabled" default:"false"`
-	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
-	APIKey            string   `yaml:"APIKey" cmdenv:"LegacyMetricsAPIKey,HoneycombAPIKey"`
-	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
-	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s"`
 }
 
 type OTelMetricsConfig struct {
@@ -987,13 +978,6 @@ func (f *fileConfig) GetDisableRedistribution() bool {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Collection.DisableRedistribution.Get()
-}
-
-func (f *fileConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.LegacyMetrics
 }
 
 func (f *fileConfig) GetPrometheusMetricsConfig() PrometheusMetricsConfig {
