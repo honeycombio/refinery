@@ -323,12 +323,12 @@ type CollectionConfig struct {
 	RedistributionDelay   Duration     `yaml:"RedistributionDelay" default:"30s"`
 
 	ShutdownDelay     Duration `yaml:"ShutdownDelay" default:"15s"`
-	TraceLocalityMode string   `yaml:"TraceLocalityMode" default:"concentrated"`
+	TraceLocalityMode string   `yaml:"-"`
 
-	MaxDropDecisionBatchSize int      `yaml:"MaxDropDecisionBatchSize" default:"1000"`
-	DropDecisionSendInterval Duration `yaml:"DropDecisionSendInterval" default:"1s"`
-	MaxKeptDecisionBatchSize int      `yaml:"MaxKeptDecisionBatchSize" default:"1000"`
-	KeptDecisionSendInterval Duration `yaml:"KeptDecisionSendInterval" default:"1s"`
+	MaxDropDecisionBatchSize int      `yaml:"-"`
+	DropDecisionSendInterval Duration `yaml:"-"`
+	MaxKeptDecisionBatchSize int      `yaml:"-"`
+	KeptDecisionSendInterval Duration `yaml:"-"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
