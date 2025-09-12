@@ -274,13 +274,19 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) Valid
 	var results ValidationResults
 	// check for unknown groups in the userdata
 	for k := range data {
-		if m.GetGroup(k) == nil {
+		group := m.GetGroup(k)
+		if group == nil {
 			possibilities := m.ClosestNamesTo(k)
 			guesses := strings.Join(possibilities, " or ")
 			results = append(results, ValidationResult{
 				Message:  fmt.Sprintf("unknown group %s; did you mean %s?", k, guesses),
 				Severity: Error,
 			})
+			continue
+		}
+
+		if deprecation := checkForDeprecation(k, group, currentVersion...); !deprecation.isEmpty() {
+			results = append(results, deprecation)
 		}
 	}
 
@@ -543,26 +549,32 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) Valid
 	return results
 }
 
+type deprecator interface {
+	GetLastVersion() string
+	GetDeprecationText() string
+}
+
 // checkForDeprecation returns validation results for deprecated fields
-func checkForDeprecation(fieldPath string, field *Field, currentVersion ...string) ValidationResult {
+func checkForDeprecation(path string, item deprecator, currentVersion ...string) ValidationResult {
 
 	// Check for deprecation warnings/errors if current version is provided
-	message := field.DeprecationText
-	if len(currentVersion) > 0 && field.LastVersion != "" {
-		if isVersionBefore(currentVersion[0], field.LastVersion) {
+	message := item.GetDeprecationText()
+	if len(currentVersion) > 0 && item.GetLastVersion() != "" {
+		if isVersionDeprecated(currentVersion[0], item.GetLastVersion()) {
 			// Current version is before the last version - collect for grouped warning
 			if message == "" {
-				message = fmt.Sprintf("field %s is deprecated since version %s", fieldPath, field.LastVersion)
+				message = fmt.Sprintf("config %s is going to be deprecated starting at version %s", path, item.GetLastVersion())
 			}
 		} else {
 			// Current version is equal to or after the last version - fail validation
-			comparison, err := compareVersions(currentVersion[0], field.LastVersion)
+			comparison, err := compareVersions(currentVersion[0], item.GetLastVersion())
 			if err != nil || comparison >= 0 {
-				// TODO: once we are ready to officially deprecate all older configs, we should return error here
-				// returning errors here will cause Refinery fail to start if there's any deprecated configs in
-				// customer's config file
 				if message == "" {
-					message = fmt.Sprintf("field %s is deprecated since version %s", fieldPath, field.LastVersion)
+					message = fmt.Sprintf("config %s is deprecated since version %s", path, item.GetLastVersion())
+				}
+				return ValidationResult{
+					Message:  message,
+					Severity: Error,
 				}
 			}
 		}
