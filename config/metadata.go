@@ -82,14 +82,20 @@ func (g *Group) IsDeprecated() bool {
 		return true
 	}
 
+	count := len(g.Fields)
+	if count == 0 {
+		return false
+	}
+
 	// Check if all fields are deprecated
 	for _, field := range g.Fields {
 		if field.LastVersion == "" {
 			return false
 		}
+		count--
 	}
 
-	return true
+	return count == 0
 }
 
 // GetDeprecationVersion returns the group's deprecation version if set, otherwise the latest deprecation version among all fields.

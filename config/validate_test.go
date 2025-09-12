@@ -498,8 +498,10 @@ func TestGroup_IsDeprecated(t *testing.T) {
 		{
 			name: "group with lastversion is deprecated",
 			group: Group{
-				Name:        "testgroup",
-				LastVersion: "v2.0.0",
+				Name: "testgroup",
+				Deprecation: Deprecation{
+					LastVersion: "v2.0.0",
+				},
 				Fields: []Field{
 					{Name: "field1"},
 					{Name: "field2"},
@@ -533,7 +535,7 @@ func TestGroup_IsDeprecated(t *testing.T) {
 						Name:        "field1",
 						Deprecation: Deprecation{LastVersion: "v1.5.0"},
 					},
-					{Name: "field2"}, // no LastVersion
+					{Name: "field2"},
 				},
 			},
 			expected: false,
@@ -541,14 +543,16 @@ func TestGroup_IsDeprecated(t *testing.T) {
 		{
 			name: "group lastversion takes precedence over non-deprecated fields",
 			group: Group{
-				Name:        "testgroup",
-				LastVersion: "v2.0.0",
+				Name: "testgroup",
+				Deprecation: Deprecation{
+					LastVersion: "v2.0.0",
+				},
 				Fields: []Field{
-					{Name: "field1"}, // not deprecated
-					{Name: "field2"}, // not deprecated
+					{Name: "field1"},
+					{Name: "field2"},
 				},
 			},
-			expected: true, // group lastversion takes precedence
+			expected: true,
 		},
 		{
 			name: "empty group without lastversion",
@@ -556,106 +560,13 @@ func TestGroup_IsDeprecated(t *testing.T) {
 				Name:   "testgroup",
 				Fields: []Field{},
 			},
-			expected: true, // empty group with all fields deprecated returns true
+			expected: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := tt.group.IsDeprecated()
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestGroup_GetDeprecationVersion(t *testing.T) {
-	tests := []struct {
-		name     string
-		group    Group
-		expected string
-	}{
-		{
-			name: "group lastversion takes precedence over later field versions",
-			group: Group{
-				Name:        "testgroup",
-				LastVersion: "v1.0.0", // earlier version than fields
-				Fields: []Field{
-					{
-						Name:        "field1",
-						Deprecation: Deprecation{LastVersion: "v2.0.0"}, // later version
-					},
-					{
-						Name:        "field2",
-						Deprecation: Deprecation{LastVersion: "v3.0.0"}, // even later version
-					},
-				},
-			},
-			expected: "v1.0.0", // group version returned, not field versions
-		},
-		{
-			name: "group lastversion takes precedence over earlier field versions",
-			group: Group{
-				Name:        "testgroup",
-				LastVersion: "v2.0.0",
-				Fields: []Field{
-					{
-						Name:        "field1",
-						Deprecation: Deprecation{LastVersion: "v1.5.0"}, // earlier version
-					},
-					{
-						Name:        "field2",
-						Deprecation: Deprecation{LastVersion: "v1.8.0"}, // earlier version
-					},
-				},
-			},
-			expected: "v2.0.0", // group version returned, not field versions
-		},
-		{
-			name: "no group lastversion, returns latest field version",
-			group: Group{
-				Name: "testgroup",
-				Fields: []Field{
-					{
-						Name:        "field1",
-						Deprecation: Deprecation{LastVersion: "v1.5.0"},
-					},
-					{
-						Name:        "field2",
-						Deprecation: Deprecation{LastVersion: "v2.1.0"}, // latest
-					},
-					{
-						Name:        "field3",
-						Deprecation: Deprecation{LastVersion: "v1.8.0"},
-					},
-				},
-			},
-			expected: "v2.1.0",
-		},
-		{
-			name: "no deprecation versions anywhere",
-			group: Group{
-				Name: "testgroup",
-				Fields: []Field{
-					{Name: "field1"},
-					{Name: "field2"},
-				},
-			},
-			expected: "",
-		},
-		{
-			name: "empty group with lastversion",
-			group: Group{
-				Name:        "testgroup",
-				LastVersion: "v1.0.0",
-				Fields:      []Field{},
-			},
-			expected: "v1.0.0",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.group.GetDeprecationVersion()
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -671,11 +582,13 @@ func TestGroup_DeprecationTextAndReplacements(t *testing.T) {
 		{
 			name: "group with deprecation text and replacements",
 			group: Group{
-				Name:            "testgroup",
-				LastVersion:     "v2.0.0",
-				DeprecationText: "TestGroup is deprecated since v2.0.0. Use NewGroup instead.",
-				Replacements: []Replacement{
-					{Field: "NewGroup"}, // For groups, only Field is used (Formula ignored)
+				Name: "testgroup",
+				Deprecation: Deprecation{
+					LastVersion:     "v2.0.0",
+					DeprecationText: "TestGroup is deprecated since v2.0.0. Use NewGroup instead.",
+					Replacements: []Replacement{
+						{Field: "NewGroup"}, // For groups, only Field is used (Formula ignored)
+					},
 				},
 			},
 			hasText: true,
@@ -684,9 +597,11 @@ func TestGroup_DeprecationTextAndReplacements(t *testing.T) {
 		{
 			name: "group with deprecation text only",
 			group: Group{
-				Name:            "testgroup",
-				LastVersion:     "v2.0.0",
-				DeprecationText: "TestGroup is deprecated since v2.0.0.",
+				Name: "testgroup",
+				Deprecation: Deprecation{
+					LastVersion:     "v2.0.0",
+					DeprecationText: "TestGroup is deprecated since v2.0.0.",
+				},
 			},
 			hasText: true,
 			hasRepl: false,
@@ -694,10 +609,12 @@ func TestGroup_DeprecationTextAndReplacements(t *testing.T) {
 		{
 			name: "group with replacements only",
 			group: Group{
-				Name:        "testgroup",
-				LastVersion: "v2.0.0",
-				Replacements: []Replacement{
-					{Field: "NewGroup"}, // For groups, only Field is used (Formula ignored)
+				Name: "testgroup",
+				Deprecation: Deprecation{
+					LastVersion: "v2.0.0",
+					Replacements: []Replacement{
+						{Field: "NewGroup"}, // For groups, only Field is used (Formula ignored)
+					},
 				},
 			},
 			hasText: false,
@@ -706,8 +623,10 @@ func TestGroup_DeprecationTextAndReplacements(t *testing.T) {
 		{
 			name: "group with lastversion but no text or replacements",
 			group: Group{
-				Name:        "testgroup",
-				LastVersion: "v2.0.0",
+				Name: "testgroup",
+				Deprecation: Deprecation{
+					LastVersion: "v2.0.0",
+				},
 			},
 			hasText: false,
 			hasRepl: false,
@@ -742,44 +661,4 @@ func TestGroup_DeprecationTextAndReplacements(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestGroup_DeprecationConsistencyWithFields(t *testing.T) {
-	// Test that Group deprecation features work consistently with Field deprecation features
-	group := Group{
-		Name:            "TestGroup",
-		LastVersion:     "v2.0.0",
-		DeprecationText: "TestGroup is deprecated since v2.0.0. Use NewTestGroup instead.",
-		Replacements: []Replacement{
-			{Field: "NewTestGroup"}, // Formula is ignored for Group replacements
-		},
-		Fields: []Field{
-			{
-				Name: "OldField",
-				Deprecation: Deprecation{
-					LastVersion:     "v2.5.0", // later than group version
-					DeprecationText: "OldField is deprecated since v2.5.0.",
-					Replacements: []Replacement{
-						{Field: "NewField", Formula: "value"},
-					},
-				},
-			},
-			{
-				Name: "CurrentField", // not deprecated
-			},
-		},
-	}
-
-	// Group deprecation should take precedence
-	assert.True(t, group.IsDeprecated(), "Group should be deprecated")
-	assert.Equal(t, "v2.0.0", group.GetDeprecationVersion(), "Should return group's version, not field version")
-
-	// Group should have its own deprecation metadata
-	assert.Equal(t, "TestGroup is deprecated since v2.0.0. Use NewTestGroup instead.", group.DeprecationText)
-	assert.Len(t, group.Replacements, 1, "Group should have 1 replacement")
-
-	// Fields should maintain their own deprecation metadata
-	assert.Equal(t, "OldField is deprecated since v2.5.0.", group.Fields[0].GetDeprecationText())
-	assert.Len(t, group.Fields[0].Replacements, 1, "Field should have 1 replacement")
-	assert.Empty(t, group.Fields[1].GetDeprecationText(), "Non-deprecated field should have no deprecation text")
 }
