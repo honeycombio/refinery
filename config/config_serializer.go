@@ -64,7 +64,6 @@ func populateConfigContents(cfg Config) configContents {
 		PeerManagement:      getPeerManagementConfig(cfg),
 		RedisPeerManagement: cfg.GetRedisPeerManagement(),
 		Collection:          cfg.GetCollectionConfig(),
-		BufferSizes:         BufferSizeConfig{},
 		Specialized: SpecializedConfig{
 			EnvironmentCacheTTL:       Duration(cfg.GetEnvironmentCacheTTL()),
 			CompressPeerCommunication: getDefaultTrueValue(cfg.GetCompressPeerCommunication()),

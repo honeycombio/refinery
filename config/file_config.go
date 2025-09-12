@@ -62,7 +62,6 @@ type configContents struct {
 	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
 	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
 	Collection           CollectionConfig          `yaml:"Collection"`
-	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
 	Specialized          SpecializedConfig         `yaml:"Specialized"`
 	IDFieldNames         IDFieldsConfig            `yaml:"IDFields"`
 	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
@@ -319,8 +318,8 @@ type CollectionConfig struct {
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 
-	DisableRedistribution *DefaultTrue `yaml:"DisableRedistribution" default:"true"` // Avoid pointer woe on access, use GetDisableRedistribution() instead.
-	RedistributionDelay   Duration     `yaml:"RedistributionDelay" default:"30s"`
+	DisableRedistribution *DefaultTrue `yaml:"-"` // Avoid pointer woe on access, use GetDisableRedistribution() instead.
+	RedistributionDelay   Duration     `yaml:"-"`
 
 	ShutdownDelay     Duration `yaml:"ShutdownDelay" default:"15s"`
 	TraceLocalityMode string   `yaml:"-"`
@@ -366,8 +365,6 @@ func (c CollectionConfig) TraceLocalityEnabled() bool {
 		return true
 	}
 }
-
-type BufferSizeConfig struct{}
 
 type SpecializedConfig struct {
 	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
