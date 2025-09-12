@@ -731,6 +731,9 @@ groups:
 
   - name: LegacyMetrics
     title: "Legacy Metrics"
+    lastversion: v2.9.7
+    replacements:
+      - field: OTelMetrics
     description: >
       contains configuration for Refinery's legacy metrics.
       Version 1.x of Refinery used this format for sending Metrics to
@@ -742,7 +745,6 @@ groups:
         type: bool
         valuetype: conditional
         extra: "eq Metrics honeycomb"
-        lastversion: v2.9.7
         default: false
         reload: false
         summary: controls whether to send legacy-formatted metrics to Honeycomb.
@@ -753,7 +755,6 @@ groups:
       - name: APIHost
         v1group: HoneycombMetrics
         v1name: MetricsHoneycombAPI
-        lastversion: v2.9.7
         type: url
         valuetype: nondefault
         default: "https://api.honeycomb.io"
@@ -766,7 +767,6 @@ groups:
       - name: APIKey
         v1group: HoneycombMetrics
         v1name: MetricsAPIKey
-        lastversion: v2.9.7
         type: string
         pattern: apikey
         valuetype: nondefault
@@ -786,7 +786,6 @@ groups:
       - name: Dataset
         v1group: HoneycombMetrics
         v1name: MetricsDataset
-        lastversion: v2.9.7
         type: string
         valuetype: nondefault
         default: "Refinery Metrics"
@@ -800,7 +799,6 @@ groups:
       - name: ReportingInterval
         v1group: HoneycombMetrics
         v1name: MetricsReportingInterval
-        lastversion: v2.9.7
         type: duration
         valuetype: secondstoduration
         default: 30s
