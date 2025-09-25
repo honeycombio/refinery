@@ -480,6 +480,10 @@ func TestAddSpan(t *testing.T) {
 
 	coll.AddSpanFromPeer(spanFromPeer)
 
+	// We need to wait for the span to be processed manually with a Sleep
+	// because trace object is not concurrent safe
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.EventuallyWithT(t,
 		func(cT *assert.CollectT) {
 			trace := coll.getFromCache(traceID)
