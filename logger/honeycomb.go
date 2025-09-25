@@ -82,6 +82,7 @@ func (h *HoneycombLogger) Start() error {
 
 	h.addResourceAttributes()
 	h.libhClient.AddField("refinery_version", h.Version)
+	h.libhClient.AddField("service.name", "refinery")
 	if hostname, err := os.Hostname(); err == nil {
 		h.libhClient.AddField("hostname", hostname)
 	}
