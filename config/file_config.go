@@ -312,8 +312,8 @@ type RedisPeerManagementConfig struct {
 }
 
 type CollectionConfig struct {
-	PeerQueueSize       int        `yaml:"PeerQueueSize"`
-	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
+	PeerQueueSize       int        `yaml:"PeerQueueSize" default:"30000"`
+	IncomingQueueSize   int        `yaml:"IncomingQueueSize" default:"30000"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	HealthCheckTimeout  Duration   `yaml:"HealthCheckTimeout" default:"15s"`
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
