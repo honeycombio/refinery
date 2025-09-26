@@ -216,8 +216,7 @@ func (agent *Agent) healthCheck() {
 				}
 			}
 
-			recordUsage := agent.effectiveConfig.GetOpAMPConfig().RecordUsage
-			if recordUsage != nil && *recordUsage {
+			if agent.effectiveConfig.GetOpAMPConfig().RecordUsage.Get() {
 				traceUsage, ok := agent.metrics.Get("bytes_received_traces")
 				if !ok {
 					agent.logger.Errorf(context.Background(), "unexpected missing trace usage metric")
