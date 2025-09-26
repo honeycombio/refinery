@@ -216,17 +216,19 @@ func (agent *Agent) healthCheck() {
 				}
 			}
 
-			traceUsage, ok := agent.metrics.Get("bytes_received_traces")
-			if !ok {
-				agent.logger.Errorf(context.Background(), "unexpected missing trace usage metric")
-			}
-			logUsage, ok := agent.metrics.Get("bytes_received_logs")
-			if !ok {
-				agent.logger.Errorf(context.Background(), "unexpected missing log usage metric")
-			}
+			if agent.effectiveConfig.GetOpAMPConfig().RecordUsage.Get() {
+				traceUsage, ok := agent.metrics.Get("bytes_received_traces")
+				if !ok {
+					agent.logger.Errorf(context.Background(), "unexpected missing trace usage metric")
+				}
+				logUsage, ok := agent.metrics.Get("bytes_received_logs")
+				if !ok {
+					agent.logger.Errorf(context.Background(), "unexpected missing log usage metric")
+				}
 
-			agent.usageTracker.Add(signal_traces, traceUsage)
-			agent.usageTracker.Add(signal_logs, logUsage)
+				agent.usageTracker.Add(signal_traces, traceUsage)
+				agent.usageTracker.Add(signal_logs, logUsage)
+			}
 		}
 	}
 }
