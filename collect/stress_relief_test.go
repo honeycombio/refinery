@@ -330,6 +330,7 @@ func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub)
 
 	sr := &StressRelief{
 		Clock:           clock,
+		Done:            make(chan struct{}),
 		Logger:          logger,
 		RefineryMetrics: metric,
 		PubSub:          channel,
@@ -338,6 +339,7 @@ func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub)
 	}
 
 	return sr, func() {
+		close(sr.Done)
 		require.NoError(t, healthReporter.Stop())
 		require.NoError(t, channel.Stop())
 	}
