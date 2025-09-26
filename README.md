@@ -99,22 +99,36 @@ Refinery is a typical linux-style command line application, and supports several
 
 ### Environment Variables
 
-Refinery supports the following key environment variables; please see the command line help or the online documentation for the full list. Command line switches take precedence over file configuration, and environment variables take precedence over both.
+Refinery supports the following environment variables; please see the command line help or the online documentation for the full list. Command line switches take precedence over file configuration, and environment variables take precedence over both.
 
-| Environment Variable                                              | Configuration Field              |
-|-------------------------------------------------------------------|----------------------------------|
-| `REFINERY_GRPC_LISTEN_ADDRESS`                                    | `GRPCListenAddr`                 |
-| `REFINERY_REDIS_HOST`                                             | `PeerManagement.RedisHost`       |
-| `REFINERY_REDIS_USERNAME`                                         | `PeerManagement.RedisUsername`   |
-| `REFINERY_REDIS_PASSWORD`                                         | `PeerManagement.RedisPassword`   |
-| `REFINERY_HONEYCOMB_API_KEY`                                      | `HoneycombLogger.LoggerAPIKey`   |
-| `REFINERY_HONEYCOMB_METRICS_API_KEY`                              | `LegacyMetrics.APIKey`           |
-| `REFINERY_HONEYCOMB_API_KEY`                                      | `LegacyMetrics.APIKey`           |
-| `REFINERY_QUERY_AUTH_TOKEN`                                       | `QueryAuthToken`                 |
+| Environment Variable                              | Description                                                      |
+| ------------------------------------------------- | ---------------------------------------------------------------- |
+| `REFINERY_CONFIG`                                 | Config file or URL to load (comma-separated for multiple)        |
+| `REFINERY_RULES_CONFIG`                           | Rules config file or URL to load (comma-separated for multiple)  |
+| `REFINERY_HTTP_LISTEN_ADDRESS`                    | HTTP listen address for incoming event traffic                   |
+| `REFINERY_PEER_LISTEN_ADDRESS`                    | Peer listen address for communication between Refinery instances |
+| `REFINERY_GRPC_LISTEN_ADDRESS`                    | gRPC listen address for OTLP traffic                             |
+| `REFINERY_REDIS_HOST`                             | Redis host address                                               |
+| `REFINERY_REDIS_CLUSTER_HOSTS`                    | Redis cluster host addresses (comma-separated)                   |
+| `REFINERY_REDIS_USERNAME`                         | Redis username                                                   |
+| `REFINERY_REDIS_PASSWORD`                         | Redis password                                                   |
+| `REFINERY_REDIS_AUTH_CODE`                        | Redis AUTH code                                                  |
+| `REFINERY_HONEYCOMB_API`                          | Honeycomb API URL                                                |
+| `REFINERY_HONEYCOMB_API_KEY`                      | Honeycomb API key (for logger and metrics)                       |
+| `REFINERY_HONEYCOMB_LOGGER_API_KEY`               | Honeycomb logger API key                                         |
+| `REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES` | Additional attributes for Honeycomb logger (comma-separated)     |
+| `REFINERY_HONEYCOMB_METRICS_API_KEY`              | API key for legacy Honeycomb metrics                             |
+| `REFINERY_TELEMETRY_ENDPOINT`                     | Endpoint to send Refinery's internal telemetry to                |
+| `REFINERY_OTEL_METRICS_API_KEY`                   | API key for OTel metrics if being sent to Honeycomb              |
+| `REFINERY_OTEL_TRACES_API_KEY`                    | API key for OTel traces if being sent to Honeycomb               |
+| `REFINERY_QUERY_AUTH_TOKEN`                       | Token for debug/management queries                               |
+| `REFINERY_AVAILABLE_MEMORY`                       | Maximum memory available for Refinery to use (ex: 4GiB)          |
+| `REFINERY_SEND_KEY`                               | Honeycomb API key that Refinery uses to send data to Honeycomb   |
 
-Note: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for the `LegacyMetrics.APIKey` configuration.
+**Note**: `REFINERY_HONEYCOMB_METRICS_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for legacy metrics configuration. Similarly, `REFINERY_HONEYCOMB_LOGGER_API_KEY` takes precedence over `REFINERY_HONEYCOMB_API_KEY` for logger configuration.
 
 ### Embedded Environment Variables
+
 Any string value in the config file (but not in the rules file) can also contain a reference to environment variables.
 These variables will be replaced with the value of the corresponding environment variable.
 This happens once the config file is fully loaded, after processing any command lines.
@@ -184,13 +198,15 @@ When Dry Run Mode is enabled, the metric `trace_send_kept` will increment for ea
 
 ## Scaling Up
 
-As of the 2.9 release, Refinery now uses bounded queues and a priority queue to manage active traces, replacing the older circular buffer design. This new architecture allows the trace cache to dynamically scale with traffic load, improving flexibility and throughput during normal operation.
+As of the 3.0 release, Refinery has undergone significant performance improvements and architectural changes. The trace cache dynamically manages memory based on available resources, using `AvailableMemory` and `MaxMemoryPercentage` or `MaxAlloc` to determine maximum memory consumption for efficient and adaptive memory utilization.
 
-However, when traffic spikes beyond what a node can process in real time, the number of traces buffered in memory can increase rapidly, leading to high memory pressure. If statistics are enabled, you’ll see this reflected in a rising `collect_cache_entries` gauge, often accompanied by a spike in the `memory_inuse` gauge.
+**Note**: Starting with version 3.0, the `CacheCapacity` configuration option has been removed as Refinery now dynamically manages memory without relying on fixed capacity settings.
+
+When traffic spikes beyond what a node can process in real time, the number of traces buffered in memory can increase rapidly, leading to high memory pressure. If statistics are enabled, you'll see this reflected in a rising `collect_cache_entries` gauge, often accompanied by a spike in the `memory_inuse` gauge.
 
 Refinery mitigates memory pressure through the configured `MaxAlloc` limit, or alternatively, via the combination of `AvailableMemory` and `MaxMemoryPercentage`. When memory usage approaches the defined threshold, Refinery will automatically begin evicting older traces based on configured `TraceTimeout`. This proactive eviction helps shed load and prevents the system from exceeding its memory constraints.
 
-To reduce the risk of OOMKills, it’s important to allocate generous headroom in your `MaxAlloc`, `MaxMemoryPercentage`, or `AvailableMemory` setting. This ensures that Refinery has enough buffer to absorb sudden traffic bursts without compromising trace integrity or triggering aggressive eviction.
+To reduce the risk of OOMKills, it's important to allocate generous headroom in your `MaxAlloc`, `MaxMemoryPercentage`, or `AvailableMemory` setting. This ensures that Refinery has enough buffer to absorb sudden traffic bursts without compromising trace integrity or triggering aggressive eviction.
 
 ### Stress Relief
 
@@ -215,8 +231,9 @@ Refinery emits a number of metrics to give some indication about the health of t
 
 - Sample rates: how many traces are kept / dropped, and what does the sample rate distribution look like?
 - `[incoming|peer]_router_*`: how many events (no trace info) vs. spans (have trace info) have been accepted, and how many sent on to peers?
-- `collect_cache_buffer_overrun`: this should remain zero; a positive value indicates the need to grow the size of Refinery's circular trace buffer (via configuration `CacheCapacity`).
 - `process_uptime_seconds`: records the uptime of each process; look for unexpected restarts as a key towards memory constraints.
+
+**Note**: The `collect_cache_buffer_overrun` and `collector_cache_capacity` metrics have been deprecated in version 3.0 as Refinery now dynamically manages memory without fixed capacity settings.
 
 ## Troubleshooting
 
@@ -279,7 +296,7 @@ Within each directory, the interface the dependency exports is in the file with 
 
 `collect/collect.go` the Collector is responsible for bundling spans together into traces and deciding when to send them to Honeycomb or if they should be dropped. The first time a trace ID is seen, the Collector starts a timer. If the root span, which is a span with a trace ID and no parent ID, arrives before the timer expires, then the trace is considered complete. The trace is sent and the timer is canceled. If the timer expires before the root span arrives, the trace will be sent whether or not it is complete. Just before sending, the Collector asks the `sampler` for a sample rate and whether or not to keep the trace. The Collector obeys this sampling decision and records it (the record is applied to any spans that may come in as part of the trace after the decision has been made). After making the sampling decision, if the trace is to be kept, it is passed along to the `transmission` for actual sending.
 
-`transmit/transmit.go` is a wrapper around the HTTP interactions with the Honeycomb API. It handles batching events together and sending them upstream.
+`transmit/direct_transmit.go` is an optimized implementation that handles HTTP interactions with the Honeycomb API. It provides improved performance through enhanced batching strategies, connection pooling, and more efficient data serialization when sending events upstream.
 
 `logger` and `metrics` are for managing the logs and metrics that Refinery itself produces.
 
