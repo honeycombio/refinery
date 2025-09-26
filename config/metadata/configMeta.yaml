@@ -1413,6 +1413,8 @@ groups:
         type: string
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         default: "concentrated"
         reload: false
         summary: controls how Refinery handles spans that belong to the same trace in a clustered environment.
@@ -1453,6 +1455,8 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         unpublished: true
         default: 1000
         reload: false
@@ -1464,6 +1468,8 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         unpublished: true
         default: 1s
         reload: true
@@ -1475,6 +1481,8 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         unpublished: true
         default: 1000
         reload: false
@@ -1486,6 +1494,8 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         unpublished: true
         default: 1s
         reload: true

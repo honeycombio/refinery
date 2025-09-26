@@ -614,7 +614,11 @@ func TestDryRunMode(t *testing.T) {
 	coll.AddSpanFromPeer(span)
 
 	assert.Eventually(t, func() bool {
-		return traceID2 == coll.getFromCache(traceID2).TraceID
+		trace := coll.getFromCache(traceID2)
+		if trace == nil {
+			return false
+		}
+		return traceID2 == trace.TraceID
 	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2, "after adding the span, we should have a trace in the cache with the right trace ID")
 
 	span = &types.Span{
