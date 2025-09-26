@@ -732,6 +732,7 @@ groups:
   - name: LegacyMetrics
     title: "Legacy Metrics"
     lastversion: v2.9.7
+    deprecationtext: LegacyMetrics has been deprecated since v2.9.7. Please use OTelMetrics instead.
     replacements:
       - field: OTelMetrics
     description: >
@@ -1510,6 +1511,7 @@ groups:
 
   - name: BufferSizes
     title: "Buffer Sizes"
+    deprecationtext: BufferSizes group has been deprecation since v2.9.7. Please remove this section.
     lastversion: v2.9.7
     description: >
       contains the settings that are relevant to
