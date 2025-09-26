@@ -38,8 +38,13 @@ type ComputedField string
 
 const (
 	// ComputedFieldPrefix is the prefix for computed fields.
-	ComputedFieldPrefix               = "?."
-	NUM_DESCENDANTS     ComputedField = ComputedFieldPrefix + "NUM_DESCENDANTS"
+	ComputedFieldPrefix = "?."
+	// ComputedFieldFirstChar is the first character of computed fields.
+	ComputedFieldFirstChar               = '?'
+	NUM_DESCENDANTS        ComputedField = ComputedFieldPrefix + "NUM_DESCENDANTS"
+	RootPrefix                           = "root."
+	// RootPrefixFirstChar is the first character of root fields.
+	RootPrefixFirstChar = 'r'
 )
 
 // The json tags in this file are used for conversion from the old format (see tools/convert for details).
@@ -54,6 +59,27 @@ type V2SamplerChoice struct {
 	EMAThroughputSampler      *EMAThroughputSamplerConfig      `json:"emathroughputsampler" yaml:"EMAThroughputSampler,omitempty"`
 	WindowedThroughputSampler *WindowedThroughputSamplerConfig `json:"windowedthroughputsampler" yaml:"WindowedThroughputSampler,omitempty"`
 	TotalThroughputSampler    *TotalThroughputSamplerConfig    `json:"totalthroughputsampler" yaml:"TotalThroughputSampler,omitempty"`
+}
+
+func (v *V2SamplerChoice) GetSamplingFields() []string {
+	switch {
+	case v.DeterministicSampler != nil:
+		return v.DeterministicSampler.GetSamplingFields()
+	case v.RulesBasedSampler != nil:
+		return v.RulesBasedSampler.GetSamplingFields()
+	case v.DynamicSampler != nil:
+		return v.DynamicSampler.GetSamplingFields()
+	case v.EMADynamicSampler != nil:
+		return v.EMADynamicSampler.GetSamplingFields()
+	case v.EMAThroughputSampler != nil:
+		return v.EMAThroughputSampler.GetSamplingFields()
+	case v.WindowedThroughputSampler != nil:
+		return v.WindowedThroughputSampler.GetSamplingFields()
+	case v.TotalThroughputSampler != nil:
+		return v.TotalThroughputSampler.GetSamplingFields()
+	default:
+		return nil
+	}
 }
 
 func (v *V2SamplerChoice) Sampler() (any, string) {
@@ -279,7 +305,12 @@ func (r *RulesBasedSamplerConfig) GetSamplingFields() []string {
 		}
 	}
 
-	return fields.Members()
+	v := fields.Members()
+	if len(v) == 0 {
+		return nil
+	}
+
+	return v
 }
 
 var _ GetSamplingFielder = (*RulesBasedDownstreamSampler)(nil)

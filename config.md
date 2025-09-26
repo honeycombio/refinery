@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-07-25 at 19:58:08 UTC.
+It was automatically generated on 2025-08-26 at 15:28:23 UTC.
 
 ## The Config file
 
@@ -962,21 +962,6 @@ It is rarely necessary to adjust this value.
 If none of the memory settings are used, then Refinery will not attempt to limit its memory usage.
 This is not recommended for production use since a burst of traffic could cause Refinery to run out of memory and crash.
 
-### `CacheCapacity`
-
-CacheCapacity is the number of traces to keep in the cache's circular buffer.
-
-The collection cache is used to collect all active spans into traces.
-It is organized as a circular buffer.
-When the buffer wraps around, Refinery will try a few times to find an empty slot; if it fails, it starts ejecting traces from the cache earlier than would otherwise be necessary.
-Ideally, the size of the cache should be many multiples (100x to 1000x) of the total number of concurrently active traces (average trace throughput * average trace duration).
-NOTE: This setting is now deprecated and no longer controls the cache size.
-Instead the maxmimum memory usage is controlled by `MaxMemoryPercentage` and `MaxAlloc`.
-
-- Eligible for live reload.
-- Type: `int`
-- Default: `10000`
-
 ### `PeerQueueSize`
 
 PeerQueueSize is the maximum number of in-flight spans redirected from other peers stored in the peer span queue.
@@ -1064,6 +1049,7 @@ However, disabling redistribution may also cause partial data loss of traces tha
 
 - Eligible for live reload.
 - Type: `bool`
+- Default: `true`
 
 ### `RedistributionDelay`
 
@@ -1126,30 +1112,6 @@ Refinery will adjust the timeout based on the configured `MaxExpiredTraces`, so 
 ## Buffer Sizes
 
 `BufferSizes` contains the settings that are relevant to the sizes of communications buffers.
-
-### `UpstreamBufferSize`
-
-UpstreamBufferSize is the size of the queue used to buffer spans to send to the upstream Collector.
-
-The size of the buffer is measured in spans.
-If the buffer fills up, then performance will degrade because Refinery will block while waiting for space to become available.
-If this happens, then you should increase the buffer size.
-
-- Eligible for live reload.
-- Type: `int`
-- Default: `10000`
-
-### `PeerBufferSize`
-
-PeerBufferSize is the size of the queue used to buffer spans to send to peer nodes.
-
-The size of the buffer is measured in spans.
-If the buffer fills up, then performance will degrade because Refinery will block while waiting for space to become available.
-If this happens, then you should increase this buffer size.
-
-- Eligible for live reload.
-- Type: `int`
-- Default: `100000`
 
 ## Specialized Configuration
 

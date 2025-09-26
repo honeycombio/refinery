@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-07-25 at 19:58:08 UTC from ../../config.yaml using a template generated on 2025-07-25 at 19:57:55 UTC
+# created on 2025-08-26 at 15:28:23 UTC from ../../config.yaml using a template generated on 2025-08-26 at 15:28:20 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -573,8 +573,8 @@ HoneycombLogger:
     ##
     ## Not eligible for live reload.
     # AdditionalAttributes:
-      #  rollout.id: '67890'
       #  pipeline.id: '12345'
+      #  rollout.id: '67890'
 
 ###################
 ## Stdout Logger ##
@@ -1007,24 +1007,6 @@ Collection:
   ## Refinery to run out of memory and crash.
   ##
   ####
-    ## CacheCapacity is the number of traces to keep in the cache's circular
-    ## buffer.
-    ##
-    ## The collection cache is used to collect all active spans into traces.
-    ## It is organized as a circular buffer. When the buffer wraps around,
-    ## Refinery will try a few times to find an empty slot; if it fails, it
-    ## starts ejecting traces from the cache earlier than would otherwise be
-    ## necessary. Ideally, the size of the cache should be many multiples
-    ## (100x to 1000x) of the total number of concurrently active traces
-    ## (average trace throughput * average trace duration).
-    ## NOTE: This setting is now deprecated and no longer controls the cache
-    ## size. Instead the maxmimum memory usage is controlled by
-    ## `MaxMemoryPercentage` and `MaxAlloc`.
-    ##
-    ## default: 10000
-    ## Eligible for live reload.
-    # CacheCapacity: 10_000
-
     ## PeerQueueSize is the maximum number of in-flight spans redirected from
     ## other peers stored in the peer span queue.
     ##
@@ -1117,8 +1099,9 @@ Collection:
     ## However, disabling redistribution may also cause partial data loss of
     ## traces that were in flight when scaling occurred.
     ##
+    ## default: true
     ## Eligible for live reload.
-    # DisableRedistribution: false
+    # DisableRedistribution: true
 
     ## RedistributionDelay controls the amount of time Refinery waits after
     ## each cluster scaling event before redistributing in-memory traces.
@@ -1209,30 +1192,6 @@ BufferSizes:
   ## communications buffers.
   ##
   ####
-    ## UpstreamBufferSize is the size of the queue used to buffer spans to
-    ## send to the upstream Collector.
-    ##
-    ## The size of the buffer is measured in spans. If the buffer fills up,
-    ## then performance will degrade because Refinery will block while
-    ## waiting for space to become available. If this happens, then you
-    ## should increase the buffer size.
-    ##
-    ## default: 10000
-    ## Eligible for live reload.
-    # UpstreamBufferSize: 10_000
-
-    ## PeerBufferSize is the size of the queue used to buffer spans to send
-    ## to peer nodes.
-    ##
-    ## The size of the buffer is measured in spans. If the buffer fills up,
-    ## then performance will degrade because Refinery will block while
-    ## waiting for space to become available. If this happens, then you
-    ## should increase this buffer size.
-    ##
-    ## default: 100000
-    ## Eligible for live reload.
-    # PeerBufferSize: 100_000
-
 ###############################
 ## Specialized Configuration ##
 ###############################
@@ -1275,8 +1234,8 @@ Specialized:
     ##
     ## Eligible for live reload.
     # AdditionalAttributes:
-      #  environment: production
       #  ClusterName: MyCluster
+      #  environment: production
 
 ###############
 ## ID Fields ##
@@ -1568,6 +1527,10 @@ StressRelief:
     ## - PeerManagement.Prefix
     ## - PeerManagement.Database
     ## - PeerManagement.Strategy
+    ## - InMemCollector.CacheCapacity
+    ## - BufferSizes.UpstreamBufferSize
+    ## - BufferSizes.PeerBufferSize
+    ## - BufferSizes
     ## - Collector
     ## - InMemCollector.CacheOverrunStrategy
     ## - SampleCacheConfig/SampleCache.Type

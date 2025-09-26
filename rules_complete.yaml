@@ -111,8 +111,7 @@ Samplers:
                       Operator: =
                       Value: users
                     - Field: trace.parent_id
-                      Operator: =
-                      Value: root
+                      Operator: not-exists
                 - Name: drop incomplete traces from the buggy service
                   Drop: true
                   Conditions:

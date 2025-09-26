@@ -1,6 +1,8 @@
 package config
 
 import (
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -86,8 +88,18 @@ type Config interface {
 	// GetCollectionConfig returns the config specific to the InMemCollector
 	GetCollectionConfig() CollectionConfig
 
+	// GetDisableRedistribution returns whether redistribution is disabled.
+	GetDisableRedistribution() bool
+
 	// GetHealthCheckTimeout returns the timeout for Refinery's internal health checks used in the collector
 	GetHealthCheckTimeout() time.Duration
+
+	// DetermineSamplerKey returns the key to look up which sampler to use for the given API key, environment, and dataset.
+	DetermineSamplerKey(apiKey, env, dataset string) string
+
+	// GetSamplingKeyFieldsForDestName returns the key fields and non-root fields
+	// for the given destination (environment, or dataset in classic)
+	GetSamplingKeyFieldsForDestName(samplerKey string) []string
 
 	// GetSamplerConfigForDestName returns the sampler type and name to use for
 	// the given destination (environment, or dataset in classic)
@@ -99,21 +111,11 @@ type Config interface {
 	// GetGeneralConfig returns the config specific to General
 	GetGeneralConfig() GeneralConfig
 
-	// GetLegacyMetricsConfig returns the config specific to LegacyMetrics
-	GetLegacyMetricsConfig() LegacyMetricsConfig
-
 	// GetPrometheusMetricsConfig returns the config specific to PrometheusMetrics
 	GetPrometheusMetricsConfig() PrometheusMetricsConfig
 
 	// GetOTelMetricsConfig returns the config specific to OTelMetrics
 	GetOTelMetricsConfig() OTelMetricsConfig
-
-	// GetUpstreamBufferSize returns the size of the libhoney buffer to use for the upstream
-	// libhoney client
-	GetUpstreamBufferSize() int
-	// GetPeerBufferSize returns the size of the libhoney buffer to use for the peer forwarding
-	// libhoney client
-	GetPeerBufferSize() int
 
 	GetIdentifierInterfaceName() string
 
@@ -191,4 +193,75 @@ func WithRulesData(in configData) ReloadedConfigDataOption {
 	return func(c *ReloadedConfigData) {
 		c.rules = append(c.rules, in)
 	}
+}
+
+func IsLegacyAPIKey(key string) bool {
+	keyLen := len(key)
+
+	switch keyLen {
+	case 32:
+		// Check if all characters are hex digits (0-9, a-f)
+		for i := 0; i < keyLen; i++ {
+			c := key[i]
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+				return false
+			}
+		}
+		return true
+	case 64:
+		// Check the prefix pattern "hc[a-z]ic_"
+		if key[:2] != "hc" || key[3:6] != "ic_" {
+			return false
+		}
+		if key[2] < 'a' || key[2] > 'z' {
+			return false
+		}
+
+		// Check if the remaining characters are alphanumeric lowercase
+		for i := 6; i < keyLen; i++ {
+			c := key[i]
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z')) {
+				return false
+			}
+		}
+		return true
+	default:
+		return false
+	}
+}
+
+// GetKeyFields returns the fields that should be used as keys for the sampler.
+// It returns two slices: the first contains all fields, including those with the root prefix,
+// and the second contains fields that do not have the root prefix.
+// Fields that start with "?." are ignored since they should not exist as a field in a trace.
+func GetKeyFields(fields []string) (allFields []string, nonRootFields []string) {
+	if len(fields) == 0 {
+		return nil, nil
+	}
+
+	rootFields := make([]string, 0, len(fields))
+	nonRootFields = make([]string, 0, len(fields))
+
+	for _, field := range fields {
+		switch {
+		case field[0] == RootPrefixFirstChar && strings.HasPrefix(field, RootPrefix):
+			// If the field starts with "root.", add it to rootFields
+			rootFields = append(rootFields, field[len(RootPrefix):])
+		case field[0] == ComputedFieldFirstChar && strings.HasPrefix(field, ComputedFieldPrefix):
+			// If the field starts with "?.", skip it
+		default:
+			// Otherwise, add it to nonRootFields
+			nonRootFields = append(nonRootFields, field)
+		}
+	}
+
+	if len(rootFields) == 0 && len(nonRootFields) == 0 {
+		return nil, nil
+	}
+
+	if len(rootFields) == 0 {
+		return nonRootFields, nonRootFields
+	}
+
+	return slices.Compact(append(rootFields, nonRootFields...)), nonRootFields
 }

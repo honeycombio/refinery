@@ -18,19 +18,7 @@ type Transmission interface {
 	// Enqueue accepts a single event and schedules it for transmission to Honeycomb
 	EnqueueEvent(ev *types.Event)
 	EnqueueSpan(ev *types.Span)
-	// Flush flushes the in-flight queue of all events and spans
-	Flush()
-
-	RegisterMetrics()
 }
-
-const (
-	counterEnqueueErrors  = "enqueue_errors"
-	counterResponse20x    = "response_20x"
-	counterResponseErrors = "response_errors"
-	updownQueuedItems     = "queued_items"
-	histogramQueueTime    = "queue_time"
-)
 
 type DefaultTransmission struct {
 	Config     config.Config   `inject:""`
@@ -50,14 +38,6 @@ var once sync.Once
 
 func NewDefaultTransmission(client *libhoney.Client, m metrics.Metrics, name string) *DefaultTransmission {
 	return &DefaultTransmission{LibhClient: client, Metrics: m, Name: name}
-}
-
-var transmissionMetrics = []metrics.Metadata{
-	{Name: counterEnqueueErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when enqueueing events"},
-	{Name: counterResponse20x, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of successful responses from Honeycomb"},
-	{Name: counterResponseErrors, Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "The number of errors encountered when sending events to Honeycomb"},
-	{Name: updownQueuedItems, Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "The number of events queued for transmission to Honeycomb"},
-	{Name: histogramQueueTime, Type: metrics.Histogram, Unit: metrics.Microseconds, Description: "The time spent in the queue before being sent to Honeycomb"},
 }
 
 func (d *DefaultTransmission) Start() error {
@@ -97,7 +77,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 		WithString("api_host", ev.APIHost).
 		WithString("dataset", ev.Dataset).
 		Logf("transmit sending event")
-	libhEv := d.builder.NewEventSized(len(ev.Data))
+	libhEv := d.builder.NewEventSized(ev.Data.GetDataSize())
 	libhEv.APIHost = ev.APIHost
 	libhEv.WriteKey = ev.APIKey
 	libhEv.Dataset = ev.Dataset
@@ -112,13 +92,13 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 	}
 
 	for _, k := range d.Config.GetAdditionalErrorFields() {
-		if v, ok := ev.Data[k]; ok {
-			metadata[k] = v
+		if ev.Data.Exists(k) {
+			metadata[k] = ev.Data.Get(k)
 		}
 	}
 	libhEv.Metadata = metadata
 
-	for k, v := range ev.Data {
+	for k, v := range ev.Data.All() {
 		libhEv.AddField(k, v)
 	}
 
@@ -139,10 +119,6 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 func (d *DefaultTransmission) EnqueueSpan(sp *types.Span) {
 	// we don't need the trace ID anymore, but it's convenient to accept spans.
 	d.EnqueueEvent(&sp.Event)
-}
-
-func (d *DefaultTransmission) Flush() {
-	d.LibhClient.Flush()
 }
 
 // RegisterMetrics registers the metrics used by the DefaultTransmission.
@@ -208,7 +184,7 @@ func (d *DefaultTransmission) processResponses(
 				d.Metrics.Increment(counterResponse20x)
 			}
 			d.Metrics.Down(updownQueuedItems)
-			d.Metrics.Histogram(histogramQueueTime, dequeuedAt-enqueuedAt)
+			d.Metrics.Histogram(histogramQueueTime, float64(dequeuedAt-enqueuedAt))
 		case <-ctx.Done():
 			return
 		}

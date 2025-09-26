@@ -36,6 +36,13 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	switch ri.ContentType {
+	case "application/json":
+		r.Metrics.Increment(r.metricsNames.routerOtlpLogHttpJson)
+	case "application/x-protobuf", "application/protobuf":
+		r.Metrics.Increment(r.metricsNames.routerOtlpLogHttpProto)
+	}
+
 	ri.ApiKey = keyToUse
 	result, err := huskyotlp.TranslateLogsRequestFromReader(ctx, req.Body, ri)
 	if err != nil {
@@ -65,6 +72,7 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 	ctx, span := otelutil.StartSpan(ctx, l.router.Tracer, "ExportOTLPLogs")
 	defer span.End()
 
+	l.router.Metrics.Increment(l.router.metricsNames.routerOtlpLogGrpc)
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
 	apicfg := l.router.Config.GetAccessKeyConfig()
 	if err := apicfg.IsAccepted(ri.ApiKey); err != nil {

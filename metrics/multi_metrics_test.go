@@ -25,7 +25,7 @@ func (d dummyLogger) Errorf(format string, v ...interface{}) {
 	fmt.Println()
 }
 
-func getAndStartMultiMetrics(children ...Metrics) (*MultiMetrics, error) {
+func getAndStartMultiMetrics(children ...MetricsBackend) (*MultiMetrics, error) {
 	mm := NewMultiMetrics()
 	for _, child := range children {
 		mm.AddChild(child)
@@ -34,7 +34,6 @@ func getAndStartMultiMetrics(children ...Metrics) (*MultiMetrics, error) {
 		{Value: "version", Name: "version"},
 		{Value: &http.Transport{}, Name: "upstreamTransport"},
 		{Value: &http.Transport{}, Name: "peerTransport"},
-		{Value: &LegacyMetrics{}, Name: "legacyMetrics"},
 		{Value: &PromMetrics{}, Name: "promMetrics"},
 		{Value: &OTelMetrics{}, Name: "otelMetrics"},
 		{Value: mm, Name: "metrics"},
@@ -109,4 +108,130 @@ func TestMultiMetrics_Register(t *testing.T) {
 	// non-existent metric should not be ok
 	_, ok = mm.Get("non-existent")
 	assert.False(t, ok)
+}
+
+func TestMultiMetrics_Get(t *testing.T) {
+	// This shows that a standalone metrics with no children can register and store values
+	// that are important to StressRelief.
+	mm, err := getAndStartMultiMetrics()
+	assert.NoError(t, err)
+	mm.Register(Metadata{
+		Name: "test_store",
+		Type: Gauge,
+	})
+
+	mm.Count("test_counter", 1)
+	val, ok := mm.Get("test_counter")
+	assert.True(t, ok)
+	assert.Equal(t, float64(1), val)
+	mm.Count("test_counter", 2)
+	val, ok = mm.Get("test_counter")
+	assert.True(t, ok)
+	assert.Equal(t, float64(3), val)
+
+	mm.Gauge("test_gauge", 42.0)
+	val, ok = mm.Get("test_gauge")
+	assert.True(t, ok)
+	assert.Equal(t, 42.0, val)
+
+	mm.Up("test_updown")
+	val, ok = mm.Get("test_updown")
+	assert.True(t, ok)
+	assert.Equal(t, 1.0, val)
+	mm.Down("test_updown")
+	val, ok = mm.Get("test_updown")
+	assert.True(t, ok)
+	assert.Equal(t, 0.0, val)
+
+	mm.Store("test_store", 100.0)
+	val, ok = mm.Get("test_store")
+	assert.True(t, ok)
+	assert.Equal(t, 100.0, val)
+
+	mm.Store("test_store", 200.0)
+	val, ok = mm.Get("test_store")
+	assert.True(t, ok)
+	assert.Equal(t, 200.0, val)
+}
+
+func BenchmarkConcurrentAccess(b *testing.B) {
+	promMetrics := &PromMetrics{
+		Logger: &logger.NullLogger{},
+		Config: &config.MockConfig{},
+	}
+	promMetrics.Start()
+	otelMetrics := &OTelMetrics{
+		Logger: &logger.NullLogger{},
+		Config: &config.MockConfig{},
+	}
+	otelMetrics.Start()
+	defer otelMetrics.Stop()
+
+	mm, err := getAndStartMultiMetrics(
+		promMetrics,
+		otelMetrics,
+	)
+	if err != nil {
+		b.Fatalf("Failed to setup MultiMetrics: %v", err)
+	}
+
+	mm.Register(Metadata{Name: "test_counter", Type: Counter})
+	mm.Register(Metadata{Name: "test_gauge", Type: Gauge})
+	mm.Register(Metadata{Name: "test_histogram", Type: Histogram})
+	mm.Register(Metadata{Name: "test_updown", Type: UpDown})
+
+	b.Run("ConcurrentCounters", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			for pb.Next() {
+				mm.Count("test_counter", 1)
+			}
+		})
+	})
+
+	b.Run("ConcurrentGauges", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			i := 0
+			for pb.Next() {
+				mm.Gauge("test_gauge", float64(i))
+				i++
+			}
+		})
+	})
+
+	b.Run("ConcurrentHistograms", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			i := 0
+			for pb.Next() {
+				mm.Histogram("test_histogram", float64(i))
+				i++
+			}
+		})
+	})
+
+	b.Run("ConcurrentMixed", func(b *testing.B) {
+		b.ResetTimer()
+		b.RunParallel(func(pb *testing.PB) {
+			i := 0
+			for pb.Next() {
+				switch i % 4 {
+				case 0:
+					mm.Count("test_counter", 1)
+				case 1:
+					mm.Gauge("test_gauge", float64(i))
+				case 2:
+					mm.Histogram("test_histogram", float64(i))
+				case 3:
+					if i%2 == 0 {
+						mm.Up("test_updown")
+					} else {
+						mm.Down("test_updown")
+					}
+				}
+				i++
+			}
+		})
+	})
 }

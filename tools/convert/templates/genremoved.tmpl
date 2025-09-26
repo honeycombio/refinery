@@ -1,7 +1,8 @@
 {{- $group := . }}
+{{- /* Show deprecated fields */ -}}
 {{- range $group.Fields -}}
 {{- $field := . -}}
-{{- $oldname := $field.Name -}}
+{{- $oldname := (print $group.Name "." $field.Name) -}}
 {{- if $field.V1Name -}}
   {{- if $field.V1Group -}}
     {{- $oldname = (print $field.V1Group "." $field.V1Name) -}}
@@ -13,5 +14,10 @@
   {{- printf "- %s" $oldname | comment | indent 4  -}}
   {{- println -}}
 {{- end -}}
+{{- end -}}
+{{- /* Show deprecated group if all its fields are deprecated */ -}}
+{{- if $group.IsDeprecated -}}
+  {{- printf "- %s" $group.Name | comment | indent 4  -}}
+  {{- println -}}
 {{- end -}}
 

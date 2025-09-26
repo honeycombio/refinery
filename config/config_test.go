@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/configwatcher"
 	"github.com/honeycombio/refinery/logger"
@@ -44,6 +45,84 @@ func createTempConfigs(t *testing.T, configBody, rulesBody string) (string, stri
 	rulesFile.Close()
 
 	return configFile.Name(), rulesFile.Name()
+}
+
+func TestDeprecationWarnings(t *testing.T) {
+	configYAML := `
+General:
+  ConfigurationVersion: 2
+Collection:
+  CacheCapacity: 10000  # This field is deprecated in v2.9.7
+  PeerQueueSize: 30000
+`
+
+	rulesYAML := `
+RulesVersion: 2
+Samplers:
+  __default__:
+    DeterministicSampler:
+      SampleRate: 1
+`
+
+	cfg, rules := createTempConfigs(t, configYAML, rulesYAML)
+
+	opts := &config.CmdEnv{
+		ConfigLocations: []string{cfg},
+		RulesLocations:  []string{rules},
+		NoValidate:      false, // Make sure validation runs
+	}
+
+	t.Run("allows startup with deprecation warning for old version", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts, "v2.8.0")
+		require.NotNil(t, cfg, "Config should be created successfully even with deprecation warnings")
+
+		// Should return a warning error, not a fatal error
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
+	})
+
+	// Test with version after deprecation should return an error
+	t.Run("shows deprecation warning for version newer than lastversion", func(t *testing.T) {
+		_, err := config.NewConfig(opts, "v2.10.0")
+		require.Error(t, err)
+
+		configErr, isConfigErr := err.(*config.FileConfigError)
+		require.True(t, isConfigErr, "Error should be a FileConfigError")
+		require.True(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+		assert.Contains(t, err.Error(), "ERROR", "Expected warning message to contain ERROR")
+	})
+
+	// Test with version equal to lastversion should show warning
+	t.Run("shows deprecation warning for version equal to lastversion", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts, "v2.9.7")
+		require.NotNil(t, cfg, "Config should be created successfully even with deprecation warnings")
+
+		// Should return a warning error, not a fatal error
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
+	})
+
+	// Test without version - should show deprecation warning based on DeprecationText
+	t.Run("shows deprecation warning when no version provided but DeprecationText exists", func(t *testing.T) {
+		cfg, err := config.NewConfig(opts)
+		require.NotNil(t, cfg, "Config should be created successfully")
+
+		// Should return a warning error since the field has DeprecationText
+		if err != nil {
+			configErr, isConfigErr := err.(*config.FileConfigError)
+			require.True(t, isConfigErr, "Error should be a FileConfigError")
+			require.False(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+			assert.Contains(t, err.Error(), "WARNING", "Expected warning message to contain WARNING")
+		}
+	})
 }
 
 func setMap(m map[string]any, key string, value any) {
@@ -143,7 +222,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 	}{
 		{
 			name:   "Specific env var",
-			envVar: "REFINERY_HONEYCOMB_METRICS_API_KEY",
+			envVar: "REFINERY_OTEL_METRICS_API_KEY",
 			key:    "abc123",
 		},
 		{
@@ -162,8 +241,8 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 				t.Error(err)
 			}
 
-			if d := c.GetLegacyMetricsConfig(); d.APIKey != tc.key {
-				t.Error("received", d, "expected", tc.key)
+			if d := c.GetOTelMetricsConfig(); d.APIKey != tc.key {
+				t.Error("received", d.APIKey, "expected", tc.key)
 			}
 		})
 	}
@@ -171,7 +250,7 @@ func TestMetricsAPIKeyEnvVar(t *testing.T) {
 
 func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 	const specificKey = "abc123"
-	const specificEnvVarName = "REFINERY_HONEYCOMB_METRICS_API_KEY"
+	const specificEnvVarName = "REFINERY_OTEL_METRICS_API_KEY"
 	const fallbackKey = "this should not be set in the config"
 	const fallbackEnvVarName = "REFINERY_HONEYCOMB_API_KEY"
 
@@ -181,7 +260,7 @@ func TestMetricsAPIKeyMultipleEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d := c.GetLegacyMetricsConfig(); d.APIKey != specificKey {
+	if d := c.GetOTelMetricsConfig(); d.APIKey != specificKey {
 		t.Error("received", d, "expected", specificKey)
 	}
 }
@@ -194,7 +273,7 @@ func TestMetricsAPIKeyFallbackEnvVar(t *testing.T) {
 	c, err := getConfig([]string{"--no-validate", "--config", "../config.yaml", "--rules_config", "../rules.yaml"})
 	assert.NoError(t, err)
 
-	if d := c.GetLegacyMetricsConfig(); d.APIKey != key {
+	if d := c.GetOTelMetricsConfig(); d.APIKey != key {
 		t.Error("received", d, "expected", key)
 	}
 }
@@ -481,51 +560,6 @@ func TestMaxAlloc(t *testing.T) {
 	expected := config.MemorySize(16 * 1024 * 1024 * 1024)
 	inMemConfig := c.GetCollectionConfig()
 	assert.Equal(t, expected, inMemConfig.MaxAlloc)
-}
-
-func TestPeerAndIncomingQueueSize(t *testing.T) {
-	testcases := []struct {
-		name                string
-		configYAML          string
-		expectedForPeer     int
-		expectedForIncoming int
-	}{
-		{
-			name:                "default",
-			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000),
-			expectedForPeer:     3000,
-			expectedForIncoming: 3000,
-		},
-		{
-			name:                "PeerInMemoryCapacity is set",
-			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.PeerQueueSize", 4000),
-			expectedForPeer:     4000,
-			expectedForIncoming: 3000,
-		},
-		{
-			name:                "IncomingInMemoryCapacity is set",
-			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.IncomingQueueSize", 4000),
-			expectedForPeer:     3000,
-			expectedForIncoming: 4000,
-		},
-		{
-			name:                "below the minimum",
-			configYAML:          makeYAML("General.ConfigurationVersion", 2, "Collection.CacheCapacity", 1000, "Collection.PeerQueueSize", 2000, "Collection.IncomingQueueSize", 2000),
-			expectedForPeer:     3000,
-			expectedForIncoming: 3000,
-		},
-	}
-
-	for _, tc := range testcases {
-		rm := makeYAML("ConfigVersion", 2)
-		config, rules := createTempConfigs(t, tc.configYAML, rm)
-		c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
-		assert.NoError(t, err)
-
-		inMemConfig := c.GetCollectionConfig()
-		assert.Equal(t, tc.expectedForPeer, inMemConfig.GetPeerQueueSize())
-		assert.Equal(t, tc.expectedForIncoming, inMemConfig.GetIncomingQueueSize())
-	}
 }
 
 func TestAvailableMemoryCmdLine(t *testing.T) {
@@ -1208,4 +1242,161 @@ func TestHealthCheckTimeout(t *testing.T) {
 		})
 	}
 
+}
+
+func TestIsLegacyKey(t *testing.T) {
+	testCases := []struct {
+		name     string
+		key      string
+		expected bool
+	}{
+		// 32-character classic API keys (hex digits only)
+		{name: "valid 32-char classic key - all lowercase", key: "a1b2c3d4e5f67890abcdef1234567890", expected: true},
+		{name: "valid 32-char classic key - all numbers", key: "12345678901234567890123456789012", expected: true},
+		{name: "valid 32-char classic key - all lowercase letters", key: "abcdefabcdefabcdefabcdefabcdefab", expected: true},
+		{name: "valid 32-char classic key - mixed hex", key: "0123456789abcdef0123456789abcdef", expected: true},
+		{name: "invalid 32-char key - uppercase letters", key: "A1B2C3D4E5F67890ABCDEF1234567890", expected: false},
+		{name: "invalid 32-char key - contains g", key: "a1b2c3d4e5f67890abcdefg234567890", expected: false},
+		{name: "invalid 32-char key - contains special chars", key: "a1b2c3d4e5f67890abcdef123456789!", expected: false},
+		{name: "invalid 32-char key - contains space", key: "a1b2c3d4e5f67890abcdef12345 7890", expected: false},
+
+		// 64-character classic ingest keys (pattern: ^hc[a-z]ic_[0-9a-z]*$)
+		{name: "valid 64-char ingest key - hcaic", key: "hcaic_1234567890123456789012345678901234567890123456789012345678", expected: true},
+		{name: "valid 64-char ingest key - hcbic", key: "hcbic_abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234", expected: true},
+		{name: "valid 64-char ingest key - hczic", key: "hczic_0123456789abcdef0123456789abcdef0123456789abcdef0123456789", expected: true},
+		{name: "valid 64-char ingest key - mixed", key: "hcxic_1234567890123456789012345678901234567890123456789012345678", expected: true},
+		{name: "invalid 64-char ingest key - wrong prefix", key: "hc1ic_1234567890123456789012345678901234567890123456789012345678", expected: false},
+		{name: "invalid 64-char ingest key - uppercase in prefix", key: "hcAic_1234567890123456789012345678901234567890123456789012345678", expected: false},
+		{name: "invalid 64-char ingest key - missing underscore", key: "hcaic1234567890123456789012345678901234567890123456789012345678", expected: false},
+		{name: "invalid 64-char ingest key - uppercase in suffix", key: "hcaic_1234567890123456789012345678901234567890123456789012345A78", expected: false},
+		{name: "invalid 64-char ingest key - special char in suffix", key: "hcaic_123456789012345678901234567890123456789012345678901234567!", expected: false},
+
+		// Edge cases for length
+		{name: "empty key", key: "", expected: false},
+		{name: "too short - 31 chars", key: "a1b2c3d4e5f67890abcdef123456789", expected: false},
+		{name: "too long - 33 chars", key: "a1b2c3d4e5f67890abcdef12345678901", expected: false},
+		{name: "too short - 63 chars", key: "hcaic_123456789012345678901234567890123456789012345678901234567", expected: false},
+		{name: "too long - 65 chars", key: "hcaic_12345678901234567890123456789012345678901234567890123456789", expected: false},
+
+		// Non-classic keys (E&S keys should return false)
+		{name: "E&S key", key: "abc123DEF456ghi789jklm", expected: false},
+		{name: "E&S ingest key", key: "hcxik_1234567890123456789012345678901234567890123456789012345678", expected: false},
+
+		// Invalid patterns
+		{name: "random string", key: "this-is-not-a-key", expected: false},
+		{name: "numbers only but wrong length", key: "123456789012", expected: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := config.IsLegacyAPIKey(tc.key)
+			assert.Equal(t, tc.expected, result, "Expected IsLegacyApiKey(%q) to return %v", tc.key, tc.expected)
+			huskysResult := otlp.IsClassicApiKey(tc.key)
+			assert.Equal(t, huskysResult, result, "Expect IsLegacyApiKey() output to match husky's IsClassicApiKey()")
+		})
+	}
+}
+
+func TestGetKeyFields(t *testing.T) {
+	tests := []struct {
+		name                  string
+		input                 []string
+		expectedAll           []string
+		expectedNonRootFields []string
+	}{
+		{
+			name:                  "empty slice",
+			input:                 []string{},
+			expectedAll:           nil,
+			expectedNonRootFields: nil,
+		},
+		{
+			name:                  "nil input",
+			input:                 nil,
+			expectedAll:           nil,
+			expectedNonRootFields: nil,
+		},
+		{
+			name:                  "no root fields",
+			input:                 []string{"service.name", "operation.name", "duration_ms"},
+			expectedAll:           []string{"service.name", "operation.name", "duration_ms"},
+			expectedNonRootFields: []string{"service.name", "operation.name", "duration_ms"},
+		},
+		{
+			name:                  "only root fields",
+			input:                 []string{"root.service.name", "root.operation.name", "root.duration_ms"},
+			expectedAll:           []string{"service.name", "operation.name", "duration_ms"},
+			expectedNonRootFields: []string{},
+		},
+		{
+			name:                  "mixed root and non-root fields",
+			input:                 []string{"service.name", "root.operation.name", "duration_ms", "root.user.id"},
+			expectedAll:           []string{"operation.name", "user.id", "service.name", "duration_ms"},
+			expectedNonRootFields: []string{"service.name", "duration_ms"},
+		},
+		{
+			name:                  "duplicate fields with and without root prefix",
+			input:                 []string{"service.name", "root.service.name", "operation.name"},
+			expectedAll:           []string{"service.name", "operation.name"},
+			expectedNonRootFields: []string{"service.name", "operation.name"},
+		},
+		{
+			name:                  "fields with dots in names",
+			input:                 []string{"root.http.request.method", "http.response.status", "root.db.query.time"},
+			expectedAll:           []string{"http.request.method", "db.query.time", "http.response.status"},
+			expectedNonRootFields: []string{"http.response.status"},
+		},
+		{
+			name:                  "single non-root field",
+			input:                 []string{"test"},
+			expectedAll:           []string{"test"},
+			expectedNonRootFields: []string{"test"},
+		},
+		{
+			name:                  "single root field",
+			input:                 []string{"root.test"},
+			expectedAll:           []string{"test"},
+			expectedNonRootFields: []string{},
+		},
+		{
+			name:                  "computed fields",
+			input:                 []string{"root.test.field", "?.NUMBER_DESCENDANTS", "test.?.field"},
+			expectedAll:           []string{"test.field", "test.?.field"},
+			expectedNonRootFields: []string{"test.?.field"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			allFields, nonrootFields := config.GetKeyFields(tt.input)
+
+			assert.Equal(t, tt.expectedAll, allFields, "All fields should have root prefix stripped and be combined")
+			assert.Equal(t, tt.expectedNonRootFields, nonrootFields, "Non-root fields should match expected non-root fields")
+		})
+	}
+}
+func BenchmarkIsLegacyAPIKey(b *testing.B) {
+	tests := []struct {
+		name string
+		key  string
+	}{
+		{"Valid classic key", "a1b2c3d4e5f67890abcdef1234567890"},
+		{"Invalid classic key", "abcdef0123456789abcdef01234567zz"},
+		{"Valid ingest key", "hcaic_1234567890123456789012345678901234567890123456789012345678"},
+		{"Invalid ingest key", "hcaic_1234567890123456789012345678901234567890123456789012345678"},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_ = config.IsLegacyAPIKey(tt.key)
+			}
+		})
+
+		b.Run(tt.name+"/husky", func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				_ = otlp.IsClassicApiKey(tt.key)
+			}
+		})
+	}
 }

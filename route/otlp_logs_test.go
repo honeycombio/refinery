@@ -20,6 +20,7 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/sharder"
 	"github.com/honeycombio/refinery/transmit"
+	"github.com/honeycombio/refinery/types"
 	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,7 +46,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 	mockTransmission.Start()
 	defer mockTransmission.Stop()
 	mockCollector := collect.NewMockCollector()
-	decoders, err := makeDecoders(1)
+	zstdDecoder, err := makeDecoders(1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -61,14 +62,14 @@ func TestLogsOTLPHandler(t *testing.T) {
 			incomingOrPeer: "incoming",
 		},
 		Logger:           logger,
-		zstdDecoders:     decoders,
+		zstdDecoder:      zstdDecoder,
 		environmentCache: newEnvironmentCache(time.Second, nil),
 		Sharder: &sharder.SingleServerSharder{
 			Logger: logger,
 		},
-		Collector:      mockCollector,
-		incomingOrPeer: "incoming",
-		Tracer:         noop.Tracer{},
+		Collector:  mockCollector,
+		routerType: types.RouterTypeIncoming,
+		Tracer:     noop.Tracer{},
 	}
 	logsServer := NewLogsServer(router)
 
@@ -428,7 +429,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		assert.Equal(t, 1, len(events))
 
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
+		assert.Equal(t, "my-user-agent", event.Data.MetaRefineryIncomingUserAgent)
 
 		assert.Equal(t, 0, len(router.Collector.(*collect.MockCollector).Spans))
 		mockCollector.Flush()
@@ -461,7 +462,7 @@ func TestLogsOTLPHandler(t *testing.T) {
 		events := mockTransmission.GetBlock(1)
 		assert.Equal(t, 1, len(events))
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
+		assert.Equal(t, "my-user-agent", event.Data.MetaRefineryIncomingUserAgent)
 
 		assert.Equal(t, 0, len(router.Collector.(*collect.MockCollector).Spans))
 		mockCollector.Flush()

@@ -16,18 +16,17 @@ var _ Metrics = (*MultiMetrics)(nil)
 // which can then be retrieved with Get(). This is for use with StressRelief and OpAMP agent. It
 // does not track histograms, which are reset after each scrape.
 type MultiMetrics struct {
-	Config        config.Config `inject:""`
-	LegacyMetrics Metrics       `inject:"legacyMetrics"`
-	PromMetrics   Metrics       `inject:"promMetrics"`
-	OTelMetrics   Metrics       `inject:"otelMetrics"`
-	children      []Metrics
-	values        map[string]float64
-	lock          sync.RWMutex
+	Config      config.Config  `inject:""`
+	PromMetrics MetricsBackend `inject:"promMetrics"`
+	OTelMetrics MetricsBackend `inject:"otelMetrics"`
+	children    []MetricsBackend
+	values      map[string]float64
+	lock        sync.RWMutex
 }
 
 func NewMultiMetrics() *MultiMetrics {
 	return &MultiMetrics{
-		children: []Metrics{},
+		children: []MetricsBackend{},
 		values:   make(map[string]float64),
 	}
 }
@@ -37,10 +36,6 @@ func (m *MultiMetrics) Start() error {
 	// the injector can't handle configurable items, so
 	// we need to inject everything and then build the
 	// array of children conditionally.
-	if m.Config.GetLegacyMetricsConfig().Enabled {
-		m.AddChild(m.LegacyMetrics)
-	}
-
 	if m.Config.GetPrometheusMetricsConfig().Enabled {
 		m.AddChild(m.PromMetrics)
 	}
@@ -52,14 +47,14 @@ func (m *MultiMetrics) Start() error {
 	return nil
 }
 
-func (m *MultiMetrics) AddChild(met Metrics) {
+func (m *MultiMetrics) AddChild(met MetricsBackend) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.children = append(m.children, met)
 }
 
 // This is not safe for concurrent use!
-func (m *MultiMetrics) Children() []Metrics {
+func (m *MultiMetrics) Children() []MetricsBackend {
 	return m.children
 }
 
@@ -81,25 +76,25 @@ func (m *MultiMetrics) Increment(name string) { // for counters
 	m.values[name]++
 }
 
-func (m *MultiMetrics) Gauge(name string, val interface{}) { // for gauges
+func (m *MultiMetrics) Gauge(name string, val float64) { // for gauges
 	for _, ch := range m.children {
 		ch.Gauge(name, val)
 	}
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	m.values[name] = ConvertNumeric(val)
+	m.values[name] = val
 }
 
-func (m *MultiMetrics) Count(name string, n interface{}) { // for counters
+func (m *MultiMetrics) Count(name string, n int64) { // for counters
 	for _, ch := range m.children {
 		ch.Count(name, n)
 	}
 	m.lock.Lock()
 	defer m.lock.Unlock()
-	m.values[name] += ConvertNumeric(n)
+	m.values[name] += float64(n)
 }
 
-func (m *MultiMetrics) Histogram(name string, obs interface{}) { // for histogram
+func (m *MultiMetrics) Histogram(name string, obs float64) { // for histogram
 	for _, ch := range m.children {
 		ch.Histogram(name, obs)
 	}

@@ -26,12 +26,29 @@ func (v *Validation) GetArgAsStringSlice() []string {
 	panic("shouldn't happen: validation arg is not a slice of strings")
 }
 
+type Replacement struct {
+	Field   string `yaml:"field"`   // Target field to set (e.g., "PeerQueueSize")
+	Formula string `yaml:"formula"` // Formula to calculate value (e.g., "3 * value")
+}
+
+type Deprecation struct {
+	LastVersion     string        `yaml:"lastversion,omitempty"`
+	DeprecationText string        `yaml:"deprecationtext,omitempty"`
+	Replacements    []Replacement `yaml:"replacements,omitempty"`
+}
+
+func (d Deprecation) GetLastVersion() string {
+	return d.LastVersion
+}
+func (d Deprecation) GetDeprecationText() string {
+	return d.DeprecationText
+}
+
 type Field struct {
 	Name         string       `yaml:"name"`
 	V1Group      string       `yaml:"v1group"`
 	V1Name       string       `yaml:"v1name"`
 	FirstVersion string       `yaml:"firstversion"`
-	LastVersion  string       `yaml:"lastversion"`
 	Type         string       `yaml:"type"`
 	ValueType    string       `yaml:"valuetype"`
 	Extra        string       `yaml:"extra"`
@@ -46,6 +63,7 @@ type Field struct {
 	Envvar       string       `yaml:"envvar,omitempty"`
 	CommandLine  string       `yaml:"commandLine,omitempty"`
 	Unpublished  bool         `yaml:"unpublished,omitempty"`
+	Deprecation  `yaml:",inline"`
 }
 
 type Group struct {
@@ -54,6 +72,46 @@ type Group struct {
 	Description string  `yaml:"description"`
 	Fields      []Field `yaml:"fields,omitempty"`
 	SortOrder   int     `yaml:"sortorder"`
+	Deprecation `yaml:",inline"`
+}
+
+// IsDeprecated returns true if the group itself is deprecated or if all fields in the group are deprecated.
+func (g *Group) IsDeprecated() bool {
+	// If the group itself is deprecated, return true
+	if g.LastVersion != "" {
+		return true
+	}
+
+	count := len(g.Fields)
+	if count == 0 {
+		return false
+	}
+
+	// Check if all fields are deprecated
+	for _, field := range g.Fields {
+		if field.LastVersion == "" {
+			return false
+		}
+		count--
+	}
+
+	return count == 0
+}
+
+// GetDeprecationVersion returns the group's deprecation version if set, otherwise the latest deprecation version among all fields.
+func (g *Group) GetDeprecationVersion() string {
+	// Group's lastversion takes precedence
+	if g.LastVersion != "" {
+		return g.LastVersion
+	}
+
+	var latestVersion string
+	for _, field := range g.Fields {
+		if field.LastVersion != "" && (latestVersion == "" || field.LastVersion > latestVersion) {
+			latestVersion = field.LastVersion
+		}
+	}
+	return latestVersion
 }
 
 type Metadata struct {

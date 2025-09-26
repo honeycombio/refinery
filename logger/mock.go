@@ -2,12 +2,14 @@ package logger
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/honeycombio/refinery/config"
 )
 
 type MockLogger struct {
 	Events []*MockLoggerEvent
+	mutex  sync.Mutex
 }
 
 var _ = Logger((*MockLogger)(nil))
@@ -86,5 +88,7 @@ func (e *MockLoggerEvent) Logf(f string, args ...interface{}) {
 	default:
 		panic("unexpected log level")
 	}
+	e.l.mutex.Lock()
 	e.l.Events = append(e.l.Events, e)
+	e.l.mutex.Unlock()
 }

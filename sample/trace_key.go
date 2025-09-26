@@ -1,12 +1,14 @@
 package sample
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/honeycombio/refinery/generics"
+	"github.com/dgryski/go-wyhash"
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/types"
 )
 
@@ -20,6 +22,8 @@ type traceKey struct {
 	fields         []string
 	rootOnlyFields []string
 	useTraceLength bool
+	keyBuilder     *bytes.Buffer
+	distinctValue  *distinctValue
 }
 
 func newTraceKey(fields []string, useTraceLength bool) *traceKey {
@@ -28,8 +32,8 @@ func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 	rootOnlyFields := make([]string, 0, len(fields)/2)
 	nonRootFields := make([]string, 0, len(fields)/2)
 	for _, field := range fields {
-		if strings.HasPrefix(field, RootPrefix) {
-			rootOnlyFields = append(rootOnlyFields, field[len(RootPrefix):])
+		if strings.HasPrefix(field, config.RootPrefix) {
+			rootOnlyFields = append(rootOnlyFields, field[len(config.RootPrefix):])
 			continue
 		}
 
@@ -40,6 +44,8 @@ func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 		fields:         nonRootFields,
 		rootOnlyFields: rootOnlyFields,
 		useTraceLength: useTraceLength,
+		distinctValue:  &distinctValue{buf: make([]byte, 0, 1024)},
+		keyBuilder:     &bytes.Buffer{},
 	}
 }
 
@@ -47,68 +53,145 @@ func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 // returns the number of values used to build the key
 func (d *traceKey) build(trace *types.Trace) (string, int) {
 	fieldCount := 0
-	// fieldCollector gets all values from the fields listed in the config, even
-	// if they happen multiple times.
-	fieldCollector := make(map[string][]string)
 
 	// for each field, for each span, get the value of that field
 	spans := trace.GetSpans()
-	uniques := generics.NewSetWithCapacity[string](maxKeyLength)
+	d.distinctValue.Reset(d.fields, maxKeyLength)
+	d.keyBuilder.Reset()
 outer:
-	for _, field := range d.fields {
+	for i, field := range d.fields {
 		for _, span := range spans {
-			if val, ok := span.Data[field]; ok {
-				u := fmt.Sprintf("%s/%v", field, val)
-				// don't bother to add it if we've already seen it
-				if uniques.Contains(u) {
-					continue
-				}
-				uniques.Add(u)
-				if len(uniques) >= maxKeyLength {
+			if span.Data.Exists(field) {
+				if d.distinctValue.totalUniqueCount >= maxKeyLength {
 					break outer
 				}
-				fieldCollector[field] = append(fieldCollector[field], fmt.Sprintf("%v", val))
+				d.distinctValue.AddAsString(span.Data.Get(field), i)
 			}
 		}
 	}
 	// ok, now we have a map of fields to a list of all unique values for that field.
 	// (unless it was huge, in which case we have a bunch of them)
 
-	var key strings.Builder
-	for _, field := range d.fields {
+	for i := range d.fields {
+		values := d.distinctValue.Values(i)
 		// if there's no values for this field, skip it
-		values, ok := fieldCollector[field]
-		if !ok || len(values) == 0 {
+		if len(values) == 0 {
 			continue
 		}
-		// sort and collapse list
-		sort.Strings(values)
 		var prevStr string
 		for _, str := range values {
 			if str != prevStr {
-				key.WriteString(str)
-				key.WriteRune('•')
+				d.keyBuilder.WriteString(str)
+				d.keyBuilder.WriteRune('•')
 				fieldCount += 1
 			}
 			prevStr = str
 		}
 		// get ready for the next element
-		key.WriteRune(',')
+		d.keyBuilder.WriteRune(',')
 	}
 
 	if trace.RootSpan != nil {
 		for _, field := range d.rootOnlyFields {
-			if val, ok := trace.RootSpan.Data[field]; ok {
-				key.WriteString(fmt.Sprintf("%v,", val))
+			if trace.RootSpan.Data.Exists(field) {
+				d.keyBuilder.WriteString(fmt.Sprintf("%v,", trace.RootSpan.Data.Get(field)))
 				fieldCount += 1
 			}
 		}
 	}
 
 	if d.useTraceLength {
-		key.WriteString(strconv.FormatInt(int64(len(spans)), 10))
+		d.keyBuilder.WriteString(strconv.FormatInt(int64(len(spans)), 10))
 		fieldCount += 1
 	}
 
-	return key.String(), fieldCount
+	return d.keyBuilder.String(), fieldCount
+}
+
+// distinctValue keeps track of distinct values for a set of fields.
+// It stores the unique values as strings.
+type distinctValue struct {
+	buf          []byte
+	values       []map[uint64]string
+	valuesBuffer []string
+
+	// totalUniqueCount keeps track of how many unique values we've seen so far for a trace key.
+	totalUniqueCount int
+	// maxDistinctValue is the maximum number of distinct values we will store for a trace key.
+	maxDistinctValue int
+}
+
+func (d *distinctValue) Reset(fields []string, maxDistinctValue int) {
+	// Reset the fields and values but do not reallocate them
+	d.maxDistinctValue = maxDistinctValue
+
+	for len(d.values) < len(fields) {
+		d.values = append(d.values, make(map[uint64]string))
+	}
+
+	d.values = d.values[:len(fields)]
+	for i := range d.values {
+		clear(d.values[i])
+	}
+
+	d.totalUniqueCount = 0
+	d.buf = d.buf[:0]
+	d.valuesBuffer = d.valuesBuffer[:0]
+}
+
+// Values returns the distinct values for a given field index.
+// It returns a sorted slice of strings containing the unique values for that field.
+func (d *distinctValue) Values(fieldIdx int) []string {
+	if fieldIdx < 0 || fieldIdx >= len(d.values) {
+		return nil
+	}
+
+	valueMap := d.values[fieldIdx]
+	if len(valueMap) == 0 {
+		return nil
+	}
+
+	// reuse the valuesBuffer to avoid allocations
+	d.valuesBuffer = d.valuesBuffer[:0]
+	for _, value := range valueMap {
+		d.valuesBuffer = append(d.valuesBuffer, value)
+	}
+	sort.Strings(d.valuesBuffer)
+
+	return d.valuesBuffer
+}
+
+// AddAsString adds a value to the distinct values for a given field index.
+// It returns true if the value was added, false if it was already present or if the maxDistinctValue limit was reached.
+func (d *distinctValue) AddAsString(value any, fieldIdx int) bool {
+	d.buf = d.buf[:0] // reset the buffer for each new value
+
+	switch v := value.(type) {
+	case string:
+		d.buf = append(d.buf, []byte(v)...)
+	case int:
+		d.buf = strconv.AppendInt(d.buf, int64(v), 10)
+	case int64:
+		d.buf = strconv.AppendInt(d.buf, v, 10)
+	case float64:
+		d.buf = strconv.AppendFloat(d.buf, v, 'f', -1, 64)
+	case bool:
+		d.buf = strconv.AppendBool(d.buf, v)
+	case nil:
+		d.buf = append(d.buf, "<nil>"...)
+	default:
+		d.buf = append(d.buf, fmt.Sprintf("%v", v)...)
+	}
+
+	hash := wyhash.Hash(d.buf, 0)
+	if _, exists := d.values[fieldIdx][hash]; !exists {
+		d.totalUniqueCount++
+		if d.totalUniqueCount >= d.maxDistinctValue {
+			return false
+		}
+		d.values[fieldIdx][hash] = string(d.buf)
+		return true
+	}
+
+	return false
 }

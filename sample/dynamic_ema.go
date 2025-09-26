@@ -26,8 +26,8 @@ type EMADynamicSampler struct {
 	maxKeys             int
 	prefix              string
 
-	key       *traceKey
-	keyFields []string
+	key                      *traceKey
+	keyFields, nonRootFields []string
 
 	dynsampler      *dynsampler.EMASampleRate
 	metricsRecorder *dynsamplerMetricsRecorder
@@ -42,13 +42,13 @@ func (d *EMADynamicSampler) Start() error {
 	d.ageOutValue = d.Config.AgeOutValue
 	d.burstMultiple = d.Config.BurstMultiple
 	d.burstDetectionDelay = d.Config.BurstDetectionDelay
-	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 	d.maxKeys = d.Config.MaxKeys
 	if d.maxKeys == 0 {
 		d.maxKeys = 500
 	}
 	d.prefix = "emadynamic"
-	d.keyFields = d.Config.GetSamplingFields()
+	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
+	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 
 	// spin up the actual dynamic sampler
 	d.dynsampler = &dynsampler.EMASampleRate{
@@ -99,6 +99,7 @@ func (d *EMADynamicSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 	return rate, shouldKeep, d.prefix, key
 }
 
-func (d *EMADynamicSampler) GetKeyFields() []string {
-	return d.keyFields
+func (d *EMADynamicSampler) GetKeyFields() ([]string, []string) {
+	return d.keyFields, d.nonRootFields
+
 }

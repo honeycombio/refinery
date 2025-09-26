@@ -119,7 +119,10 @@ func (s *StressRelief) Start() error {
 	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
 
 	// register with health
-	s.Health.Register(StressReliefHealthKey, 3*time.Second)
+	// Set health check timeout to 15 seconds (3x go-redis DialTimeout of 5s).
+	// This allows the stress relief system multiple retry attempts before
+	// the health check fails, preventing premature failure during transient issues.
+	s.Health.Register(StressReliefHealthKey, 15*time.Second)
 
 	// register stress level metrics
 	for _, m := range stressReliefMetrics {
@@ -143,8 +146,6 @@ func (s *StressRelief) Start() error {
 	s.calcs = []StressReliefCalculation{
 		{Numerator: "collector_peer_queue_length", Denominator: "PEER_CAP", Algorithm: "sqrt", Reason: "PeerQueueSize"},
 		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "IncomingQueueSize"},
-		{Numerator: "libhoney_peer_queue_length", Denominator: "PEER_BUFFER_SIZE", Algorithm: "sqrt", Reason: "PeerBufferSize"},
-		{Numerator: "libhoney_upstream_queue_length", Denominator: "UPSTREAM_BUFFER_SIZE", Algorithm: "sqrt", Reason: "UpstreamBufferSize"},
 		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
 	}
 
@@ -419,7 +420,7 @@ func (s *StressRelief) Recalc() uint {
 	localLevel := uint(maximumLevel)
 
 	clusterStressLevel := s.clusterStressLevel(localLevel)
-	s.RefineryMetrics.Gauge("cluster_stress_level", clusterStressLevel)
+	s.RefineryMetrics.Gauge("cluster_stress_level", float64(clusterStressLevel))
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -432,7 +433,7 @@ func (s *StressRelief) Recalc() uint {
 		overallStressLevel = clusterStressLevel
 	}
 	s.overallStressLevel = overallStressLevel
-	s.RefineryMetrics.Gauge("stress_level", s.overallStressLevel)
+	s.RefineryMetrics.Gauge("stress_level", float64(s.overallStressLevel))
 
 	s.reason = reason
 	s.formula = formula

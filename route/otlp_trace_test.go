@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,7 +28,9 @@ import (
 	common "go.opentelemetry.io/proto/otlp/common/v1"
 	resource "go.opentelemetry.io/proto/otlp/resource/v1"
 	trace "go.opentelemetry.io/proto/otlp/trace/v1"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -36,16 +39,57 @@ import (
 
 const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
 
-func TestOTLPHandler(t *testing.T) {
-	md := metadata.New(map[string]string{"x-honeycomb-team": legacyAPIKey, "x-honeycomb-dataset": "ds"})
-	ctx := metadata.NewIncomingContext(context.Background(), md)
+// setupGRPCTestEnvironment creates a GRPC test server with our custom trace service
+// registration. It returns a client connected to the server and automatically
+// cleans up resources when the test completes.
+func setupGRPCTestEnvironment(t testing.TB, router *Router) collectortrace.TraceServiceClient {
+	// Create a listener on a random port
+	lis, err := net.Listen("tcp", "localhost:0")
+	require.NoError(t, err)
 
+	// Create GRPC server and register our custom trace service
+	grpcServer := grpc.NewServer()
+
+	// Register the custom trace service directly
+	traceServer := NewTraceServer(router)
+	registerCustomTraceService(grpcServer, traceServer)
+
+	// Start the server in a goroutine
+	go func() {
+		if err := grpcServer.Serve(lis); err != nil {
+			t.Logf("GRPC server error: %v", err)
+		}
+	}()
+
+	// Create a client connection
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+
+	client := collectortrace.NewTraceServiceClient(conn)
+
+	// Register cleanup using t.Cleanup()
+	t.Cleanup(func() {
+		conn.Close()
+		grpcServer.Stop()
+		lis.Close()
+	})
+
+	return client
+}
+
+// createGRPCContext creates a context with GRPC metadata from the provided headers.
+func createGRPCContext(headers map[string]string) context.Context {
+	md := metadata.New(headers)
+	return metadata.NewOutgoingContext(context.Background(), md)
+}
+
+func TestOTLPHandler(t *testing.T) {
 	mockMetrics := metrics.MockMetrics{}
 	mockMetrics.Start()
 	mockTransmission := &transmit.MockTransmission{}
 	mockTransmission.Start()
 	defer mockTransmission.Stop()
-	decoders, err := makeDecoders(1)
+	zstdDecoder, err := makeDecoders(1)
 	if err != nil {
 		t.Error(err)
 	}
@@ -59,8 +103,9 @@ func TestOTLPHandler(t *testing.T) {
 		},
 		GetSamplerTypeVal: &config.DeterministicSamplerConfig{SampleRate: 1},
 		GetCollectionConfigVal: config.CollectionConfig{
-			CacheCapacity: 100,
-			MaxAlloc:      100,
+			PeerQueueSize:     100,
+			IncomingQueueSize: 100,
+			MaxAlloc:          100,
 		},
 	}
 
@@ -73,10 +118,14 @@ func TestOTLPHandler(t *testing.T) {
 			incomingOrPeer: "incoming",
 		},
 		Logger:           &logger.MockLogger{},
-		zstdDecoders:     decoders,
+		zstdDecoder:      zstdDecoder,
 		environmentCache: newEnvironmentCache(time.Second, nil),
 		Tracer:           noop.Tracer{},
 	}
+	router.registerMetricNames()
+
+	// Set up single GRPC test environment for all test cases
+	grpcClient := setupGRPCTestEnvironment(t, router)
 
 	t.Run("span with status", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
@@ -86,8 +135,12 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -104,8 +157,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -138,8 +194,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -149,12 +208,12 @@ func TestOTLPHandler(t *testing.T) {
 
 		spanEvent := events[0]
 		// assert.Equal(t, time.Unix(0, int64(12345)).UTC(), spanEvent.Timestamp)
-		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanEvent.Data["trace.trace_id"])
-		assert.Equal(t, hex.EncodeToString(spanID), spanEvent.Data["trace.span_id"])
-		assert.Equal(t, "span_link", spanEvent.Data["span.name"])
-		assert.Equal(t, "span_with_event", spanEvent.Data["parent.name"])
-		assert.Equal(t, "span_event", spanEvent.Data["meta.annotation_type"])
-		assert.Equal(t, "event_attr_key", spanEvent.Data["event_attr_val"])
+		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanEvent.Data.Get("trace.trace_id"))
+		assert.Equal(t, hex.EncodeToString(spanID), spanEvent.Data.Get("trace.span_id"))
+		assert.Equal(t, "span_link", spanEvent.Data.Get("span.name"))
+		assert.Equal(t, "span_with_event", spanEvent.Data.Get("parent.name"))
+		assert.Equal(t, "span_event", spanEvent.Data.MetaAnnotationType)
+		assert.Equal(t, "event_attr_key", spanEvent.Data.Get("event_attr_val"))
 	})
 
 	t.Run("creates events for span links", func(t *testing.T) {
@@ -184,8 +243,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -194,12 +256,12 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 
 		spanLink := events[1]
-		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanLink.Data["trace.trace_id"])
-		assert.Equal(t, hex.EncodeToString(spanID), spanLink.Data["trace.span_id"])
-		assert.Equal(t, huskyotlp.BytesToTraceID(linkTraceID), spanLink.Data["trace.link.trace_id"])
-		assert.Equal(t, hex.EncodeToString(linkSpanID), spanLink.Data["trace.link.span_id"])
-		assert.Equal(t, "link", spanLink.Data["meta.annotation_type"])
-		assert.Equal(t, "link_attr_val", spanLink.Data["link_attr_key"])
+		assert.Equal(t, huskyotlp.BytesToTraceID(traceID), spanLink.Data.Get("trace.trace_id"))
+		assert.Equal(t, hex.EncodeToString(spanID), spanLink.Data.Get("trace.span_id"))
+		assert.Equal(t, huskyotlp.BytesToTraceID(linkTraceID), spanLink.Data.Get("trace.link.trace_id"))
+		assert.Equal(t, hex.EncodeToString(linkSpanID), spanLink.Data.Get("trace.link.span_id"))
+		assert.Equal(t, "link", spanLink.Data.MetaAnnotationType)
+		assert.Equal(t, "link_attr_val", spanLink.Data.Get("link_attr_key"))
 	})
 
 	t.Run("invalid headers", func(t *testing.T) {
@@ -283,12 +345,17 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
+		currentCount, _ := router.Metrics.Get(router.metricsNames.routerOtlpTraceHttpProto)
+
 		w := httptest.NewRecorder()
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		events := mockTransmission.GetBlock(2)
 		assert.Equal(t, 2, len(events))
+
+		v, _ := router.Metrics.Get(router.metricsNames.routerOtlpTraceHttpProto)
+		assert.Equal(t, 1.0, v-currentCount)
 	})
 
 	t.Run("can receive OTLP over HTTP/protobuf with gzip encoding", func(t *testing.T) {
@@ -319,12 +386,16 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
 
+		currentCount, _ := router.Metrics.Get(router.metricsNames.routerOtlpTraceHttpProto)
 		w := httptest.NewRecorder()
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
 
 		events := mockTransmission.GetBlock(2)
 		assert.Equal(t, 2, len(events))
+
+		v, _ := router.Metrics.Get(router.metricsNames.routerOtlpTraceHttpProto)
+		assert.Equal(t, 1.0, v-currentCount)
 	})
 
 	t.Run("can receive OTLP over HTTP/protobuf with zstd encoding", func(t *testing.T) {
@@ -384,7 +455,8 @@ func TestOTLPHandler(t *testing.T) {
 		request.Header.Set("content-type", "application/json")
 		request.Header.Set("x-honeycomb-team", legacyAPIKey)
 		request.Header.Set("x-honeycomb-dataset", "dataset")
-
+		currentCount, _ := router.Metrics.Get(router.metricsNames.routerOtlpTraceHttpProto)
+		jsonReqCount, _ := router.Metrics.Get(router.metricsNames.routerOtlpTraceHttpJson)
 		w := httptest.NewRecorder()
 		router.postOTLPTrace(w, request)
 		assert.Equal(t, w.Code, http.StatusOK)
@@ -392,12 +464,13 @@ func TestOTLPHandler(t *testing.T) {
 
 		events := mockTransmission.GetBlock(2)
 		assert.Equal(t, 2, len(events))
+		v, _ := router.Metrics.Get(router.metricsNames.routerOtlpTraceHttpProto)
+		assert.Equal(t, 0.0, v-currentCount)
+		jsonReqCountVal, _ := router.Metrics.Get(router.metricsNames.routerOtlpTraceHttpJson)
+		assert.Equal(t, 1.0, jsonReqCountVal-jsonReqCount)
 	})
 
 	t.Run("events created with legacy keys use dataset header", func(t *testing.T) {
-		md := metadata.New(map[string]string{"x-honeycomb-team": legacyAPIKey, "x-honeycomb-dataset": "my-dataset"})
-		ctx := metadata.NewIncomingContext(context.Background(), md)
-
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
 				Resource: &resource.Resource{
@@ -412,8 +485,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "my-dataset",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -428,8 +504,6 @@ func TestOTLPHandler(t *testing.T) {
 
 	t.Run("events created with non-legacy keys lookup and use environment name", func(t *testing.T) {
 		apiKey := "my-api-key"
-		md := metadata.New(map[string]string{"x-honeycomb-team": apiKey})
-		ctx := metadata.NewIncomingContext(context.Background(), md)
 
 		// add cached environment lookup
 		router.environmentCache.addItem(apiKey, "local", time.Minute)
@@ -448,8 +522,10 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team": apiKey,
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -522,8 +598,11 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		assert.Equal(t, codes.Unauthenticated, status.Code(err))
 		assert.Contains(t, err.Error(), "not found in list of authorized keys")
 
@@ -532,9 +611,6 @@ func TestOTLPHandler(t *testing.T) {
 	})
 
 	t.Run("spans record incoming user agent - gRPC", func(t *testing.T) {
-		md := metadata.New(map[string]string{"x-honeycomb-team": legacyAPIKey, "x-honeycomb-dataset": "ds", "user-agent": "my-user-agent"})
-		ctx := metadata.NewIncomingContext(context.Background(), md)
-
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{
 				ScopeSpans: []*trace.ScopeSpans{{
@@ -542,8 +618,12 @@ func TestOTLPHandler(t *testing.T) {
 				}},
 			}},
 		}
-		traceServer := NewTraceServer(router)
-		_, err := traceServer.Export(ctx, req)
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+			"user-agent":          "my-user-agent",
+		})
+		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
 			t.Errorf(`Unexpected error: %s`, err)
 		}
@@ -552,7 +632,9 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
+		// Note: GRPC clients override the user-agent header with their own value.
+		// This is expected behavior and differs from HTTP where custom user-agents are preserved.
+		assert.Equal(t, "grpc-go/1.75.0", event.Data.MetaRefineryIncomingUserAgent)
 	})
 
 	t.Run("spans record incoming user agent - HTTP", func(t *testing.T) {
@@ -582,8 +664,125 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 
 		event := events[0]
-		assert.Equal(t, "my-user-agent", event.Data["meta.refinery.incoming_user_agent"])
-		mockTransmission.Flush()
+		assert.Equal(t, "my-user-agent", event.Data.MetaRefineryIncomingUserAgent)
+	})
+
+	t.Run("postOTLPTrace error cases", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+
+		t.Run("unsupported content type", func(t *testing.T) {
+			body, err := proto.Marshal(req)
+			require.NoError(t, err)
+
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/xml") // Unsupported content type
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusUnsupportedMediaType, w.Code)
+			assert.Contains(t, w.Body.String(), "unsupported content-type")
+		})
+
+		t.Run("malformed protobuf body", func(t *testing.T) {
+			// Send invalid protobuf data
+			invalidBody := []byte("this is not valid protobuf data")
+
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(invalidBody))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/protobuf")
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
+
+		t.Run("malformed JSON body", func(t *testing.T) {
+			// Send invalid JSON data
+			invalidBody := []byte(`{"invalid": json syntax}`)
+
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(invalidBody))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
+
+		t.Run("empty body", func(t *testing.T) {
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader([]byte{}))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
+
+		t.Run("oversized request body", func(t *testing.T) {
+			// Create a very large request that exceeds defaultMaxRequestBodySize (20MB)
+			largeSpans := make([]*trace.Span, 0)
+			// Create many spans with large attribute values to exceed the limit
+			for i := 0; i < 1000; i++ {
+				largeValue := strings.Repeat("x", 50000) // 50KB per span
+				span := &trace.Span{
+					Name: "large-span",
+					Attributes: []*common.KeyValue{{
+						Key:   "large_attr",
+						Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: largeValue}},
+					}},
+				}
+				largeSpans = append(largeSpans, span)
+			}
+
+			largeReq := &collectortrace.ExportTraceServiceRequest{
+				ResourceSpans: []*trace.ResourceSpans{{
+					ScopeSpans: []*trace.ScopeSpans{{
+						Spans: largeSpans,
+					}},
+				}},
+			}
+
+			body, err := protojson.Marshal(largeReq)
+			require.NoError(t, err)
+
+			// Verify the body is actually large enough
+			require.Greater(t, len(body), defaultMaxRequestBodySize, "Test body should exceed max request size")
+
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			request.Header.Set("x-honeycomb-team", legacyAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.NotEmpty(t, w.Body.String())
+		})
 	})
 
 	t.Run("use SendKeyMode override", func(t *testing.T) {
@@ -752,10 +951,8 @@ func TestOTLPHandler(t *testing.T) {
 				if len(tt.apiKey) > 0 {
 					opts["x-honeycomb-team"] = tt.apiKey
 				}
-				md := metadata.New(opts)
-				ctx := metadata.NewIncomingContext(context.Background(), md)
-				traceServer := NewTraceServer(router)
-				_, err := traceServer.Export(ctx, req)
+				ctx := createGRPCContext(opts)
+				_, err := grpcClient.Export(ctx, req)
 				if tt.wantStatus == http.StatusOK {
 					require.NoError(t, err)
 				} else {
@@ -797,6 +994,9 @@ func helperOTLPRequestSpansWithStatus() []*trace.Span {
 	now := time.Now()
 	return []*trace.Span{
 		{
+			TraceId:           []byte{0, 0, 0, 0, 1},
+			SpanId:            []byte{1, 0, 0, 0, 0},
+			Name:              "span_with_event",
 			StartTimeUnixNano: uint64(now.UnixNano()),
 			Events: []*trace.Span_Event{
 				{

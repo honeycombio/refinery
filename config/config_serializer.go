@@ -58,16 +58,11 @@ func populateConfigContents(cfg Config) configContents {
 		HoneycombLogger:     cfg.GetHoneycombLoggerConfig(),
 		StdoutLogger:        cfg.GetStdoutLoggerConfig(),
 		PrometheusMetrics:   cfg.GetPrometheusMetricsConfig(),
-		LegacyMetrics:       cfg.GetLegacyMetricsConfig(),
 		OTelMetrics:         cfg.GetOTelMetricsConfig(),
 		OTelTracing:         cfg.GetOTelTracingConfig(),
 		PeerManagement:      getPeerManagementConfig(cfg),
 		RedisPeerManagement: cfg.GetRedisPeerManagement(),
 		Collection:          cfg.GetCollectionConfig(),
-		BufferSizes: BufferSizeConfig{
-			UpstreamBufferSize: cfg.GetUpstreamBufferSize(),
-			PeerBufferSize:     cfg.GetPeerBufferSize(),
-		},
 		Specialized: SpecializedConfig{
 			EnvironmentCacheTTL:       Duration(cfg.GetEnvironmentCacheTTL()),
 			CompressPeerCommunication: getDefaultTrueValue(cfg.GetCompressPeerCommunication()),

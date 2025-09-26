@@ -5,7 +5,7 @@ import (
 	"slices"
 	"time"
 
-	huskyotlp "github.com/honeycombio/husky/otlp"
+	"github.com/honeycombio/refinery/config"
 )
 
 const (
@@ -30,58 +30,32 @@ type Event struct {
 	Environment string
 	SampleRate  uint
 	Timestamp   time.Time
-	Data        map[string]interface{}
-	dataSize    int
+	Data        Payload
+
+	// EnqueuedUnixMicro is the time when the event was enqueued for transmission
+	// used for usec-resolution metrics.
+	EnqueuedUnixMicro int64
+
+	dataSize int
 }
 
 // GetDataSize computes the size of the Data element of the Event.
 func (e *Event) GetDataSize() int {
 	if e.dataSize == 0 {
-		for k, v := range e.Data {
-			e.dataSize += len(k) + getByteSize(v)
-		}
+		e.dataSize = e.Data.GetDataSize()
 	}
 	return e.dataSize
-}
-
-// getByteSize returns the size of the given value in bytes.
-// This is a rough estimate, but it's good enough for our purposes.
-// Maps and slices are the most complex, so we'll just add up the sizes of their entries.
-func getByteSize(val any) int {
-	switch value := val.(type) {
-	case bool:
-		return 1
-	case float64, int64, int:
-		return 8
-	case string:
-		return len(value)
-	case []byte: // also catch []uint8
-		return len(value)
-	case []any:
-		total := 0
-		for _, v := range value {
-			total += getByteSize(v)
-		}
-		return total
-	case map[string]any:
-		total := 0
-		for k, v := range value {
-			total += len(k) + getByteSize(v)
-		}
-		return total
-	default:
-		return 8 // catchall
-	}
 }
 
 // Trace isn't something that shows up on the wire; it gets created within
 // Refinery. Traces are not thread-safe; only one goroutine should be working
 // with a trace object at a time.
 type Trace struct {
-	APIHost string
-	APIKey  string
-	Dataset string
-	TraceID string
+	APIHost     string
+	APIKey      string
+	Dataset     string
+	TraceID     string
+	Environment string
 
 	// SampleRate should only be changed if the changer holds the SendSampleLock
 	sampleRate uint
@@ -114,6 +88,10 @@ type Trace struct {
 	// This is used to memoize the impact calculation so that it doesn't get
 	// calculated over and over during a sort.
 	totalImpact int
+
+	spanCount      uint32
+	spanEventCount uint32
+	spanLinkCount  uint32
 }
 
 // AddSpan adds a span to this trace
@@ -125,6 +103,9 @@ func (t *Trace) AddSpan(sp *Span) {
 	t.DataSize += sp.GetDataSize()
 	t.spans = append(t.spans, sp)
 	t.totalImpact = 0
+	if t.Environment == "" && sp.Environment != "" {
+		t.Environment = sp.Environment
+	}
 }
 
 // CacheImpact calculates an abstract value for something we're calling cache impact, which is
@@ -171,63 +152,62 @@ func (t *Trace) SetKeptReason(reason uint) {
 	t.keptReason = reason
 }
 
+func (t *Trace) calculateSpanCounts() {
+	var (
+		spanCount      uint32
+		spanEventCount uint32
+		spanLinkCount  uint32
+	)
+	for _, s := range t.spans {
+		switch s.AnnotationType() {
+		case SpanAnnotationTypeSpanEvent:
+			// SpanEventCount gets the number of span events currently in this trace.
+			spanEventCount++
+		case SpanAnnotationTypeLink:
+			// SpanLinkCount gets the number of span links currently in this trace.
+			spanLinkCount++
+		default:
+			// SpanCount gets the number of spans currently in this trace.
+			// This is different from DescendantCount because it doesn't include span events or links.
+			spanCount++
+		}
+	}
+
+	t.spanCount = spanCount
+	t.spanEventCount = spanEventCount
+	t.spanLinkCount = spanLinkCount
+}
+
 // DescendantCount gets the number of descendants of all kinds currently in this trace
 func (t *Trace) DescendantCount() uint32 {
 	return uint32(len(t.spans))
 }
 
-// SpanCount gets the number of spans currently in this trace.
-// This is different from DescendantCount because it doesn't include span events or links.
 func (t *Trace) SpanCount() uint32 {
-	var count uint32
-	for _, s := range t.spans {
-		switch s.AnnotationType() {
-		case SpanAnnotationTypeSpanEvent, SpanAnnotationTypeLink:
-			continue
-		default:
-			count++
-
-		}
+	// if we haven't calculated the span counts yet, do it now
+	// we do this so that we don't have to calculate the counts every time
+	if t.spanLinkCount == 0 && t.spanCount == 0 && t.spanEventCount == 0 {
+		t.calculateSpanCounts()
 	}
-	return count
+	return t.spanCount
 }
 
-// SpanLinkCount gets the number of span links currently in this trace.
 func (t *Trace) SpanLinkCount() uint32 {
-	var count uint32
-	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeLink {
-			count++
-		}
+	// if we haven't calculated the span counts yet, do it now
+	// we do this so that we don't have to calculate the counts every time
+	if t.spanLinkCount == 0 && t.spanCount == 0 && t.spanEventCount == 0 {
+		t.calculateSpanCounts()
 	}
-	return count
+	return t.spanLinkCount
 }
 
-// SpanEventCount gets the number of span events currently in this trace.
 func (t *Trace) SpanEventCount() uint32 {
-	var count uint32
-	for _, s := range t.spans {
-		if s.AnnotationType() == SpanAnnotationTypeSpanEvent {
-			count++
-		}
+	// if we haven't calculated the span counts yet, do it now
+	// we do this so that we don't have to calculate the counts every time
+	if t.spanLinkCount == 0 && t.spanCount == 0 && t.spanEventCount == 0 {
+		t.calculateSpanCounts()
 	}
-	return count
-}
-
-func (t *Trace) GetSamplerKey() (string, bool) {
-	if IsLegacyAPIKey(t.APIKey) {
-		return t.Dataset, true
-	}
-
-	env := ""
-	for _, sp := range t.GetSpans() {
-		if sp.Environment != "" {
-			env = sp.Environment
-			break
-		}
-	}
-
-	return env, false
+	return t.spanEventCount
 }
 
 // IsOrphan returns true if the trace is older than 4 times the traceTimeout
@@ -236,69 +216,52 @@ func (t *Trace) IsOrphan(traceTimeout time.Duration, now time.Time) bool {
 }
 
 // Span is an event that shows up with a trace ID, so will be part of a Trace
+// This is not thread-safe; only one goroutine should be working with a span object at a time.
 type Span struct {
 	Event
-	TraceID     string
-	ArrivalTime time.Time
-	IsRoot      bool
+	TraceID        string
+	ArrivalTime    time.Time
+	IsRoot         bool
+	annotationType SpanAnnotationType
 }
 
 // IsDecicionSpan returns true if the span is a decision span based on
 // a flag set in the span's metadata.
 func (sp *Span) IsDecisionSpan() bool {
-	if sp.Data == nil {
-		return false
-	}
-	v, ok := sp.Data["meta.refinery.min_span"]
-	if !ok {
-		return false
-	}
-	isDecisionSpan, ok := v.(bool)
-	if !ok {
-		return false
-	}
-
-	return isDecisionSpan
+	return sp.Data.MetaRefineryMinSpan.Value
 }
 
 // ExtractDecisionContext returns a new Event that contains only the data that is
 // relevant to the decision-making process.
-func (sp *Span) ExtractDecisionContext() *Event {
+func (sp *Span) ExtractDecisionContext(config config.Config) *Event {
 	decisionCtx := sp.Event
 	dataSize := sp.Event.GetDataSize()
-	decisionCtx.Data = map[string]interface{}{
-		"meta.trace_id":                sp.TraceID,
-		"meta.refinery.root":           sp.IsRoot,
-		"meta.refinery.min_span":       true,
-		"meta.annotation_type":         sp.AnnotationType(),
-		"meta.refinery.span_data_size": dataSize,
+
+	// Create a new empty payload and set metadata fields directly
+	decisionCtx.Data = NewPayload(config, nil)
+	// use the configured trace ID field name to set the trace ID
+	decisionCtx.Data.Set(config.GetTraceIdFieldNames()[0], sp.TraceID)
+	decisionCtx.Data.MetaRefineryRoot.Set(sp.IsRoot)
+	decisionCtx.Data.MetaRefineryMinSpan.Set(true)
+	decisionCtx.Data.MetaAnnotationType = sp.AnnotationType().String()
+	decisionCtx.Data.MetaRefinerySpanDataSize = int64(dataSize)
+
+	if sp.Data.MetaRefinerySendBy > 0 {
+		decisionCtx.Data.MetaRefinerySendBy = sp.Data.MetaRefinerySendBy
 	}
 
-	if v, ok := sp.GetSendBy(); ok {
-		decisionCtx.Data["meta.refinery.send_by"] = v
-	}
 	return &decisionCtx
 }
 
 func (sp *Span) SetSendBy(sendBy time.Time) {
-	sp.Data["meta.refinery.send_by"] = sendBy.Unix()
+	sp.Data.MetaRefinerySendBy = sendBy.Unix()
 }
 
 func (sp *Span) GetSendBy() (time.Time, bool) {
-	if sp.Data == nil {
+	if sp.Data.MetaRefinerySendBy == 0 {
 		return time.Time{}, false
 	}
-
-	if value, ok := sp.Data["meta.refinery.send_by"]; ok {
-		switch v := value.(type) {
-		case int64:
-			return time.Unix(v, 0), true
-		case uint64:
-			return time.Unix(int64(v), 0), true
-		}
-	}
-
-	return time.Time{}, false
+	return time.Unix(sp.Data.MetaRefinerySendBy, 0), true
 }
 
 // GetDataSize computes the size of the Data element of the Span.
@@ -306,15 +269,7 @@ func (sp *Span) GetSendBy() (time.Time, bool) {
 // relative ordering, not absolute calculations.
 func (sp *Span) GetDataSize() int {
 	if sp.IsDecisionSpan() {
-		if v, ok := sp.Data["meta.refinery.span_data_size"]; ok {
-			switch value := v.(type) {
-			case int64:
-				return int(value)
-			case uint64:
-				return int(value)
-			}
-		}
-		return 0
+		return int(sp.Data.MetaRefinerySpanDataSize)
 	}
 
 	return sp.Event.GetDataSize()
@@ -324,25 +279,47 @@ func (sp *Span) GetDataSize() int {
 type SpanAnnotationType int
 
 const (
-	// SpanAnnotationTypeUnknown is the default value for an unknown annotation type.
-	SpanAnnotationTypeUnknown SpanAnnotationType = iota
+	// SpanAnnotationTypeUnSet is the default value for an unset annotation type.
+	SpanAnnotationTypeUnSet SpanAnnotationType = iota
+	// SpanAnnotationTypeUnknown is the value for an unknown annotation type.
+	SpanAnnotationTypeUnknown
 	// SpanAnnotationTypeSpanEvent is the type for a span event.
 	SpanAnnotationTypeSpanEvent
 	// SpanAnnotationTypeLink is the type for a span link.
 	SpanAnnotationTypeLink
 )
 
-// AnnotationType returns the type of annotation this span is.
-func (sp *Span) AnnotationType() SpanAnnotationType {
-	t := sp.Data["meta.annotation_type"]
-	switch t {
-	case "span_event":
-		return SpanAnnotationTypeSpanEvent
-	case "link":
-		return SpanAnnotationTypeLink
+func (sat SpanAnnotationType) String() string {
+	switch sat {
+	case SpanAnnotationTypeUnSet:
+		return ""
+	case SpanAnnotationTypeUnknown:
+		return "unknown"
+	case SpanAnnotationTypeSpanEvent:
+		return "span_event"
+	case SpanAnnotationTypeLink:
+		return "link"
 	default:
-		return SpanAnnotationTypeUnknown
+		return ""
 	}
+}
+
+// GetSpanAnnotationType returns the type of annotation this span is.
+func (sp *Span) AnnotationType() SpanAnnotationType {
+	if sp.annotationType != SpanAnnotationTypeUnSet {
+		return sp.annotationType
+	}
+
+	switch sp.Data.MetaAnnotationType {
+	case "span_event":
+		sp.annotationType = SpanAnnotationTypeSpanEvent
+	case "link":
+		sp.annotationType = SpanAnnotationTypeLink
+	default:
+		sp.annotationType = SpanAnnotationTypeUnknown
+	}
+
+	return sp.annotationType
 }
 
 // cacheImpactFactor controls how much more we weigh older spans compared to newer ones;
@@ -359,8 +336,4 @@ func (sp *Span) CacheImpact(traceTimeout time.Duration) int {
 	multiplier := int(cacheImpactFactor*time.Since(sp.ArrivalTime)/traceTimeout) + 1
 	// We can assume DataSize was set when the span was added.
 	return multiplier * sp.GetDataSize()
-}
-
-func IsLegacyAPIKey(apiKey string) bool {
-	return huskyotlp.IsClassicApiKey(apiKey)
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"sync"
 	"time"
 )
@@ -31,13 +32,10 @@ type MockConfig struct {
 	GetSamplerTypeVal                interface{}
 	GetMetricsTypeVal                string
 	GetGeneralConfigVal              GeneralConfig
-	GetLegacyMetricsConfigVal        LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
 	GetOpAmpConfigVal                OpAMPConfig
 	GetOTelMetricsConfigVal          OTelMetricsConfig
 	GetOTelTracingConfigVal          OTelTracingConfig
-	GetUpstreamBufferSizeVal         int
-	GetPeerBufferSizeVal             int
 	IdentifierInterfaceName          string
 	UseIPV6Identifier                bool
 	RedisIdentifier                  string
@@ -113,6 +111,13 @@ func (m *MockConfig) GetCollectionConfig() CollectionConfig {
 	defer m.Mux.RUnlock()
 
 	return m.GetCollectionConfigVal
+}
+
+func (m *MockConfig) GetDisableRedistribution() bool {
+	m.Mux.RLock()
+	defer m.Mux.RUnlock()
+
+	return m.GetCollectionConfigVal.DisableRedistribution.Get()
 }
 
 func (m *MockConfig) GetHealthCheckTimeout() time.Duration {
@@ -226,13 +231,6 @@ func (m *MockConfig) GetGeneralConfig() GeneralConfig {
 	return m.GetGeneralConfigVal
 }
 
-func (m *MockConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetLegacyMetricsConfigVal
-}
-
 func (m *MockConfig) GetPrometheusMetricsConfig() PrometheusMetricsConfig {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
@@ -289,20 +287,6 @@ func (m *MockConfig) GetAllSamplerRules() *V2SamplerConfig {
 	}
 
 	return v
-}
-
-func (m *MockConfig) GetUpstreamBufferSize() int {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetUpstreamBufferSizeVal
-}
-
-func (m *MockConfig) GetPeerBufferSize() int {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetPeerBufferSizeVal
 }
 
 func (m *MockConfig) GetIdentifierInterfaceName() string {
@@ -470,4 +454,33 @@ func (f *MockConfig) SetMaxAlloc(v MemorySize) {
 	defer f.Mux.Unlock()
 
 	f.GetCollectionConfigVal.MaxAlloc = v
+}
+
+func (f *MockConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
+	if IsLegacyAPIKey(apiKey) {
+		if f.DatasetPrefix != "" {
+			return fmt.Sprintf("%s.%s", f.DatasetPrefix, dataset)
+		}
+		return dataset
+	}
+
+	return env
+}
+
+func (f *MockConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string {
+	switch sampler := f.GetSamplerTypeVal.(type) {
+	case *DeterministicSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *DynamicSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *EMADynamicSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *RulesBasedSamplerConfig:
+		return sampler.GetSamplingFields()
+	case *TotalThroughputSamplerConfig:
+		return sampler.GetSamplingFields()
+	default:
+		return nil
+	}
+
 }

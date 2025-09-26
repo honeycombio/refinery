@@ -56,13 +56,11 @@ type configContents struct {
 	HoneycombLogger      HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
 	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
 	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
-	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
 	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
 	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
 	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
 	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
 	Collection           CollectionConfig          `yaml:"Collection"`
-	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
 	Specialized          SpecializedConfig         `yaml:"Specialized"`
 	IDFieldNames         IDFieldsConfig            `yaml:"IDFields"`
 	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
@@ -264,14 +262,6 @@ type PrometheusMetricsConfig struct {
 	ListenAddr string `yaml:"ListenAddr" default:"localhost:2112"`
 }
 
-type LegacyMetricsConfig struct {
-	Enabled           bool     `yaml:"Enabled" default:"false"`
-	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
-	APIKey            string   `yaml:"APIKey" cmdenv:"LegacyMetricsAPIKey,HoneycombAPIKey"`
-	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
-	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s"`
-}
-
 type OTelMetricsConfig struct {
 	Enabled           bool     `yaml:"Enabled" default:"false"`
 	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
@@ -304,33 +294,31 @@ type RedisPeerManagementConfig struct {
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
-	Prefix         string   `yaml:"Prefix" default:"refinery"`
-	Database       int      `yaml:"Database"`
+	Prefix         string   `yaml:"Prefix,omitempty"`
+	Database       int      `yaml:"Database,omitempty"`
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
 	Timeout        Duration `yaml:"Timeout" default:"5s"`
 }
 
 type CollectionConfig struct {
-	// CacheCapacity must be less than math.MaxInt32
-	CacheCapacity       int        `yaml:"CacheCapacity" default:"10_000"`
-	PeerQueueSize       int        `yaml:"PeerQueueSize"`
-	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
+	PeerQueueSize       int        `yaml:"PeerQueueSize" default:"30000"`
+	IncomingQueueSize   int        `yaml:"IncomingQueueSize" default:"30000"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	HealthCheckTimeout  Duration   `yaml:"HealthCheckTimeout" default:"15s"`
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 
-	DisableRedistribution bool     `yaml:"DisableRedistribution"`
-	RedistributionDelay   Duration `yaml:"RedistributionDelay" default:"30s"`
+	DisableRedistribution *DefaultTrue `yaml:"-"` // Avoid pointer woe on access, use GetDisableRedistribution() instead.
+	RedistributionDelay   Duration     `yaml:"-"`
 
 	ShutdownDelay     Duration `yaml:"ShutdownDelay" default:"15s"`
-	TraceLocalityMode string   `yaml:"TraceLocalityMode" default:"concentrated"`
+	TraceLocalityMode string   `yaml:"-"`
 
-	MaxDropDecisionBatchSize int      `yaml:"MaxDropDecisionBatchSize" default:"1000"`
-	DropDecisionSendInterval Duration `yaml:"DropDecisionSendInterval" default:"1s"`
-	MaxKeptDecisionBatchSize int      `yaml:"MaxKeptDecisionBatchSize" default:"1000"`
-	KeptDecisionSendInterval Duration `yaml:"KeptDecisionSendInterval" default:"1s"`
+	MaxDropDecisionBatchSize int      `yaml:"-"`
+	DropDecisionSendInterval Duration `yaml:"-"`
+	MaxKeptDecisionBatchSize int      `yaml:"-"`
+	KeptDecisionSendInterval Duration `yaml:"-"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
@@ -346,9 +334,6 @@ func (c CollectionConfig) GetMaxAlloc() MemorySize {
 // If PeerBufferCapacity is not set, it uses 3x the cache capacity.
 // The minimum value is 3x the cache capacity.
 func (c CollectionConfig) GetPeerQueueSize() int {
-	if c.PeerQueueSize == 0 || c.PeerQueueSize < c.CacheCapacity*3 {
-		return c.CacheCapacity * 3
-	}
 	return c.PeerQueueSize
 }
 
@@ -356,9 +341,6 @@ func (c CollectionConfig) GetPeerQueueSize() int {
 // If IncomingBufferCapacity is not set, it uses 3x the cache capacity.
 // The minimum value is 3x the cache capacity.
 func (c CollectionConfig) GetIncomingQueueSize() int {
-	if c.IncomingQueueSize == 0 || c.IncomingQueueSize < c.CacheCapacity*3 {
-		return c.CacheCapacity * 3
-	}
 	return c.IncomingQueueSize
 }
 
@@ -373,11 +355,6 @@ func (c CollectionConfig) TraceLocalityEnabled() bool {
 		//  Default to true for backwards compatibility
 		return true
 	}
-}
-
-type BufferSizeConfig struct {
-	UpstreamBufferSize int `yaml:"UpstreamBufferSize" default:"10_000"`
-	PeerBufferSize     int `yaml:"PeerBufferSize" default:"100_000"`
 }
 
 type SpecializedConfig struct {
@@ -422,32 +399,70 @@ type StressReliefConfig struct {
 
 type FileConfigError struct {
 	ConfigLocations []string
-	ConfigFailures  []string
+	ConfigResults   ValidationResults
 	RulesLocations  []string
-	RulesFailures   []string
+	RulesResults    ValidationResults
+}
+
+// HasErrors returns true if this error contains any actual errors (not just warnings)
+func (e *FileConfigError) HasErrors() bool {
+	return e.ConfigResults.HasErrors() || e.RulesResults.HasErrors()
 }
 
 func (e *FileConfigError) Error() string {
 	var msg strings.Builder
-	if len(e.ConfigFailures) > 0 {
+	var errors []ValidationResult
+	var warnings []ValidationResult
+
+	// Filter and separate errors and warnings, removing empty messages
+	for _, result := range e.ConfigResults {
+		if result.Message != "" {
+			if result.IsError() {
+				errors = append(errors, result)
+			} else {
+				warnings = append(warnings, result)
+			}
+		}
+	}
+
+	if len(errors) > 0 {
 		loc := strings.Join(e.ConfigLocations, ", ")
-		msg.WriteString("Validation failed for config [")
+		msg.WriteString("ERROR: Validation failed for config [")
 		msg.WriteString(loc)
 		msg.WriteString("]:\n")
-		for _, fail := range e.ConfigFailures {
+		for _, result := range errors {
 			msg.WriteString("  ")
-			msg.WriteString(fail)
+			msg.WriteString(result.Message)
 			msg.WriteString("\n")
 		}
 	}
-	if len(e.RulesFailures) > 0 {
-		loc := strings.Join(e.RulesLocations, ", ")
-		msg.WriteString("Validation failed for config [")
+
+	if len(warnings) > 0 {
+		loc := strings.Join(e.ConfigLocations, ", ")
+		msg.WriteString("WARNING: Configuration warnings for [")
 		msg.WriteString(loc)
 		msg.WriteString("]:\n")
-		for _, fail := range e.RulesFailures {
+		for _, result := range warnings {
 			msg.WriteString("  ")
-			msg.WriteString(fail)
+			msg.WriteString(result.Message)
+			msg.WriteString("\n")
+		}
+
+		msg.WriteString("  ")
+		// Add documentation URL once if there are any grouped deprecation warnings
+		msg.WriteString("Please update your configuration following the latest documentation here: https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/")
+		msg.WriteString("\n")
+
+	}
+
+	if len(e.RulesResults) > 0 {
+		loc := strings.Join(e.RulesLocations, ", ")
+		msg.WriteString("ERROR: Validation failed for rules [")
+		msg.WriteString(loc)
+		msg.WriteString("]:\n")
+		for _, result := range e.RulesResults {
+			msg.WriteString("  ")
+			msg.WriteString(result.Message)
 			msg.WriteString("\n")
 		}
 	}
@@ -471,10 +486,12 @@ func newConfigAndRules(opts *CmdEnv) ([]configData, []configData, error) {
 // It's used by both the main init as well as the reload code.
 // In order to do proper validation, we actually process the data twice -- once as
 // a map, and once as the actual config object.
-func newFileConfig(opts *CmdEnv, cData, rulesData []configData) (*fileConfig, error) {
+func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion ...string) (*fileConfig, error) {
+	var warningErr error
+
 	// If we're not validating, skip this part
 	if !opts.NoValidate {
-		cfgFails, err := validateConfigs(cData, opts)
+		cfgResults, err := validateConfigs(cData, opts, currentVersion...)
 		if err != nil {
 			return nil, err
 		}
@@ -484,12 +501,35 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData) (*fileConfig, er
 			return nil, err
 		}
 
-		if len(cfgFails) > 0 || len(ruleFails) > 0 {
+		// Separate warnings and errors from config validation results
+		var cfgWarnings, cfgErrors ValidationResults
+		for _, result := range cfgResults {
+			if result.IsError() {
+				cfgErrors = append(cfgErrors, result)
+			} else {
+				cfgWarnings = append(cfgWarnings, result)
+			}
+		}
+
+		// Only fail validation on errors, not warnings
+		if len(cfgErrors) > 0 || ruleFails.HasErrors() {
+			// Combine all failures (errors and warnings) for error message
+			allErrors := append(cfgErrors, cfgWarnings...)
 			return nil, &FileConfigError{
 				ConfigLocations: opts.ConfigLocations,
-				ConfigFailures:  cfgFails,
+				ConfigResults:   allErrors,
 				RulesLocations:  opts.RulesLocations,
-				RulesFailures:   ruleFails,
+				RulesResults:    ruleFails,
+			}
+		}
+
+		// Store warnings to return later if config creation succeeds
+		if len(cfgWarnings) > 0 {
+			warningErr = &FileConfigError{
+				ConfigLocations: opts.ConfigLocations,
+				ConfigResults:   cfgWarnings,
+				RulesLocations:  []string{},
+				RulesResults:    ValidationResults{},
 			}
 		}
 	}
@@ -515,6 +555,10 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData) (*fileConfig, er
 		opts:        opts,
 	}
 
+	// Return warning error if there were warnings but no real errors
+	if warningErr != nil {
+		return cfg, warningErr
+	}
 	return cfg, nil
 }
 
@@ -534,13 +578,13 @@ func writeYAMLToFile(data any, filename string) error {
 // nil, it uses the command line arguments.
 // It also dumps the config and rules to the given files, if specified, which
 // will cause the program to exit.
-func NewConfig(opts *CmdEnv) (Config, error) {
+func NewConfig(opts *CmdEnv, currentVersion ...string) (Config, error) {
 	cData, rData, err := newConfigAndRules(opts)
 	if err != nil {
 		return nil, err
 	}
 
-	cfg, err := newFileConfig(opts, cData, rData)
+	cfg, err := newFileConfig(opts, cData, rData, currentVersion...)
 	// only exit if we have no config at all; if it fails validation, we'll
 	// do the rest and return it anyway
 	if err != nil && cfg == nil {
@@ -851,6 +895,35 @@ func (f *fileConfig) GetAllSamplerRules() *V2SamplerConfig {
 	return f.rulesConfig
 }
 
+func (f *fileConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
+	if !IsLegacyAPIKey(apiKey) {
+		return env
+	}
+
+	if prefix := f.GetDatasetPrefix(); prefix != "" {
+		return fmt.Sprintf("%s.%s", prefix, dataset)
+	}
+
+	return dataset
+}
+
+func (f *fileConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	sampler, ok := f.rulesConfig.Samplers[samplerKey]
+	if ok {
+		return sampler.GetSamplingFields()
+	}
+
+	sampler, ok = f.rulesConfig.Samplers["__default__"]
+	if ok {
+		return sampler.GetSamplingFields()
+	}
+
+	return nil
+}
+
 // GetSamplerConfigForDestName returns the sampler config for the given
 // destination (environment, or dataset in classic mode), as well as the name of
 // the sampler type. If the specific destination is not found, it returns the
@@ -859,11 +932,11 @@ func (f *fileConfig) GetSamplerConfigForDestName(destname string) (any, string) 
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	nameToUse := "__default__"
-	if _, ok := f.rulesConfig.Samplers[destname]; ok {
-		nameToUse = destname
+	if sampler, ok := f.rulesConfig.Samplers[destname]; ok {
+		return sampler.Sampler()
 	}
 
+	nameToUse := "__default__"
 	name := "not found"
 	var cfg any
 	if sampler, ok := f.rulesConfig.Samplers[nameToUse]; ok {
@@ -897,11 +970,11 @@ func (f *fileConfig) GetCollectionConfig() CollectionConfig {
 	return f.mainConfig.Collection
 }
 
-func (f *fileConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
+func (f *fileConfig) GetDisableRedistribution() bool {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
-	return f.mainConfig.LegacyMetrics
+	return f.mainConfig.Collection.DisableRedistribution.Get()
 }
 
 func (f *fileConfig) GetPrometheusMetricsConfig() PrometheusMetricsConfig {
@@ -916,20 +989,6 @@ func (f *fileConfig) GetOTelMetricsConfig() OTelMetricsConfig {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.OTelMetrics
-}
-
-func (f *fileConfig) GetUpstreamBufferSize() int {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.BufferSizes.UpstreamBufferSize
-}
-
-func (f *fileConfig) GetPeerBufferSize() int {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.BufferSizes.PeerBufferSize
 }
 
 func (f *fileConfig) GetDebugServiceAddr() string {
