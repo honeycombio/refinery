@@ -1368,6 +1368,7 @@ groups:
         type: defaulttrue
         valuetype: nondefault
         firstversion: v2.8
+        lastversion: v2.9.7
         default: true
         reload: true
         summary: controls whether to transmit traces in cache to remaining peers during cluster scaling event.
@@ -1386,6 +1387,7 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
         default: 30s
         reload: false
         summary: controls the amount of time Refinery waits after each cluster scaling event before redistributing in-memory traces.
@@ -1416,6 +1418,8 @@ groups:
         type: string
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         default: "concentrated"
         reload: false
         summary: controls how Refinery handles spans that belong to the same trace in a clustered environment.
@@ -1456,6 +1460,8 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         unpublished: true
         default: 1000
         reload: false
@@ -1467,6 +1473,8 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         unpublished: true
         default: 1s
         reload: true
@@ -1478,6 +1486,8 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         unpublished: true
         default: 1000
         reload: false
@@ -1489,6 +1499,8 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
+        lastversion: v2.9.7
+        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
         unpublished: true
         default: 1s
         reload: true
@@ -1498,6 +1510,7 @@ groups:
 
   - name: BufferSizes
     title: "Buffer Sizes"
+    lastversion: v2.9.7
     description: >
       contains the settings that are relevant to
       the sizes of communications buffers.
@@ -1507,7 +1520,6 @@ groups:
         valuetype: nondefault
         default: 10_000
         reload: true
-        lastversion: v2.9.7
         validations:
           - type: minimum
             arg: 1_000
@@ -1523,7 +1535,6 @@ groups:
         valuetype: nondefault
         default: 100_000
         reload: true
-        lastversion: v2.9.7
         validations:
           - type: minimum
             arg: 10_000

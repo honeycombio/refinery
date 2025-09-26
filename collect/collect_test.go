@@ -480,6 +480,10 @@ func TestAddSpan(t *testing.T) {
 
 	coll.AddSpanFromPeer(spanFromPeer)
 
+	// We need to wait for the span to be processed manually with a Sleep
+	// because trace object is not concurrent safe
+	time.Sleep(conf.GetTracesConfig().GetSendTickerValue() * 2)
+
 	assert.EventuallyWithT(t,
 		func(cT *assert.CollectT) {
 			trace := coll.getFromCache(traceID)
@@ -610,7 +614,11 @@ func TestDryRunMode(t *testing.T) {
 	coll.AddSpanFromPeer(span)
 
 	assert.Eventually(t, func() bool {
-		return traceID2 == coll.getFromCache(traceID2).TraceID
+		trace := coll.getFromCache(traceID2)
+		if trace == nil {
+			return false
+		}
+		return traceID2 == trace.TraceID
 	}, conf.GetTracesConfig().GetSendTickerValue()*6, conf.GetTracesConfig().GetSendTickerValue()*2, "after adding the span, we should have a trace in the cache with the right trace ID")
 
 	span = &types.Span{
