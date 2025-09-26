@@ -32,7 +32,6 @@ type MockConfig struct {
 	GetSamplerTypeVal                interface{}
 	GetMetricsTypeVal                string
 	GetGeneralConfigVal              GeneralConfig
-	GetLegacyMetricsConfigVal        LegacyMetricsConfig
 	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
 	GetOpAmpConfigVal                OpAMPConfig
 	GetOTelMetricsConfigVal          OTelMetricsConfig
@@ -230,13 +229,6 @@ func (m *MockConfig) GetGeneralConfig() GeneralConfig {
 	defer m.Mux.RUnlock()
 
 	return m.GetGeneralConfigVal
-}
-
-func (m *MockConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
-	m.Mux.RLock()
-	defer m.Mux.RUnlock()
-
-	return m.GetLegacyMetricsConfigVal
 }
 
 func (m *MockConfig) GetPrometheusMetricsConfig() PrometheusMetricsConfig {

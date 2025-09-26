@@ -534,20 +534,23 @@ func removeDeprecated(data map[string]any, dryRun bool) (map[string]any, []strin
 	var removedItems []string
 
 	// Helper function to handle field removal logic
-	handleDeprecatedField := func(keyToCheck string, lastVersion string, field config.Field, groupName string) bool {
+	handleDeprecatedField := func(keyToCheck string, field config.Field, groupName string) bool {
 		if value, exists := _fetch(data, keyToCheck); exists {
-			removedItems = append(removedItems, fmt.Sprintf("%s (deprecated in %s)", keyToCheck, lastVersion))
+			// Only process if field is actually deprecated (has lastversion)
+			if field.GetLastVersion() != "" {
+				removedItems = append(removedItems, fmt.Sprintf("%s (deprecated in %s)", keyToCheck, field.GetLastVersion()))
 
-			// Apply any replacements defined in metadata
-			conversions := applyReplacements(field.Replacements, groupName, value, data, dryRun)
-			for _, conversion := range conversions {
-				removedItems = append(removedItems, fmt.Sprintf("  → %s", conversion))
-			}
+				// Apply any replacements defined in metadata
+				conversions := applyReplacements(field.Replacements, groupName, value, data, dryRun)
+				for _, conversion := range conversions {
+					removedItems = append(removedItems, fmt.Sprintf("  → %s", conversion))
+				}
 
-			if !dryRun {
-				removeField(data, keyToCheck)
+				if !dryRun {
+					removeField(data, keyToCheck)
+				}
+				return true
 			}
-			return true
 		}
 		return false
 	}
@@ -555,30 +558,37 @@ func removeDeprecated(data map[string]any, dryRun bool) (map[string]any, []strin
 	for _, group := range metadata.Groups {
 		// Process individual deprecated fields first
 		for _, field := range group.Fields {
-			if field.LastVersion != "" {
-				// Check current location first
-				currentKey := group.Name + "." + field.Name
-				handled := handleDeprecatedField(currentKey, field.LastVersion, field, group.Name)
+			// Check current location first
+			currentKey := group.Name + "." + field.Name
+			handled := handleDeprecatedField(currentKey, field, group.Name)
 
-				// Check legacy V1 location if it exists and current location wasn't found
-				if !handled && field.V1Group != "" && field.V1Name != "" {
-					legacyKey := field.V1Group + "." + field.V1Name
-					handleDeprecatedField(legacyKey, field.LastVersion, field, group.Name)
-				}
+			// Check legacy V1 location if it exists and current location wasn't found
+			if !handled && field.V1Group != "" && field.V1Name != "" {
+				legacyKey := field.V1Group + "." + field.V1Name
+				handleDeprecatedField(legacyKey, field, group.Name)
 			}
 		}
 
 		// After processing all fields, check if the group itself should be deprecated
-		// A group is deprecated if all its fields are deprecated
+		// A group is deprecated
 		if group.IsDeprecated() {
 			if groupData, groupExists := data[group.Name]; groupExists {
-				if _, ok := groupData.(map[string]any); ok {
+				if groupMap, ok := groupData.(map[string]any); ok {
 					deprecationVersion := group.GetDeprecationVersion()
 					if len(deprecationVersion) == 0 {
 						continue
 					}
 					removedItems = append(removedItems, fmt.Sprintf("%s group (deprecated in %s)", group.Name, deprecationVersion))
-					if !dryRun {
+
+					// Apply group replacements before removing the group
+					// For groups, we only use the Field part of Replacement (ignore Formula)
+					conversions, hasSuccessfulReplacement := applyGroupReplacements(group.Replacements, group, groupMap, data, dryRun)
+					for _, conversion := range conversions {
+						removedItems = append(removedItems, fmt.Sprintf("  → %s", conversion))
+					}
+
+					// Only delete the original group if there was a successful replacement or if there are no replacements
+					if !dryRun && (hasSuccessfulReplacement || len(group.Replacements) == 0) {
 						delete(data, group.Name)
 					}
 				}
@@ -656,6 +666,43 @@ func applyReplacement(replacement config.Replacement, groupName string, deprecat
 	}
 
 	return fmt.Sprintf("%s set to %v (using formula: %s)", replacement.Field, newValue, replacement.Formula), true
+}
+
+// applyGroupReplacements processes group-level replacements.
+// For groups, only the Field part of Replacement is used (Formula is ignored).
+// This copies the deprecated group content to the target group name.
+// Since field deprecation is processed first, the remaining content is exactly what should be copied.
+// Returns the conversion messages and a boolean indicating if at least one replacement was successful.
+func applyGroupReplacements(replacements []config.Replacement, groupMetadata config.Group, deprecatedGroupData map[string]any, data map[string]any, dryRun bool) ([]string, bool) {
+	var conversions []string
+	hasSuccessfulReplacement := false
+
+	for _, replacement := range replacements {
+		targetGroupName := replacement.Field
+
+		// Check if target group already exists
+		if _, exists := data[targetGroupName]; exists {
+			conversions = append(conversions, fmt.Sprintf("skipped copy to %s (target group already exists)", targetGroupName))
+			continue
+		}
+
+		// Copy the remaining group content to the new name
+		// Field replacements have already been processed, so we copy whatever remains
+		if !dryRun {
+			data[targetGroupName] = make(map[string]any)
+			if targetGroupMap, ok := data[targetGroupName].(map[string]any); ok {
+				// Copy all remaining fields (deprecated fields with replacements have already been processed)
+				for fieldName, fieldValue := range deprecatedGroupData {
+					targetGroupMap[fieldName] = fieldValue
+				}
+			}
+		}
+
+		conversions = append(conversions, fmt.Sprintf("copied %s group content to %s", groupMetadata.Name, targetGroupName))
+		hasSuccessfulReplacement = true
+	}
+
+	return conversions, hasSuccessfulReplacement
 }
 
 // evaluateFormula parses and evaluates simple mathematical formulas.

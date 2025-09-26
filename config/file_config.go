@@ -56,13 +56,11 @@ type configContents struct {
 	HoneycombLogger      HoneycombLoggerConfig     `yaml:"HoneycombLogger"`
 	StdoutLogger         StdoutLoggerConfig        `yaml:"StdoutLogger"`
 	PrometheusMetrics    PrometheusMetricsConfig   `yaml:"PrometheusMetrics"`
-	LegacyMetrics        LegacyMetricsConfig       `yaml:"LegacyMetrics"`
 	OTelMetrics          OTelMetricsConfig         `yaml:"OTelMetrics"`
 	OTelTracing          OTelTracingConfig         `yaml:"OTelTracing"`
 	PeerManagement       PeerManagementConfig      `yaml:"PeerManagement"`
 	RedisPeerManagement  RedisPeerManagementConfig `yaml:"RedisPeerManagement"`
 	Collection           CollectionConfig          `yaml:"Collection"`
-	BufferSizes          BufferSizeConfig          `yaml:"BufferSizes"`
 	Specialized          SpecializedConfig         `yaml:"Specialized"`
 	IDFieldNames         IDFieldsConfig            `yaml:"IDFields"`
 	GRPCServerParameters GRPCServerParameters      `yaml:"GRPCServerParameters"`
@@ -264,14 +262,6 @@ type PrometheusMetricsConfig struct {
 	ListenAddr string `yaml:"ListenAddr" default:"localhost:2112"`
 }
 
-type LegacyMetricsConfig struct {
-	Enabled           bool     `yaml:"Enabled" default:"false"`
-	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
-	APIKey            string   `yaml:"APIKey" cmdenv:"LegacyMetricsAPIKey,HoneycombAPIKey"`
-	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
-	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s"`
-}
-
 type OTelMetricsConfig struct {
 	Enabled           bool     `yaml:"Enabled" default:"false"`
 	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
@@ -312,23 +302,23 @@ type RedisPeerManagementConfig struct {
 }
 
 type CollectionConfig struct {
-	PeerQueueSize       int        `yaml:"PeerQueueSize"`
-	IncomingQueueSize   int        `yaml:"IncomingQueueSize"`
+	PeerQueueSize       int        `yaml:"PeerQueueSize" default:"30000"`
+	IncomingQueueSize   int        `yaml:"IncomingQueueSize" default:"30000"`
 	AvailableMemory     MemorySize `yaml:"AvailableMemory" cmdenv:"AvailableMemory"`
 	HealthCheckTimeout  Duration   `yaml:"HealthCheckTimeout" default:"15s"`
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 
-	DisableRedistribution *DefaultTrue `yaml:"DisableRedistribution" default:"true"` // Avoid pointer woe on access, use GetDisableRedistribution() instead.
-	RedistributionDelay   Duration     `yaml:"RedistributionDelay" default:"30s"`
+	DisableRedistribution *DefaultTrue `yaml:"-"` // Avoid pointer woe on access, use GetDisableRedistribution() instead.
+	RedistributionDelay   Duration     `yaml:"-"`
 
 	ShutdownDelay     Duration `yaml:"ShutdownDelay" default:"15s"`
-	TraceLocalityMode string   `yaml:"TraceLocalityMode" default:"concentrated"`
+	TraceLocalityMode string   `yaml:"-"`
 
-	MaxDropDecisionBatchSize int      `yaml:"MaxDropDecisionBatchSize" default:"1000"`
-	DropDecisionSendInterval Duration `yaml:"DropDecisionSendInterval" default:"1s"`
-	MaxKeptDecisionBatchSize int      `yaml:"MaxKeptDecisionBatchSize" default:"1000"`
-	KeptDecisionSendInterval Duration `yaml:"KeptDecisionSendInterval" default:"1s"`
+	MaxDropDecisionBatchSize int      `yaml:"-"`
+	DropDecisionSendInterval Duration `yaml:"-"`
+	MaxKeptDecisionBatchSize int      `yaml:"-"`
+	KeptDecisionSendInterval Duration `yaml:"-"`
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
@@ -366,8 +356,6 @@ func (c CollectionConfig) TraceLocalityEnabled() bool {
 		return true
 	}
 }
-
-type BufferSizeConfig struct{}
 
 type SpecializedConfig struct {
 	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
@@ -987,13 +975,6 @@ func (f *fileConfig) GetDisableRedistribution() bool {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Collection.DisableRedistribution.Get()
-}
-
-func (f *fileConfig) GetLegacyMetricsConfig() LegacyMetricsConfig {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.LegacyMetrics
 }
 
 func (f *fileConfig) GetPrometheusMetricsConfig() PrometheusMetricsConfig {

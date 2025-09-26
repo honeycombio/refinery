@@ -433,9 +433,6 @@ func validateConfigs(configs []configData, opts *CmdEnv, currentVersion ...strin
 	if config.HoneycombLogger.APIKey == "" {
 		config.HoneycombLogger.APIKey = "InvalidHoneycombAPIKey"
 	}
-	if config.LegacyMetrics.APIKey == "" {
-		config.LegacyMetrics.APIKey = "InvalidHoneycombAPIKey"
-	}
 	if config.OTelMetrics.APIKey == "" {
 		config.OTelMetrics.APIKey = "InvalidHoneycombAPIKey"
 	}

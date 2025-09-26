@@ -14,23 +14,31 @@ import (
 //	 1 if current > target
 //	error if versions are malformed
 func compareVersions(current, target string) (int, error) {
-	if !semver.IsValid(current) {
-		return 0, fmt.Errorf("invalid version format: %s", current)
+	currentValue := current
+	targetValue := target
+	if !semver.IsValid(currentValue) {
+		currentValue = "v" + currentValue
+		if !semver.IsValid(currentValue) {
+			return 0, fmt.Errorf("invalid version format: %s", current)
+		}
 	}
 
-	if !semver.IsValid(target) {
-		return 0, fmt.Errorf("invalid version format: %s", target)
+	if !semver.IsValid(targetValue) {
+		targetValue = "v" + targetValue
+		if !semver.IsValid(targetValue) {
+			return 0, fmt.Errorf("invalid version format: %s", target)
+		}
 	}
 
-	return semver.Compare(current, target), nil
+	return semver.Compare(currentValue, targetValue), nil
 }
 
-// isVersionBefore returns true if current version is before the target version
-func isVersionBefore(current, target string) bool {
+// isVersionDeprecated returns true if the current version is equal or before the target version.
+func isVersionDeprecated(current, target string) bool {
 	result, err := compareVersions(current, target)
 	if err != nil {
 		// If we can't parse versions, assume we should show the warning
 		return true
 	}
-	return result < 0
+	return result < 1
 }

@@ -189,12 +189,8 @@ func main() {
 
 	// we need to include all the metrics types so we can inject them in case they're needed
 	// but we only want to instantiate the ones that are enabled with non-null values
-	var legacyMetrics metrics.MetricsBackend = &metrics.NullMetrics{}
 	var promMetrics metrics.MetricsBackend = &metrics.NullMetrics{}
 	var oTelMetrics metrics.MetricsBackend = &metrics.NullMetrics{}
-	if c.GetLegacyMetricsConfig().Enabled {
-		legacyMetrics = &metrics.LegacyMetrics{}
-	}
 	if c.GetPrometheusMetricsConfig().Enabled {
 		promMetrics = &metrics.PromMetrics{}
 	}
@@ -248,7 +244,6 @@ func main() {
 		{Value: peerTransmission, Name: "peerTransmission"},
 		{Value: shrdr},
 		{Value: collector},
-		{Value: legacyMetrics, Name: "legacyMetrics"},
 		{Value: promMetrics, Name: "promMetrics"},
 		{Value: oTelMetrics, Name: "otelMetrics"},
 		{Value: tracer, Name: "tracer"}, // we need to use a named injection here because trace.Tracer's struct fields are all private

@@ -111,9 +111,6 @@ type Config interface {
 	// GetGeneralConfig returns the config specific to General
 	GetGeneralConfig() GeneralConfig
 
-	// GetLegacyMetricsConfig returns the config specific to LegacyMetrics
-	GetLegacyMetricsConfig() LegacyMetricsConfig
-
 	// GetPrometheusMetricsConfig returns the config specific to PrometheusMetrics
 	GetPrometheusMetricsConfig() PrometheusMetricsConfig
 
