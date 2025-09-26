@@ -34,7 +34,6 @@ func getAndStartMultiMetrics(children ...MetricsBackend) (*MultiMetrics, error) 
 		{Value: "version", Name: "version"},
 		{Value: &http.Transport{}, Name: "upstreamTransport"},
 		{Value: &http.Transport{}, Name: "peerTransport"},
-		{Value: &LegacyMetrics{}, Name: "legacyMetrics"},
 		{Value: &PromMetrics{}, Name: "promMetrics"},
 		{Value: &OTelMetrics{}, Name: "otelMetrics"},
 		{Value: mm, Name: "metrics"},
@@ -156,12 +155,6 @@ func TestMultiMetrics_Get(t *testing.T) {
 }
 
 func BenchmarkConcurrentAccess(b *testing.B) {
-	legacyMetrics := &LegacyMetrics{
-		Logger: &logger.NullLogger{},
-		Config: &config.MockConfig{},
-	}
-	legacyMetrics.Start()
-	defer legacyMetrics.Stop()
 	promMetrics := &PromMetrics{
 		Logger: &logger.NullLogger{},
 		Config: &config.MockConfig{},
@@ -175,7 +168,6 @@ func BenchmarkConcurrentAccess(b *testing.B) {
 	defer otelMetrics.Stop()
 
 	mm, err := getAndStartMultiMetrics(
-		legacyMetrics,
 		promMetrics,
 		otelMetrics,
 	)

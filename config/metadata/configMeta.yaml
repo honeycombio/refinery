@@ -731,6 +731,9 @@ groups:
 
   - name: LegacyMetrics
     title: "Legacy Metrics"
+    lastversion: v2.9.7
+    replacements:
+      - field: OTelMetrics
     description: >
       contains configuration for Refinery's legacy metrics.
       Version 1.x of Refinery used this format for sending Metrics to

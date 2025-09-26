@@ -16,13 +16,12 @@ var _ Metrics = (*MultiMetrics)(nil)
 // which can then be retrieved with Get(). This is for use with StressRelief and OpAMP agent. It
 // does not track histograms, which are reset after each scrape.
 type MultiMetrics struct {
-	Config        config.Config  `inject:""`
-	LegacyMetrics MetricsBackend `inject:"legacyMetrics"`
-	PromMetrics   MetricsBackend `inject:"promMetrics"`
-	OTelMetrics   MetricsBackend `inject:"otelMetrics"`
-	children      []MetricsBackend
-	values        map[string]float64
-	lock          sync.RWMutex
+	Config      config.Config  `inject:""`
+	PromMetrics MetricsBackend `inject:"promMetrics"`
+	OTelMetrics MetricsBackend `inject:"otelMetrics"`
+	children    []MetricsBackend
+	values      map[string]float64
+	lock        sync.RWMutex
 }
 
 func NewMultiMetrics() *MultiMetrics {
@@ -37,10 +36,6 @@ func (m *MultiMetrics) Start() error {
 	// the injector can't handle configurable items, so
 	// we need to inject everything and then build the
 	// array of children conditionally.
-	if m.Config.GetLegacyMetricsConfig().Enabled {
-		m.AddChild(m.LegacyMetrics)
-	}
-
 	if m.Config.GetPrometheusMetricsConfig().Enabled {
 		m.AddChild(m.PromMetrics)
 	}

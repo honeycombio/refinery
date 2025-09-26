@@ -58,7 +58,6 @@ func populateConfigContents(cfg Config) configContents {
 		HoneycombLogger:     cfg.GetHoneycombLoggerConfig(),
 		StdoutLogger:        cfg.GetStdoutLoggerConfig(),
 		PrometheusMetrics:   cfg.GetPrometheusMetricsConfig(),
-		LegacyMetrics:       cfg.GetLegacyMetricsConfig(),
 		OTelMetrics:         cfg.GetOTelMetricsConfig(),
 		OTelTracing:         cfg.GetOTelTracingConfig(),
 		PeerManagement:      getPeerManagementConfig(cfg),
