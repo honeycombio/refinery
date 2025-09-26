@@ -864,6 +864,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	}
 	dt.EnqueueEvent(event1)
 
+	fakeClock.BlockUntilContext(t.Context(), 1)
 	// Advance time by 100ms (1/4 of batch timeout) - ticker should fire but batch should not be sent
 	fakeClock.Advance(100 * time.Millisecond)
 	assert.Eventually(t, func() bool {
@@ -883,18 +884,21 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	dt.EnqueueEvent(event2)
 
 	// Advance time by another 100ms (200ms total) - ticker fires again, batch still not old enough
+	fakeClock.BlockUntilContext(t.Context(), 1)
 	fakeClock.Advance(100 * time.Millisecond)
 	assert.Eventually(t, func() bool {
 		return len(testServer.getEvents()) == 0
 	}, 100*time.Millisecond, time.Millisecond, "Batch should not be sent yet (only 200ms old)")
 
 	// Advance time by another 100ms (300ms total) - ticker fires, still not old enough
+	fakeClock.BlockUntilContext(t.Context(), 1)
 	fakeClock.Advance(100 * time.Millisecond)
 	assert.Eventually(t, func() bool {
 		return len(testServer.getEvents()) == 0
 	}, 100*time.Millisecond, time.Millisecond, "Batch should not be sent yet (only 300ms old)")
 
 	// Advance time by another 100ms (400ms total) - ticker fires, batch is now old enough
+	fakeClock.BlockUntilContext(t.Context(), 1)
 	fakeClock.Advance(100 * time.Millisecond)
 
 	// Wait for batch to be sent
@@ -926,12 +930,14 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	dt.EnqueueEvent(event3)
 
 	// Advance time by 300ms - not enough for the new batch to be sent
+	fakeClock.BlockUntilContext(t.Context(), 1)
 	fakeClock.Advance(300 * time.Millisecond)
 	assert.Eventually(t, func() bool {
 		return len(testServer.getEvents()) == 2
 	}, 100*time.Millisecond, time.Millisecond, "Third event should not be sent yet")
 
 	// Advance time by another 100ms (400ms since third event) - now it should be sent
+	fakeClock.BlockUntilContext(t.Context(), 1)
 	fakeClock.Advance(100 * time.Millisecond)
 
 	assert.Eventually(t, func() bool {
