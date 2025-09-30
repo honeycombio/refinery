@@ -1464,7 +1464,7 @@ groups:
         valuetype: nondefault
         firstversion: v2.9
         lastversion: v2.9.7
-        deprecationtext: MaxDropDecisionBatchSize was an experimental feature that has been removed.
+        deprecationtext: MaxDropDecisionBatchSize was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1000
         reload: false
@@ -1477,7 +1477,7 @@ groups:
         valuetype: nondefault
         firstversion: v2.9
         lastversion: v2.9.7
-        deprecationtext: DropDecisionSendInterval was an experimental feature that has been removed.
+        deprecationtext: DropDecisionSendInterval was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1s
         reload: true
@@ -1490,7 +1490,7 @@ groups:
         valuetype: nondefault
         firstversion: v2.9
         lastversion: v2.9.7
-        deprecationtext: MaxKeptDecisionBatchSize was an experimental feature that has been removed.
+        deprecationtext: MaxKeptDecisionBatchSize was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1000
         reload: false
@@ -1503,7 +1503,7 @@ groups:
         valuetype: nondefault
         firstversion: v2.9
         lastversion: v2.9.7
-        deprecationtext: KeptDecisionSendInterval was an experimental feature that has been removed.
+        deprecationtext: KeptDecisionSendInterval was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1s
         reload: true
