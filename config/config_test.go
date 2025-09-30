@@ -87,12 +87,12 @@ Samplers:
 
 	// Test with version after deprecation should return an error
 	t.Run("shows deprecation warning for version newer than lastversion", func(t *testing.T) {
-		_, err := config.NewConfig(opts, "v2.10.0")
+		_, err := config.NewConfig(opts, "v3.1.0")
 		require.Error(t, err)
 
 		configErr, isConfigErr := err.(*config.FileConfigError)
 		require.True(t, isConfigErr, "Error should be a FileConfigError")
-		require.True(t, configErr.HasErrors(), "Error should be warning-only, not a fatal error")
+		require.True(t, configErr.HasErrors(), "Error should be a fatal error")
 		assert.Contains(t, err.Error(), "ERROR", "Expected warning message to contain ERROR")
 	})
 
