@@ -455,7 +455,7 @@ func TestValidateDeprecationWarnings(t *testing.T) {
 			currentVersion: "v2.6.0", // After v2.5.0 but before v2.9.7
 			expected: []string{
 				"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.",
-				"config Collection.OtherDeprecatedField is deprecated since version v2.5.0"},
+				"config Collection.OtherDeprecatedField was deprecated and removed in version v2.5.0"},
 		},
 		{
 			name: "old version shows all deprecated field warnings",
@@ -468,7 +468,7 @@ func TestValidateDeprecationWarnings(t *testing.T) {
 			currentVersion: "v2.4.0", // Before both deprecation versions
 			expected: []string{
 				"CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize instead.",
-				"config Collection.OtherDeprecatedField is going to be deprecated starting at version v2.5.0"},
+				"config Collection.OtherDeprecatedField is deprecated and will be removed in version v2.5.0"},
 		},
 	}
 
