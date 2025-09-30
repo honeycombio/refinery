@@ -361,7 +361,7 @@ func newStartedApp(
 func post(t testing.TB, req *http.Request) {
 	req.Header.Set("User-Agent", "Test-Client")
 	resp, err := httpClient.Do(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
