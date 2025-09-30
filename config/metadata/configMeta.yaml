@@ -731,7 +731,7 @@ groups:
 
   - name: LegacyMetrics
     title: "Legacy Metrics"
-    lastversion: v2.9.7
+    lastversion: v3.0.0
     deprecationtext: LegacyMetrics was deprecated in v2.0.0. Replace with OTelMetrics. See documentation for more details.
     replacements:
       - field: OTelMetrics
@@ -1259,7 +1259,7 @@ groups:
         v1name: CacheCapacity
         type: int
         valuetype: nondefault
-        lastversion: v2.9.7
+        lastversion: v3.0.0
         deprecationtext: CacheCapacity was deprecated in v2.9.7. Set PeerQueueSize and IncomingQueueSize to (3 x CacheCapacity) instead.
         replacements:
           - field: PeerQueueSize
@@ -1369,7 +1369,7 @@ groups:
         type: defaulttrue
         valuetype: nondefault
         firstversion: v2.8
-        lastversion: v2.9.7
+        lastversion: v3.0.0
         deprecationtext: DisableRedistribution option was removed in v3.0.0. See release notes for more details.
         default: true
         reload: true
@@ -1389,7 +1389,7 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
+        lastversion: v3.0.0
         deprecationtext: RedistributionDelay option was removed in v3.0.0. See release notes for more details.
         default: 30s
         reload: false
@@ -1421,7 +1421,7 @@ groups:
         type: string
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
+        lastversion: v3.0.0
         deprecationtext: TraceLocalityMode was an experimental feature that has been removed.
         default: "concentrated"
         reload: false
@@ -1463,7 +1463,7 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
+        lastversion: v3.0.0
         deprecationtext: MaxDropDecisionBatchSize was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1000
@@ -1476,7 +1476,7 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
+        lastversion: v3.0.0
         deprecationtext: DropDecisionSendInterval was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1s
@@ -1489,7 +1489,7 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
+        lastversion: v3.0.0
         deprecationtext: MaxKeptDecisionBatchSize was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1000
@@ -1502,7 +1502,7 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
+        lastversion: v3.0.0
         deprecationtext: KeptDecisionSendInterval was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1s
@@ -1514,7 +1514,7 @@ groups:
   - name: BufferSizes
     title: "Buffer Sizes"
     deprecationtext: BufferSizes was removed in v3.0.0. See release note for more details.
-    lastversion: v2.9.7
+    lastversion: v3.0.0
     description: >
       contains the settings that are relevant to
       the sizes of communications buffers.
