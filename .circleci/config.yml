@@ -67,7 +67,7 @@ jobs:
     docker:
       - image: cimg/go:1.24
       - image: redis:6.2
-    resource_class: large
+    resource_class: xlarge
     steps:
       - checkout
       - restore_cache:
