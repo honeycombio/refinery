@@ -2,6 +2,54 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.0.0
+
+This is a performance improvement release, focused on memory utilization.
+The improvements introduce some backwards breaking changes which are covered in detail below.
+
+* Configuration options removed
+* Metrics removed or behavior altered
+
+### Configuration Options
+
+Some updates to a Refinery configuration are necessary for the cluster to start or behave as intended.
+
+* Removed: these options completely from your configuration:
+  * `TraceLocalityMode` - **Remove** this option. This experimental feature has been removed.
+  * `DisableRedistribution` - **Remove** this option. The redistribution of in-progress traces during Refinery scaling events is no longer supported.
+  * `PeerBufferSize` and `UpstreamBufferSize` - **Remove** these options. These queue sizes no longer need to be set.
+
+* Replace:
+  * `CacheCapacity` - **Remove** this option.
+    * **Replace** it with `IncomingQueueSize` and `PeerQueueSize` if these are not already set.
+    * Appropriate starting values for these queue sizes are 3 times the previous value of `CacheCapacity`.
+    * A signal that the queue sizes are too small is "Error processing event: Dropping span as channel buffer is full." appearing in Refinery's logs.
+  * `LegacyMetrics` - **Replace** with `OTelMetrics`
+    * LegacyMetrics was deprecated in v2.0.0 and is being removed in this release.
+    * Both metric types have the same configuration options.
+    * Some metrics will have slightly different names after this change; see below for details.
+
+### Metrics Breaking Changes
+
+Some metrics have been removed, some added, some renamed, some behave slightly differently.
+These changes—summarized below—mean than existing boards, triggers, and SLOs using the affected metrics will likely break.
+There is a new board template available in Honeycomb for "Refinery 3.0 Operations".
+We recommend starting a new board with that template.
+
+* Removed:
+  * `libhoney_(upstream|peer)_queue_overflow`
+  * `libhoney_(upstream|peer)_enqueue_errors`
+  * `(incoming|peer)_router_otlp`
+
+* New Behavior:
+  * `(incoming|peer)_router_span` tracks the number of spans received by refinery *regardless of stress relief*.
+    * `incoming_router_span` now tracks the *total* number of spans received from clients.
+    * `peer_router_span` tracks only spans send by peers.
+  * `libhoney_(peer|upstream)_queue_time` baseline will appear higher due to more efficient batching behavior.
+  * `num_goroutines` baseline will appear higher due to much larger number of goroutines added in this release.
+
+
+
 ## Version 2.9.7
 
 This release focuses on improving Refinery by fixing a bug with empty payloads. It also adds a new feature that allows you to add static fields to all internal refinery logs.
