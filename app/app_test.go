@@ -414,7 +414,7 @@ func TestAppIntegration(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := http.DefaultTransport.RoundTrip(req)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	resp.Body.Close()
 
