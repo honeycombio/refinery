@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2025-08-26 at 15:28:22 UTC
+# automatically generated on 2025-10-01 at 18:54:37 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -61,12 +61,6 @@ StdoutLogger:
 PrometheusMetrics:
   Enabled: false
   ListenAddr: "localhost:2112"
-LegacyMetrics:
-  Enabled: false
-  APIHost: "https://api.honeycomb.io"
-  APIKey: SetThisToAHoneycombKey
-  Dataset: "Refinery Metrics"
-  ReportingInterval: 30s
 OTelMetrics:
   Enabled: false
   APIHost: "https://api.honeycomb.io"
@@ -107,12 +101,8 @@ Collection:
   AvailableMemory: "4.5Gb"
   MaxMemoryPercentage: 75
   MaxAlloc: 0
-  DisableRedistribution: true
-  RedistributionDelay: 30s
   ShutdownDelay: 15s
-  TraceLocalityMode: concentrated
   HealthCheckTimeout: 15s
-BufferSizes:
 Specialized:
   EnvironmentCacheTTL: 1h
   CompressPeerCommunication: true
