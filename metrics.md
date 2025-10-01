@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-08-07 at 21:56:06 UTC.
+It was automatically generated on 2025-10-01 at 18:54:38 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -105,6 +105,7 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _batches_sent | Counter | Dimensionless | number of batches of events sent to destination |
 | _messages_sent | Counter | Dimensionless | number of messages sent to destination |
 | _response_decode_errors | Counter | Dimensionless | number of errors encountered while decoding responses from destination |
+| _stale_dispatch_time | Histogram | Microseconds | The time spent per iteration of the stale batch dispatch loop |
 | _router_proxied | Counter | Dimensionless | the number of events proxied to another refinery |
 | _router_event | Counter | Dimensionless | the number of events received |
 | _router_event_bytes | Histogram | Bytes | the number of bytes per event received |

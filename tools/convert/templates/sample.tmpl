@@ -3,6 +3,9 @@
 {{- $file := . -}}
 {{ range $file.Groups -}}
     {{- $group := . }}
+    {{- if .LastVersion -}}
+        {{- continue -}}
+    {{- end -}}
     {{- println -}}
     {{- $group.Name | indent 0 }}:
     {{- range $group.Fields -}}
