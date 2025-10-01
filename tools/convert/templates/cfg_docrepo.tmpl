@@ -29,11 +29,17 @@ The remainder of this document describes the sections within the file and the fi
 
 ## Table of Contents
 {{ range $file.Groups -}}
+{{- if .LastVersion -}}
+  {{- continue -}}
+{{- end -}}
 - [{{.Title}}](#{{ anchorize .Title }})
 {{- println -}}
 {{- end -}}
 
 {{ range $file.Groups -}}
+{{- if .LastVersion -}}
+  {{- continue -}}
+{{- end -}}
 {{- template "docsite_group" . -}}
 {{- end -}}
 {{- println -}}

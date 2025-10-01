@@ -1,4 +1,6 @@
 {{- $group := . }}
+{{- if .LastVersion -}}
+{{- else -}}
 {{ box $group.Title }}
 {{ $group.Name }}:
 {{ printf "%s %s" $group.Name $group.Description | wordwrap | comment | indent 2 }}
@@ -12,4 +14,5 @@
 {{- end -}}
 {{ template "genfield.tmpl" . }}
 {{- end -}}
-
+{{- println -}}
+{{- end -}}

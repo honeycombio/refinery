@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-08-26 at 15:28:23 UTC.
+It was automatically generated on 2025-10-01 at 18:54:38 UTC.
 
 ## The Config file
 
@@ -38,13 +38,11 @@ The remainder of this document describes the sections within the file and the fi
 - [Honeycomb Logger](#honeycomb-logger)
 - [Stdout Logger](#stdout-logger)
 - [Prometheus Metrics](#prometheus-metrics)
-- [Legacy Metrics](#legacy-metrics)
 - [OpenTelemetry Metrics](#opentelemetry-metrics)
 - [OpenTelemetry Tracing](#opentelemetry-tracing)
 - [Peer Management](#peer-management)
 - [Redis Peer Management](#redis-peer-management)
 - [Collection Settings](#collection-settings)
-- [Buffer Sizes](#buffer-sizes)
 - [Specialized Configuration](#specialized-configuration)
 - [ID Fields](#id-fields)
 - [gRPC Server Parameters](#grpc-server-parameters)
@@ -613,64 +611,6 @@ Only used if `Enabled` is `true` in `PrometheusMetrics`.
 - Type: `hostport`
 - Default: `localhost:2112`
 
-## Legacy Metrics
-
-`LegacyMetrics` contains configuration for Refinery's legacy metrics.
-Version 1.x of Refinery used this format for sending Metrics to Honeycomb.
-The metrics generated that way are nonstandard and will be deprecated in a future release.
-New installations should prefer `OTelMetrics`.
-
-### `Enabled`
-
-Enabled controls whether to send legacy-formatted metrics to Honeycomb.
-
-Each of the metrics providers can be enabled or disabled independently.
-Metrics can be sent to multiple destinations.
-
-- Not eligible for live reload.
-- Type: `bool`
-
-### `APIHost`
-
-APIHost is the URL of the Honeycomb API where legacy metrics are sent.
-
-Refinery's internal metrics will be sent to this host using the standard Honeycomb Events API.
-
-- Not eligible for live reload.
-- Type: `url`
-- Default: `https://api.honeycomb.io`
-
-### `APIKey`
-
-APIKey is the API key used by Refinery to send its metrics to Honeycomb. Setting this value via a command line flag may expose credentials - it is recommended to use the environment variable or a configuration file.
-
-It is recommended that you create a separate team and key for Refinery metrics.
-
-- Not eligible for live reload.
-- Type: `string`
-- Example: `SetThisToAHoneycombKey`
-- Environment variable: `REFINERY_HONEYCOMB_METRICS_API_KEY, REFINERY_HONEYCOMB_API_KEY`
-
-### `Dataset`
-
-Dataset is the Honeycomb dataset where Refinery sends its metrics.
-
-Only used if `APIKey` is specified.
-
-- Not eligible for live reload.
-- Type: `string`
-- Default: `Refinery Metrics`
-
-### `ReportingInterval`
-
-ReportingInterval is the interval between sending legacy metrics to Honeycomb.
-
-Between 1 and 60 seconds is typical.
-
-- Not eligible for live reload.
-- Type: `duration`
-- Default: `30s`
-
 ## OpenTelemetry Metrics
 
 `OTelMetrics` contains configuration for Refinery's OpenTelemetry (OTel) metrics.
@@ -1034,35 +974,6 @@ If set, `Collections.AvailableMemory` must not be defined.
 - Eligible for live reload.
 - Type: `memorysize`
 
-### `DisableRedistribution`
-
-DisableRedistribution controls whether to transmit traces in cache to remaining peers during cluster scaling event.
-
-Redistribution is intended to help prevent data loss by reconsolidating traces onto the appropriate node after a scaling event.
-During scale down events, all stored spans are forwarded to the new owning Refinery peer instance, so it can shut down without dropping spans.
-During scale up events, only stored spans that belong to another Refinery peer instance are forwarded, so that instance can make whole trace decisions.
-Refinery uses additional system resources during scale up/down events.
-If the cluster does not have enough resource capacity headroom, a redistribution event can cause the cluster to go into stress relief (if enabled).
-If `true`, Refinery will NOT forward live traces in its cache to the rest of the peers when peers join or leave the cluster.
-Disabling redistribution can help to prevent disruptive bursts of network traffic when large traces with long `TraceTimeout` are redistributed.
-However, disabling redistribution may also cause partial data loss of traces that were in flight when scaling occurred.
-
-- Eligible for live reload.
-- Type: `bool`
-- Default: `true`
-
-### `RedistributionDelay`
-
-RedistributionDelay controls the amount of time Refinery waits after each cluster scaling event before redistributing in-memory traces.
-
-This value should be longer than the amount of time between individual pod changes in a bulk scaling operation (changing the cluster size by more than one pod).
-Each redistribution generates additional traffic between peers.
-If this value is too short, multiple consecutive redistributions will occur and the resulting traffic may overwhelm the cluster.
-
-- Not eligible for live reload.
-- Type: `duration`
-- Default: `30s`
-
 ### `ShutdownDelay`
 
 ShutdownDelay controls the maximum time Refinery can use while draining traces at shutdown.
@@ -1074,26 +985,6 @@ This value should be set to a bit less than the normal timeout period for shutti
 - Eligible for live reload.
 - Type: `duration`
 - Default: `15s`
-
-### `TraceLocalityMode`
-
-TraceLocalityMode controls how Refinery handles spans that belong to the same trace in a clustered environment.
-
-This feature is experimental, in active development, and not intended for broad customer use at this time.
-**Distributed mode is UNSUPPORTED without prior coordination with the Honeycomb product engineering team.**
-When `concentrated`, Refinery will route all spans that belong to the same trace to a single peer.
-This is the default behavior ("Trace Locality") and the way Refinery has worked in the past.
-When `distributed`, Refinery will instead keep spans on the node where they were received, and forward proxy spans that contain only the key information needed to make a trace decision.
-This can reduce the amount of traffic between peers, and can help avoid a situation where a single large trace can cause a memory overrun on a single node.
-If `distributed`, the amount of traffic between peers will be reduced, but the amount of traffic between Refinery and Redis will significantly increase, because Refinery uses Redis to distribute the trace decisions to all nodes in the cluster.
-It is important to adjust the size of the Redis cluster in this case.
-The total volume of network traffic in `distributed` mode should be expected to decrease unless the cluster size is very large (hundreds of nodes).
-NOTE: This setting is not compatible with `DryRun` when set to `distributed`.
-See `DryRun` for more information.
-
-- Not eligible for live reload.
-- Type: `string`
-- Default: `concentrated`
 
 ### `HealthCheckTimeout`
 
@@ -1108,10 +999,6 @@ Refinery will adjust the timeout based on the configured `MaxExpiredTraces`, so 
 - Not eligible for live reload.
 - Type: `duration`
 - Default: `15s`
-
-## Buffer Sizes
-
-`BufferSizes` contains the settings that are relevant to the sizes of communications buffers.
 
 ## Specialized Configuration
 
