@@ -4,12 +4,12 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 3.0.0
 
-This is a performance improvement release, focused on memory utilization.
+This is a performance improvement release, focused on memory and CPU efficiency.
 The improvements introduce some backwards breaking changes which are covered in detail below.
 
 ### Performance Improvements
 
-Refinery's memory usage improvements are the result of reducing the number of data transformations performed during the receipt and retransmission of traces.
+The improvements are the result of reducing the number of data transformations performed during the receipt and retransmission of traces.
 Reduced data transformations has reduced memory allocations and time spent in garbage collection.
 
 To take full advantage of these optimizations, send telemetry to Refinery in supported binary formats whenever possible.
