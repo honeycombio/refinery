@@ -7,34 +7,42 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 This is a performance improvement release, focused on memory utilization.
 The improvements introduce some backwards breaking changes which are covered in detail below.
 
-* Configuration options removed
-* Metrics removed or behavior altered
+### Performance Improvements
 
-### Configuration Options
+Refinery's memory usage improvements are the result of reducing the number data transformations performed during the receipt and retransmit of traces.
+Reduced data transformations has reduced memory allocations and time spent in garbage collection.
+To take full advantage of these optimizations, send telemetry to Refinery in supported binary formats whenever possible.
+When sending OTLP, use http/protobuf (preferred) or GRPC.
+If you are sending OTLP as http/json, consider using an OpenTelemetry Collector to receive it and send to Refinery with an OTLP exporter using http/protobuf (preferred) or GRPC.
+When sending libhoney events (using Beelines), use msgpack.
 
-Some updates to a Refinery configuration are necessary for the cluster to start or behave as intended.
+### Configuration Options (💣 Breaking Changes!)
 
-* Removed: these options completely from your configuration:
-  * `TraceLocalityMode` - **Remove** this option. This experimental feature has been removed.
-  * `DisableRedistribution` - **Remove** this option. The redistribution of in-progress traces during Refinery scaling events is no longer supported.
-  * `PeerBufferSize` and `UpstreamBufferSize` - **Remove** these options. These queue sizes no longer need to be set.
+You may need to update your Refinery configuration or the cluster will fail to start or behave as intended.
+
+* Removed:
+  * Trace Redistribution
+    * `DisableRedistribution` - **Remove** this option. The redistribution of in-progress traces during Refinery scaling events is no longer supported.
+    * `RedistributionDelay` - **Remove** this option. Redistribution is no longer supported.
+  * Outgoing Buffer Sizes
+    * `PeerBufferSize` and `UpstreamBufferSize` - **Remove** these options. These queue sizes no longer need to be set.
+  * Trace Locality Mode (experimental)
+    * `TraceLocalityMode` - **Remove** this option. This experimental feature has been removed.
+    * `MaxDropDecisionBatchSize`, `DropDecisionSendInterval`, `MaxKeptDecisionBatchSize`, and `KeptDecisionSendInterval` - Remove these options related to `TraceLocalityMode`.
 
 * Replace:
   * `CacheCapacity` - **Remove** this option.
     * **Replace** it with `IncomingQueueSize` and `PeerQueueSize` if these are not already set.
     * Appropriate starting values for these queue sizes are 3 times the previous value of `CacheCapacity`.
-    * A signal that the queue sizes are too small is "Error processing event: Dropping span as channel buffer is full." appearing in Refinery's logs.
   * `LegacyMetrics` - **Replace** with `OTelMetrics`
     * LegacyMetrics was deprecated in v2.0.0 and is being removed in this release.
     * Both metric types have the same configuration options.
     * Some metrics will have slightly different names after this change; see below for details.
 
-### Metrics Breaking Changes
+### Metrics (️⚠️ Breaking Changes!)
 
 Some metrics have been removed, some added, some renamed, some behave slightly differently.
-These changes—summarized below—mean than existing boards, triggers, and SLOs using the affected metrics will likely break.
-There is a new board template available in Honeycomb for "Refinery 3.0 Operations".
-We recommend starting a new board with that template.
+These changes mean that existing boards or alerts using the affected metrics will break and require updating.
 
 * Removed:
   * `libhoney_(upstream|peer)_queue_overflow`
@@ -48,7 +56,10 @@ We recommend starting a new board with that template.
   * `libhoney_(peer|upstream)_queue_time` baseline will appear higher due to more efficient batching behavior.
   * `num_goroutines` baseline will appear higher due to much larger number of goroutines added in this release.
 
-
+* Renamed:
+  * Histograms sent as LegacyMetrics separated the metric name and the aggregation function with an underscore ("_").
+    The equivalent OTelMetrics histogram separates name and function with a period (".").
+    For example, the legacy metric `collect_cache_entries_max` is now the OTel metric `collect_cache_entries.max`.
 
 ## Version 2.9.7
 
