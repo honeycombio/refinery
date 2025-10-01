@@ -16,7 +16,7 @@ To take full advantage of these optimizations, send telemetry to Refinery in sup
 
 * When sending OTLP, use http/protobuf (preferred) or GRPC.
   * If you *must* send OTLP as http/json:
-    * Limit batch sizes to 1024 spans.
+    * Limit OTLP http/json exporter batch sizes to 1,024 spans.
     * Consider using an OpenTelemetry Collector to receive http/json and configure an OTLP exporter to send to Refinery with http/protobuf (preferred) or GRPC.
 * When sending libhoney events (using Beelines), use msgpack.
 
