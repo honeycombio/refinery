@@ -2,9 +2,10 @@
 
 ## 3.0.0 2025-10-02
 
-### 💥 Breaking Changes 💥
+This is a performance improvement release, focused on memory and CPU efficiency.
+The improvements introduce some backwards breaking changes which are covered in [the release notes](https://github.com/honeycombio/refinery/blob/main/RELEASE_NOTES.md).
 
-See [the release notes](https://github.com/honeycombio/refinery/blob/main/RELEASE_NOTES.md) for details on what has changed and what actions to take during upgrade.
+### 💥 Breaking Changes 💥
 
 - perf: streamline data handling by reducing the number of data transforms by @robbkidd in <https://github.com/honeycombio/refinery/pull/1653>
 - fix: set DisableRedistribution default to true by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1657>
