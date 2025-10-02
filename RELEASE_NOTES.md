@@ -73,7 +73,7 @@ These changes mean that existing boards or alerts using the affected metrics wil
   * `(incoming|peer)_router_span` tracks the number of spans received by refinery *regardless of stress relief*.
     * `incoming_router_span` now tracks the *total* number of spans received from clients.
     * `peer_router_span` tracks only spans received from peers.
-  * `libhoney_(peer|upstream)_queue_time` baseline will appear higher due to more efficient batching behavior.
+  * `libhoney_(peer|upstream)_queue_time` baseline will appear higher due to larger default send batch sizes to reduce network transmit overhead.
   * `num_goroutines` baseline will appear higher due to a much larger number of goroutines added in this release.
 
 ## Version 2.9.7
