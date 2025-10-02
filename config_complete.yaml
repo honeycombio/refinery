@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-10-01 at 18:54:38 UTC from ../../config.yaml using a template generated on 2025-10-01 at 18:54:36 UTC
+# created on 2025-10-02 at 19:03:22 UTC from ../../config.yaml using a template generated on 2025-10-02 at 19:03:19 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -136,35 +136,6 @@ OpAMP:
   ## intended or supported for customer use. **FOR INTERNAL USE ONLY**
   ##
   ####
-    ## Enabled controls whether to enable OpAMP support.
-    ##
-    ## OpAMP support is an experimental feature, subject to breaking changes
-    ## at any time. Not intended or supported for customer use. **FOR
-    ## INTERNAL USE ONLY**
-    ##
-    ## Not eligible for live reload.
-    # Enabled: false
-
-    ## RecordUsage controls whether to record usage metrics.
-    ##
-    ## OpAMP support is an experimental feature, subject to breaking changes
-    ## at any time. Not intended or supported for customer use. **FOR
-    ## INTERNAL USE ONLY**
-    ##
-    ## default: true
-    ## Eligible for live reload.
-    # RecordUsage: true
-
-    ## Endpoint is the URL of the OpAMP server for this client.
-    ##
-    ## OpAMP support is an experimental feature, subject to breaking changes
-    ## at any time. Not intended or supported for customer use. **FOR
-    ## INTERNAL USE ONLY**
-    ##
-    ## default: wss://127.0.0.1:4320/v1/opamp
-    ## Not eligible for live reload.
-    Endpoint: wss://127.0.0.1:4320/v1/opamp
-
 ##############################
 ## Access Key Configuration ##
 ##############################
