@@ -1,5 +1,114 @@
 # Refinery Changelog
 
+## 3.0.0 2025-10-02
+
+### 💥 Breaking Changes 💥
+
+See [the release notes](https://github.com/honeycombio/refinery/blob/main/RELEASE_NOTES.md) for details on what has changed and what actions to take during upgrade.
+
+- perf: streamline data handling by reducing the number of data transforms by @robbkidd in <https://github.com/honeycombio/refinery/pull/1653>
+- fix: set DisableRedistribution default to true by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1657>
+- maint: separate metrics for otlp traffic based on transport protocol and incoming data format/signal by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1651>
+- fix: increment incoming/peer_router_span regardless of queue state by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1659>
+- maint: (BREAKING) remove CacheCapacity functionality by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1666>
+- maint: remove UpstreamBufferSize and PeerBufferSize from stress relief by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1672>
+- feat: allow deprecating an entire config group by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1692>
+- maint: remove deprecated config options by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1689>
+- maint: remove deprecated LegacyMetrics by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1691>
+
+### 💡 Enhancements
+
+- perf: use noop span when tracing is disabled by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1583>
+- perf: only calculate span count and annotation type once by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1584>
+- perf: optimize trace key generation with hash-based deduplication by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1585>
+- perf: add lazy-loading MessagePack payload for events by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1586>
+- perf: use concrete type for Counter, Gauge, and Histogram metrics by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1590>
+- perf: move collector queue metrics to be outside of the collect loop by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1587>
+- feat: draft DirectTransmit to replace libhoney for trace data transmission by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1595>
+- perf: memoize fields that don't exist on a payload by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1601>
+- perf: fix encoded type of map keys by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1603>
+- feat: add message size limits to DirectTransmission by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1602>
+- perf: switch to an async pool for DirectTranmission batch sends, test changes by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1604>
+- perf: more scalable DirectTransmission batching by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1605>
+- feat: switch to DirectTransmission in refinery main by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1606>
+- perf: prefetch span attributes during ingest and sampling by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1607>
+- perf: promote all write-only metadata fields as first class fields in Payload struct by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1609>
+- perf: use a buffer pool for http body reads by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1610>
+- perf: remove dynamic string creation for metric names by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1615>
+- perf: reduce lock contention for internal metrics by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1617>
+- perf: memoize sampling fields in router by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1620>
+- perf: avoid dynamic string creation for sampling fields with no data by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1629>
+- perf: use protobuf to msgp translator for otlp/http protobuf request by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1632>
+- perf: avoid an extra copy for otlp protobuf payload during unmarshaling by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1633>
+- perf: remove metricsnamer to avoid dynamic string concatenation by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1626>
+- feat: allow file peers to be hot-reloaded by @kentquirk in <https://github.com/honeycombio/refinery/pull/1636>
+- perf: use protobuf to msgp translator for otlp/http JSON request by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1641>
+- feat: use husky's optimized direct translation for GRPC calls by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1643>
+- perf: optimize sampling key field extraction in payload processing by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1645>
+- feat: implement retry for direct transmit by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1635>
+- perf: optimized JSON batch handling by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1644>
+- feat: config option deprecation by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1667>
+- feat(convert): support updating deprecated field using convert tool by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1674>
+- perf: use single zstd decoder by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1677>
+
+### 🐛 Fixes
+
+- fix: fully initialize Payload object during unmarshaling by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1611>
+- fix: address race condition in managing locks for internal OTel metrics by @robbkidd in <https://github.com/honeycombio/refinery/pull/1619>
+- perf: use read lock in Prometheus metrics Down operation by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1624>
+- fix: correct type for processing a span from a peer by @robbkidd in <https://github.com/honeycombio/refinery/pull/1627>
+- fix: implement missing libhoney metrics in DirectTransmit by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1631>
+- fix: sampling key fields extraction for root-prefixed sampling fields by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1637>
+- fix: Ignore computed fields during sampling key extraction by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1640>
+- fix: error handling in postOTLPTrace by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1656>
+- fix: repair bad rule example by @kentquirk in <https://github.com/honeycombio/refinery/pull/1660>
+- fix: set shutdown wait time to be 2x of BatchTimeout by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1663>
+- fix: make sure all transmit metrics have correct libhoney prefix by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1661>
+- fix: race condition between metrics startup and DirectTransmit registering metrics by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1665>
+- fix: dataset name should only be url encoded only once by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1681>
+- fix: wait for redis connection retry before marking Refinery as unheathy by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1685>
+- fix: increase upstream tranmission timeout to 30s by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1687>
+- fix: set default sizes for queues by @robbkidd in <https://github.com/honeycombio/refinery/pull/1694>
+- fix: only try to track usage when enabled by @TylerHelmuth in <https://github.com/honeycombio/refinery/pull/1699>
+
+### 🛠 Maintenance
+
+- test: improve existing integration benchmark, add new test and benchmark for Router.batch() by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1580>
+- test: add benchmark test for collect loop by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1582>
+- perf: cleanup superfluous allocations during event unmarshal by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1592>
+- test: enable DryRun in collect loop benchmark test by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1594>
+- maint: remove metro hash and use wyhash instead by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1597>
+- test: add benchmark for transmission by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1599>
+- maint: remove unused LibhoneyMetricsWrapper by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1612>
+- maint: clean up payload code and testing, fix broken benchmark by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1613>
+- test: add BenchmarkRouterBatch/otlp by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1614>
+- ci: extend deadline for a wait in a flaky test by @robbkidd in <https://github.com/honeycombio/refinery/pull/1623>
+- maint: upgrade dynsampler-go to 0.6.3 by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1625>
+- test: add OTLP to app test and benchmark by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1634>
+- ci: fix flaky tests by @robbkidd in <https://github.com/honeycombio/refinery/pull/1639>
+- ci: fix flaky TestDirectTransmissionQueueLengthGauge by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1638>
+- maint: only use one reader per sendBatch in DirectTransmit by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1649>
+- maint: remove unused messagepack iterator code by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1648>
+- fix: update CacheCapacity description by @TylerHelmuth in <https://github.com/honeycombio/refinery/pull/1646>
+- maint: update streamlined data handling branch to the latest changes in main by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1652>
+- test: improve efficiency of BenchmarkCollectorWithSamplers by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1650>
+- test: allow tests to pass when run multiple times by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1655>
+- maint: update husky to v0.38.0 by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1658>
+- maint(deps): bump the minor-patch group across 1 directory with 20 updates by @dependabot[bot] in <https://github.com/honeycombio/refinery/pull/1654>
+- maint: add stale batch dispatch timer to direct transmission by @ianwilkes in <https://github.com/honeycombio/refinery/pull/1664>
+- maint: make CacheCapacity deprecation text more actionable by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1679>
+- feat: add public ECR upload for tagged releases by @lizthegrey in <https://github.com/honeycombio/refinery/pull/1680>
+- fix(ci): consolidate Docker publishing to prevent SHA hash mismatches by @lizthegrey in <https://github.com/honeycombio/refinery/pull/1683>
+- fix(ci): publish to ghcr.io/honeycombio/refinery not /honeycombio by @lizthegrey in <https://github.com/honeycombio/refinery/pull/1686>
+- maint: update husky to v0.39.0 by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1696>
+- maint: remove TraceLocalityMode configs by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1688>
+- maint: update husky to 0.39.1 by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1700>
+- maint: provide more actionable deprecation text for LegacyMetrics and BufferSizes by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1697>
+- maint: generate config for 3.0 by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1703>
+- maint: Bump husky to v0.39.2 by @MikeGoldsmith in <https://github.com/honeycombio/refinery/pull/1706>
+- maint: remove deprecated config as default behavior for convert tool by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1705>
+- fix: unpublish OpAMP configs by @VinozzZ in <https://github.com/honeycombio/refinery/pull/1707>
+
 ## 2.9.7 2025-07-16
 
 ### Features
