@@ -154,6 +154,7 @@ groups:
         valuetype: nondefault
         default: false
         reload: false
+        unpublished: true
         firstversion: v2.9.4
         summary: controls whether to enable OpAMP support.
         description: >
@@ -163,6 +164,7 @@ groups:
         type: defaulttrue
         valuetype: nondefault
         default: true
+        unpublished: true
         reload: true
         firstversion: v2.9.4
         summary: controls whether to record usage metrics.
@@ -173,6 +175,7 @@ groups:
         type: string
         valuetype: assigndefault
         default: "wss://127.0.0.1:4320/v1/opamp"
+        unpublished: true
         reload: false
         firstversion: v2.9.4
         summary: is the URL of the OpAMP server for this client.
@@ -731,7 +734,8 @@ groups:
 
   - name: LegacyMetrics
     title: "Legacy Metrics"
-    lastversion: v2.9.7
+    lastversion: v3.0.0
+    deprecationtext: LegacyMetrics was deprecated in v2.0.0. Replace with OTelMetrics. See documentation for more details.
     replacements:
       - field: OTelMetrics
     description: >
@@ -1258,8 +1262,8 @@ groups:
         v1name: CacheCapacity
         type: int
         valuetype: nondefault
-        lastversion: v2.9.7
-        deprecationtext: CacheCapacity is deprecated since version v2.9.7. Set PeerQueueSize and IncomingQueueSize to (3 x CacheCapacity) instead.
+        lastversion: v3.0.0
+        deprecationtext: CacheCapacity was deprecated in v2.9.7. Set PeerQueueSize and IncomingQueueSize to (3 x CacheCapacity) instead.
         replacements:
           - field: PeerQueueSize
             formula: "3 * value"
@@ -1368,7 +1372,8 @@ groups:
         type: defaulttrue
         valuetype: nondefault
         firstversion: v2.8
-        lastversion: v2.9.7
+        lastversion: v3.0.0
+        deprecationtext: DisableRedistribution option was removed in v3.0.0. See release notes for more details.
         default: true
         reload: true
         summary: controls whether to transmit traces in cache to remaining peers during cluster scaling event.
@@ -1387,7 +1392,8 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
+        lastversion: v3.0.0
+        deprecationtext: RedistributionDelay option was removed in v3.0.0. See release notes for more details.
         default: 30s
         reload: false
         summary: controls the amount of time Refinery waits after each cluster scaling event before redistributing in-memory traces.
@@ -1418,8 +1424,8 @@ groups:
         type: string
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
-        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
+        lastversion: v3.0.0
+        deprecationtext: TraceLocalityMode was an experimental feature that has been removed.
         default: "concentrated"
         reload: false
         summary: controls how Refinery handles spans that belong to the same trace in a clustered environment.
@@ -1460,8 +1466,8 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
-        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
+        lastversion: v3.0.0
+        deprecationtext: MaxDropDecisionBatchSize was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1000
         reload: false
@@ -1473,8 +1479,8 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
-        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
+        lastversion: v3.0.0
+        deprecationtext: DropDecisionSendInterval was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1s
         reload: true
@@ -1486,8 +1492,8 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
-        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
+        lastversion: v3.0.0
+        deprecationtext: MaxKeptDecisionBatchSize was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1000
         reload: false
@@ -1499,8 +1505,8 @@ groups:
         type: duration
         valuetype: nondefault
         firstversion: v2.9
-        lastversion: v2.9.7
-        deprecationtext: This feature was introduced as an experimental capability and is now deprecated.
+        lastversion: v3.0.0
+        deprecationtext: KeptDecisionSendInterval was part of TraceLocalityMode experimental feature that has been removed.
         unpublished: true
         default: 1s
         reload: true
@@ -1510,7 +1516,8 @@ groups:
 
   - name: BufferSizes
     title: "Buffer Sizes"
-    lastversion: v2.9.7
+    deprecationtext: BufferSizes was removed in v3.0.0. See release note for more details.
+    lastversion: v3.0.0
     description: >
       contains the settings that are relevant to
       the sizes of communications buffers.

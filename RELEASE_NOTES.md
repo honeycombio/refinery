@@ -2,6 +2,80 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.0.0
+
+This is a performance improvement release, focused on memory and CPU efficiency.
+The improvements introduce some backwards breaking changes which are covered in detail below.
+
+### Performance Improvements
+
+The improvements are the result of reducing the number of data transformations performed during the receipt and retransmission of traces.
+Reduced data transformations has reduced memory allocations and time spent in garbage collection.
+
+To take full advantage of these optimizations, send telemetry to Refinery in supported binary formats whenever possible.
+
+* When sending OTLP, use http/protobuf (preferred) or GRPC.
+  * If you *must* send OTLP as http/json:
+    * Limit OTLP http/json exporter batch sizes to 1,024 spans.
+    * Consider using an OpenTelemetry Collector to receive http/json and configure an OTLP exporter to send to Refinery with http/protobuf (preferred) or GRPC.
+* When sending libhoney events (using Beelines), use msgpack.
+
+### Configuration Options (💣 Breaking Changes!)
+
+You may need to update your Refinery configuration or the cluster will fail to start or behave as intended.
+
+* Removed:
+  * Trace Redistribution
+    * `DisableRedistribution` - **Remove** this option. The redistribution of in-progress traces during Refinery scaling events is no longer supported.
+    * `RedistributionDelay` - **Remove** this option. Redistribution is no longer supported.
+  * Outgoing Buffer Sizes
+    * `PeerBufferSize` and `UpstreamBufferSize` - **Remove** these options. These queue sizes no longer need to be set.
+  * Trace Locality Mode (experimental)
+    * `TraceLocalityMode` - **Remove** this option. This experimental feature has been removed.
+    * `MaxDropDecisionBatchSize`, `DropDecisionSendInterval`, `MaxKeptDecisionBatchSize`, and `KeptDecisionSendInterval` - **Remove** these options related to `TraceLocalityMode`.
+  * `CacheCapacity` - **Remove** this option.
+    * **Replace** it with `IncomingQueueSize` and `PeerQueueSize` if these are not already set.
+    * Appropriate starting values for these queue sizes are 3 times the previous value of `CacheCapacity`.
+  * `LegacyMetrics` - **Replace** with `OTelMetrics`
+    * LegacyMetrics was deprecated in v2.0.0 and is being removed in this release.
+    * Both metric types have the same configuration options.
+    * Some metrics will have slightly different names after this change; see below for details.
+
+### Metrics (️⚠️ Breaking Changes!)
+
+Some metrics have been removed, some added, some renamed, and some behave slightly differently.
+These changes mean that existing boards or alerts using the affected metrics will stop behaving as expected and will require updating.
+
+* Removed:
+  * `libhoney_(upstream|peer)_queue_overflow`
+    * Use `libhoney_(upstream|peer)_queue_length` instead to monitor events queued to be sent.
+  * `libhoney_(upstream|peer)_enqueue_errors`
+    * Use `libhoney_(upstream|peer)_send_errors` and `libhoney_(upstream|peer)_send_retries` instead to monitor for issues sending events upstream or to peers.
+  * `incoming_router_otlp`
+    * Replaced with more specific counters for variations of OTLP signal type and send protocol. See **Added** below.
+
+* Added:
+  * Request counters for specific OTLP signal type and send protocol combinations.
+    These are counts of telemetry client *requests*, likely sending batches of one or more spans or logs.
+    * `incoming_router_otlp_trace_grpc`
+    * `incoming_router_otlp_trace_http_json`
+    * `incoming_router_otlp_trace_http_proto`
+    * `incoming_router_otlp_log_grpc`
+    * `incoming_router_otlp_log_http_json`
+    * `incoming_router_otlp_log_http_proto`
+
+* Renamed:
+  * Histograms sent as LegacyMetrics separated the metric name and the aggregation function with an underscore (`_`).
+    The equivalent OTelMetrics histogram separates name and function with a period (`.`).
+    For example, the legacy metric `collect_cache_entries_max` is now the OTel metric `collect_cache_entries.max`.
+
+* New Behavior:
+  * `(incoming|peer)_router_span` tracks the number of spans received by refinery *regardless of stress relief*.
+    * `incoming_router_span` now tracks the *total* number of spans received from clients.
+    * `peer_router_span` tracks only spans received from peers.
+  * `libhoney_(peer|upstream)_queue_time` baseline will appear higher due to larger default send batch sizes to reduce network transmit overhead.
+  * `num_goroutines` baseline will appear higher due to a much larger number of goroutines added in this release.
+
 ## Version 2.9.7
 
 This release focuses on improving Refinery by fixing a bug with empty payloads. It also adds a new feature that allows you to add static fields to all internal refinery logs.

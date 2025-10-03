@@ -563,14 +563,14 @@ func checkForDeprecation(path string, item deprecator, currentVersion ...string)
 		if isVersionDeprecated(currentVersion[0], item.GetLastVersion()) {
 			// Current version is before the last version - collect for grouped warning
 			if message == "" {
-				message = fmt.Sprintf("config %s is going to be deprecated starting at version %s", path, item.GetLastVersion())
+				message = fmt.Sprintf("config %s is deprecated and will be removed in version %s", path, item.GetLastVersion())
 			}
 		} else {
 			// Current version is equal to or after the last version - fail validation
 			comparison, err := compareVersions(currentVersion[0], item.GetLastVersion())
 			if err != nil || comparison >= 0 {
 				if message == "" {
-					message = fmt.Sprintf("config %s is deprecated since version %s", path, item.GetLastVersion())
+					message = fmt.Sprintf("config %s was deprecated and removed in version %s", path, item.GetLastVersion())
 				}
 				return ValidationResult{
 					Message:  message,

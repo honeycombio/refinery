@@ -25,6 +25,9 @@ OTelMetrics:
 The remainder of this page describes the sections within the file and the fields in each.
 
 {{ range $file.Groups -}}
+{{- if .LastVersion -}}
+  {{- continue -}}
+{{- end -}}
 {{- template "docsite_group" . -}}
 {{- end -}}
 {{- println -}}

@@ -27,11 +27,9 @@ import (
 var filesystem embed.FS
 
 type Options struct {
-	Input            string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
-	Output           string `short:"o" long:"output" description:"the Refinery v2 config file to write (goes to stdout by default)"`
-	Type             string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON (in case file extension doesn't work)" choice:"Y" choice:"T" choice:"J"`
-	DryRun           bool   `long:"dry-run" description:"show what would be changed without writing output"`
-	RemoveDeprecated bool   `long:"remove-deprecated" description:"remove deprecated config options during conversion"`
+	Input  string `short:"i" long:"input" description:"the Refinery v1 config file to read" default:"config.toml"`
+	Output string `short:"o" long:"output" description:"the Refinery v2 config file to write (goes to stdout by default)"`
+	Type   string `short:"t" long:"type" description:"loads input file as YAML, TOML, or JSON (in case file extension doesn't work)" choice:"Y" choice:"T" choice:"J"`
 }
 
 func load(r io.Reader, typ string) (map[string]any, error) {
@@ -232,11 +230,11 @@ func main() {
 
 	switch args[0] {
 	case "config":
-		ConvertConfig(tmplData, output, &opts)
+		ConvertConfig(tmplData, output)
 	case "rules":
 		ConvertRules(userConfig, output)
 	case "helm":
-		ConvertHelm(tmplData, output, &opts)
+		ConvertHelm(tmplData, output)
 	case "validate":
 		if args[1] == "config" {
 			if !ValidateFromMetadata(userConfig, output) {
@@ -278,37 +276,19 @@ func loadRulesMetadata() *config.Metadata {
 	return m
 }
 
-func ConvertConfig(tmplData *configTemplateData, w io.Writer, opts *Options) {
+func ConvertConfig(tmplData *configTemplateData, w io.Writer) {
 	var removedItems []string
-	if opts.RemoveDeprecated {
-		tmplData.Data, removedItems = removeDeprecated(tmplData.Data, opts.DryRun)
+	tmplData.Data, removedItems = removeDeprecated(tmplData.Data)
 
-		if len(removedItems) > 0 {
-			if opts.DryRun {
-				fmt.Fprintf(w, "# DRY RUN: The following deprecated config options were found and would be removed:\n")
-			} else {
-				fmt.Fprintf(w, "# The following deprecated config options were removed:\n")
-			}
-			for _, item := range removedItems {
-				fmt.Fprintf(w, "# - %s\n", item)
-			}
-			fmt.Fprintf(w, "#\n")
+	if len(removedItems) > 0 {
+		fmt.Fprintf(w, "# The following deprecated config options were removed:\n")
+		for _, item := range removedItems {
+			fmt.Fprintf(w, "# - %s\n", item)
 		}
-	}
+		fmt.Fprintf(w, "#\n")
 
-	// If dry-run mode, don't execute the template conversion
-	if opts.DryRun {
-		if len(removedItems) == 0 && opts.RemoveDeprecated {
-			fmt.Fprintf(w, "# DRY RUN: No deprecated config options found.\n")
-		}
-		return
-	}
-
-	// If remove-deprecated is used, just output the modified config as YAML
-	if opts.RemoveDeprecated {
 		encoder := yaml.NewEncoder(w)
-		err := encoder.Encode(tmplData.Data)
-		if err != nil {
+		if err := encoder.Encode(tmplData.Data); err != nil {
 			fmt.Fprintf(os.Stderr, "YAML encoding error %v\n", err)
 			os.Exit(1)
 		}
@@ -345,7 +325,7 @@ func removeEmpty(m map[string]any) map[string]any {
 	return result
 }
 
-func ConvertHelm(tmplData *configTemplateData, w io.Writer, opts *Options) {
+func ConvertHelm(tmplData *configTemplateData, w io.Writer) {
 	const rulesConfigMapName = "RulesConfigMapName"
 	const liveReload = "LiveReload"
 	// convert config if we have it
@@ -366,13 +346,7 @@ func ConvertHelm(tmplData *configTemplateData, w io.Writer, opts *Options) {
 		config := *tmplData
 		config.Data = helmConfig
 		// convert the config into the buffer
-		ConvertConfig(&config, convertedConfig, opts)
-
-		// If dry-run, ConvertConfig writes dry-run messages to convertedConfig, forward them to main output
-		if opts.DryRun {
-			w.Write(convertedConfig.Bytes())
-			return
-		}
+		ConvertConfig(&config, convertedConfig)
 
 		// read the buffer as YAML
 		decoder := yaml.NewDecoder(convertedConfig)
