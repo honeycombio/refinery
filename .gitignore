@@ -31,3 +31,5 @@ dockerize*
 ko-cache/
 ko
 ko*.tar.gz
+crane
+crane*.tar.gz
