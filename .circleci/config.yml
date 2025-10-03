@@ -232,7 +232,7 @@ jobs:
       - run:
           name: build and publish to private ECR
           command: |
-            export KO_DOCKER_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
+            export PRIMARY_DOCKER_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
             ./build-docker.sh
 
   publish_docker_to_ecr_sippycup:
@@ -256,7 +256,7 @@ jobs:
       - run:
           name: publish docker image to aws ecr
           environment:
-            KO_DOCKER_REPO: 017118846235.dkr.ecr.us-east-1.amazonaws.com
+            PRIMARY_DOCKER_REPO: 017118846235.dkr.ecr.us-east-1.amazonaws.com
           command: ./build-docker.sh
 
   publish_docker_to_all_public_registries:
