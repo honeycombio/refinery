@@ -56,11 +56,12 @@ commands:
       - restore_cache:
           keys:
             - v2-googleko-{{ checksum "Makefile" }}
-      - run: make ko
+      - run: make ko crane
       - save_cache:
           key: v2-googleko-{{ checksum "Makefile" }}
           paths:
             - ./ko
+            - ./crane
 
 jobs:
   test:
