@@ -63,7 +63,7 @@ unset GOARCH
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(make latest_modification_time)}
 
-# If KO_DOCKER_REPOS is set (comma-separated list), build once and push to multiple registries
+# If KO_DOCKER_REPOS is set (comma-separated list), build once and copy to multiple registries
 if [[ -n "${KO_DOCKER_REPOS:-}" ]]; then
   # Build the image once to a local registry first
   LOCAL_REPO="ko.local"
@@ -82,22 +82,20 @@ if [[ -n "${KO_DOCKER_REPOS:-}" ]]; then
     ./cmd/refinery)
 
   echo "Built image: $IMAGE_REF"
-  echo "Pushing to multiple registries: $KO_DOCKER_REPOS"
+  echo "Copying to multiple registries: $KO_DOCKER_REPOS"
   
   IFS=',' read -ra REPOS <<< "$KO_DOCKER_REPOS"
   for REPO in "${REPOS[@]}"; do
     REPO=$(echo "$REPO" | xargs) # trim whitespace
-    echo "Tagging and pushing to: $REPO"
+    echo "Copying to repository: $REPO"
     
-    # Tag for each tag in the TAGS list
+    # Copy for each tag in the TAGS list
     IFS=',' read -ra TAG_LIST <<< "$TAGS"
     for TAG in "${TAG_LIST[@]}"; do
       TAG=$(echo "$TAG" | xargs) # trim whitespace
       TARGET_IMAGE="$REPO/refinery:$TAG"
-      echo "Tagging $IMAGE_REF as $TARGET_IMAGE"
-      docker tag "$IMAGE_REF" "$TARGET_IMAGE"
-      echo "Pushing $TARGET_IMAGE"
-      docker push "$TARGET_IMAGE"
+      echo "Copying $IMAGE_REF to $TARGET_IMAGE"
+      ./crane copy "$IMAGE_REF" "$TARGET_IMAGE"
     done
   done
 else
