@@ -28,6 +28,7 @@ test_results:
 	@mkdir -p test_results
 
 local_image: export PRIMARY_DOCKER_REPO=ko.local
+local_image: export CIRCLE_TAG=$(shell git describe --always --match "v[0-9]*" --tags)
 local_image: export CIRCLE_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 local_image: export CIRCLE_SHA1=$(shell git rev-parse HEAD)
 local_image: export SOURCE_DATE_EPOCH=$(call __latest_modification_time)
