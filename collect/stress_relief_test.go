@@ -171,7 +171,7 @@ func TestStressRelief_OverallStressLevel_DisableTraceLocality(t *testing.T) {
 	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 965)
 	clock.Advance(time.Second * 1)
 	sr.stressLevels = make(map[string]stressReport, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := fmt.Sprintf("peer%d", i)
 		sr.stressLevels[key] = stressReport{
 			key:       key,
@@ -189,7 +189,7 @@ func TestStressRelief_OverallStressLevel_DisableTraceLocality(t *testing.T) {
 	// and the rest of the cluster is above the activation level
 	// the single peer should remain in stress relief mode
 	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := fmt.Sprintf("peer%d", i)
 		sr.stressLevels[key] = stressReport{
 			key:       key,
@@ -205,7 +205,7 @@ func TestStressRelief_OverallStressLevel_DisableTraceLocality(t *testing.T) {
 	// Only when both the single peer's individual stress level and the cluster stress
 	// level is below the activation level, the stress relief should be deactivated.
 	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := fmt.Sprintf("peer%d", i)
 		sr.stressLevels[key] = stressReport{
 			key:       key,
@@ -254,7 +254,7 @@ func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
 	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 965)
 	clock.Advance(time.Second * 1)
 	sr.stressLevels = make(map[string]stressReport, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := fmt.Sprintf("peer%d", i)
 		sr.stressLevels[key] = stressReport{
 			key:       key,
@@ -272,7 +272,7 @@ func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
 	// and the rest of the cluster is above the activation level
 	// the single peer should remain in stress relief mode
 	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := fmt.Sprintf("peer%d", i)
 		sr.stressLevels[key] = stressReport{
 			key:       key,
@@ -288,7 +288,7 @@ func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
 	// Only when both the single peer's individual stress level and the cluster stress
 	// level is below the activation level, the stress relief should be deactivated.
 	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		key := fmt.Sprintf("peer%d", i)
 		sr.stressLevels[key] = stressReport{
 			key:       key,

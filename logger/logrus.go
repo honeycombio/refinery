@@ -115,7 +115,7 @@ func (l *StdoutLogger) SetLevel(level string) error {
 	return nil
 }
 
-func (l *LogrusEntry) WithField(key string, value interface{}) Entry {
+func (l *LogrusEntry) WithField(key string, value any) Entry {
 	return &LogrusEntry{
 		entry:   l.entry.WithField(key, value),
 		level:   l.level,
@@ -131,7 +131,7 @@ func (l *LogrusEntry) WithString(key string, value string) Entry {
 	}
 }
 
-func (l *LogrusEntry) WithFields(fields map[string]interface{}) Entry {
+func (l *LogrusEntry) WithFields(fields map[string]any) Entry {
 	return &LogrusEntry{
 		entry:   l.entry.WithFields(fields),
 		level:   l.level,
@@ -139,7 +139,7 @@ func (l *LogrusEntry) WithFields(fields map[string]interface{}) Entry {
 	}
 }
 
-func (l *LogrusEntry) Logf(f string, args ...interface{}) {
+func (l *LogrusEntry) Logf(f string, args ...any) {
 	if l.sampler != nil {
 		// use the level and format string as the key to sample on
 		// this will give us a different sample rate for each level and format string

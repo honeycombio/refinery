@@ -14,7 +14,7 @@ func (n *NullLogger) SetLevel(string) error { return nil }
 
 type NullLoggerEntry struct{}
 
-func (n *NullLoggerEntry) WithField(key string, value interface{}) Entry  { return n }
-func (n *NullLoggerEntry) WithString(key string, value string) Entry      { return n }
-func (n *NullLoggerEntry) WithFields(fields map[string]interface{}) Entry { return n }
-func (n *NullLoggerEntry) Logf(string, ...interface{})                    {}
+func (n *NullLoggerEntry) WithField(key string, value any) Entry     { return n }
+func (n *NullLoggerEntry) WithString(key string, value string) Entry { return n }
+func (n *NullLoggerEntry) WithFields(fields map[string]any) Entry    { return n }
+func (n *NullLoggerEntry) Logf(string, ...any)                       {}

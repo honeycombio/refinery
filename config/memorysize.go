@@ -102,11 +102,11 @@ func (m MemorySize) MarshalText() ([]byte, error) {
 				if !ok {
 					break
 				}
-				return []byte(fmt.Sprintf("%.0f%v", result, unit)), nil
+				return fmt.Appendf(nil, "%.0f%v", result, unit), nil
 			}
 		}
 	}
-	return []byte(fmt.Sprintf("%v", m)), nil
+	return fmt.Appendf(nil, "%v", m), nil
 }
 
 // We accept floating point specifications but convert them ultimately to a uint64.

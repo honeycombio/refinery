@@ -27,7 +27,7 @@ func TestKeyGeneration(t *testing.T) {
 			useTraceLength: true,
 			spans: []testSpan{
 				{
-					data: map[string]interface{}{
+					data: map[string]any{
 						"http.status_code": 200,
 						"request.path":     "/{slug}/home",
 						"app.team.id":      float64(2),
@@ -43,10 +43,10 @@ func TestKeyGeneration(t *testing.T) {
 			fields:         []string{"http.status_code", "request.path", "app.team.id", "important_field"},
 			useTraceLength: true,
 			spans: []testSpan{
-				{data: map[string]interface{}{"http.status_code": 200}},
-				{data: map[string]interface{}{"request.path": "/{slug}/home"}},
-				{data: map[string]interface{}{"app.team.id": float64(2)}},
-				{data: map[string]interface{}{"important_field": true}},
+				{data: map[string]any{"http.status_code": 200}},
+				{data: map[string]any{"request.path": "/{slug}/home"}},
+				{data: map[string]any{"app.team.id": float64(2)}},
+				{data: map[string]any{"important_field": true}},
 			},
 			expectedKey:   "2•,200•,true•,/{slug}/home•,4",
 			expectedCount: 5,
@@ -56,10 +56,10 @@ func TestKeyGeneration(t *testing.T) {
 			fields:         []string{"http.status_code"},
 			useTraceLength: true,
 			spans: []testSpan{
-				{data: map[string]interface{}{"http.status_code": 200}},
-				{data: map[string]interface{}{"http.status_code": 200}},
-				{data: map[string]interface{}{"http.status_code": 404}},
-				{data: map[string]interface{}{"http.status_code": 404}},
+				{data: map[string]any{"http.status_code": 200}},
+				{data: map[string]any{"http.status_code": 200}},
+				{data: map[string]any{"http.status_code": 404}},
+				{data: map[string]any{"http.status_code": 404}},
 			},
 			expectedKey:   "200•404•,4",
 			expectedCount: 3,
@@ -69,13 +69,13 @@ func TestKeyGeneration(t *testing.T) {
 			fields:         []string{"http.status_code", "root.service_name", "root.another_field"},
 			useTraceLength: true,
 			spans: []testSpan{
-				{data: map[string]interface{}{"http.status_code": 404}},
-				{data: map[string]interface{}{
+				{data: map[string]any{"http.status_code": 404}},
+				{data: map[string]any{
 					"http.status_code": 200,
 					"service_name":     "another",
 				}},
 
-				{data: map[string]interface{}{
+				{data: map[string]any{
 					"service_name": "test",
 				}, isRoot: true},
 			},
@@ -86,8 +86,8 @@ func TestKeyGeneration(t *testing.T) {
 			name:   "no value for key fields found",
 			fields: []string{"http.status_code", "request.path"},
 			spans: []testSpan{
-				{data: map[string]interface{}{"app.team.id": 2}},
-				{data: map[string]interface{}{"important_field": true}, isRoot: true},
+				{data: map[string]any{"app.team.id": 2}},
+				{data: map[string]any{"important_field": true}, isRoot: true},
 			},
 			useTraceLength: true,
 			expectedKey:    "2",
@@ -120,10 +120,10 @@ func TestKeyLimits(t *testing.T) {
 	config := &config.MockConfig{}
 
 	// generate too many spans with different unique values
-	for i := 0; i < 160; i++ {
+	for i := range 160 {
 		trace.AddSpan(&types.Span{
 			Event: types.Event{
-				Data: types.NewPayload(config, map[string]interface{}{
+				Data: types.NewPayload(config, map[string]any{
 					"fieldA": fmt.Sprintf("value%d", i),
 					"fieldB": i,
 				}),
@@ -133,7 +133,7 @@ func TestKeyLimits(t *testing.T) {
 
 	trace.RootSpan = &types.Span{
 		Event: types.Event{
-			Data: types.NewPayload(config, map[string]interface{}{
+			Data: types.NewPayload(config, map[string]any{
 				"service_name": "test",
 			}),
 		},
@@ -219,8 +219,8 @@ func TestDistinctValue_AddAsString(t *testing.T) {
 		{
 			name: "nested_map",
 			valuesToAdd: [][]any{
-				{"field1", map[string]interface{}{"inner": "value"}},
-				{"field1", map[string]interface{}{"inner": "value"}},
+				{"field1", map[string]any{"inner": "value"}},
+				{"field1", map[string]any{"inner": "value"}},
 				{"field1", `{"inner":"value"}`}, // JSON string representation
 			},
 			expectedCounts: []int{2},
@@ -428,7 +428,7 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 			config := &config.MockConfig{}
 
 			for i := 0; i < scenario.spanCount; i++ {
-				spanData := make(map[string]interface{})
+				spanData := make(map[string]any)
 
 				for _, field := range scenario.fields {
 					if !strings.HasPrefix(field, "root.") {
@@ -491,7 +491,7 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 }
 
 type testSpan struct {
-	data   map[string]interface{}
+	data   map[string]any
 	isRoot bool
 }
 

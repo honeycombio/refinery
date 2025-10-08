@@ -447,7 +447,7 @@ func (s *StressRelief) Recalc() uint {
 		// If it's off, should we activate it?
 		if !s.stressed && s.overallStressLevel >= s.activateLevel {
 			s.stressed = true
-			s.Logger.Warn().WithFields(map[string]interface{}{
+			s.Logger.Warn().WithFields(map[string]any{
 				"individual_stress_level": localLevel,
 				"cluster_stress_level":    clusterStressLevel,
 				"stress_level":            s.overallStressLevel,
@@ -464,7 +464,7 @@ func (s *StressRelief) Recalc() uint {
 		// If it's on, should we deactivate it?
 		if s.stressed && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
 			s.stressed = false
-			s.Logger.Warn().WithFields(map[string]interface{}{
+			s.Logger.Warn().WithFields(map[string]any{
 				"individual_stress_level": localLevel,
 				"cluster_stress_level":    clusterStressLevel,
 				"stress_level":            s.overallStressLevel,

@@ -137,7 +137,7 @@ func setMap(m map[string]any, key string, value any) {
 	m[key] = value
 }
 
-func makeYAML(args ...interface{}) string {
+func makeYAML(args ...any) string {
 	m := make(map[string]any)
 	for i := 0; i < len(args); i += 2 {
 		setMap(m, args[i].(string), args[i+1])
@@ -304,7 +304,7 @@ func TestReload(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 
-	ch := make(chan interface{}, 1)
+	ch := make(chan any, 1)
 
 	c.RegisterReloadCallback(func(cfgHash, ruleHash string) {
 		close(ch)
@@ -1220,7 +1220,7 @@ func TestHealthCheckTimeout(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create config with specified values
-			configEntries := []interface{}{"General.ConfigurationVersion", 2}
+			configEntries := []any{"General.ConfigurationVersion", 2}
 
 			if tc.healthTimeout != "" {
 				configEntries = append(configEntries, "Collection.HealthCheckTimeout", tc.healthTimeout)
@@ -1388,13 +1388,13 @@ func BenchmarkIsLegacyAPIKey(b *testing.B) {
 
 	for _, tt := range tests {
 		b.Run(tt.name, func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = config.IsLegacyAPIKey(tt.key)
 			}
 		})
 
 		b.Run(tt.name+"/husky", func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = otlp.IsClassicApiKey(tt.key)
 			}
 		})

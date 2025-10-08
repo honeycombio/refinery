@@ -38,15 +38,15 @@ func AddException(span trace.Span, err error) {
 }
 
 // addSpanField adds a field to a span, using the appropriate method for the type of the value.
-func AddSpanField(span trace.Span, key string, value interface{}) {
+func AddSpanField(span trace.Span, key string, value any) {
 	if !span.IsRecording() {
 		return
 	}
-	span.SetAttributes(Attributes(map[string]interface{}{key: value})...)
+	span.SetAttributes(Attributes(map[string]any{key: value})...)
 }
 
 // AddSpanFields adds multiple fields to a span, using the appropriate method for the type of each value.
-func AddSpanFields(span trace.Span, fields map[string]interface{}) {
+func AddSpanFields(span trace.Span, fields map[string]any) {
 	if !span.IsRecording() {
 		return
 	}
@@ -56,7 +56,7 @@ func AddSpanFields(span trace.Span, fields map[string]interface{}) {
 }
 
 // Attributes converts a map of fields to a slice of attribute.KeyValue, setting types appropriately.
-func Attributes(fields map[string]interface{}) []attribute.KeyValue {
+func Attributes(fields map[string]any) []attribute.KeyValue {
 	attrs := make([]attribute.KeyValue, 0, len(fields))
 	for k, v := range fields {
 		kv := attribute.KeyValue{Key: attribute.Key(k)}
@@ -88,15 +88,15 @@ func StartSpan(ctx context.Context, tracer trace.Tracer, name string) (context.C
 }
 
 // Starts a span with a single field.
-func StartSpanWith(ctx context.Context, tracer trace.Tracer, name string, field string, value interface{}) (context.Context, trace.Span) {
+func StartSpanWith(ctx context.Context, tracer trace.Tracer, name string, field string, value any) (context.Context, trace.Span) {
 	if isNoopTracer(tracer) {
 		return ctx, noopSpan
 	}
-	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(map[string]interface{}{field: value})...))
+	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(map[string]any{field: value})...))
 }
 
 // Starts a span with multiple fields.
-func StartSpanMulti(ctx context.Context, tracer trace.Tracer, name string, fields map[string]interface{}) (context.Context, trace.Span) {
+func StartSpanMulti(ctx context.Context, tracer trace.Tracer, name string, fields map[string]any) (context.Context, trace.Span) {
 	if isNoopTracer(tracer) {
 		return ctx, noopSpan
 	}
@@ -115,10 +115,7 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 		log.Fatalf("failed to parse otel API host: %v", err)
 	}
 
-	sampleRate := cfg.SampleRate
-	if sampleRate < 1 {
-		sampleRate = 1
-	}
+	sampleRate := max(cfg.SampleRate, 1)
 
 	var sampleRatio float64 = 1.0 / float64(sampleRate)
 

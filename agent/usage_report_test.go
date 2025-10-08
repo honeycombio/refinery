@@ -132,37 +132,37 @@ func TestUsageTracker_NewReport(t *testing.T) {
 }
 
 func newOTLPResourceMetricsPayload(metrics map[usageSignal]float64, now time.Time) pmetric.Metrics {
-	var dataPoints []map[string]interface{}
+	var dataPoints []map[string]any
 	for signal, value := range metrics {
-		dataPoints = append(dataPoints, map[string]interface{}{
-			"attributes":   []map[string]interface{}{{"key": "signal", "value": map[string]string{"stringValue": string(signal)}}},
+		dataPoints = append(dataPoints, map[string]any{
+			"attributes":   []map[string]any{{"key": "signal", "value": map[string]string{"stringValue": string(signal)}}},
 			"timeUnixNano": fmt.Sprintf("%d", now.UnixNano()),
 			"asInt":        fmt.Sprintf("%d", int(value)),
 		})
 	}
 
-	payload := map[string]interface{}{
-		"resourceMetrics": []map[string]interface{}{
+	payload := map[string]any{
+		"resourceMetrics": []map[string]any{
 			{
-				"resource": map[string]interface{}{
-					"attributes": []map[string]interface{}{
+				"resource": map[string]any{
+					"attributes": []map[string]any{
 						{"key": "service.name", "value": map[string]string{"stringValue": "my-service"}},
 						{"key": "service.version", "value": map[string]string{"stringValue": "1.0.0"}},
 						{"key": "host.name", "value": map[string]string{"stringValue": "my-hostname"}},
 					},
 				},
-				"scopeMetrics": []map[string]interface{}{
+				"scopeMetrics": []map[string]any{
 					{
-						"metrics": []map[string]interface{}{
+						"metrics": []map[string]any{
 							{
 								"name": "bytes_received",
-								"sum": map[string]interface{}{
+								"sum": map[string]any{
 									"aggregationTemporality": 1,
 									"dataPoints":             dataPoints,
 								},
 							},
 						},
-						"scope": map[string]interface{}{},
+						"scope": map[string]any{},
 					},
 				},
 			},

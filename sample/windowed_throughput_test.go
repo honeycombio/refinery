@@ -27,10 +27,10 @@ func TestWindowedThroughputAddSampleRateKeyToTrace(t *testing.T) {
 
 	trace := &types.Trace{}
 	mockCfg := &config.MockConfig{}
-	for i := 0; i < spanCount; i++ {
+	for range spanCount {
 		trace.AddSpan(&types.Span{
 			Event: types.Event{
-				Data: types.NewPayload(mockCfg, map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]any{
 					"http.status_code": 200,
 					"app.team.id":      float64(4),
 					"important_field":  true,

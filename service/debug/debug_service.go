@@ -27,7 +27,7 @@ const addr = "localhost:6060"
 type DebugService struct {
 	mux     *http.ServeMux
 	urls    []string
-	expVars map[string]interface{}
+	expVars map[string]any
 	mutex   sync.RWMutex
 	Config  config.Config
 }
@@ -38,7 +38,7 @@ func (s *DebugService) Start() error {
 	runtime.SetBlockProfileRate(1000000)
 	runtime.SetMutexProfileFraction(100)
 
-	s.expVars = make(map[string]interface{})
+	s.expVars = make(map[string]any)
 
 	s.mux = http.NewServeMux()
 
@@ -72,7 +72,7 @@ func (s *DebugService) Start() error {
 		} else {
 			// Prefer to listen on addr, but will try to bind to the next 9 ports
 			// in case you have multiple services running on the same host.
-			for i := 0; i < 10; i++ {
+			for i := range 10 {
 				host, portStr, _ := net.SplitHostPort(addr)
 				port, _ := strconv.Atoi(portStr)
 				port += i
@@ -117,7 +117,7 @@ func (s *DebugService) HandleFunc(pattern string, handler func(http.ResponseWrit
 }
 
 // Publish an expvar at /debug/vars, possibly using Func
-func (s *DebugService) Publish(name string, v interface{}) {
+func (s *DebugService) Publish(name string, v any) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if _, existing := s.expVars[name]; existing {
@@ -156,7 +156,7 @@ func (s *DebugService) expvarHandler(w http.ResponseWriter, r *http.Request) {
 	defer s.mutex.RUnlock()
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	values := make(map[string]interface{}, len(s.expVars))
+	values := make(map[string]any, len(s.expVars))
 	for k, v := range s.expVars {
 		if f, ok := v.(Func); ok {
 			v = f()
@@ -170,10 +170,10 @@ func (s *DebugService) expvarHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func memstats() interface{} {
+func memstats() any {
 	stats := new(runtime.MemStats)
 	runtime.ReadMemStats(stats)
 	return *stats
 }
 
-type Func func() interface{}
+type Func func() any

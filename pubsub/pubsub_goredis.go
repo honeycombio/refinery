@@ -130,7 +130,7 @@ func (ps *GoRedisPubSub) Close() {
 }
 
 func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) error {
-	ctx, span := otelutil.StartSpanMulti(ctx, ps.Tracer, "GoRedisPubSub.Publish", map[string]interface{}{
+	ctx, span := otelutil.StartSpanMulti(ctx, ps.Tracer, "GoRedisPubSub.Publish", map[string]any{
 		"topic":   topic,
 		"message": message,
 	})
@@ -170,7 +170,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 				if msg == nil {
 					continue
 				}
-				receiveCtx, span := otelutil.StartSpanMulti(receiveRootCtx, ps.Tracer, "GoRedisPubSub.Receive", map[string]interface{}{
+				receiveCtx, span := otelutil.StartSpanMulti(receiveRootCtx, ps.Tracer, "GoRedisPubSub.Receive", map[string]any{
 					"topic":              topic,
 					"message_queue_size": len(redisch),
 					"message":            msg.Payload,

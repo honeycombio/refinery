@@ -27,10 +27,10 @@ func TestTotalThroughputAddSampleRateKeyToTrace(t *testing.T) {
 
 	config := &config.MockConfig{}
 	trace := &types.Trace{}
-	for i := 0; i < spanCount; i++ {
+	for range spanCount {
 		trace.AddSpan(&types.Span{
 			Event: types.Event{
-				Data: types.NewPayload(config, map[string]interface{}{
+				Data: types.NewPayload(config, map[string]any{
 					"http.status_code": "200",
 				}),
 			},

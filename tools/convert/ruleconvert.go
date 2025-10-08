@@ -192,7 +192,7 @@ func convertRulesToNewConfig(rules map[string]any) *config.V2SamplerConfig {
 
 func ConvertRules(rules map[string]any, w io.Writer) {
 	newConfig := convertRulesToNewConfig(rules)
-	w.Write([]byte(fmt.Sprintf("# Automatically generated on %s\n", time.Now().Format(time.RFC3339))))
+	w.Write(fmt.Appendf(nil, "# Automatically generated on %s\n", time.Now().Format(time.RFC3339)))
 	yaml.NewEncoder(w).Encode(newConfig)
 
 	warningText := `

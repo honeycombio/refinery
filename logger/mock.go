@@ -2,6 +2,7 @@ package logger
 
 import (
 	"fmt"
+	"maps"
 	"sync"
 
 	"github.com/honeycombio/refinery/config"
@@ -17,14 +18,14 @@ var _ = Logger((*MockLogger)(nil))
 type MockLoggerEvent struct {
 	l      *MockLogger
 	level  config.Level
-	Fields map[string]interface{}
+	Fields map[string]any
 }
 
 func (l *MockLogger) Debug() Entry {
 	return &MockLoggerEvent{
 		l:      l,
 		level:  config.DebugLevel,
-		Fields: make(map[string]interface{}),
+		Fields: make(map[string]any),
 	}
 }
 
@@ -32,7 +33,7 @@ func (l *MockLogger) Info() Entry {
 	return &MockLoggerEvent{
 		l:      l,
 		level:  config.InfoLevel,
-		Fields: make(map[string]interface{}),
+		Fields: make(map[string]any),
 	}
 }
 
@@ -40,7 +41,7 @@ func (l *MockLogger) Warn() Entry {
 	return &MockLoggerEvent{
 		l:      l,
 		level:  config.WarnLevel,
-		Fields: make(map[string]interface{}),
+		Fields: make(map[string]any),
 	}
 }
 
@@ -48,7 +49,7 @@ func (l *MockLogger) Error() Entry {
 	return &MockLoggerEvent{
 		l:      l,
 		level:  config.ErrorLevel,
-		Fields: make(map[string]interface{}),
+		Fields: make(map[string]any),
 	}
 }
 
@@ -56,7 +57,7 @@ func (l *MockLogger) SetLevel(level string) error {
 	return nil
 }
 
-func (e *MockLoggerEvent) WithField(key string, value interface{}) Entry {
+func (e *MockLoggerEvent) WithField(key string, value any) Entry {
 	e.Fields[key] = value
 
 	return e
@@ -66,15 +67,13 @@ func (e *MockLoggerEvent) WithString(key string, value string) Entry {
 	return e.WithField(key, value)
 }
 
-func (e *MockLoggerEvent) WithFields(fields map[string]interface{}) Entry {
-	for k, v := range fields {
-		e.Fields[k] = v
-	}
+func (e *MockLoggerEvent) WithFields(fields map[string]any) Entry {
+	maps.Copy(e.Fields, fields)
 
 	return e
 }
 
-func (e *MockLoggerEvent) Logf(f string, args ...interface{}) {
+func (e *MockLoggerEvent) Logf(f string, args ...any) {
 	msg := fmt.Sprintf(f, args...)
 	switch e.level {
 	case config.DebugLevel:

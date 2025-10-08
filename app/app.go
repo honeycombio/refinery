@@ -38,7 +38,7 @@ func (a *App) Start() error {
 	record_hashes := func(msg string) {
 		cfgHash, rulesHash := a.Config.GetHashes()
 		if a.Logger != nil {
-			a.Logger.Warn().WithFields(map[string]interface{}{
+			a.Logger.Warn().WithFields(map[string]any{
 				"configHash": cfgHash,
 				"rulesHash":  rulesHash,
 			}).Logf(msg)

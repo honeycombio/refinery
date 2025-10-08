@@ -6,6 +6,7 @@ package main
 import (
 	"context"
 	"math/rand"
+	"slices"
 	"sync"
 	"time"
 
@@ -47,7 +48,7 @@ func main() {
 	}
 
 	wg := sync.WaitGroup{}
-	for i := 0; i < 500; i++ {
+	for range 500 {
 		wg.Add(1)
 		go func() {
 			singleTestRandomLength(10, 5, rm)
@@ -124,12 +125,8 @@ func singleTestRandomLength(limit, registerDurLimitSec int, rm *redimem.RedisMem
 					"iteration":  i,
 				}).Warn("caught error from get members")
 			}
-			for _, entry := range list {
-				if entry == name {
-					found = true
-					// logrus.WithField("name", name).Info("shouldexist: found entry")
-					break
-				}
+			if slices.Contains(list, name) {
+				found = true
 			}
 			if !found {
 				logrus.WithFields(logrus.Fields{
@@ -166,12 +163,8 @@ func singleTestRandomLength(limit, registerDurLimitSec int, rm *redimem.RedisMem
 					"iteration":  i,
 				}).Warn("in lastiter caught error from get members")
 			}
-			for _, entry := range list {
-				if entry == name {
-					found = true
-					// logrus.WithField("name", name).Info("lastiter: found entry")
-					break
-				}
+			if slices.Contains(list, name) {
+				found = true
 			}
 			if !found {
 				dur := time.Since(startLastIter)
@@ -211,11 +204,8 @@ func singleTestRandomLength(limit, registerDurLimitSec int, rm *redimem.RedisMem
 					"iteration":  i,
 				}).Warn("in endgame caught error from get members")
 			}
-			for _, entry := range list {
-				if entry == name {
-					found = true
-					break
-				}
+			if slices.Contains(list, name) {
+				found = true
 			}
 			if !found {
 				// we're done, the register is gone
@@ -283,7 +273,7 @@ const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 // GenID returns a random string of length numChars
 func GenID(numChars int) string {
 	id := make([]byte, numChars)
-	for i := 0; i < numChars; i++ {
+	for i := range numChars {
 		id[i] = charset[rand.Intn(len(charset))]
 	}
 	return string(id)

@@ -37,7 +37,7 @@ func (s *RulesBasedSampler) Start() error {
 	for _, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {
 			if err := cond.Init(); err != nil {
-				s.Logger.Debug().WithFields(map[string]interface{}{
+				s.Logger.Debug().WithFields(map[string]any{
 					"rule_name": rule.Name,
 					"condition": cond.String(),
 				}).Logf("error creating rule evaluation function: %s", err)
@@ -60,7 +60,7 @@ func (s *RulesBasedSampler) Start() error {
 			} else if rule.Sampler.DeterministicSampler != nil {
 				sampler = &DeterministicSampler{Config: rule.Sampler.DeterministicSampler, Logger: s.Logger, Metrics: s.Metrics}
 			} else {
-				s.Logger.Debug().WithFields(map[string]interface{}{
+				s.Logger.Debug().WithFields(map[string]any{
 					"rule_name": rule.Name,
 				}).Logf("invalid or missing downstream sampler")
 				continue
@@ -68,7 +68,7 @@ func (s *RulesBasedSampler) Start() error {
 
 			err := sampler.Start()
 			if err != nil {
-				s.Logger.Debug().WithFields(map[string]interface{}{
+				s.Logger.Debug().WithFields(map[string]any{
 					"rule_name": rule.Name,
 				}).Logf("error creating downstream sampler: %s", err)
 				continue
@@ -96,7 +96,7 @@ func (s *RulesBasedSampler) SetClusterSize(size int) {
 }
 
 func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
-	logger := s.Logger.Debug().WithFields(map[string]interface{}{
+	logger := s.Logger.Debug().WithFields(map[string]any{
 		"trace_id": trace.TraceID,
 	})
 
@@ -112,7 +112,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 			matched = ruleMatchesTrace(trace, rule, s.Config.CheckNestedFields)
 			reason = "rules/trace/"
 		default:
-			logger.WithFields(map[string]interface{}{
+			logger.WithFields(map[string]any{
 				"rule_name": rule.Name,
 				"scope":     rule.Scope,
 			}).Logf("invalid scope %s given for rule: %s", rule.Scope, rule.Name)
@@ -130,7 +130,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 				var sampler Sampler
 				var found bool
 				if sampler, found = s.samplers[rule.String()]; !found {
-					logger.WithFields(map[string]interface{}{
+					logger.WithFields(map[string]any{
 						"rule_name": rule.Name,
 					}).Logf("could not find downstream sampler for rule: %s", rule.Name)
 					return 1, true, reason + "bad_rule:" + rule.Name, ""
@@ -153,7 +153,7 @@ func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep b
 					s.Metrics.Increment(s.metricNames.numDroppedByDropRule)
 				}
 			}
-			logger.WithFields(map[string]interface{}{
+			logger.WithFields(map[string]any{
 				"rate":      rate,
 				"keep":      keep,
 				"drop_rule": rule.Drop,
@@ -281,7 +281,7 @@ func extractValueFromSpan(
 	span *types.Span,
 	condition *config.RulesBasedSamplerCondition,
 	checkNestedFields bool,
-) (value interface{}, exists bool, checkedOnlyRoot bool) {
+) (value any, exists bool, checkedOnlyRoot bool) {
 	// start with the assumption that we only checked the root span
 	checkedOnlyRoot = true
 
@@ -339,7 +339,7 @@ func extractValueFromSpan(
 // there is no datatype specified (meaning that the Matches function has not
 // been set). In this case, we need to do some type conversion and comparison
 // to determine whether the condition matches the value.
-func conditionMatchesValue(condition *config.RulesBasedSamplerCondition, value interface{}, exists bool) bool {
+func conditionMatchesValue(condition *config.RulesBasedSamplerCondition, value any, exists bool) bool {
 	var match bool
 	switch exists {
 	case true:
@@ -386,7 +386,7 @@ const (
 	more  = 1
 )
 
-func compare(a, b interface{}) (int, bool) {
+func compare(a, b any) (int, bool) {
 	// a is the tracing data field value. This can be: float64, int64, bool, or string
 	// b is the Rule condition value. This can be: float64, int64, int, bool, or string
 	// Note: in YAML config parsing, the Value may be returned as int

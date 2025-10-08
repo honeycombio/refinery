@@ -96,7 +96,6 @@ func TestAgentOnMessage_RemoteConfig(t *testing.T) {
 	}
 
 	for _, tc := range testcases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			agent.onMessage(context.Background(), &types.MessageData{
 				RemoteConfig: &protobufs.AgentRemoteConfig{

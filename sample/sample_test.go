@@ -61,7 +61,7 @@ func setMap(m map[string]any, key string, value any) {
 	m[key] = value
 }
 
-func makeYAML(args ...interface{}) string {
+func makeYAML(args ...any) string {
 	m := make(map[string]any)
 	for i := 0; i < len(args); i += 2 {
 		setMap(m, args[i].(string), args[i+1])

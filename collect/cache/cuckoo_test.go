@@ -18,7 +18,7 @@ const charset = "abcdef0123456789"
 
 func genID(numChars int) string {
 	id := make([]byte, numChars)
-	for i := 0; i < numChars; i++ {
+	for i := range numChars {
 		id[i] = charset[int(rng.Next()%uint64(len(charset)))]
 	}
 	return string(id)
@@ -27,13 +27,13 @@ func genID(numChars int) string {
 // Benchmark the Add function
 func BenchmarkCuckooTraceChecker_Add(b *testing.B) {
 	traceIDs := make([]string, b.N)
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		traceIDs[i] = genID(32)
 	}
 
 	c := NewCuckooTraceChecker(1000000, &metrics.NullMetrics{})
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; b.Loop(); i++ {
 		c.Add(traceIDs[i])
 	}
 	c.drain()
@@ -41,7 +41,7 @@ func BenchmarkCuckooTraceChecker_Add(b *testing.B) {
 
 func BenchmarkCuckooTraceChecker_AddParallel(b *testing.B) {
 	traceIDs := make([]string, b.N)
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		traceIDs[i] = genID(32)
 	}
 	const numGoroutines = 70
@@ -59,7 +59,7 @@ func BenchmarkCuckooTraceChecker_AddParallel(b *testing.B) {
 
 	c := NewCuckooTraceChecker(1000000, &metrics.NullMetrics{})
 	ch := make(chan int, numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for i := range numGoroutines {
 		p.Go(func() {
 			for n := range ch {
 				if i%10000 == 0 {
@@ -69,8 +69,8 @@ func BenchmarkCuckooTraceChecker_AddParallel(b *testing.B) {
 			}
 		})
 	}
-	b.ResetTimer()
-	for j := 0; j < b.N; j++ {
+
+	for j := 0; b.Loop(); j++ {
 		ch <- j
 		if j%1000 == 0 {
 			// just give things a moment to run
@@ -85,21 +85,20 @@ func BenchmarkCuckooTraceChecker_AddParallel(b *testing.B) {
 
 func BenchmarkCuckooTraceChecker_Check(b *testing.B) {
 	traceIDs := make([]string, b.N)
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		traceIDs[i] = genID(32)
 	}
 
 	c := NewCuckooTraceChecker(1000000, &metrics.NullMetrics{})
 	// add every other one to the filter
-	for i := 0; i < b.N; i += 2 {
+	for i := 0; b.Loop(); i += 2 {
 		if i%10000 == 0 {
 			c.Maintain()
 		}
 		c.Add(traceIDs[i])
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		c.Check(traceIDs[i])
 	}
 	c.drain()
@@ -107,12 +106,12 @@ func BenchmarkCuckooTraceChecker_Check(b *testing.B) {
 
 func BenchmarkCuckooTraceChecker_CheckParallel(b *testing.B) {
 	traceIDs := make([]string, b.N)
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		traceIDs[i] = genID(32)
 	}
 
 	c := NewCuckooTraceChecker(1000000, &metrics.NullMetrics{})
-	for i := 0; i < b.N; i += 2 {
+	for i := 0; b.Loop(); i += 2 {
 		if i%10000 == 0 {
 			c.Maintain()
 		}
@@ -140,15 +139,15 @@ func BenchmarkCuckooTraceChecker_CheckParallel(b *testing.B) {
 	})
 
 	ch := make(chan int, numGoroutines)
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		p.Go(func() {
 			for n := range ch {
 				c.Check(traceIDs[n])
 			}
 		})
 	}
-	b.ResetTimer()
-	for j := 0; j < b.N; j++ {
+
+	for j := 0; b.Loop(); j++ {
 		ch <- j
 	}
 	close(ch)
@@ -159,7 +158,7 @@ func BenchmarkCuckooTraceChecker_CheckParallel(b *testing.B) {
 
 func BenchmarkCuckooTraceChecker_CheckAddParallel(b *testing.B) {
 	traceIDs := make([]string, b.N)
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		traceIDs[i] = genID(32)
 	}
 
@@ -173,7 +172,7 @@ func BenchmarkCuckooTraceChecker_CheckAddParallel(b *testing.B) {
 	stop := make(chan struct{})
 	addch := make(chan int, numCheckers)
 	checkch := make(chan int, numCheckers)
-	for i := 0; i < numAdders; i++ {
+	for range numAdders {
 		p.Go(func() {
 			for n := range addch {
 				if n%10000 == 0 {
@@ -183,15 +182,15 @@ func BenchmarkCuckooTraceChecker_CheckAddParallel(b *testing.B) {
 			}
 		})
 	}
-	for i := 0; i < numCheckers; i++ {
+	for range numCheckers {
 		p.Go(func() {
 			for n := range checkch {
 				c.Check(traceIDs[n])
 			}
 		})
 	}
-	b.ResetTimer()
-	for j := 0; j < b.N; j++ {
+
+	for j := 0; b.Loop(); j++ {
 		addch <- j
 		checkch <- j
 	}

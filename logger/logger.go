@@ -17,14 +17,14 @@ type Logger interface {
 }
 
 type Entry interface {
-	WithField(key string, value interface{}) Entry
+	WithField(key string, value any) Entry
 
 	// WithString does the same thing as WithField, but is more efficient for
 	// disabled log levels. (Because the value parameter doesn't escape.)
 	WithString(key string, value string) Entry
 
-	WithFields(fields map[string]interface{}) Entry
-	Logf(f string, args ...interface{})
+	WithFields(fields map[string]any) Entry
+	Logf(f string, args ...any)
 }
 
 func GetLoggerImplementation(c config.Config) Logger {

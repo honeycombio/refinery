@@ -118,7 +118,7 @@ func applyCmdEnvTags(s reflect.Value, fielder getFielder) error {
 
 			if tags := fieldType.Tag.Get("cmdenv"); tags != "" {
 				// this field has a cmdenv tag, so try all its values
-				for _, tag := range strings.Split(tags, ",") {
+				for tag := range strings.SplitSeq(tags, ",") {
 					value := fielder.GetField(tag)
 					if !value.IsValid() {
 						// if you get this error, you didn't specify cmdenv tags

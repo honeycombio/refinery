@@ -50,7 +50,7 @@ type graphLogger struct {
 }
 
 // TODO: make this log properly
-func (g graphLogger) Debugf(format string, v ...interface{}) {
+func (g graphLogger) Debugf(format string, v ...any) {
 	fmt.Printf(format, v...)
 	fmt.Println()
 }

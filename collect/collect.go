@@ -324,7 +324,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	for _, trace := range allTraces {
 		// only eject traces that belong to this peer or the trace is an orphan
 		if _, ok := i.IsMyTrace(trace.ID()); !ok && !trace.IsOrphan(traceTimeout, i.Clock.Now()) {
-			i.Logger.Debug().WithFields(map[string]interface{}{
+			i.Logger.Debug().WithFields(map[string]any{
 				"trace_id": trace.ID(),
 			}).Logf("cannot eject trace that does not belong to this peer")
 
@@ -573,7 +573,7 @@ func (i *InMemCollector) redistributeTraces(ctx context.Context) {
 		redistributeTraceSpan.End()
 	}
 
-	otelutil.AddSpanFields(span, map[string]interface{}{
+	otelutil.AddSpanFields(span, map[string]any{
 		"forwarded_trace_count": len(forwardedTraces.Members()),
 		"total_trace_count":     len(traces),
 		"hostname":              i.hostname,
@@ -916,7 +916,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
 func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSentRecord, keptReason string, sp *types.Span) {
-	_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]interface{}{
+	_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]any{
 		"trace_id":    sp.TraceID,
 		"kept_reason": keptReason,
 		"hostname":    i.hostname,
@@ -957,7 +957,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 	}
 	isDryRun := i.Config.GetIsDryRun()
 	keep := tr.Kept()
-	otelutil.AddSpanFields(span, map[string]interface{}{
+	otelutil.AddSpanFields(span, map[string]any{
 		"keep":      keep,
 		"is_dryrun": isDryRun,
 	})
@@ -1255,7 +1255,7 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 				return
 			}
 
-			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_span", map[string]interface{}{"trace_id": r.span.TraceID, "hostname": i.hostname})
+			ctx, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_sent_span", map[string]any{"trace_id": r.span.TraceID, "hostname": i.hostname})
 			r.span.Data.Set(types.MetaRefineryShutdownSend, true)
 
 			i.dealWithSentTrace(ctx, r.record, r.reason, r.span)
@@ -1273,7 +1273,7 @@ func (i *InMemCollector) sendSpansOnShutdown(ctx context.Context, sentSpanChan <
 				return
 			}
 
-			_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_span", map[string]interface{}{"trace_id": sp.TraceID, "hostname": i.hostname})
+			_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "shutdown_forwarded_span", map[string]any{"trace_id": sp.TraceID, "hostname": i.hostname})
 
 			targetShard := i.Sharder.WhichShard(sp.TraceID)
 			url := targetShard.GetAddress()
@@ -1349,7 +1349,7 @@ func (i *InMemCollector) sendTraces() {
 
 	for t := range i.outgoingTraces {
 		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
-		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
+		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]any{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
 
 		// if we have a key replacement rule, we should
 		// replace the key with the new key
@@ -1525,7 +1525,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 	defer span.End()
 	i.Metrics.Histogram("trace_span_count", float64(trace.DescendantCount()))
 
-	otelutil.AddSpanFields(span, map[string]interface{}{
+	otelutil.AddSpanFields(span, map[string]any{
 		"trace_id": trace.ID(),
 		"root":     trace.RootSpan,
 		"send_by":  trace.SendBy,
@@ -1573,7 +1573,7 @@ func (i *InMemCollector) makeDecision(ctx context.Context, trace *types.Trace, s
 		i.Metrics.Increment("trace_send_no_root")
 	}
 
-	otelutil.AddSpanFields(span, map[string]interface{}{
+	otelutil.AddSpanFields(span, map[string]any{
 		"kept":        shouldSend,
 		"reason":      reason,
 		"sampler":     key,
@@ -1737,14 +1737,14 @@ func (i *InMemCollector) sendDecisions(decisionChan <-chan TraceDecision, interv
 				default:
 					msg, err := createDecisionMessage(decisionsToProcess, peerID)
 					if err != nil {
-						i.Logger.Error().WithFields(map[string]interface{}{
+						i.Logger.Error().WithFields(map[string]any{
 							"error": err.Error(),
 						}).Logf("Failed to create trace decision message")
 						return nil
 					}
 					err = i.PubSub.Publish(ctx, topic, msg)
 					if err != nil {
-						i.Logger.Error().WithFields(map[string]interface{}{
+						i.Logger.Error().WithFields(map[string]any{
 							"error": err.Error(),
 						}).Logf("Failed to publish trace decision")
 					}

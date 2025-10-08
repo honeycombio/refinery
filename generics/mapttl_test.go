@@ -36,15 +36,15 @@ func BenchmarkMapWithTTLContains(b *testing.B) {
 
 	n := 10000
 	traceIDs := make([]string, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		traceIDs[i] = genID(32)
 		if i%2 == 0 {
 			m.Set(traceIDs[i], struct{}{})
 		}
 		fc.Advance(1 * time.Microsecond)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for i := 0; b.Loop(); i++ {
 		m.Get(traceIDs[i%n])
 	}
 }
@@ -58,16 +58,16 @@ func BenchmarkMapWithTTLExpire(b *testing.B) {
 	// we'll check them over the course of 1 second as well, so they should all expire by the end
 	n := 1000
 	traceIDs := make([]string, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		traceIDs[i] = genID(32)
 		m.Set(traceIDs[i], struct{}{})
 		fc.Advance(1 * time.Millisecond)
 	}
 	// make sure we have 1000 ids now
 	assert.Equal(b, n, m.Length())
-	b.ResetTimer()
+
 	advanceTime := 100 * time.Second / time.Duration(b.N)
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		m.Get(traceIDs[i%n])
 		if i%100 == 0 {
 			fc.Advance(advanceTime)

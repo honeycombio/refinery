@@ -86,7 +86,7 @@ func (h *HoneycombLogger) Start() error {
 		h.libhClient.AddField("hostname", hostname)
 	}
 	startTime := time.Now()
-	h.libhClient.AddDynamicField("process_uptime_seconds", func() interface{} {
+	h.libhClient.AddDynamicField("process_uptime_seconds", func() any {
 		return time.Since(startTime) / time.Second
 	})
 
@@ -213,7 +213,7 @@ func (h *HoneycombLogger) SetLevel(lvl string) error {
 	return nil
 }
 
-func (h *HoneycombEntry) WithField(key string, value interface{}) Entry {
+func (h *HoneycombEntry) WithField(key string, value any) Entry {
 	h.builder.AddField(key, value)
 	return h
 }
@@ -222,12 +222,12 @@ func (h *HoneycombEntry) WithString(key string, value string) Entry {
 	return h.WithField(key, value)
 }
 
-func (h *HoneycombEntry) WithFields(fields map[string]interface{}) Entry {
+func (h *HoneycombEntry) WithFields(fields map[string]any) Entry {
 	h.builder.Add(fields)
 	return h
 }
 
-func (h *HoneycombEntry) Logf(f string, args ...interface{}) {
+func (h *HoneycombEntry) Logf(f string, args ...any) {
 	ev := h.builder.NewEvent()
 	msg := fmt.Sprintf(f, args...)
 	ev.AddField("msg", msg)

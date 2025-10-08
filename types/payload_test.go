@@ -627,7 +627,7 @@ func BenchmarkPayload(b *testing.B) {
 	var keys []string
 
 	data := make(map[string]any)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		keys = append(keys, fmt.Sprintf("key%d", i))
 		data[fmt.Sprintf("key%d", i)] = fmt.Sprintf("value%d", i)
 		data[fmt.Sprintf("num%d", i)] = int64(i)
@@ -746,7 +746,7 @@ func BenchmarkPayload(b *testing.B) {
 
 func BenchmarkUnmarshalPayload(b *testing.B) {
 	data := make(map[string]any)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		data[fmt.Sprintf("key%d", i)] = fmt.Sprintf("value%d", i)
 		data[fmt.Sprintf("num%d", i)] = int64(i)
 		data[fmt.Sprintf("float%d", i)] = float64(i) * 1.5

@@ -198,7 +198,7 @@ func (p *RedisPubsubPeers) Ready() error {
 				ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
 				err := p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr, p.InstanceID).marshal())
 				if err != nil {
-					p.Logger.Error().WithFields(map[string]interface{}{
+					p.Logger.Error().WithFields(map[string]any{
 						"error":       err,
 						"hostaddress": myaddr,
 					}).Logf("failed to publish peer address")
@@ -231,7 +231,7 @@ func (p *RedisPubsubPeers) stop() {
 
 	err = p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr, p.InstanceID).marshal())
 	if err != nil {
-		p.Logger.Error().WithFields(map[string]interface{}{
+		p.Logger.Error().WithFields(map[string]any{
 			"error":       err,
 			"hostaddress": myaddr,
 		}).Logf("failed to publish peer address")

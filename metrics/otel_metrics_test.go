@@ -64,7 +64,7 @@ func Test_OTelMetrics_Raciness(t *testing.T) {
 
 	// this loop modifying the metric registry and reading it to increment
 	// a counter should not trigger a race condition
-	for i := 0; i < loopLength; i++ {
+	for i := range loopLength {
 		wg.Add(1)
 		go func(j int) {
 			defer wg.Done()

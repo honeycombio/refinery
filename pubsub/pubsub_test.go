@@ -74,7 +74,7 @@ func TestPubSubBasics(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				time.Sleep(100 * time.Millisecond)
-				for i := 0; i < 10; i++ {
+				for i := range 10 {
 					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
 					assert.NoError(t, err)
 				}
@@ -103,7 +103,7 @@ func TestPubSubMultiSubscriber(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				time.Sleep(100 * time.Millisecond)
-				for i := 0; i < messageCount; i++ {
+				for i := range messageCount {
 					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
 					require.NoError(t, err)
 				}
@@ -129,13 +129,13 @@ func TestPubSubMultiTopic(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 			topics := make([]string, topicCount)
 			listeners := make([]*pubsubListener, topicCount)
-			for i := 0; i < topicCount; i++ {
+			for i := range topicCount {
 				topics[i] = fmt.Sprintf("topic%d", i)
 				listeners[i] = &pubsubListener{}
 			}
 			totals := make([]int, topicCount)
 			subs := make([]pubsub.Subscription, topicCount)
-			for ix := 0; ix < topicCount; ix++ {
+			for ix := range topicCount {
 				subs[ix] = ps.Subscribe(ctx, topics[ix], listeners[ix].Listen)
 			}
 
@@ -143,8 +143,8 @@ func TestPubSubMultiTopic(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				time.Sleep(100 * time.Millisecond)
-				for j := 0; j < topicCount; j++ {
-					for i := 0; i < messageCount; i++ {
+				for j := range topicCount {
+					for i := range messageCount {
 						// we want a different sum for each topic
 						err := ps.Publish(ctx, topics[j], fmt.Sprintf("%d", (i+1)*(j+1)))
 						require.NoError(t, err)
@@ -155,7 +155,7 @@ func TestPubSubMultiTopic(t *testing.T) {
 				wg.Done()
 			}()
 			wg.Wait()
-			for ix := 0; ix < topicCount; ix++ {
+			for ix := range topicCount {
 				assert.Len(t, listeners[ix].Messages(), messageCount, "topic %d", ix)
 				for _, msg := range listeners[ix].Messages() {
 					n, _ := strconv.Atoi(msg)
@@ -164,7 +164,7 @@ func TestPubSubMultiTopic(t *testing.T) {
 			}
 
 			// validate that all the topics each add up to the desired total
-			for i := 0; i < topicCount; i++ {
+			for i := range topicCount {
 				require.Equal(t, expectedTotal*(i+1), totals[i])
 			}
 		})
@@ -184,7 +184,7 @@ func TestPubSubLatency(t *testing.T) {
 			wg.Add(2)
 			go func() {
 				time.Sleep(300 * time.Millisecond)
-				for i := 0; i < messageCount; i++ {
+				for range messageCount {
 					err := ps.Publish(ctx, "topic", fmt.Sprintf("%d", time.Now().UnixNano()))
 					require.NoError(t, err)
 				}
@@ -248,7 +248,7 @@ func BenchmarkPubSub(b *testing.B) {
 			b.ResetTimer()
 			go func() {
 				time.Sleep(100 * time.Millisecond)
-				for i := 0; i < b.N; i++ {
+				for i := 0; b.Loop(); i++ {
 					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
 					require.NoError(b, err)
 				}

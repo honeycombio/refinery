@@ -56,13 +56,12 @@ var res Set[int]
 func BenchmarkUnion(b *testing.B) {
 	x := NewSet(0, 1, 2, 3, 4, 5)
 	y := NewSet(1, 3, 5, 7, 9)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		x.Add(i)
 		y.Add(i)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		res = x.Union(y)
 	}
 }

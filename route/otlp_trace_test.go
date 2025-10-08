@@ -745,7 +745,7 @@ func TestOTLPHandler(t *testing.T) {
 			// Create a very large request that exceeds defaultMaxRequestBodySize (20MB)
 			largeSpans := make([]*trace.Span, 0)
 			// Create many spans with large attribute values to exceed the limit
-			for i := 0; i < 1000; i++ {
+			for range 1000 {
 				largeValue := strings.Repeat("x", 50000) // 50KB per span
 				span := &trace.Span{
 					Name: "large-span",

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"maps"
 	"regexp"
 	"strconv"
 	"strings"
@@ -287,7 +288,7 @@ func renderStringarray(data map[string]any, key, oldkey string, example string) 
 	comment := ""
 	if v, ok := _fetch(data, oldkey); ok {
 		switch value := v.(type) {
-		case []interface{}:
+		case []any:
 			for _, s := range value {
 				sa = append(sa, s.(string))
 			}
@@ -495,8 +496,8 @@ func _fetch(data map[string]any, key string) (any, bool) {
 	}
 	if strings.Contains(key, ".") {
 		parts := strings.SplitN(key, ".", 2)
-		groups := strings.Split(parts[0], "/")
-		for _, g := range groups {
+		groups := strings.SplitSeq(parts[0], "/")
+		for g := range groups {
 			if value, ok := data[g]; ok {
 				if submap, ok := value.(map[string]any); ok {
 					return _fetch(submap, parts[1])
@@ -605,9 +606,9 @@ func removeField(data map[string]any, key string) {
 	}
 
 	parts := strings.SplitN(key, ".", 2)
-	groups := strings.Split(parts[0], "/")
+	groups := strings.SplitSeq(parts[0], "/")
 
-	for _, g := range groups {
+	for g := range groups {
 		if value, ok := data[g]; ok {
 			if submap, ok := value.(map[string]any); ok {
 				if strings.Contains(parts[1], ".") {
@@ -687,9 +688,7 @@ func applyGroupReplacements(replacements []config.Replacement, groupMetadata con
 		data[targetGroupName] = make(map[string]any)
 		if targetGroupMap, ok := data[targetGroupName].(map[string]any); ok {
 			// Copy all remaining fields (deprecated fields with replacements have already been processed)
-			for fieldName, fieldValue := range deprecatedGroupData {
-				targetGroupMap[fieldName] = fieldValue
-			}
+			maps.Copy(targetGroupMap, deprecatedGroupData)
 		}
 
 		conversions = append(conversions, fmt.Sprintf("copied %s group content to %s", groupMetadata.Name, targetGroupName))

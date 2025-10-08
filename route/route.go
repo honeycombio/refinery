@@ -360,10 +360,10 @@ func (r *Router) alive(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Gauge("is_alive", metrics.ConvertBoolToFloat(alive))
 	if !alive {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "alive": "no"}, "json")
+		r.marshalToFormat(w, map[string]any{"source": "refinery", "alive": "no"}, "json")
 		return
 	}
-	r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "alive": "yes"}, "json")
+	r.marshalToFormat(w, map[string]any{"source": "refinery", "alive": "yes"}, "json")
 }
 
 func (r *Router) ready(w http.ResponseWriter, req *http.Request) {
@@ -373,10 +373,10 @@ func (r *Router) ready(w http.ResponseWriter, req *http.Request) {
 	r.Metrics.Gauge("is_ready", metrics.ConvertBoolToFloat(ready))
 	if !ready {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "ready": "no"}, "json")
+		r.marshalToFormat(w, map[string]any{"source": "refinery", "ready": "no"}, "json")
 		return
 	}
-	r.marshalToFormat(w, map[string]interface{}{"source": "refinery", "ready": "yes"}, "json")
+	r.marshalToFormat(w, map[string]any{"source": "refinery", "ready": "yes"}, "json")
 }
 
 func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
@@ -384,20 +384,20 @@ func (r *Router) panic(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) version(w http.ResponseWriter, req *http.Request) {
-	w.Write([]byte(fmt.Sprintf(`{"source":"refinery","version":"%s"}`, r.versionStr)))
+	w.Write(fmt.Appendf(nil, `{"source":"refinery","version":"%s"}`, r.versionStr))
 }
 
 func (r *Router) debugTrace(w http.ResponseWriter, req *http.Request) {
 	traceID := mux.Vars(req)["traceID"]
 	shard := r.Sharder.WhichShard(traceID)
-	w.Write([]byte(fmt.Sprintf(`{"traceID":"%s","node":"%s"}`, html.EscapeString(traceID), shard.GetAddress())))
+	w.Write(fmt.Appendf(nil, `{"traceID":"%s","node":"%s"}`, html.EscapeString(traceID), shard.GetAddress()))
 }
 
 func (r *Router) getSamplerRules(w http.ResponseWriter, req *http.Request) {
 	format := strings.ToLower(mux.Vars(req)["format"])
 	dataset := mux.Vars(req)["dataset"]
 	cfg, name := r.Config.GetSamplerConfigForDestName(dataset)
-	r.marshalToFormat(w, map[string]interface{}{name: cfg}, format)
+	r.marshalToFormat(w, map[string]any{name: cfg}, format)
 }
 
 func (r *Router) getAllSamplerRules(w http.ResponseWriter, req *http.Request) {
@@ -411,33 +411,33 @@ func (r *Router) getConfigMetadata(w http.ResponseWriter, req *http.Request) {
 	r.marshalToFormat(w, cm, "json")
 }
 
-func (r *Router) marshalToFormat(w http.ResponseWriter, obj interface{}, format string) {
+func (r *Router) marshalToFormat(w http.ResponseWriter, obj any, format string) {
 	var body []byte
 	var err error
 	switch format {
 	case "json":
 		body, err = json.Marshal(obj)
 		if err != nil {
-			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal to json\n", err)))
+			w.Write(fmt.Appendf(nil, "got error %v trying to marshal to json\n", err))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	case "toml":
 		body, err = toml.Marshal(obj)
 		if err != nil {
-			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal to toml\n", err)))
+			w.Write(fmt.Appendf(nil, "got error %v trying to marshal to toml\n", err))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	case "yaml":
 		body, err = yaml.Marshal(obj)
 		if err != nil {
-			w.Write([]byte(fmt.Sprintf("got error %v trying to marshal to toml\n", err)))
+			w.Write(fmt.Appendf(nil, "got error %v trying to marshal to toml\n", err))
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 	default:
-		w.Write([]byte(fmt.Sprintf("invalid format '%s' when marshaling\n", format)))
+		w.Write(fmt.Appendf(nil, "invalid format '%s' when marshaling\n", format))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -496,7 +496,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 		return nil, err
 	}
 
-	data := map[string]interface{}{}
+	data := map[string]any{}
 	err = unmarshal(req, reqBod, &data)
 	if err != nil {
 		return nil, err
@@ -687,7 +687,7 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	return nil
 }
 
-func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
+func (r *Router) processEvent(ev *types.Event, reqID any) error {
 	debugLog := r.iopLogger.Debug().
 		WithField("request_id", reqID).
 		WithString("api_host", ev.APIHost).
@@ -940,7 +940,7 @@ func makeDecoders(concurrency int) (*zstd.Decoder, error) {
 	return d, nil
 }
 
-func unmarshal(r *http.Request, data []byte, v interface{}) error {
+func unmarshal(r *http.Request, data []byte, v any) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
 		if unmarshaler, ok := v.(msgp.Unmarshaler); ok {

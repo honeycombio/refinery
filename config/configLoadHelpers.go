@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -375,9 +376,7 @@ func loadConfigsIntoMap(dest map[string]any, configs []configData) error {
 				} else {
 					// this works without needing recursion because we know that
 					// configurations can never be more than two levels deep.
-					for kk, vv := range vm {
-						dest[k].(map[string]any)[kk] = vv
-					}
+					maps.Copy(dest[k].(map[string]any), vm)
 				}
 			default:
 				// everything else just gets copied over, including slices

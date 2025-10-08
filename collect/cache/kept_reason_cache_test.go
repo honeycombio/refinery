@@ -34,12 +34,12 @@ func BenchmarkKeptReasonCache_Set(b *testing.B) {
 	s.Start()
 	for _, numItems := range []int{10, 100, 1000, 10000, 100000} {
 		entries := make([]string, numItems)
-		for i := 0; i < numItems; i++ {
+		for i := range numItems {
 			entries[i] = randomString(50)
 		}
 		b.Run(strconv.Itoa(numItems), func(b *testing.B) {
 			cache := cache.NewKeptReasonsCache(s)
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				cache.Set(entries[seededRand.Intn(numItems)])
 			}
 		})
@@ -50,11 +50,11 @@ func BenchmarkKeptReasonCache_Get(b *testing.B) {
 	s.Start()
 	for _, numItems := range []int{10, 100, 1000, 10000, 100000} {
 		cache := cache.NewKeptReasonsCache(s)
-		for i := 0; i < numItems; i++ {
+		for range numItems {
 			cache.Set(randomString(50))
 		}
 		b.Run(strconv.Itoa(numItems), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, _ = cache.Get(uint(seededRand.Intn(numItems)))
 			}
 		})
@@ -70,7 +70,7 @@ func BenchmarkKeptReasonsCache_Get_Parallel(b *testing.B) {
 				cache := cache.NewKeptReasonsCache(s)
 
 				entries := make([]string, numUniqueEntries)
-				for i := 0; i < numUniqueEntries; i++ {
+				for i := range numUniqueEntries {
 					entries[i] = randomString(50)
 					cache.Set(entries[i])
 				}
@@ -81,7 +81,7 @@ func BenchmarkKeptReasonsCache_Get_Parallel(b *testing.B) {
 					count = 1
 				}
 				b.ResetTimer()
-				for g := 0; g < numGoroutines; g++ {
+				for range numGoroutines {
 					wg.Add(1)
 					go func() {
 						for n := 0; n < count; n++ {
@@ -103,7 +103,7 @@ func BenchmarkKeptReasonsCache_Set_Parallel(b *testing.B) {
 				s := &metrics.MockMetrics{}
 				s.Start()
 				entries := make([]string, numUniqueEntries)
-				for i := 0; i < numUniqueEntries; i++ {
+				for i := range numUniqueEntries {
 					entries[i] = randomString(50)
 				}
 				cache := cache.NewKeptReasonsCache(s)
@@ -113,7 +113,7 @@ func BenchmarkKeptReasonsCache_Set_Parallel(b *testing.B) {
 					count = 1
 				}
 				b.ResetTimer()
-				for g := 0; g < numGoroutines; g++ {
+				for range numGoroutines {
 					wg.Add(1)
 					go func() {
 						for n := 0; n < count; n++ {

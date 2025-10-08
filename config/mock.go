@@ -29,7 +29,7 @@ type MockConfig struct {
 	GetPeersVal                      []string
 	GetRedisPeerManagementVal        RedisPeerManagementConfig
 	GetSamplerTypeName               string
-	GetSamplerTypeVal                interface{}
+	GetSamplerTypeVal                any
 	GetMetricsTypeVal                string
 	GetGeneralConfigVal              GeneralConfig
 	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
@@ -253,7 +253,7 @@ func (m *MockConfig) GetOTelTracingConfig() OTelTracingConfig {
 }
 
 // TODO: allow per-dataset mock values
-func (m *MockConfig) GetSamplerConfigForDestName(dataset string) (interface{}, string) {
+func (m *MockConfig) GetSamplerConfigForDestName(dataset string) (any, string) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 

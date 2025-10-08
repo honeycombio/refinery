@@ -43,7 +43,7 @@ func Fanout[T, U any](input []T, parallelism int, workerFactory func(int) (worke
 	}()
 
 	wgWorkers := sync.WaitGroup{}
-	for i := 0; i < parallelism; i++ {
+	for i := range parallelism {
 		wgWorkers.Add(1)
 		worker, cleanup := workerFactory(i)
 		go func(i int) {
@@ -125,7 +125,7 @@ func FanoutToMap[T comparable, U any](input []T, parallelism int, workerFactory 
 	}()
 
 	wgWorkers := sync.WaitGroup{}
-	for i := 0; i < parallelism; i++ {
+	for i := range parallelism {
 		wgWorkers.Add(1)
 		worker, cleanup := workerFactory(i)
 		go func(i int) {
@@ -207,7 +207,7 @@ func FanoutChunksToMap[T comparable, U any](input []T, chunkSize int, maxParalle
 	}()
 
 	wgWorkers := sync.WaitGroup{}
-	for i := 0; i < parallelism; i++ {
+	for i := range parallelism {
 		wgWorkers.Add(1)
 		worker, cleanup := workerFactory(i)
 		go func(i int) {

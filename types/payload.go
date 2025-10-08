@@ -298,7 +298,7 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 	}
 
 	// Process all map entries
-	for i := uint32(0); i < mapSize; i++ {
+	for range mapSize {
 		// Read the key
 		var keyBytes []byte
 		keyBytes, remaining, err = msgp.ReadMapKeyZC(remaining)

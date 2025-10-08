@@ -138,7 +138,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 	cfg := &config.MockConfig{
 		TraceIdFieldNames: []string{"trace.trace_id"},
 	}
-	payload := NewPayload(cfg, map[string]interface{}{
+	payload := NewPayload(cfg, map[string]any{
 		"test":                 "test",
 		"meta.annotation_type": "span_event",
 	})
@@ -166,7 +166,7 @@ func TestSpan_ExtractDecisionContext(t *testing.T) {
 	assert.Equal(t, ev.Environment, got.Environment)
 	assert.Equal(t, ev.SampleRate, got.SampleRate)
 	assert.Equal(t, ev.Timestamp, got.Timestamp)
-	expectedData := map[string]interface{}{
+	expectedData := map[string]any{
 		"trace.trace_id":               sp.TraceID,
 		"meta.refinery.root":           true,
 		"meta.refinery.min_span":       true,
@@ -213,10 +213,10 @@ func TestSpan_IsDecisionSpan(t *testing.T) {
 // we don't expect this to be a performance issue.
 func BenchmarkSpan_CalculateSizeSmall(b *testing.B) {
 	data := make(map[string]any)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		data["int"+strconv.Itoa(i)] = i
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 	}
 	payload := NewPayload(&config.MockConfig{}, data)
@@ -225,18 +225,18 @@ func BenchmarkSpan_CalculateSizeSmall(b *testing.B) {
 			Data: payload,
 		},
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		sp.GetDataSize()
 	}
 }
 
 func BenchmarkSpan_CalculateSizeLarge(b *testing.B) {
 	data := make(map[string]any)
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		data["int"+strconv.Itoa(i)] = i
 	}
-	for i := 0; i < 500; i++ {
+	for i := range 500 {
 		data["str"+strconv.Itoa(i)] = strings.Repeat("x", i)
 	}
 	payload := NewPayload(&config.MockConfig{}, data)
@@ -245,8 +245,8 @@ func BenchmarkSpan_CalculateSizeLarge(b *testing.B) {
 			Data: payload,
 		},
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		sp.GetDataSize()
 	}
 }

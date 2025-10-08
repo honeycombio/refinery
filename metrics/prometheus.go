@@ -20,7 +20,7 @@ type PromMetrics struct {
 	Logger logger.Logger `inject:""`
 	// metrics keeps a record of all the registered metrics so we can increment
 	// them by name
-	metrics map[string]interface{}
+	metrics map[string]any
 	lock    sync.RWMutex
 }
 
@@ -32,7 +32,7 @@ func (p *PromMetrics) Start() error {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	p.metrics = make(map[string]interface{})
+	p.metrics = make(map[string]any)
 
 	muxxer := mux.NewRouter()
 

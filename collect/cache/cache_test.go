@@ -127,9 +127,8 @@ func BenchmarkCache_TakeExpiredTracesWithoutFilter(b *testing.B) {
 
 	// setup is expensive, so reset timer and report allocations
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0, nil)
 	}
 }
@@ -144,9 +143,8 @@ func BenchmarkCache_TakeExpiredTracesWithFilter(b *testing.B) {
 
 	// setup is expensive, so reset timer and report allocations
 	b.ReportAllocs()
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		c.TakeExpiredTraces(now.Add(time.Duration(i)*time.Second), 0, func(trace *types.Trace) bool {
 			// filter out 20% of traces
 			return rand.Float32() > 0.2
@@ -178,7 +176,7 @@ func BenchmarkCache_RemoveTraces(b *testing.B) {
 func generateTraces(n int) (time.Time, map[string]*types.Trace) {
 	now := time.Now()
 	traces := make(map[string]*types.Trace, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		traceID := "trace" + fmt.Sprint(i)
 		traces[traceID] = &types.Trace{
 			TraceID: "trace" + fmt.Sprint(i),

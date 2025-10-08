@@ -156,7 +156,7 @@ func (d *DefaultTransmission) processResponses(
 					enqueuedAt = metadata["enqueued_at"].(int64)
 					dequeuedAt = time.Now().UnixMicro()
 				}
-				log := d.Logger.Error().WithFields(map[string]interface{}{
+				log := d.Logger.Error().WithFields(map[string]any{
 					"status_code":    r.StatusCode,
 					"api_host":       apiHost,
 					"dataset":        dataset,

@@ -105,7 +105,7 @@ func GenID(numChars int) string {
 	const charset = "abcdef0123456789"
 
 	id := make([]byte, numChars)
-	for i := 0; i < numChars; i++ {
+	for i := range numChars {
 		id[i] = charset[rand.Intn(len(charset))]
 	}
 	return string(id)
@@ -145,12 +145,11 @@ func BenchmarkShardBulk(b *testing.B) {
 
 	const ntraces = 10
 	ids := make([]string, ntraces)
-	for i := 0; i < ntraces; i++ {
+	for i := range ntraces {
 		ids[i] = GenID(32)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		sharder.WhichShard(ids[i%ntraces])
 	}
 }
@@ -162,10 +161,10 @@ func TestShardBulk(t *testing.T) {
 	)
 
 	// this test should work for a wide range of peer counts
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		npeers := i*10 + 5
 		t.Run(fmt.Sprintf("bulk npeers=%d", npeers), func(t *testing.T) {
-			for retry := 0; retry < 2; retry++ {
+			for retry := range 2 {
 				peers := []string{
 					"http://" + selfPeerAddr,
 				}
@@ -194,12 +193,12 @@ func TestShardBulk(t *testing.T) {
 
 				const ntraces = 1000
 				ids := make([]string, ntraces)
-				for i := 0; i < ntraces; i++ {
+				for i := range ntraces {
 					ids[i] = GenID(32)
 				}
 
 				results := make(map[string]int)
-				for i := 0; i < ntraces; i++ {
+				for i := range ntraces {
 					s := sharder.WhichShard(ids[i])
 					results[s.GetAddress()]++
 				}
@@ -237,10 +236,10 @@ func TestShardDrop(t *testing.T) {
 		traceID      = "test"
 	)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		npeers := i*10 + 5
 		t.Run(fmt.Sprintf("drop npeers=%d", npeers), func(t *testing.T) {
-			for retry := 0; retry < 2; retry++ {
+			for retry := range 2 {
 				peers := make([]string, 0, npeers)
 				for i := 1; i < npeers; i++ {
 					peers = append(peers, fmt.Sprintf("http://2.2.2.%d/:8081", i))
@@ -272,12 +271,12 @@ func TestShardDrop(t *testing.T) {
 
 				const ntraces = 1000
 				placements := make([]placement, ntraces)
-				for i := 0; i < ntraces; i++ {
+				for i := range ntraces {
 					placements[i].id = GenID(32)
 				}
 
 				results := make(map[string]int)
-				for i := 0; i < ntraces; i++ {
+				for i := range ntraces {
 					s := sharder.WhichShard(placements[i].id)
 					results[s.GetAddress()]++
 					placements[i].shard = s.GetAddress()
@@ -289,7 +288,7 @@ func TestShardDrop(t *testing.T) {
 
 				results = make(map[string]int)
 				nDiff := 0
-				for i := 0; i < ntraces; i++ {
+				for i := range ntraces {
 					s := sharder.WhichShard(placements[i].id)
 					results[s.GetAddress()]++
 					if s.GetAddress() != placements[i].shard {
@@ -321,10 +320,10 @@ func TestShardAddHash(t *testing.T) {
 		traceID      = "test"
 	)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		npeers := i*10 + 7
 		t.Run(fmt.Sprintf("add npeers=%d", npeers), func(t *testing.T) {
-			for retry := 0; retry < 2; retry++ {
+			for retry := range 2 {
 				peers := []string{
 					"http://" + selfPeerAddr,
 				}
@@ -358,12 +357,12 @@ func TestShardAddHash(t *testing.T) {
 
 				const ntraces = 1000
 				placements := make([]placement, ntraces)
-				for i := 0; i < ntraces; i++ {
+				for i := range ntraces {
 					placements[i].id = GenID(32)
 				}
 
 				results := make(map[string]int)
-				for i := 0; i < ntraces; i++ {
+				for i := range ntraces {
 					s := sharder.WhichShard(placements[i].id)
 					results[s.GetAddress()]++
 					placements[i].shard = s.GetAddress()
@@ -375,7 +374,7 @@ func TestShardAddHash(t *testing.T) {
 
 				results = make(map[string]int)
 				nDiff := 0
-				for i := 0; i < ntraces; i++ {
+				for i := range ntraces {
 					s := sharder.WhichShard(placements[i].id)
 					results[s.GetAddress()]++
 					if s.GetAddress() != placements[i].shard {
@@ -408,7 +407,7 @@ func BenchmarkDeterministicShard(b *testing.B) {
 		traceID      = "test"
 	)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		npeers := i*10 + 4
 		b.Run(fmt.Sprintf("benchmark_deterministic_%d", npeers), func(b *testing.B) {
 			peers := []string{
@@ -438,7 +437,7 @@ func BenchmarkDeterministicShard(b *testing.B) {
 				"starting deterministic sharder should not error")
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				sharder.WhichShard(traceID)
 			}
 		})

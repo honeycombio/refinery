@@ -157,7 +157,7 @@ func BenchmarkFanoutParallelism(b *testing.B) {
 
 			workerFactory := func(i int) (func(int) string, func(int)) {
 				worker := func(i int) string {
-					h := sha256.Sum256(([]byte(fmt.Sprintf("%d", i))))
+					h := sha256.Sum256((fmt.Appendf(nil, "%d", i)))
 					time.Sleep(1 * time.Millisecond)
 					return hex.EncodeToString(h[:])
 				}
@@ -182,7 +182,7 @@ func BenchmarkFanoutMapParallelism(b *testing.B) {
 
 			workerFactory := func(i int) (func(int) string, func(int)) {
 				worker := func(i int) string {
-					h := sha256.Sum256(([]byte(fmt.Sprintf("%d", i))))
+					h := sha256.Sum256((fmt.Appendf(nil, "%d", i)))
 					time.Sleep(1 * time.Millisecond)
 					return hex.EncodeToString(h[:])
 				}

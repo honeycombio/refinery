@@ -104,7 +104,7 @@ func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	var events []map[string]interface{}
+	var events []map[string]any
 	contentType := r.Header.Get("Content-Type")
 	if contentType == "application/x-msgpack" || contentType == "application/msgpack" {
 		decoder := msgpack.NewDecoder(reader)
@@ -126,7 +126,7 @@ func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
-	responses := make([]map[string]interface{}, 0, len(events))
+	responses := make([]map[string]any, 0, len(events))
 	for _, eventData := range events {
 		sampleRate := 1
 		if sr, ok := eventData["samplerate"]; ok {
@@ -151,13 +151,13 @@ func (t *testAPIServer) handleBatch(w http.ResponseWriter, r *http.Request) {
 			APIHost:    t.server.URL,
 			Timestamp:  timestamp,
 		}
-		if dataMap, ok := eventData["data"].(map[string]interface{}); ok {
+		if dataMap, ok := eventData["data"].(map[string]any); ok {
 			event.Data = types.NewPayload(t.cfg, dataMap)
 			event.Data.ExtractMetadata()
 		}
 
 		t.events = append(t.events, event)
-		responses = append(responses, map[string]interface{}{"status": 202})
+		responses = append(responses, map[string]any{"status": 202})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -372,7 +372,7 @@ func getTestSpanJSON() string {
 	data, _ := json.Marshal(batchedEvent{
 		Timestamp:  now.Format(time.RFC3339Nano),
 		SampleRate: 2,
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"trace.trace_id":  "2",
 			"trace.span_id":   "10",
 			"trace.parent_id": "0000000000",
@@ -819,7 +819,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 		defer startstop.Stop(graph.Objects(), nil)
 	}
 
-	traceData := []byte(fmt.Sprintf(`{"foo":"bar","trace.trace_id":"%s"}`, traceID))
+	traceData := fmt.Appendf(nil, `{"foo":"bar","trace.trace_id":"%s"}`, traceID)
 	// Deliver to host 1, it should be passed to host 0 and emitted there.
 	zEnc, _ := zstd.NewWriter(nil)
 	blob := zEnc.EncodeAll(traceData, nil)
@@ -1111,7 +1111,7 @@ func TestOTLPGRPCConcurrency(t *testing.T) {
 	for i := range numConcurrent {
 		routineID := i
 		p.Go(func() error {
-			for j := 0; j < numRequests; j++ {
+			for j := range numRequests {
 				// Create unique trace data for each request to detect corruption
 				traceID := make([]byte, 16)
 				spanID := make([]byte, 8)
@@ -1196,7 +1196,7 @@ func createBenchmarkEvents(n int) {
 				Timestamp:        now.Format(time.RFC3339Nano),
 				MsgPackTimestamp: &now,
 				SampleRate:       2,
-				Data: map[string]interface{}{
+				Data: map[string]any{
 					"trace.trace_id":  uuid.NewString(),
 					"trace.span_id":   uuid.NewString(),
 					"trace.parent_id": "0000000000",
@@ -1232,10 +1232,10 @@ var encodings = []struct {
 
 // batchedEvent represents the structure expected by the batch endpoint
 type batchedEvent struct {
-	Timestamp        string                 `json:"time"`
-	MsgPackTimestamp *time.Time             `msgpack:"time,omitempty"`
-	SampleRate       int64                  `json:"samplerate" msgpack:"samplerate"`
-	Data             map[string]interface{} `json:"data" msgpack:"data"`
+	Timestamp        string         `json:"time"`
+	MsgPackTimestamp *time.Time     `msgpack:"time,omitempty"`
+	SampleRate       int64          `json:"samplerate" msgpack:"samplerate"`
+	Data             map[string]any `json:"data" msgpack:"data"`
 }
 
 var zstdEncoder *zstd.Encoder
@@ -1285,7 +1285,7 @@ func createBenchmarkOTLPRequest() *collectortrace.ExportTraceServiceRequest {
 	if len(benchmarkOTLPRequests) == 0 {
 		// Create a single request with 50 spans
 		spans := make([]*trace.Span, 50)
-		for i := 0; i < 50; i++ {
+		for i := range 50 {
 			traceID := make([]byte, 16)
 			spanID := make([]byte, 8)
 			binary.BigEndian.PutUint64(traceID[8:], uint64(i))
@@ -1355,7 +1355,7 @@ func BenchmarkTracesOTLP(b *testing.B) {
 
 		sender.resetCount()
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for b.Loop() {
 			req.Body = io.NopCloser(bytes.NewReader(blob))
 			post(b, req)
 		}
@@ -1383,7 +1383,7 @@ func BenchmarkTracesOTLP(b *testing.B) {
 
 		sender.resetCount()
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for b.Loop() {
 			req.Body = io.NopCloser(bytes.NewReader(blob))
 			post(b, req)
 		}
@@ -1408,7 +1408,7 @@ func BenchmarkTracesOTLP(b *testing.B) {
 
 		sender.resetCount()
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for b.Loop() {
 			req.Body = io.NopCloser(bytes.NewReader(blob))
 			post(b, req)
 		}
@@ -1432,7 +1432,7 @@ func BenchmarkTracesOTLP(b *testing.B) {
 
 		sender.resetCount()
 		b.ResetTimer()
-		for n := 0; n < b.N; n++ {
+		for b.Loop() {
 			_, err := client.Export(ctx, otlpReq)
 			assert.NoError(b, err)
 		}
@@ -1455,7 +1455,7 @@ func BenchmarkTraces(b *testing.B) {
 			// Pre-compute single batch with 50 events
 			createBenchmarkEvents(50)
 			events := make([]batchedEvent, 50)
-			for i := 0; i < 50; i++ {
+			for i := range 50 {
 				events[i] = benchmarkEvents[i]
 			}
 			blob, err := encodeAndCompress(events, encoding.contentType, encoding.encoding)
@@ -1473,7 +1473,7 @@ func BenchmarkTraces(b *testing.B) {
 
 			sender.resetCount()
 			b.ResetTimer()
-			for n := 0; n < b.N; n++ {
+			for b.Loop() {
 				req.Body = io.NopCloser(bytes.NewReader(blob))
 				post(b, req)
 			}
@@ -1527,14 +1527,14 @@ func BenchmarkDistributedTraces(b *testing.B) {
 				// Pre-compute blobs
 				createBenchmarkEvents(b.N)
 				blobs := make([][]byte, b.N)
-				for n := 0; n < b.N; n++ {
+				for n := 0; b.Loop(); n++ {
 					blobs[n], err = encodeAndCompress([]batchedEvent{benchmarkEvents[n%len(benchmarkEvents)]}, encoding.contentType, encoding.encoding)
 					assert.NoError(b, err)
 				}
 
 				sender.resetCount()
 				b.ResetTimer()
-				for n := 0; n < b.N; n++ {
+				for n := 0; b.Loop(); n++ {
 					req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
 					req.URL.Host = addrs[n%len(addrs)]
 					post(b, req)
@@ -1547,9 +1547,9 @@ func BenchmarkDistributedTraces(b *testing.B) {
 				createBenchmarkEvents(b.N)
 				numBatches := (b.N / 50) + 1
 				blobs := make([][]byte, numBatches)
-				for n := 0; n < numBatches; n++ {
+				for n := range numBatches {
 					events := make([]batchedEvent, 50)
-					for i := 0; i < 50; i++ {
+					for i := range 50 {
 						events[i] = benchmarkEvents[((n*50)+i)%len(benchmarkEvents)]
 					}
 					blobs[n], err = encodeAndCompress(events, encoding.contentType, encoding.encoding)
@@ -1558,7 +1558,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 
 				sender.resetCount()
 				b.ResetTimer()
-				for n := 0; n < numBatches; n++ {
+				for n := range numBatches {
 					req.Body = io.NopCloser(bytes.NewReader(blobs[n]))
 					req.URL.Host = addrs[n%len(addrs)]
 					post(b, req)

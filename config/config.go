@@ -103,7 +103,7 @@ type Config interface {
 
 	// GetSamplerConfigForDestName returns the sampler type and name to use for
 	// the given destination (environment, or dataset in classic)
-	GetSamplerConfigForDestName(string) (interface{}, string)
+	GetSamplerConfigForDestName(string) (any, string)
 
 	// GetAllSamplerRules returns all rules in a single map, including the default rules
 	GetAllSamplerRules() *V2SamplerConfig
@@ -201,7 +201,7 @@ func IsLegacyAPIKey(key string) bool {
 	switch keyLen {
 	case 32:
 		// Check if all characters are hex digits (0-9, a-f)
-		for i := 0; i < keyLen; i++ {
+		for i := range keyLen {
 			c := key[i]
 			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
 				return false

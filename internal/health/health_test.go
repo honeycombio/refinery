@@ -43,7 +43,7 @@ func TestHealthRegistrationNotReady(t *testing.T) {
 	assert.False(t, h.IsReady())
 
 	// and even after the timeout, it should still be alive and not ready
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		cl.Advance(500 * time.Millisecond)
 		time.Sleep(1 * time.Millisecond) // give goroutines time to run
 	}
@@ -71,7 +71,7 @@ func TestHealthRegistrationAndReady(t *testing.T) {
 	assert.True(t, h.IsReady())
 
 	// make some periodic ready calls, it should stay alive and ready
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		h.Ready("foo", true)
 		cl.Advance(500 * time.Millisecond)
 		time.Sleep(1 * time.Millisecond) // give goroutines time to run
@@ -80,7 +80,7 @@ func TestHealthRegistrationAndReady(t *testing.T) {
 	}
 
 	// now run for a bit with no ready calls, it should be dead and not ready
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		cl.Advance(500 * time.Millisecond)
 		time.Sleep(1 * time.Millisecond) // give goroutines time to run
 	}

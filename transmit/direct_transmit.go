@@ -453,7 +453,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		readerPtr := readerPool.Get().(*bytes.Reader)
 		defer readerPool.Put(readerPtr)
 
-		for try := 0; try < 2; try++ {
+		for try := range 2 {
 			if try > 0 {
 				d.Metrics.Increment(d.metricKeys.counterSendRetries)
 			}
@@ -579,7 +579,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 
 			// Handle msgpack or JSON response body
 			if resp.Header.Get("Content-Type") == "application/msgpack" {
-				var errorBody interface{}
+				var errorBody any
 				decoder := msgpack.NewDecoder(resp.Body)
 				err = decoder.Decode(&errorBody)
 				if err == nil {

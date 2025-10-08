@@ -28,11 +28,11 @@ func TestDynamicAddSampleRateKeyToTrace(t *testing.T) {
 
 	trace := &types.Trace{}
 	mockCfg := &config.MockConfig{}
-	for i := 0; i < spanCount; i++ {
+	for i := range spanCount {
 		if i == spanCount-1 {
 			trace.RootSpan = &types.Span{
 				Event: types.Event{
-					Data: types.NewPayload(mockCfg, map[string]interface{}{
+					Data: types.NewPayload(mockCfg, map[string]any{
 						"http.status_code": "200",
 						"service_name":     "test",
 					}),
@@ -41,7 +41,7 @@ func TestDynamicAddSampleRateKeyToTrace(t *testing.T) {
 		}
 		trace.AddSpan(&types.Span{
 			Event: types.Event{
-				Data: types.NewPayload(mockCfg, map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]any{
 					"http.status_code": "200",
 					"url":              "/test",
 				}),

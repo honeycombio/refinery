@@ -34,7 +34,7 @@ type detShard string
 func (d detShard) GetHashesFor(index int, n int, seed uint64) []hashShard {
 	hashes := make([]hashShard, 0)
 	addr := d.GetAddress()
-	for i := 0; i < n; i++ {
+	for range n {
 		hashes = append(hashes, hashShard{
 			uhash:      wyhash.Hash([]byte(addr), seed),
 			shardIndex: index,
@@ -115,7 +115,7 @@ func (d *DeterministicSharder) Start() error {
 	// Try up to 5 times to find myself in the peer list before giving up
 	var self string
 	var err error
-	for j := 0; j < 5; j++ {
+	for range 5 {
 		// go through peer list, resolve each address, see if any of them match any
 		// local interface. Note that this assumes only one instance of Refinery per
 		// host can run.
@@ -133,7 +133,7 @@ func (d *DeterministicSharder) Start() error {
 		time.Sleep(5 * time.Second)
 	}
 
-	d.Logger.Error().WithFields(map[string]interface{}{"peers": d.peers, "self": self}).Logf("failed to find self in the peer list")
+	d.Logger.Error().WithFields(map[string]any{"peers": d.peers, "self": self}).Logf("failed to find self in the peer list")
 	return errors.New("failed to find self in the peer list")
 }
 

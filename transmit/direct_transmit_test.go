@@ -979,7 +979,7 @@ func TestDirectTransmissionQueueLengthGauge(t *testing.T) {
 
 	// Send a few events that should queue up
 	mockCfg := &config.MockConfig{}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		event := &types.Event{
 			Context:    context.Background(),
 			APIHost:    testServer.server.URL,
@@ -1157,7 +1157,7 @@ func newBenchmarkAPIServer(t testing.TB) *benchmarkAPIServer {
 	server := &benchmarkAPIServer{
 		t: t,
 		bufferPool: sync.Pool{
-			New: func() interface{} {
+			New: func() any {
 				buf := make([]byte, 0, 1024) // Pre-allocate capacity
 				return &buf
 			},

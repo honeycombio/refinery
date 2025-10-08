@@ -128,8 +128,7 @@ func newKeptDecisionMessageJSON(tds []TraceDecision) (string, error) {
 func BenchmarkDynamicJSONEncoding(b *testing.B) {
 	decisions := generateRandomDecisions(1000)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := newKeptDecisionMessageJSON(decisions)
 		if err != nil {
 			b.Fatal(err)
@@ -141,8 +140,8 @@ func BenchmarkDynamicCompressedEncoding(b *testing.B) {
 	decisions := generateRandomDecisions(1000)
 
 	// Run the benchmark
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, err := newKeptDecisionMessage(decisions, "sender1")
 		if err != nil {
 			b.Fatal(err)
@@ -157,8 +156,7 @@ func BenchmarkDynamicJSONDecoding(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := newKeptTraceDecision(jsonData, "sender1")
 		if err != nil {
 			b.Fatal(err)
@@ -173,8 +171,7 @@ func BenchmarkDynamicCompressedDecoding(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := newKeptTraceDecision(compressedData, "sender1")
 		if err != nil {
 			b.Fatal(err)
@@ -191,7 +188,7 @@ func BenchmarkCompressionSizes(b *testing.B) {
 
 	// Benchmark JSON Encoding size
 	b.Run("JSON Encoding", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			size, err := jsonEncodeSize(tds)
 			if err != nil {
 				b.Fatalf("Error encoding JSON: %v", err)
@@ -204,7 +201,7 @@ func BenchmarkCompressionSizes(b *testing.B) {
 
 	// Benchmark Snappy Compression size
 	b.Run("Snappy Compression", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for b.Loop() {
 			size, err := snappyCompressSize(tds)
 			if err != nil {
 				b.Fatalf("Error compressing with Snappy: %v", err)
@@ -246,7 +243,7 @@ func generateRandomTraceDecision() TraceDecision {
 // GenerateRandomDecisions generates multiple TraceDecision
 func generateRandomDecisions(num int) []TraceDecision {
 	decisions := make([]TraceDecision, num)
-	for i := 0; i < num; i++ {
+	for i := range num {
 		decisions[i] = generateRandomTraceDecision()
 	}
 	return decisions

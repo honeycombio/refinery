@@ -15,12 +15,12 @@ import (
 
 type dummyLogger struct{}
 
-func (d dummyLogger) Debugf(format string, v ...interface{}) {
+func (d dummyLogger) Debugf(format string, v ...any) {
 	fmt.Printf(format, v...)
 	fmt.Println()
 }
 
-func (d dummyLogger) Errorf(format string, v ...interface{}) {
+func (d dummyLogger) Errorf(format string, v ...any) {
 	fmt.Printf(format, v...)
 	fmt.Println()
 }

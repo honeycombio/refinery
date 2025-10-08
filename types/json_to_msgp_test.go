@@ -157,14 +157,14 @@ func BenchmarkJSONToMessagePack(b *testing.B) {
 
 	b.Run("DirectConversion", func(b *testing.B) {
 		var buf []byte
-		for range b.N {
+		for b.Loop() {
 			buf, _ = JSONToMessagePack(buf[:0], []byte(testData))
 		}
 	})
 
 	b.Run("StandardWay", func(b *testing.B) {
 		var buf []byte
-		for range b.N {
+		for b.Loop() {
 			var data map[string]any
 			err := json.Unmarshal([]byte(testData), &data)
 			if err != nil {

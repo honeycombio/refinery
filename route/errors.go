@@ -45,7 +45,7 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 		he.err = err
 	}
 
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"error.err":         he.err.Error(),
 		"error.msg":         he.msg,
 		"error.status_code": he.status,

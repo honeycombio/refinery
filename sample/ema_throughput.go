@@ -98,12 +98,11 @@ func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, kee
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
 	}
 	count := int(trace.DescendantCount())
-	rate = uint(d.dynsampler.GetSampleRateMulti(key, count))
-	if rate < 1 { // protect against dynsampler being broken even though it shouldn't be
-		rate = 1
-	}
+	rate = max(uint(d.dynsampler.GetSampleRateMulti(key, count)),
+		// protect against dynsampler being broken even though it shouldn't be
+		1)
 	shouldKeep := rand.Intn(int(rate)) == 0
-	d.Logger.Debug().WithFields(map[string]interface{}{
+	d.Logger.Debug().WithFields(map[string]any{
 		"sample_key":  key,
 		"sample_rate": rate,
 		"sample_keep": shouldKeep,

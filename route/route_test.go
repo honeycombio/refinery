@@ -133,7 +133,7 @@ func TestUnmarshal(t *testing.T) {
 	}
 
 	// Common test data - using only floats to avoid JSON type conversion issues
-	testData := map[string]interface{}{
+	testData := map[string]any{
 		"trace.trace_id": "test-trace-id",
 		"trace.span_id":  "test-span-id",
 		"service.name":   "test-service",
@@ -148,7 +148,7 @@ func TestUnmarshal(t *testing.T) {
 		req := httptest.NewRequest("POST", "/test", bytes.NewBufferString("{}"))
 		req.Header.Set("Content-Type", "nope")
 
-		var data map[string]interface{}
+		var data map[string]any
 		err := unmarshal(req, readAll(t, req.Body), &data)
 		// Should succeed because invalid content type defaults to JSON
 		assert.NoError(t, err)
@@ -165,7 +165,7 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
 					req.Header.Set("Content-Type", contentType)
 
-					var result map[string]interface{}
+					var result map[string]any
 					err = unmarshal(req, readAll(t, req.Body), &result)
 					require.NoError(t, err)
 
@@ -186,7 +186,7 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", buf)
 					req.Header.Set("Content-Type", contentType)
 
-					var result map[string]interface{}
+					var result map[string]any
 					err = unmarshal(req, readAll(t, req.Body), &result)
 					require.NoError(t, err)
 
@@ -242,9 +242,9 @@ func TestUnmarshal(t *testing.T) {
 		t.Run("msgpack", func(t *testing.T) {
 			// Create test data as a simple struct that can be marshaled/unmarshaled
 			type testBatchEvent struct {
-				MsgPackTimestamp *time.Time             `msgpack:"time,omitempty"`
-				SampleRate       int64                  `msgpack:"samplerate"`
-				Data             map[string]interface{} `msgpack:"data"`
+				MsgPackTimestamp *time.Time     `msgpack:"time,omitempty"`
+				SampleRate       int64          `msgpack:"samplerate"`
+				Data             map[string]any `msgpack:"data"`
 			}
 
 			later := now.Add(time.Second)
@@ -786,7 +786,7 @@ func TestExtractMetadataTraceID(t *testing.T) {
 		{
 			name: "trace id from meta.trace_id",
 			event: types.Event{
-				Data: types.NewPayload(mockCfg, map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]any{
 					"meta.trace_id": "trace123",
 				}),
 			},
@@ -795,7 +795,7 @@ func TestExtractMetadataTraceID(t *testing.T) {
 		{
 			name: "trace id from trace.trace_id field",
 			event: types.Event{
-				Data: types.NewPayload(mockCfg, map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]any{
 					"trace.trace_id": "trace456",
 				}),
 			},
@@ -804,7 +804,7 @@ func TestExtractMetadataTraceID(t *testing.T) {
 		{
 			name: "trace id from traceId field",
 			event: types.Event{
-				Data: types.NewPayload(mockCfg, map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]any{
 					"traceId": "trace789",
 				}),
 			},
@@ -820,7 +820,7 @@ func TestExtractMetadataTraceID(t *testing.T) {
 		{
 			name: "prefer meta.trace_id over other fields",
 			event: types.Event{
-				Data: types.NewPayload(mockCfg, map[string]interface{}{
+				Data: types.NewPayload(mockCfg, map[string]any{
 					"meta.trace_id":  "meta-trace",
 					"trace.trace_id": "field-trace",
 				}),
@@ -849,7 +849,7 @@ func TestAddIncomingUserAgent(t *testing.T) {
 	})
 
 	t.Run("existing incoming user agent", func(t *testing.T) {
-		payload := types.NewPayload(&config.MockConfig{}, map[string]interface{}{
+		payload := types.NewPayload(&config.MockConfig{}, map[string]any{
 			"meta.refinery.incoming_user_agent": "test-agent",
 		})
 		payload.ExtractMetadata()
@@ -960,7 +960,7 @@ func TestProcessEventMetrics(t *testing.T) {
 				APIHost:   "test.honeycomb.io",
 				Dataset:   "test-dataset",
 				Timestamp: time.Now(),
-				Data: types.NewPayload(mockConfig, map[string]interface{}{
+				Data: types.NewPayload(mockConfig, map[string]any{
 					"trace.trace_id":    "trace-123",
 					"meta.signal_type":  tt.signalType,
 					"test_attribute":    "test_value",
@@ -1040,7 +1040,7 @@ func createBatchEvents(mockCfg config.Config) *batchedEvents {
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 2,
-			Data: types.NewPayload(mockCfg, map[string]interface{}{
+			Data: types.NewPayload(mockCfg, map[string]any{
 				"trace.trace_id":  "trace-1",
 				"trace.span_id":   "span-1",
 				"trace.parent_id": "",
@@ -1054,7 +1054,7 @@ func createBatchEvents(mockCfg config.Config) *batchedEvents {
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 2,
-			Data: types.NewPayload(mockCfg, map[string]interface{}{
+			Data: types.NewPayload(mockCfg, map[string]any{
 				"trace.trace_id":  "trace-1",
 				"trace.span_id":   "span-2",
 				"trace.parent_id": "span-1",
@@ -1068,7 +1068,7 @@ func createBatchEvents(mockCfg config.Config) *batchedEvents {
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
 			SampleRate: 4,
-			Data: types.NewPayload(mockCfg, map[string]interface{}{
+			Data: types.NewPayload(mockCfg, map[string]any{
 				"trace.trace_id":  "trace-2",
 				"trace.span_id":   "span-3",
 				"trace.parent_id": "",
@@ -1173,8 +1173,8 @@ func createBatchEventsWithLargeAttributes(numEvents int, cfg config.Config) *bat
 	batchEvents := newBatchedEvents(cfg, "api-key", "env", "dataset")
 	batchEvents.events = make([]batchedEvent, numEvents)
 
-	for i := 0; i < numEvents; i++ {
-		data := make(map[string]interface{})
+	for i := range numEvents {
+		data := make(map[string]any)
 
 		// Core tracing fields (always present)
 		traceID := fmt.Sprintf("trace-%040d", i)
@@ -1200,7 +1200,7 @@ func createBatchEventsWithLargeAttributes(numEvents int, cfg config.Config) *bat
 		data["large_field_3"] = smallText
 
 		// many string, float, int, and bool fields
-		for j := 0; j < 25; j++ {
+		for j := range 25 {
 			data[fmt.Sprintf("string.field_%d", j)] = fmt.Sprintf("string_value_%d", j)
 			data[fmt.Sprintf("int.field_%d", j)] = int64(j)
 			data[fmt.Sprintf("float.field_%d", j)] = float64(j)
@@ -1215,13 +1215,13 @@ func createBatchEventsWithLargeAttributes(numEvents int, cfg config.Config) *bat
 		}
 
 		// Nested map field
-		data["custom.metadata"] = map[string]interface{}{
-			"nested_field_1": map[string]interface{}{
+		data["custom.metadata"] = map[string]any{
+			"nested_field_1": map[string]any{
 				"key1": fmt.Sprintf("value_%d", i),
 				"key2": i * 10,
 				"key3": i%2 == 0,
 			},
-			"nested_field_2": map[string]interface{}{
+			"nested_field_2": map[string]any{
 				"key1": true,
 				"key2": false,
 				"key3": i + 100,

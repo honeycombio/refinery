@@ -119,7 +119,7 @@ func (c *CuckooTraceChecker) drain() {
 	lockStart := time.Now()
 	timeout := time.NewTimer(1 * time.Millisecond)
 outer:
-	for i := 0; i < n; i++ {
+	for range n {
 		select {
 		case t, ok := <-c.addch:
 			// if the channel is closed, we will stop processing

@@ -131,7 +131,7 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 
 	for _, event := range events {
 		// Create event data
-		eventData := map[string]interface{}{
+		eventData := map[string]any{
 			"trace.trace_id":     event.traceID,
 			"trace.parent_id":    event.parentID,
 			"meta.signal_type":   event.signalType,
