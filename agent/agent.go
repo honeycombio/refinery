@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	hpsf "github.com/honeycombio/hpsf/pkg/config"
+	hpsf "github.com/honeycombio/hpsf/pkg/hpsftypes"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/metrics"
