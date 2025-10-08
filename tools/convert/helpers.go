@@ -529,7 +529,7 @@ func _getStringsFrom(value any) []string {
 // removeDeprecated removes deprecated config options from the provided data map.
 // It returns the cleaned data and a list of removed options.
 // If dryRun is true, it returns the original data unchanged but still identifies what would be removed.
-func removeDeprecated(data map[string]any, dryRun bool) (map[string]any, []string) {
+func removeDeprecated(data map[string]any) (map[string]any, []string) {
 	metadata := loadConfigMetadata()
 	var removedItems []string
 
@@ -541,14 +541,12 @@ func removeDeprecated(data map[string]any, dryRun bool) (map[string]any, []strin
 				removedItems = append(removedItems, fmt.Sprintf("%s (deprecated in %s)", keyToCheck, field.GetLastVersion()))
 
 				// Apply any replacements defined in metadata
-				conversions := applyReplacements(field.Replacements, groupName, value, data, dryRun)
+				conversions := applyReplacements(field.Replacements, groupName, value, data)
 				for _, conversion := range conversions {
 					removedItems = append(removedItems, fmt.Sprintf("  → %s", conversion))
 				}
 
-				if !dryRun {
-					removeField(data, keyToCheck)
-				}
+				removeField(data, keyToCheck)
 				return true
 			}
 		}
@@ -582,13 +580,13 @@ func removeDeprecated(data map[string]any, dryRun bool) (map[string]any, []strin
 
 					// Apply group replacements before removing the group
 					// For groups, we only use the Field part of Replacement (ignore Formula)
-					conversions, hasSuccessfulReplacement := applyGroupReplacements(group.Replacements, group, groupMap, data, dryRun)
+					conversions, hasSuccessfulReplacement := applyGroupReplacements(group.Replacements, group, groupMap, data)
 					for _, conversion := range conversions {
 						removedItems = append(removedItems, fmt.Sprintf("  → %s", conversion))
 					}
 
 					// Only delete the original group if there was a successful replacement or if there are no replacements
-					if !dryRun && (hasSuccessfulReplacement || len(group.Replacements) == 0) {
+					if hasSuccessfulReplacement || len(group.Replacements) == 0 {
 						delete(data, group.Name)
 					}
 				}
@@ -637,11 +635,11 @@ func setFieldValue(data map[string]any, groupName string, fieldName string, valu
 
 // applyReplacements processes the replacements defined in a field's metadata.
 // It evaluates formulas and applies conditions to determine if replacement values should be set.
-func applyReplacements(replacements []config.Replacement, groupName string, deprecatedValue any, data map[string]any, dryRun bool) []string {
+func applyReplacements(replacements []config.Replacement, groupName string, deprecatedValue any, data map[string]any) []string {
 	var conversions []string
 
 	for _, replacement := range replacements {
-		if message, applied := applyReplacement(replacement, groupName, deprecatedValue, data, dryRun); applied {
+		if message, applied := applyReplacement(replacement, groupName, deprecatedValue, data); applied {
 			conversions = append(conversions, message)
 		}
 	}
@@ -650,7 +648,7 @@ func applyReplacements(replacements []config.Replacement, groupName string, depr
 }
 
 // applyReplacement handles a single replacement operation.
-func applyReplacement(replacement config.Replacement, groupName string, deprecatedValue any, data map[string]any, dryRun bool) (string, bool) {
+func applyReplacement(replacement config.Replacement, groupName string, deprecatedValue any, data map[string]any) (string, bool) {
 	targetKey := groupName + "." + replacement.Field
 	if _, exists := _fetch(data, targetKey); exists {
 		return "", false // Field already exists, skip replacement
@@ -661,9 +659,7 @@ func applyReplacement(replacement config.Replacement, groupName string, deprecat
 		return "", false
 	}
 
-	if !dryRun {
-		setFieldValue(data, groupName, replacement.Field, newValue)
-	}
+	setFieldValue(data, groupName, replacement.Field, newValue)
 
 	return fmt.Sprintf("%s set to %v (using formula: %s)", replacement.Field, newValue, replacement.Formula), true
 }
@@ -673,7 +669,7 @@ func applyReplacement(replacement config.Replacement, groupName string, deprecat
 // This copies the deprecated group content to the target group name.
 // Since field deprecation is processed first, the remaining content is exactly what should be copied.
 // Returns the conversion messages and a boolean indicating if at least one replacement was successful.
-func applyGroupReplacements(replacements []config.Replacement, groupMetadata config.Group, deprecatedGroupData map[string]any, data map[string]any, dryRun bool) ([]string, bool) {
+func applyGroupReplacements(replacements []config.Replacement, groupMetadata config.Group, deprecatedGroupData map[string]any, data map[string]any) ([]string, bool) {
 	var conversions []string
 	hasSuccessfulReplacement := false
 
@@ -688,13 +684,11 @@ func applyGroupReplacements(replacements []config.Replacement, groupMetadata con
 
 		// Copy the remaining group content to the new name
 		// Field replacements have already been processed, so we copy whatever remains
-		if !dryRun {
-			data[targetGroupName] = make(map[string]any)
-			if targetGroupMap, ok := data[targetGroupName].(map[string]any); ok {
-				// Copy all remaining fields (deprecated fields with replacements have already been processed)
-				for fieldName, fieldValue := range deprecatedGroupData {
-					targetGroupMap[fieldName] = fieldValue
-				}
+		data[targetGroupName] = make(map[string]any)
+		if targetGroupMap, ok := data[targetGroupName].(map[string]any); ok {
+			// Copy all remaining fields (deprecated fields with replacements have already been processed)
+			for fieldName, fieldValue := range deprecatedGroupData {
+				targetGroupMap[fieldName] = fieldValue
 			}
 		}
 

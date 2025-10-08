@@ -154,6 +154,7 @@ groups:
         valuetype: nondefault
         default: false
         reload: false
+        unpublished: true
         firstversion: v2.9.4
         summary: controls whether to enable OpAMP support.
         description: >
@@ -163,6 +164,7 @@ groups:
         type: defaulttrue
         valuetype: nondefault
         default: true
+        unpublished: true
         reload: true
         firstversion: v2.9.4
         summary: controls whether to record usage metrics.
@@ -173,6 +175,7 @@ groups:
         type: string
         valuetype: assigndefault
         default: "wss://127.0.0.1:4320/v1/opamp"
+        unpublished: true
         reload: false
         firstversion: v2.9.4
         summary: is the URL of the OpAMP server for this client.

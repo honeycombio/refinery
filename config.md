@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-10-01 at 18:54:38 UTC.
+It was automatically generated on 2025-10-02 at 19:03:23 UTC.
 
 ## The Config file
 
@@ -157,41 +157,6 @@ This setting is the destination to which Refinery sends all events that it decid
 OpAMP support is an experimental feature, subject to breaking changes at any time.
 Not intended or supported for customer use.
 **FOR INTERNAL USE ONLY**
-
-### `Enabled`
-
-Enabled controls whether to enable OpAMP support.
-
-OpAMP support is an experimental feature, subject to breaking changes at any time.
-Not intended or supported for customer use.
-**FOR INTERNAL USE ONLY**
-
-- Not eligible for live reload.
-- Type: `bool`
-
-### `RecordUsage`
-
-RecordUsage controls whether to record usage metrics.
-
-OpAMP support is an experimental feature, subject to breaking changes at any time.
-Not intended or supported for customer use.
-**FOR INTERNAL USE ONLY**
-
-- Eligible for live reload.
-- Type: `bool`
-- Default: `true`
-
-### `Endpoint`
-
-Endpoint is the URL of the OpAMP server for this client.
-
-OpAMP support is an experimental feature, subject to breaking changes at any time.
-Not intended or supported for customer use.
-**FOR INTERNAL USE ONLY**
-
-- Not eligible for live reload.
-- Type: `string`
-- Default: `wss://127.0.0.1:4320/v1/opamp`
 
 ## Access Key Configuration
 

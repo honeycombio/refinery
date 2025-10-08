@@ -134,7 +134,6 @@ func Test_applyReplacement(t *testing.T) {
 		groupName       string
 		deprecatedValue any
 		data            map[string]any
-		dryRun          bool
 		wantMessage     string
 		wantApplied     bool
 		expectedData    map[string]any
@@ -148,7 +147,6 @@ func Test_applyReplacement(t *testing.T) {
 			groupName:       "TestGroup",
 			deprecatedValue: int(10),
 			data:            map[string]any{},
-			dryRun:          false,
 			wantMessage:     "NewField set to 30 (using formula: 3 * value)",
 			wantApplied:     true,
 			expectedData: map[string]any{
@@ -170,7 +168,6 @@ func Test_applyReplacement(t *testing.T) {
 					"ExistingField": "already here",
 				},
 			},
-			dryRun:      false,
 			wantMessage: "",
 			wantApplied: false,
 			expectedData: map[string]any{
@@ -192,7 +189,6 @@ func Test_applyReplacement(t *testing.T) {
 					"OtherField": "other",
 				},
 			},
-			dryRun:      false,
 			wantMessage: "NewField set to 10 (using formula: 2 * value)",
 			wantApplied: true,
 			expectedData: map[string]any{
@@ -201,20 +197,6 @@ func Test_applyReplacement(t *testing.T) {
 					"NewField":   int64(10),
 				},
 			},
-		},
-		{
-			name: "dry run mode doesn't modify data",
-			replacement: config.Replacement{
-				Field:   "NewField",
-				Formula: "value",
-			},
-			groupName:       "TestGroup",
-			deprecatedValue: int(10),
-			data:            map[string]any{},
-			dryRun:          true,
-			wantMessage:     "NewField set to 10 (using formula: value)",
-			wantApplied:     true,
-			expectedData:    map[string]any{}, // Should remain unchanged
 		},
 		{
 			name: "skip replacement when target field exists (overwrite protection)",
@@ -229,7 +211,6 @@ func Test_applyReplacement(t *testing.T) {
 					"ExistingField": "original_value",
 				},
 			},
-			dryRun:      false,
 			wantMessage: "",
 			wantApplied: false,
 			expectedData: map[string]any{
@@ -247,7 +228,6 @@ func Test_applyReplacement(t *testing.T) {
 			groupName:       "TestGroup",
 			deprecatedValue: int(10),
 			data:            map[string]any{},
-			dryRun:          false,
 			wantMessage:     "",
 			wantApplied:     false,
 			expectedData:    map[string]any{},
@@ -255,7 +235,7 @@ func Test_applyReplacement(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			message, applied := applyReplacement(tt.replacement, tt.groupName, tt.deprecatedValue, tt.data, tt.dryRun)
+			message, applied := applyReplacement(tt.replacement, tt.groupName, tt.deprecatedValue, tt.data)
 			assert.Equal(t, tt.wantMessage, message)
 			assert.Equal(t, tt.wantApplied, applied)
 			assert.True(t, reflect.DeepEqual(tt.data, tt.expectedData))
