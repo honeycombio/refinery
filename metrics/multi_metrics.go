@@ -20,14 +20,14 @@ var _ Metrics = (*MultiMetrics)(nil)
 //
 // To minimize lock contention, this implementation uses sync.Map for lock-free
 // concurrent access to metric values. atomic.Uint64 and atomic.Int64 types are used
-// for lock-free concurrent updates.
+// for reduced lock contention.
 type MultiMetrics struct {
 	Config      config.Config  `inject:""`
 	PromMetrics MetricsBackend `inject:"promMetrics"`
 	OTelMetrics MetricsBackend `inject:"otelMetrics"`
 	children    []MetricsBackend
 
-	// Use sync.Map with atomic types for lock-free concurrent access
+	// Use sync.Map with atomic types for reduced lock contention across metric types
 	counters sync.Map // map[string]*atomic.Uint64
 	gauges   sync.Map // map[string]*atomic.Uint64 (stores float64 bits)
 	updowns  sync.Map // map[string]*atomic.Int64 (can be negative)
