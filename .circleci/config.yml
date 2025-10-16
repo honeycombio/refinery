@@ -65,7 +65,7 @@ commands:
 jobs:
   test:
     docker:
-      - image: cimg/go:1.24
+      - image: cimg/go:1.25
       - image: redis:6.2
     resource_class: xlarge
     steps:
@@ -93,7 +93,7 @@ jobs:
 
   build_binaries:
     docker:
-      - image: cimg/go:1.24
+      - image: cimg/go:1.25
     steps:
       - checkout
       - go-build:
@@ -184,7 +184,7 @@ jobs:
 
   build_docker:
     docker:
-      - image: cimg/go:1.24
+      - image: cimg/go:1.25
     steps:
       - checkout
       - setup_googleko
@@ -213,7 +213,7 @@ jobs:
 
   publish_docker_to_private_ecr:
     docker:
-      - image: cimg/go:1.24
+      - image: cimg/go:1.25
     steps:
       - checkout
       - setup_remote_docker
@@ -236,7 +236,7 @@ jobs:
 
   publish_docker_to_ecr_sippycup:
     docker:
-      - image: cimg/go:1.24
+      - image: cimg/go:1.25
     steps:
       - checkout
       - setup_remote_docker
@@ -260,7 +260,7 @@ jobs:
 
   publish_docker_to_all_public_registries:
     docker:
-      - image: cimg/go:1.24
+      - image: cimg/go:1.25
     steps:
       - checkout
       - setup_remote_docker
