@@ -52,19 +52,6 @@ func (p *MockPeers) Ready() error {
 	return nil
 }
 
-func (p *MockPeers) TriggerCallbacks() {
-	var callbacks []func()
-	p.mut.RLock()
-	copy(callbacks, p.callbacks)
-	p.mut.RUnlock()
-
-	if callbacks != nil {
-		for _, c := range callbacks {
-			c()
-		}
-	}
-}
-
 // UpdatePeers changes the peer list and triggers callbacks
 func (p *MockPeers) UpdatePeers(newPeers []string) {
 	p.mut.Lock()
