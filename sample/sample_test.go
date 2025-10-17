@@ -83,7 +83,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
-		&inject.Object{Value: &peer.MockPeers{Peers: []string{"foo", "bar"}}},
+		&inject.Object{Value: peer.NewMockPeers([]string{"foo", "bar"}, "")},
 	)
 	if err != nil {
 		t.Error(err)
@@ -111,7 +111,7 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
+		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production")
@@ -140,7 +140,7 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
+		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production")
@@ -169,7 +169,7 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
+		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production")
@@ -475,7 +475,7 @@ func TestDifferentDatasetsShouldNotShareDynsampler(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
+		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
 	defer factory.Stop()
@@ -498,9 +498,7 @@ func TestDifferentDatasetsShouldNotShareDynsampler(t *testing.T) {
 // and their impact on throughput-based sampling behavior.
 func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	// Create a test peer manager that we can control
-	testPeers := &TestPeerMockWithCallback{
-		peers: []string{"peer1"}, // Start with 1 peer (just ourselves)
-	}
+	testPeers := peer.NewMockPeers([]string{"peer1"}, "")
 
 	// Create a SamplerFactory directly for testing the cluster size behavior
 	cm := makeYAML(
@@ -540,8 +538,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	assert.Equal(t, 100, throughputSampler.dynsampler.GoalThroughputPerSec)
 
 	// Add a second peer
-	testPeers.peers = []string{"peer1", "peer2"}
-	testPeers.TriggerUpdate()
+	testPeers.UpdatePeers([]string{"peer1", "peer2"})
 
 	// Throughput should now be 100/2 = 50
 	assert.Eventually(t, func() bool {
@@ -549,8 +546,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated to 50 with 2 peers")
 
 	// Add a third peer
-	testPeers.peers = []string{"peer1", "peer2", "peer3"}
-	testPeers.TriggerUpdate()
+	testPeers.UpdatePeers([]string{"peer1", "peer2", "peer3"})
 
 	// Throughput should now be 100/3 = 33 (rounded down to at least 1)
 	assert.Eventually(t, func() bool {
@@ -558,8 +554,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated to 33 with 3 peers")
 
 	// Remove a peer (back to 2)
-	testPeers.peers = []string{"peer1", "peer2"}
-	testPeers.TriggerUpdate()
+	testPeers.UpdatePeers([]string{"peer1", "peer2"})
 
 	// Throughput should be back to 100/2 = 50
 	assert.Eventually(t, func() bool {
@@ -637,7 +632,7 @@ func BenchmarkGetSamplerImplementation(b *testing.B) {
 	cfg, rules := createTempConfigs(b, cm, rm)
 	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(b, err)
-	mockPeers := &peer.MockPeers{Peers: []string{"foo", "bar"}}
+	mockPeers := peer.NewMockPeers([]string{"foo", "bar"}, "")
 	mockPeers.Start()
 
 	factory := SamplerFactory{
