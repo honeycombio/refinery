@@ -63,54 +63,41 @@ unset GOARCH
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(make latest_modification_time)}
 
-# If KO_DOCKER_REPOS is set (comma-separated list), build once and push to multiple registries
-if [[ -n "${KO_DOCKER_REPOS:-}" ]]; then
-  # Build the image once to a local registry first
-  LOCAL_REPO="ko.local"
-  ORIGINAL_REPO="${KO_DOCKER_REPO:-ko.local}"
-  export KO_DOCKER_REPO="$LOCAL_REPO"
+# Build the image once, either to a remote registry designated by PRIMARY_DOCKER_REPO
+# or to the local repository as "ko.local/refinery:<tags>" if PRIMARY_DOCKER_REPO is not set.
+export KO_DOCKER_REPO="${PRIMARY_DOCKER_REPO:-ko.local}"
 
-  echo "Building image locally with ko for multi-registry push..."
-  # shellcheck disable=SC2086
-  IMAGE_REF=$(./ko publish \
-    --tags "${TAGS}" \
-    --base-import-paths \
-    --platform "linux/amd64,linux/arm64" \
-    --image-label org.opencontainers.image.source=https://github.com/honeycombio/refinery \
-    --image-label org.opencontainers.image.licenses=Apache-2.0 \
-    --image-label org.opencontainers.image.revision=${GIT_COMMIT} \
-    ./cmd/refinery)
+echo "Building image locally with ko for multi-registry push..."
+# shellcheck disable=SC2086
+IMAGE_REF=$(./ko publish \
+  --tags "${TAGS}" \
+  --base-import-paths \
+  --platform "linux/amd64,linux/arm64" \
+  --image-label org.opencontainers.image.source=https://github.com/honeycombio/refinery \
+  --image-label org.opencontainers.image.licenses=Apache-2.0 \
+  --image-label org.opencontainers.image.revision=${GIT_COMMIT} \
+  ./cmd/refinery)
 
-  echo "Built image: $IMAGE_REF"
-  echo "Pushing to multiple registries: $KO_DOCKER_REPOS"
-  
-  IFS=',' read -ra REPOS <<< "$KO_DOCKER_REPOS"
+echo "Built image: ${IMAGE_REF}"
+
+# If COPY_DOCKER_REPOS is set, copy the built image to each of the listed registries.
+# This is a comma-separated list of registry/repo names, e.g.
+#   "public.ecr.aws/honeycombio,ghcr.io/honeycombio/refinery"
+if [[ -n "${COPY_DOCKER_REPOS:-}" ]]; then
+  echo "Pushing to multiple registries: ${COPY_DOCKER_REPOS}"
+
+  IFS=',' read -ra REPOS <<< "$COPY_DOCKER_REPOS"
   for REPO in "${REPOS[@]}"; do
     REPO=$(echo "$REPO" | xargs) # trim whitespace
     echo "Tagging and pushing to: $REPO"
-    
+
     # Tag for each tag in the TAGS list
     IFS=',' read -ra TAG_LIST <<< "$TAGS"
     for TAG in "${TAG_LIST[@]}"; do
       TAG=$(echo "$TAG" | xargs) # trim whitespace
       TARGET_IMAGE="$REPO/refinery:$TAG"
-      echo "Tagging $IMAGE_REF as $TARGET_IMAGE"
-      docker tag "$IMAGE_REF" "$TARGET_IMAGE"
-      echo "Pushing $TARGET_IMAGE"
-      docker push "$TARGET_IMAGE"
+      echo "Copying $IMAGE_REF to $TARGET_IMAGE"
+      ./crane copy "$IMAGE_REF" "$TARGET_IMAGE"
     done
   done
-else
-  # Single registry mode - use ko publish directly
-  export KO_DOCKER_REPO=${KO_DOCKER_REPO:-ko.local}
-  echo "Publishing to single registry: $KO_DOCKER_REPO"
-  # shellcheck disable=SC2086
-  ./ko publish \
-    --tags "${TAGS}" \
-    --base-import-paths \
-    --platform "linux/amd64,linux/arm64" \
-    --image-label org.opencontainers.image.source=https://github.com/honeycombio/refinery \
-    --image-label org.opencontainers.image.licenses=Apache-2.0 \
-    --image-label org.opencontainers.image.revision=${GIT_COMMIT} \
-    ./cmd/refinery
 fi

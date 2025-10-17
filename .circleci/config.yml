@@ -56,11 +56,12 @@ commands:
       - restore_cache:
           keys:
             - v2-googleko-{{ checksum "Makefile" }}
-      - run: make ko
+      - run: make ko crane
       - save_cache:
           key: v2-googleko-{{ checksum "Makefile" }}
           paths:
             - ./ko
+            - ./crane
 
 jobs:
   test:
@@ -231,7 +232,7 @@ jobs:
       - run:
           name: build and publish to private ECR
           command: |
-            export KO_DOCKER_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
+            export PRIMARY_DOCKER_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
             ./build-docker.sh
 
   publish_docker_to_ecr_sippycup:
@@ -255,7 +256,7 @@ jobs:
       - run:
           name: publish docker image to aws ecr
           environment:
-            KO_DOCKER_REPO: 017118846235.dkr.ecr.us-east-1.amazonaws.com
+            PRIMARY_DOCKER_REPO: 017118846235.dkr.ecr.us-east-1.amazonaws.com
           command: ./build-docker.sh
 
   publish_docker_to_all_public_registries:
@@ -280,7 +281,8 @@ jobs:
       - run:
           name: build once and publish to all public registries
           command: |
-            export KO_DOCKER_REPOS="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com,honeycombio,public.ecr.aws/honeycombio,ghcr.io/honeycombio/refinery"
+            export PRIMARY_DOCKER_REPO="honeycombio"
+            export COPY_DOCKER_REPOS="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com,public.ecr.aws/honeycombio,ghcr.io/honeycombio/refinery"
             echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
             echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_USERNAME}" --password-stdin
             ./build-docker.sh
