@@ -3159,10 +3159,11 @@ func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
 	require.NoError(t, err)
 	defer samplerFactory.Stop()
 
+	sampleRate := int64(10)
 	// Create two identical downstream sampler configs
 	downstreamConfig := &config.RulesBasedDownstreamSampler{
 		DynamicSampler: &config.DynamicSamplerConfig{
-			SampleRate: 2,
+			SampleRate: sampleRate,
 			FieldList:  []string{"service.name"},
 		},
 	}
@@ -3240,12 +3241,12 @@ func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
 
 	// Both rules should work and return sample rates
 	rate1, _, reason1, key1 := rulesSampler.GetSampleRate(trace1)
-	assert.Equal(t, rate1, uint(2))
+	assert.Equal(t, rate1, uint(sampleRate))
 	assert.Contains(t, reason1, "test-rule-1")
 	assert.Equal(t, "test-service•,", key1)
 
 	rate2, _, reason2, key2 := rulesSampler.GetSampleRate(trace2)
-	assert.Equal(t, rate2, uint(2))
+	assert.Equal(t, rate2, uint(sampleRate))
 	assert.Contains(t, reason2, "test-rule-2")
 	assert.Equal(t, "test-service•,", key2)
 
