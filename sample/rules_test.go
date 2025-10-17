@@ -3162,32 +3162,10 @@ func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
 	// Create two identical downstream sampler configs
 	downstreamConfig := &config.RulesBasedDownstreamSampler{
 		DynamicSampler: &config.DynamicSamplerConfig{
-			SampleRate: 10,
+			SampleRate: 2,
 			FieldList:  []string{"service.name"},
 		},
 	}
-
-	// Create the first downstream sampler
-	sampler1 := samplerFactory.GetDownstreamSampler("test-key", downstreamConfig)
-	require.NotNil(t, sampler1)
-	
-	// Create the second downstream sampler with identical config
-	sampler2 := samplerFactory.GetDownstreamSampler("test-key", downstreamConfig)
-	require.NotNil(t, sampler2)
-
-	// Both samplers should be different instances (they are wrapper structs)
-	assert.NotSame(t, sampler1, sampler2)
-
-	// But they should share the same underlying dynsampler
-	dynamicSampler1, ok1 := sampler1.(*DynamicSampler)
-	require.True(t, ok1, "sampler1 should be a DynamicSampler")
-	
-	dynamicSampler2, ok2 := sampler2.(*DynamicSampler)
-	require.True(t, ok2, "sampler2 should be a DynamicSampler")
-
-	// The underlying dynsamplers should be the same instance (shared)
-	assert.Same(t, dynamicSampler1.dynsampler, dynamicSampler2.dynsampler,
-		"Both DynamicSamplers should share the same underlying dynsampler")
 
 	// Test that RulesBasedSampler uses shared dynsamplers
 	rulesConfig := &config.RulesBasedSamplerConfig{
@@ -3204,7 +3182,7 @@ func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
 				Sampler: downstreamConfig,
 			},
 			{
-				Name: "test-rule-2", 
+				Name: "test-rule-2",
 				Conditions: []*config.RulesBasedSamplerCondition{
 					{
 						Field:    "rule_test",
@@ -3261,21 +3239,28 @@ func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
 	trace2.AddSpan(span2)
 
 	// Both rules should work and return sample rates
-	rate1, keep1, reason1, key1 := rulesSampler.GetSampleRate(trace1)
-	assert.Greater(t, rate1, uint(0))
+	rate1, _, reason1, key1 := rulesSampler.GetSampleRate(trace1)
+	assert.Equal(t, rate1, uint(2))
 	assert.Contains(t, reason1, "test-rule-1")
 	assert.Equal(t, "test-service•,", key1)
 
-	rate2, keep2, reason2, key2 := rulesSampler.GetSampleRate(trace2)
-	assert.Greater(t, rate2, uint(0))
+	rate2, _, reason2, key2 := rulesSampler.GetSampleRate(trace2)
+	assert.Equal(t, rate2, uint(2))
 	assert.Contains(t, reason2, "test-rule-2")
 	assert.Equal(t, "test-service•,", key2)
 
-	// Since both rules use the same downstream sampler config,
-	// they should get the same sample rates (shared dynsampler state)
-	assert.Equal(t, rate1, rate2, "Both rules should get the same sample rate due to shared dynsampler")
+	// Verify that both rules actually share the same dynsampler by checking
+	// that they reference the same underlying dynsampler instance
+	rule1Key := rulesConfig.Rules[0].String()
+	rule2Key := rulesConfig.Rules[1].String()
 
-	t.Logf("Rule 1: rate=%d, keep=%v, reason=%s", rate1, keep1, reason1)
-	t.Logf("Rule 2: rate=%d, keep=%v, reason=%s", rate2, keep2, reason2)
+	rule1Sampler, ok := rulesSampler.samplers[rule1Key].(*DynamicSampler)
+	require.True(t, ok, "rule 1 sampler should be a DynamicSampler")
+
+	rule2Sampler, ok := rulesSampler.samplers[rule2Key].(*DynamicSampler)
+	require.True(t, ok, "rule 2 sampler should be a DynamicSampler")
+
+	// This is the critical assertion: both rules must share the exact same dynsampler instance
+	assert.Same(t, rule1Sampler.dynsampler, rule2Sampler.dynsampler,
+		"Both rules should share the same underlying dynsampler instance")
 }
-
