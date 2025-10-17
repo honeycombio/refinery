@@ -201,7 +201,7 @@ jobs:
 
   smoke-test:
     machine:
-      image: ubuntu-2204:2024.01.1
+      image: ubuntu-2204:2025.09.1
     steps:
       - checkout
       - restore_cache:

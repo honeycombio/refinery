@@ -63,6 +63,7 @@ unset GOARCH
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(make latest_modification_time)}
 export GOEXPERIMENT=greenteagc
+go version
 
 # If KO_DOCKER_REPOS is set (comma-separated list), build once and push to multiple registries
 if [[ -n "${KO_DOCKER_REPOS:-}" ]]; then
