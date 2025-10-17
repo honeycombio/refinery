@@ -419,38 +419,6 @@ func (m *MockSampler) SaveState() ([]byte, error) {
 	return nil, nil
 }
 
-// TestPeerMockWithCallback is a test peer implementation that supports triggering callbacks
-type TestPeerMockWithCallback struct {
-	peers    []string
-	callback func()
-}
-
-func (p *TestPeerMockWithCallback) GetPeers() ([]string, error) {
-	return p.peers, nil
-}
-
-func (p *TestPeerMockWithCallback) GetInstanceID() (string, error) {
-	return "test-instance", nil
-}
-
-func (p *TestPeerMockWithCallback) RegisterUpdatedPeersCallback(callback func()) {
-	p.callback = callback
-}
-
-func (p *TestPeerMockWithCallback) Ready() error {
-	return nil
-}
-
-func (p *TestPeerMockWithCallback) Start() error {
-	return nil
-}
-
-func (p *TestPeerMockWithCallback) TriggerUpdate() {
-	if p.callback != nil {
-		p.callback()
-	}
-}
-
 func TestDifferentDatasetsShouldNotShareDynsampler(t *testing.T) {
 	// This test demonstrates the bug where different datasets with identical
 	// sampler configs incorrectly share the same dynsampler instance
