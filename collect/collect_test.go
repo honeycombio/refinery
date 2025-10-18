@@ -110,10 +110,7 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 		StressRelief:     &MockStressReliever{},
 		SamplerFactory:   sf,
 		done:             make(chan struct{}),
-		Peers: &peer.MockPeers{
-			Peers: []string{"api1", "api2"},
-			ID:    "api1",
-		},
+		Peers:            peer.NewMockPeers([]string{"api1", "api2"}, "api1"),
 		Sharder: &sharder.MockSharder{
 			Self: &sharder.TestShard{
 				Addr: "api1",
