@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -319,7 +320,7 @@ type CollectionConfig struct {
 	// NumCollectLoops controls the number of parallel collection loops.
 	// Each loop processes a subset of traces independently.
 	// Higher values can improve throughput on multi-core systems.
-	NumCollectLoops int `yaml:"NumCollectLoops" default:"8"`
+	NumCollectLoops int `yaml:"NumCollectLoops"` // default: GOXMAXPROCS
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
@@ -348,6 +349,9 @@ func (c CollectionConfig) GetIncomingQueueSize() int {
 // GetNumCollectLoops returns the number of parallel collection loops.
 // Ensures the value is at least 1.
 func (c CollectionConfig) GetNumCollectLoops() int {
+	if c.NumCollectLoops == 0 {
+		return runtime.GOMAXPROCS(0)
+	}
 	return max(c.NumCollectLoops, 1)
 }
 

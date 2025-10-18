@@ -2,11 +2,29 @@ package config
 
 import (
 	"errors"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func Test_GetNumCollectLoops(t *testing.T) {
+	for _, tC := range []struct {
+		name     string
+		numLoops int
+		want     int
+	}{
+		{"default", 0, runtime.GOMAXPROCS(0)},
+		{"configured/one worker", 1, 1},       // minimum allowed
+		{"configured/multiple workers", 4, 4}, // custom value
+	} {
+		t.Run(tC.name, func(t *testing.T) {
+			c := &CollectionConfig{NumCollectLoops: tC.numLoops}
+			assert.Equal(t, tC.want, c.GetNumCollectLoops())
+		})
+	}
+}
 
 func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 	type fields struct {
