@@ -575,10 +575,7 @@ func TestPeerRouting(t *testing.T) {
 		var graph inject.Graph
 		basePort := 11000 + (i * 2)
 		senders[i] = &transmit.MockTransmission{}
-		peers := &peer.MockPeers{
-			Peers: peerList,
-			ID:    peerList[i],
-		}
+		peers := peer.NewMockPeers(peerList, peerList[i])
 		redisDB := 5 + i
 		cfg := defaultConfig(basePort, redisDB, "")
 
@@ -706,10 +703,7 @@ func TestEventsEndpoint(t *testing.T) {
 		var graph inject.Graph
 		basePort := 13000 + (i * 2)
 		senders[i] = &transmit.MockTransmission{}
-		peers := &peer.MockPeers{
-			Peers: peerList,
-			ID:    peerList[i],
-		}
+		peers := peer.NewMockPeers(peerList, peerList[i])
 		redisDB := 8 + i
 
 		cfg := defaultConfig(basePort, redisDB, "")
@@ -805,10 +799,7 @@ func TestEventsEndpointWithNonLegacyKey(t *testing.T) {
 	for i := range apps {
 		basePort := 15000 + (i * 2)
 		senders[i] = &transmit.MockTransmission{}
-		peers := &peer.MockPeers{
-			Peers: peerList,
-			ID:    peerList[i],
-		}
+		peers := peer.NewMockPeers(peerList, peerList[i])
 
 		redisDB := 10 + i
 		cfg := defaultConfig(basePort, redisDB, "")
@@ -1393,62 +1384,6 @@ func BenchmarkTraces(b *testing.B) {
 	}
 }
 
-// MockPeersWithUpdates extends MockPeers to support dynamic peer list updates
-type MockPeersWithUpdates struct {
-	peers     []string
-	id        string
-	callbacks []func()
-	mutex     sync.RWMutex
-}
-
-func (p *MockPeersWithUpdates) GetPeers() ([]string, error) {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-	return p.peers, nil
-}
-
-func (p *MockPeersWithUpdates) GetInstanceID() (string, error) {
-	p.mutex.RLock()
-	defer p.mutex.RUnlock()
-	return p.id, nil
-}
-
-func (p *MockPeersWithUpdates) RegisterUpdatedPeersCallback(callback func()) {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	p.callbacks = append(p.callbacks, callback)
-}
-
-func (p *MockPeersWithUpdates) Start() error {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
-	if len(p.id) == 0 && len(p.peers) > 0 {
-		p.id = p.peers[0]
-	}
-	return nil
-}
-
-func (p *MockPeersWithUpdates) Ready() error {
-	return nil
-}
-
-// UpdatePeers changes the peer list and triggers callbacks
-func (p *MockPeersWithUpdates) UpdatePeers(newPeers []string) {
-	p.mutex.Lock()
-	p.peers = newPeers
-	if len(newPeers) > 0 && p.id == "" {
-		p.id = newPeers[0]
-	}
-	callbacks := make([]func(), len(p.callbacks))
-	copy(callbacks, p.callbacks)
-	p.mutex.Unlock()
-
-	// Trigger callbacks outside the lock
-	for _, callback := range callbacks {
-		callback()
-	}
-}
-
 // createRulesBasedConfig creates a mock config with rules-based sampler containing downstream samplers
 func createRulesBasedConfig(port, redisDB int, apiURL string, throughputGoal int) *config.MockConfig {
 	cfg := defaultConfig(port, redisDB, apiURL)
@@ -1534,10 +1469,7 @@ func TestRulesBasedSamplerWithDownstreamAndClusterChanges(t *testing.T) {
 	testServer := newTestAPIServer(t)
 
 	// Phase 1: Initial setup with single-node cluster
-	mockPeers := &MockPeersWithUpdates{
-		peers: []string{"http://localhost:20001"}, // Single peer initially
-		id:    "http://localhost:20001",
-	}
+	mockPeers := peer.NewMockPeers([]string{"http://localhost:20001"}, "http://localhost:20001")
 
 	cfg := createRulesBasedConfig(port, redisDB, testServer.server.URL, 100)
 	_, graph := newStartedApp(t, nil, mockPeers, cfg)
@@ -1826,10 +1758,7 @@ func BenchmarkDistributedTraces(b *testing.B) {
 	for i := range apps {
 		var graph inject.Graph
 		basePort := 12000 + (i * 2)
-		peers := &peer.MockPeers{
-			Peers: peerList,
-			ID:    peerList[i],
-		}
+		peers := peer.NewMockPeers(peerList, peerList[i])
 
 		redisDB := 2 + i
 		cfg := defaultConfig(basePort, redisDB, "")
