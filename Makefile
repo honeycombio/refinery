@@ -147,18 +147,18 @@ verify-licenses: install-tools
     fi; \
 
 .PHONY: smoke
-smoke: dockerize local_image
+smoke: local_image
 	@echo ""
 	@echo "+++ Smoking all the tests."
 	@echo ""
 	@echo ""
 	@echo "+++ Spin up Refinery and Redis."
 	@echo ""
-	cd smoke-test && docker compose up --detach --wait-timeout 10
+	cd smoke-test && docker compose up --detach --wait --wait-timeout 20
 	@echo ""
-	@echo "+++ Verify Refinery is ready within the timeout."
+	@echo "+++ Verify Refinery is ready via healthcheck."
 	@echo ""
-	$(DOCKERIZE_CMD) -wait http://localhost:8080/ready -timeout 5s
+	cd smoke-test && docker compose exec -T refinery wget --spider -q http://localhost:8080/ready
 
 .PHONY: unsmoke
 unsmoke:
