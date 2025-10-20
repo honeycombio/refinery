@@ -26,6 +26,31 @@ func Test_GetNumCollectLoops(t *testing.T) {
 	}
 }
 
+func Test_GetQueueSizesPerLoop(t *testing.T) {
+	for _, tC := range []struct {
+		name                string
+		incomingQueueSize   int
+		peerQueueSize       int
+		numCollectLoops     int
+		wantIncomingPerLoop int
+		wantPeerPerLoop     int
+	}{
+		{"default/single loop", 30000, 30000, 1, 30000, 30000},
+		{"even division/multiple loops", 100, 50, 5, 20, 10},
+		{"uneven division/multiple loops", 5, 5, 2, 3, 3}, // rounds up
+	} {
+		t.Run(tC.name, func(t *testing.T) {
+			c := &CollectionConfig{
+				IncomingQueueSize: tC.incomingQueueSize,
+				PeerQueueSize:     tC.peerQueueSize,
+				NumCollectLoops:   tC.numCollectLoops,
+			}
+			assert.Equal(t, tC.wantIncomingPerLoop, c.GetIncomingQueueSizePerLoop())
+			assert.Equal(t, tC.wantPeerPerLoop, c.GetPeerQueueSizePerLoop())
+		})
+	}
+}
+
 func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 	type fields struct {
 		ReceiveKeys          []string
