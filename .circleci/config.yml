@@ -198,10 +198,11 @@ jobs:
             - /home/circleci/.cache/go-build
 
   smoke-test:
-    machine:
-      image: ubuntu-2204:2024.01.1
+    docker:
+      - image: cimg/go:1.25
     steps:
       - checkout
+      - setup_remote_docker
       - restore_cache:
           keys:
             - v2-googleko-{{ checksum "Makefile" }}

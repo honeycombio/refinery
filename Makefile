@@ -3,6 +3,7 @@ MAKEFLAGS += --no-builtin-rules
 MAKEFLAGS += --no-builtin-variables
 
 GOTESTCMD = $(if $(shell command -v gotestsum),gotestsum --junitfile ./test_results/$(1).xml --format testname --,go test)
+DOCKERIZE_CMD = $(if $(shell command -v dockerize),dockerize,./dockerize)
 
 .PHONY: test
 #: run all tests
@@ -43,8 +44,8 @@ wait_for_redis: dockerize
 	@echo
 	@echo "+++ We need a Redis running to run the tests."
 	@echo
-	@echo "Checking with dockerize $(shell ./dockerize --version)"
-	@./dockerize -wait tcp://localhost:6379 -timeout 30s
+	@echo "Checking with dockerize $(shell $(DOCKERIZE_CMD) --version)"
+	@$(DOCKERIZE_CMD) -wait tcp://localhost:6379 -timeout 30s
 
 # You can override this version from an environment variable.
 HOST_OS := $(shell uname -s | tr A-Z a-z)
@@ -80,7 +81,16 @@ latest_modification_time:
 	@echo $(call __latest_modification_time)
 
 # ensure the dockerize command is available
-dockerize: dockerize.tar.gz
+.PHONY: dockerize
+dockerize:
+ifeq (, $(shell command -v dockerize))
+	@echo "dockerize not found in PATH, downloading..."
+	@$(MAKE) dockerize_local
+else
+	@echo "Using system dockerize: $(shell command -v dockerize)"
+endif
+
+dockerize_local: dockerize.tar.gz
 	tar xzvmf dockerize.tar.gz
 
 # You can override this version from an environment variable.
@@ -148,7 +158,7 @@ smoke: dockerize local_image
 	@echo ""
 	@echo "+++ Verify Refinery is ready within the timeout."
 	@echo ""
-	./dockerize -wait http://localhost:8080/ready -timeout 5s
+	$(DOCKERIZE_CMD) -wait http://localhost:8080/ready -timeout 5s
 
 .PHONY: unsmoke
 unsmoke:
