@@ -320,7 +320,7 @@ type CollectionConfig struct {
 	// NumCollectLoops controls the number of parallel collection loops.
 	// Each loop processes a subset of traces independently.
 	// Higher values can improve throughput on multi-core systems.
-	NumCollectLoops int `yaml:"NumCollectLoops"` // default: GOXMAXPROCS
+	NumCollectLoops int `yaml:"NumCollectLoops"` // default: GOMAXPROCS
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
