@@ -212,8 +212,9 @@ func (i *InMemCollector) Start() error {
 	i.collectLoops = make([]*CollectLoop, numLoops)
 
 	// Divide queue sizes among loops
-	incomingPerLoop := imcConfig.GetIncomingQueueSize() / numLoops
-	peerPerLoop := imcConfig.GetPeerQueueSize() / numLoops
+	// Round up the queue size per loop to make sure we have at least configured total queue size
+	incomingPerLoop := (imcConfig.GetIncomingQueueSize() + numLoops - 1) / numLoops
+	peerPerLoop := (imcConfig.GetPeerQueueSize() + numLoops - 1) / numLoops
 
 	for loopID := range i.collectLoops {
 		loop := NewCollectLoop(loopID, i, incomingPerLoop, peerPerLoop)
