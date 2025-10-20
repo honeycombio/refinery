@@ -154,11 +154,13 @@ smoke: local_image
 	@echo ""
 	@echo "+++ Spin up Refinery and Redis."
 	@echo ""
-	cd smoke-test && docker compose up --detach --wait --wait-timeout 20
+	cd smoke-test && docker compose up --detach refinery redis
 	@echo ""
-	@echo "+++ Verify Refinery is ready via healthcheck."
+	@echo "+++ Verify Refinery is ready."
 	@echo ""
-	cd smoke-test && docker compose exec -T refinery wget --spider -q http://localhost:8080/ready
+	cd smoke-test && docker compose run --rm healthcheck
+	@echo ""
+	@echo "+++ Smoke test passed!"
 
 .PHONY: unsmoke
 unsmoke:
