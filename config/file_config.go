@@ -349,10 +349,11 @@ func (c CollectionConfig) GetIncomingQueueSizePerLoop() int {
 // GetNumCollectLoops returns the number of parallel collection loops.
 // Ensures the value is at least 1.
 func (c CollectionConfig) GetNumCollectLoops() int {
-	if c.NumCollectLoops == 0 {
-		return runtime.GOMAXPROCS(0)
+	num := c.NumCollectLoops
+	if num == 0 {
+		num = runtime.GOMAXPROCS(0)
 	}
-	return max(c.NumCollectLoops, 1)
+	return max(num, 1)
 }
 
 type SpecializedConfig struct {
