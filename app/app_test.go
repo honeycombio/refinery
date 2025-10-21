@@ -451,11 +451,16 @@ func TestAppIntegration(t *testing.T) {
 
 	require.EventuallyWithT(t, func(collect *assert.CollectT) {
 		events := testServer.getEvents()
-		require.Len(collect, events, 1)
-		assert.Equal(collect, "dataset", events[0].Dataset)
-		assert.Equal(collect, "bar", events[0].Data.Get("foo"))
-		assert.Equal(collect, "1", events[0].Data.Get("trace.trace_id"))
-		assert.Equal(collect, int64(1), events[0].Data.Get(types.MetaRefineryOriginalSampleRate))
+		// TODO: fix flaky behavior where sometimes two events are received in the testServer
+		// Loop through all received events so that we can see what's the failure in CI
+		require.Greater(collect, len(events), 0)
+		for _, e := range events {
+			assert.Equal(collect, "dataset", e.Dataset)
+			assert.Equal(collect, "bar", e.Data.Get("foo"))
+			assert.Equal(collect, "1", e.Data.Get("trace.trace_id"))
+			assert.Equal(collect, int64(1), e.Data.Get(types.MetaRefineryOriginalSampleRate))
+		}
+		assert.Len(collect, events, 1)
 	}, 2*time.Second, 10*time.Millisecond)
 
 	err = startstop.Stop(graph.Objects(), nil)

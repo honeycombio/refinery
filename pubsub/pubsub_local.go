@@ -78,13 +78,16 @@ func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error
 	ps.Metrics.Count("local_pubsub_published", 1)
 	ps.Metrics.Count("local_pubsub_received", int64(len(ps.topics[topic])))
 	// make a copy of our subs so we don't hold the lock while calling them
-	subs := make([]*LocalSubscription, 0, len(ps.topics[topic]))
-	subs = append(subs, ps.topics[topic]...)
+	subs := make([]*LocalSubscription, len(ps.topics[topic]))
+	copy(subs, ps.topics[topic])
 	ps.mut.Unlock()
 	for _, sub := range subs {
 		// don't wait around for slow consumers
-		if sub.cb != nil {
-			go sub.cb(ctx, message)
+		sub.mut.RLock()
+		cb := sub.cb
+		sub.mut.RUnlock()
+		if cb != nil {
+			go cb(ctx, message)
 		}
 	}
 	return nil

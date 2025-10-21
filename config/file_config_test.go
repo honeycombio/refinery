@@ -2,11 +2,56 @@ package config
 
 import (
 	"errors"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func Test_GetNumCollectLoops(t *testing.T) {
+	for _, tC := range []struct {
+		name     string
+		numLoops int
+		want     int
+	}{
+		{"default", 0, runtime.GOMAXPROCS(0)},
+		{"configured/one worker", 1, 1},       // minimum allowed
+		{"configured/multiple workers", 4, 4}, // custom value
+	} {
+		t.Run(tC.name, func(t *testing.T) {
+			c := &CollectionConfig{NumCollectLoops: tC.numLoops}
+			assert.Equal(t, tC.want, c.GetNumCollectLoops())
+		})
+	}
+}
+
+func Test_GetQueueSizesPerLoop(t *testing.T) {
+	for _, tC := range []struct {
+		name                string
+		incomingQueueSize   int
+		peerQueueSize       int
+		numCollectLoops     int
+		wantIncomingPerLoop int
+		wantPeerPerLoop     int
+	}{
+		{"single loop/default", 30000, 30000, 1, 30000, 30000},
+		{"multiple loops/default", 30000, 30000, 8, 3750, 3750},
+		{"multiple loops/even division", 100, 50, 5, 20, 10},
+		{"multiple loops/uneven division", 5, 5, 2, 3, 3},            // rounds up
+		{"multiple loops/more loops than queue size", 3, 2, 5, 1, 1}, // minimum 1 per loop
+	} {
+		t.Run(tC.name, func(t *testing.T) {
+			c := &CollectionConfig{
+				IncomingQueueSize: tC.incomingQueueSize,
+				PeerQueueSize:     tC.peerQueueSize,
+				NumCollectLoops:   tC.numCollectLoops,
+			}
+			assert.Equal(t, tC.wantIncomingPerLoop, c.GetIncomingQueueSizePerLoop())
+			assert.Equal(t, tC.wantPeerPerLoop, c.GetPeerQueueSizePerLoop())
+		})
+	}
+}
 
 func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 	type fields struct {
