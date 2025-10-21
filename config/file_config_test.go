@@ -35,9 +35,11 @@ func Test_GetQueueSizesPerLoop(t *testing.T) {
 		wantIncomingPerLoop int
 		wantPeerPerLoop     int
 	}{
-		{"default/single loop", 30000, 30000, 1, 30000, 30000},
-		{"even division/multiple loops", 100, 50, 5, 20, 10},
-		{"uneven division/multiple loops", 5, 5, 2, 3, 3}, // rounds up
+		{"single loop/default", 30000, 30000, 1, 30000, 30000},
+		{"multiple loops/default", 30000, 30000, 8, 3750, 3750},
+		{"multiple loops/even division", 100, 50, 5, 20, 10},
+		{"multiple loops/uneven division", 5, 5, 2, 3, 3},            // rounds up
+		{"multiple loops/more loops than queue size", 3, 2, 5, 1, 1}, // minimum 1 per loop
 	} {
 		t.Run(tC.name, func(t *testing.T) {
 			c := &CollectionConfig{
