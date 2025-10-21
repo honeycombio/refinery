@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -322,7 +323,7 @@ type CollectionConfig struct {
 	// NumCollectLoops controls the number of parallel collection loops.
 	// Each loop processes a subset of traces independently.
 	// Higher values can improve throughput on multi-core systems.
-	NumCollectLoops int `yaml:"NumCollectLoops" default:"8"`
+	NumCollectLoops int `yaml:"NumCollectLoops"` // default: GOMAXPROCS
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
@@ -334,24 +335,28 @@ func (c CollectionConfig) GetMaxAlloc() MemorySize {
 	return c.AvailableMemory * MemorySize(c.MaxMemoryPercentage) / 100
 }
 
-// GetPeerBufferCapacity returns the capacity of the in-memory channel for peer traces.
-// If PeerBufferCapacity is not set, it uses 3x the cache capacity.
-// The minimum value is 3x the cache capacity.
-func (c CollectionConfig) GetPeerQueueSize() int {
-	return c.PeerQueueSize
+// GetPeerQueueSizePerLoop returns the capacity per collect loop worker of the in-memory channel for peer traces.
+// It divides queue sizes among loops, rounding up to make sure total queue size across loops is equal to or greater than configured.
+func (c CollectionConfig) GetPeerQueueSizePerLoop() int {
+	numLoops := c.GetNumCollectLoops()
+	return (c.PeerQueueSize + numLoops - 1) / numLoops
 }
 
-// GetIncomingBufferCapacity returns the capacity of the in-memory channel for incoming traces.
-// If IncomingBufferCapacity is not set, it uses 3x the cache capacity.
-// The minimum value is 3x the cache capacity.
-func (c CollectionConfig) GetIncomingQueueSize() int {
-	return c.IncomingQueueSize
+// GetIncomingQueueSizePerLoop returns the capacity per collect loop worker of the in-memory channel for incoming traces.
+// It divides queue sizes among loops, rounding up to make sure total queue size across loops is equal to or greater than configured.
+func (c CollectionConfig) GetIncomingQueueSizePerLoop() int {
+	numLoops := c.GetNumCollectLoops()
+	return (c.IncomingQueueSize + numLoops - 1) / numLoops
 }
 
 // GetNumCollectLoops returns the number of parallel collection loops.
 // Ensures the value is at least 1.
 func (c CollectionConfig) GetNumCollectLoops() int {
-	return max(c.NumCollectLoops, 1)
+	num := c.NumCollectLoops
+	if num == 0 {
+		num = runtime.GOMAXPROCS(0)
+	}
+	return max(num, 1)
 }
 
 type SpecializedConfig struct {

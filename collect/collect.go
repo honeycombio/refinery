@@ -211,12 +211,8 @@ func (i *InMemCollector) Start() error {
 
 	i.collectLoops = make([]*CollectLoop, numLoops)
 
-	// Divide queue sizes among loops
-	incomingPerLoop := imcConfig.GetIncomingQueueSize() / numLoops
-	peerPerLoop := imcConfig.GetPeerQueueSize() / numLoops
-
 	for loopID := range i.collectLoops {
-		loop := NewCollectLoop(loopID, i, incomingPerLoop, peerPerLoop)
+		loop := NewCollectLoop(loopID, i, imcConfig.GetIncomingQueueSizePerLoop(), imcConfig.GetPeerQueueSizePerLoop())
 		i.collectLoops[loopID] = loop
 
 		// Start the collect goroutine for this loop

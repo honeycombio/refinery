@@ -160,6 +160,7 @@ func TestAddRootSpan(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -237,6 +238,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -322,6 +324,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -367,6 +370,7 @@ func TestAddSpan(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -451,6 +455,7 @@ func TestDryRunMode(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -575,10 +580,14 @@ func TestSampleConfigReload(t *testing.T) {
 			MaxBatchSize: 500,
 		},
 		// Start with DynamicSampler with low sample rate to test config changes
-		GetSamplerTypeVal:      &config.DynamicSamplerConfig{SampleRate: 2, FieldList: []string{"service.name"}},
-		TraceIdFieldNames:      []string{"trace.trace_id", "traceId"},
-		ParentIdFieldNames:     []string{"trace.parent_id", "parentId"},
-		GetCollectionConfigVal: config.CollectionConfig{IncomingQueueSize: 10, ShutdownDelay: config.Duration(1 * time.Millisecond)},
+		GetSamplerTypeVal:  &config.DynamicSamplerConfig{SampleRate: 2, FieldList: []string{"service.name"}},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   1,
+			IncomingQueueSize: 10,
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+		},
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
 			DroppedSize:       100,
@@ -706,6 +715,7 @@ func TestStableMaxAlloc(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 1000,
 			PeerQueueSize:     5,
@@ -810,6 +820,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 10,
 			PeerQueueSize:     10,
@@ -900,6 +911,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 9,
 			PeerQueueSize:     9,
@@ -998,9 +1010,10 @@ func TestLateRootGetsCounts(t *testing.T) {
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
-			IncomingQueueSize: 5,
-			PeerQueueSize:     5,
+			IncomingQueueSize: 10,
+			PeerQueueSize:     10,
 		},
 	}
 
@@ -1082,6 +1095,7 @@ func TestAddSpanCount(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1159,6 +1173,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1224,6 +1239,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1287,6 +1303,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 			"other": "bar",
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1345,7 +1362,8 @@ func TestStressReliefSampleRate(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			NumCollectLoops: 2,
+			ShutdownDelay:   config.Duration(1 * time.Millisecond),
 		},
 	}
 
@@ -1436,6 +1454,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			SamplingRate:      100,
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1534,9 +1553,10 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
-			IncomingQueueSize: 5,
-			PeerQueueSize:     5,
+			IncomingQueueSize: 10,
+			PeerQueueSize:     10,
 		},
 	}
 
@@ -1637,6 +1657,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:   2,
 			IncomingQueueSize: 500,
 			PeerQueueSize:     500,
 		},
@@ -1713,7 +1734,8 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			ShutdownDelay: config.Duration(1 * time.Millisecond),
+			NumCollectLoops: 2,
+			ShutdownDelay:   config.Duration(1 * time.Millisecond),
 		},
 	}
 
