@@ -44,18 +44,13 @@ var _ Cache = (*DefaultInMemCache)(nil)
 // order) so it is important to have a cache larger than trace throughput *
 // longest trace.
 type DefaultInMemCache struct {
-	Metrics metrics.Metrics
-	Logger  logger.Logger
+	Logger logger.Logger
 
 	pq    *kpq.KeyedPriorityQueue[string, time.Time]
 	cache map[string]*types.Trace
 }
 
 const DefaultInMemCacheCapacity = 10000
-
-var collectCacheMetrics = []metrics.Metadata{
-	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "The number of traces currently stored in the cache"},
-}
 
 func NewInMemCache(
 	met metrics.Metrics,
@@ -64,19 +59,14 @@ func NewInMemCache(
 	logger.Debug().Logf("Starting DefaultInMemCache")
 	defer func() { logger.Debug().Logf("Finished starting DefaultInMemCache") }()
 
-	for _, metadata := range collectCacheMetrics {
-		met.Register(metadata)
-	}
-
 	cmp := func(v1, v2 time.Time) bool {
 		return v1.Before(v2)
 	}
 
 	return &DefaultInMemCache{
-		Metrics: met,
-		Logger:  logger,
-		pq:      kpq.NewKeyedPriorityQueue[string](cmp),
-		cache:   make(map[string]*types.Trace),
+		Logger: logger,
+		pq:     kpq.NewKeyedPriorityQueue[string](cmp),
+		cache:  make(map[string]*types.Trace),
 	}
 }
 
@@ -114,8 +104,6 @@ func (d *DefaultInMemCache) GetCacheCapacity() int {
 // It removes and returns them.
 // If a filter is provided, it will be called with each trace to determine if it should be skipped.
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter func(*types.Trace) bool) []*types.Trace {
-	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
-
 	var expired, skipped []*types.Trace
 	for !d.pq.IsEmpty() && (max <= 0 || len(expired) < max) {
 		// pop the the next trace from the queue
@@ -158,8 +146,6 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 // RemoveTraces accepts a set of trace IDs and removes any matching ones from
 // the insertion list. This is used in the case of a cache overrun.
 func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
-	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
-
 	for _, traceID := range toDelete.Members() {
 		delete(d.cache, traceID)
 		d.pq.Remove(traceID)
