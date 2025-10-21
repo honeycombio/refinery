@@ -1517,17 +1517,18 @@ groups:
       - name: NumCollectLoops
         type: int
         valuetype: nondefault
-        default: 8
+        default: 0
         reload: false
         validations:
           - type: minimum
-            arg: 1
+            arg: 0
         summary: is the number of parallel collection loops to run for trace processing.
         description: >
           Controls the number of parallel collection loops used for processing traces.
           Each loop processes a subset of traces independently using consistent hashing.
           Values greater than 1 enable parallel processing which can improve throughput
           on multi-core systems.
+          The default of 0 means Refinery will automatically set this value to the number of logical CPUs available at startup.
 
   - name: BufferSizes
     title: "Buffer Sizes"
