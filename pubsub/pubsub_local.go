@@ -83,8 +83,11 @@ func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error
 	ps.mut.Unlock()
 	for _, sub := range subs {
 		// don't wait around for slow consumers
-		if sub.cb != nil {
-			go sub.cb(ctx, message)
+		sub.mut.RLock()
+		cb := sub.cb
+		sub.mut.RUnlock()
+		if cb != nil {
+			go cb(ctx, message)
 		}
 	}
 	return nil
