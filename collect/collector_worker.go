@@ -18,7 +18,7 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-const collectLoopHealthPrefix = "collect-loop-"
+const collectWorkerHealthPrefix = "collect-worker-"
 
 type sendEarly struct {
 	wg          *sync.WaitGroup
@@ -137,7 +137,7 @@ func (cl *CollectorWorker) addSpanFromPeer(sp *types.Span) error {
 func (cl *CollectorWorker) collect() {
 	defer cl.parent.workersWG.Done()
 
-	healthKey := collectLoopHealthPrefix + strconv.Itoa(cl.ID)
+	healthKey := collectWorkerHealthPrefix + strconv.Itoa(cl.ID)
 	cl.parent.Health.Register(healthKey, cl.parent.Config.GetHealthCheckTimeout())
 	defer cl.parent.Health.Unregister(healthKey)
 
