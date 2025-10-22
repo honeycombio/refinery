@@ -466,7 +466,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-// This method is made public so CollectLoop can access it.
+// This method is made public so CollectWorker can access it.
 func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSentRecord, keptReason string, sp *types.Span) {
 	_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]interface{}{
 		"trace_id":    sp.TraceID,
@@ -558,7 +558,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 }
 
 // this is only called when a trace decision is received
-// TODO it may be desirable to move this and sendTraes() into the CollectLoop.
+// TODO it may be desirable to move this and sendTraes() into the CollectWorker.
 func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
