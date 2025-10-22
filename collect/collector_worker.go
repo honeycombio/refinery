@@ -18,21 +18,23 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-const collectorLoopHealthPrefix = "collector-loop-"
+const collectWorkerHealthPrefix = "collect-worker-"
 
 type sendEarly struct {
 	wg          *sync.WaitGroup
 	bytesToSend int
 }
 
-// CollectLoop represents a single concurrent collection loop that processes
-// a subset of the trace ID space. Each loop has its own cache and channels
-// but shares configuration and transmission resources with the parent collector.
-type CollectLoop struct {
-	// ID identifies this particular loop instance
+// CollectorWorker represents a single worker that processes a subset of the trace ID space.
+// It receives work from the parent InMemCollector (manager) which divides work and routes
+// traces based on ownership. Each CollectorWorker has its own cache and channels, makes
+// sampling decisions for traces, and shares configuration and transmission resources with
+// the parent InMemCollector manager.
+type CollectorWorker struct {
+	// ID identifies this particular worker instance
 	ID int
 
-	// parent is a reference to the parent InMemCollector for accessing shared resources
+	// parent is a reference to the parent InMemCollector manager for accessing shared resources
 	parent *InMemCollector
 
 	// Input channels specific to this loop
@@ -63,18 +65,18 @@ type CollectLoop struct {
 	localSpansWaiting atomic.Int64
 	localSpanReceived atomic.Int64
 	// span_processed doesn't need to be atomic because it's only accessed
-	// inside the CollectLoop
+	// inside the CollectorWorker
 	localSpanProcessed int64
 }
 
-// NewCollectLoop creates a new CollectLoop instance
-func NewCollectLoop(
+// NewCollectorWorker creates a new CollectorWorker instance
+func NewCollectorWorker(
 	id int,
 	parent *InMemCollector,
 	incomingSize int,
 	peerSize int,
-) *CollectLoop {
-	return &CollectLoop{
+) *CollectorWorker {
+	return &CollectorWorker{
 		ID:        id,
 		parent:    parent,
 		cache:     cache.NewInMemCache(parent.Metrics, parent.Logger),
@@ -92,8 +94,8 @@ func NewCollectLoop(
 	}
 }
 
-// addSpan adds a span to this loop's incoming channel
-func (cl *CollectLoop) addSpan(sp *types.Span) error {
+// addSpan adds a span to this worker's incoming channel (called by the parent manager)
+func (cl *CollectorWorker) addSpan(sp *types.Span) error {
 	if cl.parent.BlockOnAddSpan {
 		cl.incoming <- sp
 		cl.localSpanReceived.Add(1)
@@ -111,8 +113,8 @@ func (cl *CollectLoop) addSpan(sp *types.Span) error {
 	}
 }
 
-// addSpanFromPeer adds a span from a peer to this loop's peer channel
-func (cl *CollectLoop) addSpanFromPeer(sp *types.Span) error {
+// addSpanFromPeer adds a span from a peer to this worker's peer channel (called by the parent manager)
+func (cl *CollectorWorker) addSpanFromPeer(sp *types.Span) error {
 	if cl.parent.BlockOnAddSpan {
 		cl.fromPeer <- sp
 		cl.localSpanReceived.Add(1)
@@ -130,11 +132,12 @@ func (cl *CollectLoop) addSpanFromPeer(sp *types.Span) error {
 	}
 }
 
-// collect is the main event processing loop for this CollectLoop
-func (cl *CollectLoop) collect() {
-	defer cl.parent.collectLoopsWG.Done()
+// collect is the main event processing loop for this worker. It receives spans,
+// makes sampling decisions, and sends completed traces to the parent manager.
+func (cl *CollectorWorker) collect() {
+	defer cl.parent.workersWG.Done()
 
-	healthKey := collectorLoopHealthPrefix + strconv.Itoa(cl.ID)
+	healthKey := collectWorkerHealthPrefix + strconv.Itoa(cl.ID)
 	cl.parent.Health.Register(healthKey, cl.parent.Config.GetHealthCheckTimeout())
 	defer cl.parent.Health.Unregister(healthKey)
 
@@ -202,7 +205,7 @@ func (cl *CollectLoop) collect() {
 }
 
 // processSpan handles a single span, adding it to the cache or forwarding it
-func (cl *CollectLoop) processSpan(ctx context.Context, sp *types.Span) {
+func (cl *CollectorWorker) processSpan(ctx context.Context, sp *types.Span) {
 	ctx, span := otelutil.StartSpanWith(ctx, cl.parent.Tracer, "processSpan", "loop_id", cl.ID)
 	defer func() {
 		cl.localSpanProcessed++
@@ -296,7 +299,7 @@ func (cl *CollectLoop) processSpan(ctx context.Context, sp *types.Span) {
 }
 
 // sendExpiredTracesInCache finds and sends traces that have exceeded their timeout
-func (cl *CollectLoop) sendExpiredTracesInCache(ctx context.Context, now time.Time) {
+func (cl *CollectorWorker) sendExpiredTracesInCache(ctx context.Context, now time.Time) {
 	ctx, span := otelutil.StartSpanWith(ctx, cl.parent.Tracer, "sendExpiredTracesInCache", "loop_id", cl.ID)
 	startTime := cl.parent.Clock.Now()
 	defer func() {
@@ -351,7 +354,7 @@ func (cl *CollectLoop) sendExpiredTracesInCache(ctx context.Context, now time.Ti
 	span.SetAttributes(attribute.Int64("total_spans_sent", totalSpansSent))
 }
 
-func (cl *CollectLoop) sendTracesEarly(ctx context.Context, sendEarlyBytes int) {
+func (cl *CollectorWorker) sendTracesEarly(ctx context.Context, sendEarlyBytes int) {
 	// The size of the cache exceeds the user's intended allocation, so we're going to
 	// remove the traces from the cache that have had the most impact on allocation.
 	// To do this, we sort the traces by their CacheImpact value and then remove traces
@@ -388,19 +391,19 @@ func (cl *CollectLoop) sendTracesEarly(ctx context.Context, sendEarlyBytes int) 
 	cl.lastCacheSize.Store(int64(cl.cache.GetCacheEntryCount()))
 }
 
-// GetCacheSize returns the most recently recorded count of traces in this loop's cache
-func (cl *CollectLoop) GetCacheSize() int {
+// GetCacheSize returns the most recently recorded count of traces in this worker's cache
+func (cl *CollectorWorker) GetCacheSize() int {
 	return int(cl.lastCacheSize.Load())
 }
 
 // getLastSpanProcessed returns the latest value of span_processed and reset the current count to 0.
-func (cl *CollectLoop) getLastSpanProcessed() int64 {
+func (cl *CollectorWorker) getLastSpanProcessed() int64 {
 	lastValue := cl.localSpanProcessed
 	cl.localSpanProcessed = 0
 	return lastValue
 }
 
-func (cl *CollectLoop) makeDecision(ctx context.Context, trace *types.Trace, sendReason string) (s sendableTrace, err error) {
+func (cl *CollectorWorker) makeDecision(ctx context.Context, trace *types.Trace, sendReason string) (s sendableTrace, err error) {
 	if trace.Sent {
 		return s, errors.New("trace already sent")
 	}

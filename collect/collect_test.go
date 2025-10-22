@@ -35,12 +35,12 @@ const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
 
 var peerTraceIDs = []string{"peer-trace-1", "peer-trace-2", "peer-trace-3"}
 
-// getFromCache is a test helper to retrieve a trace from the appropriate collect loop's cache.
+// getFromCache is a test helper to retrieve a trace from the appropriate worker's cache.
 // Note technically this is still racy because the trace itself could be modified
 // concurrently, after this function returns. Since this is just for testing, if the race
 // detector doesn't complain, then I won't worry about it.
 func getFromCache(coll *InMemCollector, traceID string) *types.Trace {
-	cl := coll.collectLoops[coll.getLoopForTrace(traceID)]
+	cl := coll.workers[coll.getWorkerIDForTrace(traceID)]
 
 	ch := make(chan struct{})
 	defer close(ch)
@@ -380,7 +380,7 @@ func TestAddSpan(t *testing.T) {
 	transmission := coll.Transmission.(*transmit.MockTransmission)
 
 	var traceID = "mytrace"
-	loopIndex := coll.getLoopForTrace(traceID)
+	workerIndex := coll.getWorkerIDForTrace(traceID)
 
 	span := &types.Span{
 		TraceID: traceID,
@@ -429,8 +429,8 @@ func TestAddSpan(t *testing.T) {
 
 	ch := make(chan struct{})
 	defer close(ch)
-	coll.collectLoops[loopIndex].pause <- ch
-	assert.Equal(t, int64(0), coll.collectLoops[loopIndex].localSpanProcessed)
+	coll.workers[workerIndex].pause <- ch
+	assert.Equal(t, int64(0), coll.workers[workerIndex].localSpanProcessed)
 }
 
 // TestDryRunMode tests that all traces are sent, regardless of sampling decision, and that the
@@ -601,8 +601,8 @@ func TestSampleConfigReload(t *testing.T) {
 	err := coll.SamplerFactory.Start()
 	require.NoError(t, err)
 
-	// Just one loop keep things intelligible.
-	loop := coll.collectLoops[0]
+	// Just one worker keep things intelligible.
+	worker := coll.workers[0]
 
 	dataset := "aoeu"
 
@@ -641,8 +641,8 @@ func TestSampleConfigReload(t *testing.T) {
 		ch := make(chan struct{})
 		defer close(ch)
 
-		loop.pause <- ch
-		if sampler := loop.datasetSamplers[dataset]; sampler != nil {
+		worker.pause <- ch
+		if sampler := worker.datasetSamplers[dataset]; sampler != nil {
 			testTrace := createTestTrace("test-trace-1")
 			rate, _, reason, _ := sampler.GetSampleRate(testTrace)
 			if reason == "dynamic" && rate > 0 {
@@ -665,8 +665,8 @@ func TestSampleConfigReload(t *testing.T) {
 		ch := make(chan struct{})
 		defer close(ch)
 
-		loop.pause <- ch
-		return loop.datasetSamplers[dataset] == nil
+		worker.pause <- ch
+		return worker.datasetSamplers[dataset] == nil
 	}, conf.GetTracesConfig().GetTraceTimeout()*2, conf.GetTracesConfig().GetSendTickerValue())
 
 	// Another span, it gets loaded again with new configuration.
@@ -683,8 +683,8 @@ func TestSampleConfigReload(t *testing.T) {
 		ch := make(chan struct{})
 		defer close(ch)
 
-		loop.pause <- ch
-		if sampler := loop.datasetSamplers[dataset]; sampler != nil {
+		worker.pause <- ch
+		if sampler := worker.datasetSamplers[dataset]; sampler != nil {
 			testTrace := createTestTrace("test-trace-2")
 			rate, _, reason, _ := sampler.GetSampleRate(testTrace)
 			if reason == "dynamic" && rate > 0 {
@@ -760,8 +760,8 @@ func TestStableMaxAlloc(t *testing.T) {
 	// Wait for spans to be processed into cache
 	assert.Eventually(t, func() bool {
 		totalCacheSize := 0
-		for _, loop := range coll.collectLoops {
-			totalCacheSize += loop.GetCacheSize()
+		for _, worker := range coll.workers {
+			totalCacheSize += worker.GetCacheSize()
 		}
 		return totalCacheSize == 500
 	}, 5*time.Second, 50*time.Millisecond, "Should have 500 traces in cache")
@@ -783,8 +783,8 @@ func TestStableMaxAlloc(t *testing.T) {
 	var totalTraces int
 	assert.Eventually(t, func() bool {
 		totalTraces = 0
-		for _, loop := range coll.collectLoops {
-			totalTraces += loop.GetCacheSize()
+		for _, worker := range coll.workers {
+			totalTraces += worker.GetCacheSize()
 		}
 		return totalTraces < 500 // Wait for any eviction to start
 	}, 3*time.Second, 100*time.Millisecond, "Cache should evict some traces due to memory pressure")
@@ -834,10 +834,10 @@ func TestAddSpanNoBlock(t *testing.T) {
 
 	coll.sampleTraceCache = stc
 
-	// Block the collect loop so nothing gets processed
+	// Block the worker so nothing gets processed
 	ch := make(chan struct{})
 	defer close(ch)
-	coll.collectLoops[0].pause <- ch
+	coll.workers[0].pause <- ch
 
 	span := &types.Span{
 		TraceID: "1",
@@ -848,7 +848,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 	}
 
 	// Fill the channel
-	for range cap(coll.collectLoops[0].incoming) {
+	for range cap(coll.workers[0].incoming) {
 		err := coll.AddSpan(span)
 		assert.NoError(t, err)
 		err = coll.AddSpanFromPeer(span)
@@ -1742,10 +1742,10 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	coll := newTestCollector(t, conf, clock)
 
-	// Pause the collect loop so we can manipulate the cache
+	// Pause the worker so we can manipulate the cache
 	ch := make(chan struct{})
 	defer close(ch)
-	coll.collectLoops[0].pause <- ch
+	coll.workers[0].pause <- ch
 
 	sampleTraceCache, err := newCache()
 	require.NoError(t, err)
@@ -1776,8 +1776,8 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 			},
 		})
 	}
-	// Add trace to the loop's cache
-	coll.collectLoops[0].cache.Set(trace)
+	// Add trace to the worker's cache
+	coll.workers[0].cache.Set(trace)
 
 	clock.Advance(5 * time.Second)
 	// process another span for the same trace that exceeds the span limit should not change the SendBy time
@@ -1788,10 +1788,10 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 			APIKey:  legacyAPIKey,
 		},
 	}
-	// Route span to appropriate loop for processing
-	coll.collectLoops[0].processSpan(context.Background(), lateSpan)
+	// Route span to appropriate worker for processing
+	coll.workers[0].processSpan(context.Background(), lateSpan)
 
-	updatedTrace := coll.collectLoops[0].cache.Get(traceID)
+	updatedTrace := coll.workers[0].cache.Get(traceID)
 	require.Equal(t, trace.SendBy.Unix(), updatedTrace.SendBy.Unix())
 }
 
