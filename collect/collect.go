@@ -76,7 +76,7 @@ type sendableTrace struct {
 	samplerSelector string
 }
 
-// InMemCollector is a collector that can use multiple concurrent collection loops.
+// InMemCollector is a collector that can use multiple concurrent workers to make sampling decision.
 type InMemCollector struct {
 	Config  config.Config   `inject:""`
 	Logger  logger.Logger   `inject:""`
@@ -175,9 +175,9 @@ func (i *InMemCollector) Start() error {
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
 	imcConfig := i.Config.GetCollectionConfig()
 
-	numLoops := imcConfig.GetNumCollectLoops()
+	numWorkers := imcConfig.GetNumCollectLoops()
 
-	i.Logger.Info().WithField("num_loops", numLoops).Logf("Starting InMemCollector with %d collection loops", numLoops)
+	i.Logger.Info().WithField("num_workers", numWorkers).Logf("Starting InMemCollector with %d workers", numWorkers)
 
 	i.StressRelief.UpdateFromConfig()
 
@@ -209,7 +209,7 @@ func (i *InMemCollector) Start() error {
 		}
 	}
 
-	i.workers = make([]*CollectorWorker, numLoops)
+	i.workers = make([]*CollectorWorker, numWorkers)
 
 	for loopID := range i.workers {
 		worker := NewCollectorWorker(loopID, i, imcConfig.GetIncomingQueueSizePerLoop(), imcConfig.GetPeerQueueSizePerLoop())
@@ -350,7 +350,7 @@ func (i *InMemCollector) monitor() {
 			i.Metrics.Gauge("collector_incoming_queue_length", float64(totalIncoming))
 			i.Metrics.Gauge("collector_peer_queue_length", float64(totalPeer))
 			i.Metrics.Gauge("collector_cache_size", float64(totalCacheSize))
-			i.Metrics.Gauge("collector_num_loops", float64(len(i.workers)))
+			i.Metrics.Gauge("collector_num_workers", float64(len(i.workers)))
 
 			// Report aggregated thread-local metrics
 			i.Metrics.Count("span_received", totalReceived)
@@ -466,7 +466,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-// This method is made public so CollectLoop can access it.
+// This method is made public so CollectWorker can access it.
 func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSentRecord, keptReason string, sp *types.Span) {
 	_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]interface{}{
 		"trace_id":    sp.TraceID,
@@ -558,7 +558,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 }
 
 // this is only called when a trace decision is received
-// TODO it may be desirable to move this and sendTraes() into the CollectLoop.
+// TODO it may be desirable to move this and sendTraes() into the CollectWorker.
 func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
