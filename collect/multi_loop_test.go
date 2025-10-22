@@ -181,7 +181,7 @@ func TestMultiLoopProcessing(t *testing.T) {
 				"collector_incoming_queue_length",
 				"collector_peer_queue_length",
 				"collector_cache_size",
-				"collector_num_loops",
+				"collector_num_workers",
 			} {
 				_, ok = met.Get(name)
 				assert.True(t, ok)
