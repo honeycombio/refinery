@@ -19,17 +19,17 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-// getAllTracesFromLoops is a test helper that efficiently gets all traces from all loops.
-// It pauses each loop, then extracts all traces. Note the traces themselves aren't locked
+// getAllTracesFromLoops is a test helper that efficiently gets all traces from all workers.
+// It pauses each worker, then extracts all traces. Note the traces themselves aren't locked
 // so there is still a hypothetical race condition after this function returns.
 func getAllTracesFromLoops(collector *InMemCollector) map[string]*types.Trace {
 	ch := make(chan struct{})
 	defer close(ch)
 
 	allTraces := make(map[string]*types.Trace)
-	for _, loop := range collector.collectLoops {
-		loop.pause <- ch
-		traces := loop.cache.GetAll()
+	for _, worker := range collector.workers {
+		worker.pause <- ch
+		traces := worker.cache.GetAll()
 
 		for _, trace := range traces {
 			allTraces[trace.TraceID] = trace
@@ -69,8 +69,8 @@ func TestMultiLoopProcessing(t *testing.T) {
 
 			collector := newTestCollector(t, conf)
 
-			// Verify loops were created
-			assert.Equal(t, numLoops, len(collector.collectLoops))
+			// Verify workers were created
+			assert.Equal(t, numLoops, len(collector.workers))
 
 			assert.Eventually(t, func() bool {
 				return collector.Health.(health.Reporter).IsReady()
@@ -117,16 +117,16 @@ func TestMultiLoopProcessing(t *testing.T) {
 			// Verify spans were added
 			assert.Equal(t, int32(numTraces*spansPerTrace), atomic.LoadInt32(&spansAdded))
 
-			// Verify traces are distributed across loops
-			loopUsage := make(map[int]int)
+			// Verify traces are distributed across workers
+			workerUsage := make(map[int]int)
 			for i := 0; i < numTraces; i++ {
 				traceID := fmt.Sprintf("trace-%d", i)
-				loopIndex := collector.getLoopForTrace(traceID)
-				loopUsage[loopIndex]++
+				workerIndex := collector.getWorkerIDForTrace(traceID)
+				workerUsage[workerIndex]++
 			}
 
-			// All loops should have been used (with high probability)
-			assert.Equal(t, numLoops, len(loopUsage))
+			// All workers should have been used (with high probability)
+			assert.Equal(t, numLoops, len(workerUsage))
 
 			// Wait for all spans to be processed into traces
 			assert.Eventually(t, func() bool {
@@ -166,9 +166,9 @@ func TestMultiLoopProcessing(t *testing.T) {
 				totalLocalReceived := int64(0)
 				totalLocalWaiting := int64(0)
 
-				for _, loop := range collector.collectLoops {
-					totalLocalReceived += loop.localSpanReceived.Load()
-					totalLocalWaiting += loop.localSpansWaiting.Load()
+				for _, worker := range collector.workers {
+					totalLocalReceived += worker.localSpanReceived.Load()
+					totalLocalWaiting += worker.localSpansWaiting.Load()
 				}
 
 				return totalLocalReceived == 0 && totalLocalWaiting == 0
@@ -181,7 +181,7 @@ func TestMultiLoopProcessing(t *testing.T) {
 				"collector_incoming_queue_length",
 				"collector_peer_queue_length",
 				"collector_cache_size",
-				"collector_num_loops",
+				"collector_num_workers",
 			} {
 				_, ok = met.Get(name)
 				assert.True(t, ok)
@@ -237,44 +237,44 @@ func TestTraceIDSharding(t *testing.T) {
 
 			collector := newTestCollector(t, conf)
 
-			// Track which loop each trace ID maps to
-			traceToLoop := make(map[string]int)
+			// Track which worker each trace ID maps to
+			traceToWorker := make(map[string]int)
 
 			// Test multiple trace IDs
 			for i := 0; i < 100; i++ {
 				traceID := fmt.Sprintf("trace-%d", i)
 
-				// Get the loop for this trace multiple times
-				// It should always return the same loop
-				firstLoop := collector.getLoopForTrace(traceID)
-				traceToLoop[traceID] = firstLoop
+				// Get the worker for this trace multiple times
+				// It should always return the same worker
+				firstWorker := collector.getWorkerIDForTrace(traceID)
+				traceToWorker[traceID] = firstWorker
 
 				// Verify consistency - call multiple times
 				for j := 0; j < 10; j++ {
-					loop := collector.getLoopForTrace(traceID)
-					assert.Equal(t, firstLoop, loop,
-						"Trace %s should always map to the same loop", traceID)
+					worker := collector.getWorkerIDForTrace(traceID)
+					assert.Equal(t, firstWorker, worker,
+						"Trace %s should always map to the same worker", traceID)
 				}
 
-				// Verify the loop index is within bounds
-				assert.GreaterOrEqual(t, firstLoop, 0)
-				assert.Less(t, firstLoop, tc.numLoops)
+				// Verify the worker index is within bounds
+				assert.GreaterOrEqual(t, firstWorker, 0)
+				assert.Less(t, firstWorker, tc.numLoops)
 			}
 
-			// Count traces per loop for distribution analysis
-			loopCounts := make([]int, tc.numLoops)
-			for _, loop := range traceToLoop {
-				loopCounts[loop]++
+			// Count traces per worker for distribution analysis
+			workerCounts := make([]int, tc.numLoops)
+			for _, worker := range traceToWorker {
+				workerCounts[worker]++
 			}
 
 			// Assert the deterministic expected distribution
-			assert.Equal(t, tc.expectedDistribution, loopCounts)
+			assert.Equal(t, tc.expectedDistribution, workerCounts)
 
-			// Also verify all loops are used appropriately
-			assert.Equal(t, tc.numLoops, len(loopCounts), "Loop counts should match number of loops")
+			// Also verify all workers are used appropriately
+			assert.Equal(t, tc.numLoops, len(workerCounts), "Worker counts should match number of workers")
 			totalTraces := 0
-			for loop, count := range loopCounts {
-				assert.Greater(t, count, 0, "Loop %d should have at least some traces", loop)
+			for worker, count := range workerCounts {
+				assert.Greater(t, count, 0, "Worker %d should have at least some traces", worker)
 				totalTraces += count
 			}
 			assert.Equal(t, 100, totalTraces, "Total traces should equal 100")

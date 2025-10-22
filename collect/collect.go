@@ -76,7 +76,7 @@ type sendableTrace struct {
 	samplerSelector string
 }
 
-// InMemCollector is a collector that can use multiple concurrent collection loops.
+// InMemCollector is a collector that can use multiple concurrent workers to make sampling decision.
 type InMemCollector struct {
 	Config  config.Config   `inject:""`
 	Logger  logger.Logger   `inject:""`
@@ -97,20 +97,20 @@ type InMemCollector struct {
 	TestMode       bool
 	BlockOnAddSpan bool
 
-	// Parallel collection support
-	collectLoops []*CollectLoop
+	// Workers for parallel collection - each worker processes a subset of traces
+	workers []*CollectorWorker
 
 	// mutex must be held whenever non-channel internal fields are accessed.
 	mutex sync.RWMutex
 
 	sampleTraceCache cache.TraceSentCache
 
-	houseKeepingWG sync.WaitGroup
-	collectLoopsWG sync.WaitGroup // Separate WaitGroup for collect loops
-	sendTracesWG   sync.WaitGroup
-	reload         chan struct{} // Channel for config reload signals
-	outgoingTraces chan sendableTrace
-	done           chan struct{}
+	monitorWG    sync.WaitGroup // WaitGroup for background monitoring goroutine
+	workersWG    sync.WaitGroup // Separate WaitGroup for workers
+	sendTracesWG sync.WaitGroup
+	reload       chan struct{}      // Channel for config reload signals
+	tracesToSend chan sendableTrace // Channel of traces ready for transmission
+	done         chan struct{}
 
 	hostname string
 }
@@ -175,9 +175,9 @@ func (i *InMemCollector) Start() error {
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
 	imcConfig := i.Config.GetCollectionConfig()
 
-	numLoops := imcConfig.GetNumCollectLoops()
+	numWorkers := imcConfig.GetNumCollectLoops()
 
-	i.Logger.Info().WithField("num_loops", numLoops).Logf("Starting InMemCollector with %d collection loops", numLoops)
+	i.Logger.Info().WithField("num_workers", numWorkers).Logf("Starting InMemCollector with %d workers", numWorkers)
 
 	i.StressRelief.UpdateFromConfig()
 
@@ -199,7 +199,7 @@ func (i *InMemCollector) Start() error {
 		return err
 	}
 
-	i.outgoingTraces = make(chan sendableTrace, 100_000)
+	i.tracesToSend = make(chan sendableTrace, 100_000)
 	i.done = make(chan struct{})
 	i.reload = make(chan struct{}, 1)
 
@@ -209,22 +209,22 @@ func (i *InMemCollector) Start() error {
 		}
 	}
 
-	i.collectLoops = make([]*CollectLoop, numLoops)
+	i.workers = make([]*CollectorWorker, numWorkers)
 
-	for loopID := range i.collectLoops {
-		loop := NewCollectLoop(loopID, i, imcConfig.GetIncomingQueueSizePerLoop(), imcConfig.GetPeerQueueSizePerLoop())
-		i.collectLoops[loopID] = loop
+	for loopID := range i.workers {
+		worker := NewCollectorWorker(loopID, i, imcConfig.GetIncomingQueueSizePerLoop(), imcConfig.GetPeerQueueSizePerLoop())
+		i.workers[loopID] = worker
 
-		// Start the collect goroutine for this loop
-		i.collectLoopsWG.Add(1)
-		go loop.collect()
+		// Start the collect goroutine for this worker
+		i.workersWG.Add(1)
+		go worker.collect()
 	}
 
 	i.sendTracesWG.Add(1)
 	go i.sendTraces()
 
-	i.houseKeepingWG.Add(1)
-	go i.houseKeeping()
+	i.monitorWG.Add(1)
+	go i.monitor()
 
 	return nil
 }
@@ -249,11 +249,11 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.StressRelief.UpdateFromConfig()
 
-	// Send reload signals to all collect loops to clear their local samplers
+	// Send reload signals to all workers to clear their local samplers
 	// so that the new configuration will be propagated
-	for _, loop := range i.collectLoops {
+	for _, worker := range i.workers {
 		select {
-		case loop.reload <- struct{}{}:
+		case worker.reload <- struct{}{}:
 		default:
 			// Channel already has a signal pending, skip
 		}
@@ -282,22 +282,22 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	// Because our impact numbers are only the data size, reducing by enough to reach
 	// max alloc will actually do more than that.
 	totalToRemove := mem.Alloc - uint64(maxAlloc)
-	perLoopToRemove := int(totalToRemove) / len(i.collectLoops)
+	perWorkerToRemove := int(totalToRemove) / len(i.workers)
 
 	var wg sync.WaitGroup
 	var cacheSizeBefore, cacheSizeAfter int
-	wg.Add(len(i.collectLoops))
-	for _, loop := range i.collectLoops {
-		cacheSizeBefore += loop.GetCacheSize()
-		loop.sendEarly <- sendEarly{
+	wg.Add(len(i.workers))
+	for _, worker := range i.workers {
+		cacheSizeBefore += worker.GetCacheSize()
+		worker.sendEarly <- sendEarly{
 			wg:          &wg,
-			bytesToSend: perLoopToRemove,
+			bytesToSend: perWorkerToRemove,
 		}
 	}
 	wg.Wait()
 
-	for _, loop := range i.collectLoops {
-		cacheSizeAfter += loop.GetCacheSize()
+	for _, worker := range i.workers {
+		cacheSizeAfter += worker.GetCacheSize()
 	}
 
 	// Treat any MaxAlloc overage as an error so we know it's happening
@@ -313,9 +313,12 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	return
 }
 
-// houseKeeping listens for reload signals and calls reloadConfigs
-func (i *InMemCollector) houseKeeping() {
-	defer i.houseKeepingWG.Done()
+// monitor runs background maintenance tasks including:
+// - Aggregating metrics from all workers
+// - Monitoring memory usage and triggering cache eviction
+// - Handling config reload signals
+func (i *InMemCollector) monitor() {
+	defer i.monitorWG.Done()
 
 	ctx := context.Background()
 
@@ -333,13 +336,13 @@ func (i *InMemCollector) houseKeeping() {
 			var totalWaiting int64
 			var totalReceived int64
 
-			for _, loop := range i.collectLoops {
-				totalIncoming += len(loop.incoming)
-				totalPeer += len(loop.fromPeer)
-				totalCacheSize += loop.GetCacheSize()
+			for _, worker := range i.workers {
+				totalIncoming += len(worker.incoming)
+				totalPeer += len(worker.fromPeer)
+				totalCacheSize += worker.GetCacheSize()
 
-				totalWaiting += loop.localSpansWaiting.Swap(0)
-				totalReceived += loop.localSpanReceived.Swap(0)
+				totalWaiting += worker.localSpansWaiting.Swap(0)
+				totalReceived += worker.localSpanReceived.Swap(0)
 			}
 
 			i.Metrics.Histogram("collector_incoming_queue", float64(totalIncoming))
@@ -347,7 +350,7 @@ func (i *InMemCollector) houseKeeping() {
 			i.Metrics.Gauge("collector_incoming_queue_length", float64(totalIncoming))
 			i.Metrics.Gauge("collector_peer_queue_length", float64(totalPeer))
 			i.Metrics.Gauge("collector_cache_size", float64(totalCacheSize))
-			i.Metrics.Gauge("collector_num_loops", float64(len(i.collectLoops)))
+			i.Metrics.Gauge("collector_num_workers", float64(len(i.workers)))
 
 			// Report aggregated thread-local metrics
 			i.Metrics.Count("span_received", totalReceived)
@@ -364,33 +367,33 @@ func (i *InMemCollector) houseKeeping() {
 	}
 }
 
-// getLoopForTrace determines which CollectLoop should handle a given trace ID
-// using consistent hashing to ensure all spans for a trace go to the same loop
-func (i *InMemCollector) getLoopForTrace(traceID string) int {
+// getWorkerIDForTrace determines which CollectorWorker should handle a given trace ID
+// using consistent hashing to ensure all spans for a trace go to the same worker
+func (i *InMemCollector) getWorkerIDForTrace(traceID string) int {
 	// Hash with a seed so that we don't align with any other hashes of this
 	// trace. We use a different algorithm to assign traces to nodes, but we
-	// still want to minimize the risk of any synchronization beteween that
+	// still want to minimize the risk of any synchronization between that
 	// distribution and this one.
 	hash := wyhash.Hash([]byte(traceID), 7215963184435617557)
 
-	// Map to loop index
-	loopIndex := int(hash % uint64(len(i.collectLoops)))
+	// Map to worker index
+	workerIndex := int(hash % uint64(len(i.workers)))
 
-	return loopIndex
+	return workerIndex
 }
 
 // AddSpan accepts the incoming span to a queue and returns immediately
 func (i *InMemCollector) AddSpan(sp *types.Span) error {
-	// Route to the appropriate loop
-	loopIndex := i.getLoopForTrace(sp.TraceID)
-	return i.collectLoops[loopIndex].addSpan(sp)
+	// Route to the appropriate worker
+	workerIndex := i.getWorkerIDForTrace(sp.TraceID)
+	return i.workers[workerIndex].addSpan(sp)
 }
 
 // AddSpanFromPeer accepts the incoming span from a peer to a queue and returns immediately
 func (i *InMemCollector) AddSpanFromPeer(sp *types.Span) error {
-	// Route to the appropriate loop
-	loopIndex := i.getLoopForTrace(sp.TraceID)
-	return i.collectLoops[loopIndex].addSpanFromPeer(sp)
+	// Route to the appropriate worker
+	workerIndex := i.getWorkerIDForTrace(sp.TraceID)
+	return i.workers[workerIndex].addSpanFromPeer(sp)
 }
 
 // Stressed returns true if the collector is undergoing significant stress
@@ -463,7 +466,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 // dealWithSentTrace handles a span that has arrived after the sampling decision
 // on the trace has already been made, and it obeys that decision by either
 // sending the span immediately or dropping it.
-// This method is made public so CollectLoop can access it.
+// This method is made public so CollectWorker can access it.
 func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSentRecord, keptReason string, sp *types.Span) {
 	_, span := otelutil.StartSpanMulti(ctx, i.Tracer, "dealWithSentTrace", map[string]interface{}{
 		"trace_id":    sp.TraceID,
@@ -555,7 +558,7 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 }
 
 // this is only called when a trace decision is received
-// TODO it may be desirable to move this and sendTraes() into the CollectLoop.
+// TODO it may be desirable to move this and sendTraes() into the CollectWorker.
 func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	if trace.Sent {
 		// someone else already sent this so we shouldn't also send it.
@@ -618,7 +621,7 @@ func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
 	}
 
-	i.outgoingTraces <- trace
+	i.tracesToSend <- trace
 }
 
 func (i *InMemCollector) Stop() error {
@@ -631,26 +634,26 @@ func (i *InMemCollector) Stop() error {
 	// stop liveness check so that no new traces are accepted
 	i.Health.Unregister(collectorHealthKey)
 
-	// Stop housekeeping first - we want to make sure we don't start a checkAlloc
-	// after shutting down the collect loops.
-	i.houseKeepingWG.Wait()
+	// Stop maintenance first - we want to make sure we don't start a checkAlloc
+	// after shutting down the workers.
+	i.monitorWG.Wait()
 
-	// Close all loop input channels, which will cause the loops to stop.
-	for idx, loop := range i.collectLoops {
-		i.Logger.Debug().WithField("loop_id", idx).Logf("closing loop channels")
-		close(loop.incoming)
-		close(loop.fromPeer)
+	// Close all worker input channels, which will cause the workers to stop.
+	for idx, worker := range i.workers {
+		i.Logger.Debug().WithField("worker_id", idx).Logf("closing worker channels")
+		close(worker.incoming)
+		close(worker.fromPeer)
 	}
-	i.collectLoopsWG.Wait()
+	i.workersWG.Wait()
 
 	// Stop the sample trace cache
 	if i.sampleTraceCache != nil {
 		i.sampleTraceCache.Stop()
 	}
 
-	// Now it's safe to close the outgoing traces channel
+	// Now it's safe to close the traces to send channel
 	// No more traces will be sent to it
-	close(i.outgoingTraces)
+	close(i.tracesToSend)
 	i.sendTracesWG.Wait()
 
 	i.Logger.Debug().Logf("InMemCollector shutdown complete")
@@ -673,9 +676,9 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 func (i *InMemCollector) sendTraces() {
 	defer i.sendTracesWG.Done()
 
-	for t := range i.outgoingTraces {
-		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
-		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
+	for t := range i.tracesToSend {
+		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.tracesToSend)))
+		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "tracesToSend_size": len(i.tracesToSend)})
 
 		// if we have a key replacement rule, we should
 		// replace the key with the new key
