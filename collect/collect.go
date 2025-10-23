@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
-	runtimemetrics "runtime/metrics"
+	rtmetrics "runtime/metrics"
 	"sync"
 	"time"
 
@@ -38,6 +38,7 @@ const (
 	defaultKeptDecisionTickerInterval = 1 * time.Second
 
 	collectorHealthKey = "collector"
+	memMetricName      = "/memory/classes/heap/objects:bytes"
 )
 
 var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
@@ -115,7 +116,7 @@ type InMemCollector struct {
 
 	hostname string
 
-	memMetricSample []runtimemetrics.Sample // Memory monitoring using runtime/metrics
+	memMetricSample []rtmetrics.Sample // Memory monitoring using runtime/metrics
 }
 
 // These are the names of the metrics we use to track the number of events sent to peers through the router.
@@ -213,9 +214,8 @@ func (i *InMemCollector) Start() error {
 	}
 
 	// Initialize runtime/metrics sample for efficient memory monitoring
-	i.memMetricSample = []runtimemetrics.Sample{
-		runtimemetrics.Sample{Name: "/memory/classes/heap/objects:bytes"},
-	}
+	i.memMetricSample = make([]rtmetrics.Sample, 1)
+	i.memMetricSample[0].Name = memMetricName
 
 	i.workers = make([]*CollectorWorker, numWorkers)
 
@@ -276,7 +276,7 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	maxAlloc := inMemConfig.GetMaxAlloc()
 	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(maxAlloc))
 
-	runtimemetrics.Read(i.memMetricSample)
+	rtmetrics.Read(i.memMetricSample)
 	currentAlloc := i.memMetricSample[0].Value.Uint64()
 
 	i.Metrics.Gauge("memory_heap_allocation", float64(currentAlloc))
