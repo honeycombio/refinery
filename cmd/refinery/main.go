@@ -14,7 +14,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/noop"
-	_ "go.uber.org/automaxprocs"
 	"golang.org/x/exp/slices"
 
 	"github.com/dgryski/go-wyhash"
