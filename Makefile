@@ -27,14 +27,13 @@ test_all: test_results wait_for_redis
 test_results:
 	@mkdir -p test_results
 
-local_image: export KO_DOCKER_REPO=ko.local
+local_image: export PRIMARY_DOCKER_REPO=ko.local
 local_image: export CIRCLE_TAG=$(shell git describe --always --match "v[0-9]*" --tags)
 local_image: export CIRCLE_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
 local_image: export CIRCLE_SHA1=$(shell git rev-parse HEAD)
-local_image: export CIRCLE_BUILD_NUM=''
 local_image: export SOURCE_DATE_EPOCH=$(call __latest_modification_time)
 #: build the release image locally, available as "ko.local/refinery:<commit>"
-local_image:
+local_image: ko crane
 	./build-docker.sh
 
 .PHONY: wait_for_redis
@@ -51,14 +50,14 @@ HOST_OS := $(shell uname -s | tr A-Z a-z)
 # You can override this version from an environment variable.
 KO_VERSION ?= 0.11.2
 KO_RELEASE_ASSET := ko_${KO_VERSION}_${HOST_OS}_x86_64.tar.gz
-# ensure the dockerize command is available
+# ensure the ko command is available
 ko: ko_${KO_VERSION}.tar.gz
 	tar xzvmf $< ko
 	chmod u+x ./ko
 
 ko_${KO_VERSION}.tar.gz:
 	@echo
-	@echo "+++ Retrieving dockerize tool for Redis readiness check."
+	@echo "+++ Retrieving ko tool for container building."
 	@echo
 # make sure that file is available
 ifeq (, $(shell command -v file))
@@ -70,6 +69,29 @@ endif
 	    https://github.com/ko-build/ko/releases/download/v${KO_VERSION}/${KO_RELEASE_ASSET} \
 	&& file ko_tmp.tar.gz | grep --silent gzip \
 	&& mv ko_tmp.tar.gz $@ || (echo "Failed to download ko. Got:"; cat ko_tmp.tar.gz ; echo "" ; exit 1)
+
+# You can override this version from an environment variable.
+CRANE_VERSION ?= 0.19.1
+CRANE_RELEASE_ASSET := go-containerregistry_${HOST_OS}_x86_64.tar.gz
+# ensure the crane command is available
+crane: crane_${CRANE_VERSION}.tar.gz
+	tar xzvmf $< crane
+	chmod u+x ./crane
+
+crane_${CRANE_VERSION}.tar.gz:
+	@echo
+	@echo "+++ Retrieving crane tool for container registry operations."
+	@echo
+# make sure that file is available
+ifeq (, $(shell command -v file))
+	sudo apt-get update
+	sudo apt-get -y install file
+endif
+	curl --location --silent --show-error \
+	    --output crane_tmp.tar.gz \
+	    https://github.com/google/go-containerregistry/releases/download/v${CRANE_VERSION}/${CRANE_RELEASE_ASSET} \
+	&& file crane_tmp.tar.gz | grep --silent gzip \
+	&& mv crane_tmp.tar.gz $@ || (echo "Failed to download crane. Got:"; cat crane_tmp.tar.gz ; echo "" ; exit 1)
 
 __latest_modification_time := $(strip $(if $(shell git diff --quiet && echo $$?), \
 $(shell git log --max-count=1 --pretty=format:"%ct"), \
@@ -105,6 +127,10 @@ endif
 clean:
 	rm -f dockerize.tar.gz
 	rm -f dockerize
+	rm -f ko_*.tar.gz
+	rm -f ko
+	rm -f crane_*.tar.gz
+	rm -f crane
 	rm -rf test_results
 
 
