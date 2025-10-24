@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	rtmetrics "runtime/metrics"
 	"sync"
 	"time"
 
@@ -37,6 +38,7 @@ const (
 	defaultKeptDecisionTickerInterval = 1 * time.Second
 
 	collectorHealthKey = "collector"
+	memMetricName      = "/memory/classes/heap/objects:bytes"
 )
 
 var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
@@ -113,6 +115,8 @@ type InMemCollector struct {
 	done         chan struct{}
 
 	hostname string
+
+	memMetricSample []rtmetrics.Sample // Memory monitoring using runtime/metrics
 }
 
 // These are the names of the metrics we use to track the number of events sent to peers through the router.
@@ -130,6 +134,7 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_incoming_queue_length", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of spans in the incoming queue"},
 	{Name: "collector_peer_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans currently in the peer queue"},
 	{Name: "collector_cache_size", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces currently stored in the trace cache"},
+	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Total number of traces currently stored in the cache from all workers"},
 	{Name: "memory_heap_allocation", Type: metrics.Gauge, Unit: metrics.Bytes, Description: "current heap allocation"},
 	{Name: "span_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans received by the collector"},
 	{Name: "span_processed", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans processed by the collector"},
@@ -209,6 +214,10 @@ func (i *InMemCollector) Start() error {
 		}
 	}
 
+	// Initialize runtime/metrics sample for efficient memory monitoring
+	i.memMetricSample = make([]rtmetrics.Sample, 1)
+	i.memMetricSample[0].Name = memMetricName
+
 	i.workers = make([]*CollectorWorker, numWorkers)
 
 	for loopID := range i.workers {
@@ -261,29 +270,31 @@ func (i *InMemCollector) reloadConfigs() {
 	// TODO add resizing the LRU sent trace cache on config reload
 }
 
+// checkAlloc performs memory monitoring using runtime/metrics instead of
+// runtime.ReadMemStats. This avoids stop-the-world pauses that can impact performance.
 func (i *InMemCollector) checkAlloc(ctx context.Context) {
-	_, span := otelutil.StartSpan(ctx, i.Tracer, "checkAlloc")
-	defer span.End()
-
 	inMemConfig := i.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
 	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(maxAlloc))
 
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
-	i.Metrics.Gauge("memory_heap_allocation", float64(mem.Alloc))
-	if maxAlloc == 0 || mem.Alloc < uint64(maxAlloc) {
+	rtmetrics.Read(i.memMetricSample)
+	currentAlloc := i.memMetricSample[0].Value.Uint64()
+
+	i.Metrics.Gauge("memory_heap_allocation", float64(currentAlloc))
+
+	// Check if we're within memory budget
+	if maxAlloc == 0 || currentAlloc < uint64(maxAlloc) {
 		return
 	}
+
+	// Memory over budget - trigger cache eviction
 	i.Metrics.Increment("collector_cache_eviction")
 
-	// Figure out what fraction of the total cache we should remove. We'd like it to be
-	// enough to get us below the max capacity, but not TOO much below.
-	// Because our impact numbers are only the data size, reducing by enough to reach
-	// max alloc will actually do more than that.
-	totalToRemove := mem.Alloc - uint64(maxAlloc)
+	// Calculate how much to remove from each worker
+	totalToRemove := currentAlloc - uint64(maxAlloc)
 	perWorkerToRemove := int(totalToRemove) / len(i.workers)
 
+	// Coordinate eviction across all workers
 	var wg sync.WaitGroup
 	var cacheSizeBefore, cacheSizeAfter int
 	wg.Add(len(i.workers))
@@ -296,21 +307,20 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	}
 	wg.Wait()
 
+	// Calculate actual eviction results
 	for _, worker := range i.workers {
 		cacheSizeAfter += worker.GetCacheSize()
 	}
 
-	// Treat any MaxAlloc overage as an error so we know it's happening
+	// Log the eviction
 	i.Logger.Warn().
-		WithField("alloc", mem.Alloc).
+		WithField("alloc", currentAlloc).
 		WithField("old_trace_count", cacheSizeBefore).
 		WithField("new_trace_count", cacheSizeAfter).
 		Logf("Making some trace decisions early due to memory overrun.")
 
-	// Manually GC here - without this we can easily end up evicting more than we
-	// need to, since total alloc won't be updated until after a GC pass.
+	// Manually trigger GC to reclaim memory immediately
 	runtime.GC()
-	return
 }
 
 // monitor runs background maintenance tasks including:
@@ -347,6 +357,7 @@ func (i *InMemCollector) monitor() {
 
 			i.Metrics.Histogram("collector_incoming_queue", float64(totalIncoming))
 			i.Metrics.Histogram("collector_peer_queue", float64(totalPeer))
+			i.Metrics.Histogram("collect_cache_entries", float64(totalCacheSize))
 			i.Metrics.Gauge("collector_incoming_queue_length", float64(totalIncoming))
 			i.Metrics.Gauge("collector_peer_queue_length", float64(totalPeer))
 			i.Metrics.Gauge("collector_cache_size", float64(totalCacheSize))
@@ -356,7 +367,7 @@ func (i *InMemCollector) monitor() {
 			i.Metrics.Count("span_received", totalReceived)
 			i.Metrics.Count("spans_waiting", totalWaiting)
 
-			// Send traces early if we're over memory budget
+			// Check memory and evict if needed (using runtime/metrics - no STW)
 			i.checkAlloc(ctx)
 		case <-i.reload:
 			i.reloadConfigs()
