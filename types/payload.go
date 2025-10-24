@@ -568,7 +568,9 @@ func (p *Payload) MemoizeFields(keys ...string) {
 		p.missingFields = make(map[string]struct{}, len(keys))
 	}
 
-	keysToFind := make(map[string]struct{}, len(keys))
+	// We memoize all key fields during ingest, it should be rare to
+	// have keys not memoized, we will not prematurely allocate here
+	keysToFind := make(map[string]struct{})
 	for _, key := range keys {
 		if _, ok := p.missingFields[key]; ok {
 			continue
