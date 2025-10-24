@@ -568,8 +568,13 @@ func (p *Payload) MemoizeFields(keys ...string) {
 		p.missingFields = make(map[string]struct{}, len(keys))
 	}
 
-	// We memoize all key fields during ingest, it should be rare to
-	// have keys not memoized, we will not prematurely allocate here
+	// It is rare for a key field to not be memoized.
+	// Intentionally not allocating memory for keysToFind because it is rarely needed.
+	// It is worth the compute cost to grow this map on those rare occassions instead
+	// of allocating memory we rarely use.
+	// CAUTION: This optimization is under the assumption that MemoizeFields() are only
+	// called after the first memoization operation. If this assumption ever changes,
+	// we should reevaluate this optimization
 	keysToFind := make(map[string]struct{})
 	for _, key := range keys {
 		if _, ok := p.missingFields[key]; ok {
