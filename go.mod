@@ -1,6 +1,6 @@
 module github.com/honeycombio/refinery
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/agnivade/levenshtein v1.2.1
@@ -47,7 +47,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
 	go.opentelemetry.io/proto/otlp v1.7.0
-	go.uber.org/automaxprocs v1.6.0
 	golang.org/x/exp v0.0.0-20250531010427-b6e5de432a8b
 	golang.org/x/sync v0.16.0
 	google.golang.org/grpc v1.75.0
