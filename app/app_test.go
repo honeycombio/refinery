@@ -77,6 +77,34 @@ func newTestAPIServer(t testing.TB) *testAPIServer {
 
 	server.server = httptest.NewServer(mux)
 	t.Cleanup(server.server.Close)
+
+	// Health check to ensure the server is ready before returning
+	require.Eventually(t, func() bool {
+		testReq, err := http.NewRequest(
+			"POST",
+			server.server.URL+"/1/batch/test",
+			strings.NewReader(`[{"data":{"test":"ready"}}]`),
+		)
+		if err != nil {
+			return false
+		}
+		testReq.Header.Set("Content-Type", "application/json")
+
+		resp, err := server.server.Client().Do(testReq)
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		io.Copy(io.Discard, resp.Body)
+
+		return resp.StatusCode == http.StatusOK
+	}, 100*time.Millisecond, 10*time.Millisecond, "Test server failed to become ready")
+
+	// Clear the health check events from the events array
+	server.mutex.Lock()
+	server.events = nil
+	server.mutex.Unlock()
+
 	return server
 }
 

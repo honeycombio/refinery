@@ -134,6 +134,7 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_incoming_queue_length", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of spans in the incoming queue"},
 	{Name: "collector_peer_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans currently in the peer queue"},
 	{Name: "collector_cache_size", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces currently stored in the trace cache"},
+	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Total number of traces currently stored in the cache from all workers"},
 	{Name: "memory_heap_allocation", Type: metrics.Gauge, Unit: metrics.Bytes, Description: "current heap allocation"},
 	{Name: "span_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans received by the collector"},
 	{Name: "span_processed", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans processed by the collector"},
@@ -356,6 +357,7 @@ func (i *InMemCollector) monitor() {
 
 			i.Metrics.Histogram("collector_incoming_queue", float64(totalIncoming))
 			i.Metrics.Histogram("collector_peer_queue", float64(totalPeer))
+			i.Metrics.Histogram("collect_cache_entries", float64(totalCacheSize))
 			i.Metrics.Gauge("collector_incoming_queue_length", float64(totalIncoming))
 			i.Metrics.Gauge("collector_peer_queue_length", float64(totalPeer))
 			i.Metrics.Gauge("collector_cache_size", float64(totalCacheSize))
