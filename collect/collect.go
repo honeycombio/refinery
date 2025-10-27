@@ -38,7 +38,6 @@ const (
 	defaultKeptDecisionTickerInterval = 1 * time.Second
 
 	collectorHealthKey = "collector"
-	memMetricName      = "/memory/classes/heap/objects:bytes"
 )
 
 var ErrWouldBlock = errors.New("Dropping span as channel buffer is full. Span will not be processed and will be lost.")
@@ -216,7 +215,7 @@ func (i *InMemCollector) Start() error {
 
 	// Initialize runtime/metrics sample for efficient memory monitoring
 	i.memMetricSample = make([]rtmetrics.Sample, 1)
-	i.memMetricSample[0].Name = memMetricName
+	i.memMetricSample[0].Name = metrics.RtMetricNameMemory
 
 	i.workers = make([]*CollectorWorker, numWorkers)
 
