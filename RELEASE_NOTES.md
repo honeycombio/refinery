@@ -7,6 +7,9 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 This is a performance improvement release, focused on memory and CPU efficiency.
 The improvements introduce some backwards breaking changes which are covered in detail below.
 
+📝 With the release of v3.0.0, v2.x enters [maintenance](https://docs.honeycomb.io/troubleshoot/product-lifecycle/release-stages/#maintenance) for support until April 1, 2026.
+We recommend [migrating to Refinery 3](https://docs.honeycomb.io/troubleshoot/product-lifecycle/recommended-migrations/upgrade-refinery/).
+
 ### Performance Improvements
 
 The improvements are the result of reducing the number of data transformations performed during the receipt and retransmission of traces.
