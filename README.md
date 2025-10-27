@@ -10,6 +10,9 @@
 For a detailed list of linked pull requests merged in each release, see [CHANGELOG.md](./CHANGELOG.md).
 For more readable information about recent changes, please see [RELEASE_NOTES.md](./RELEASE_NOTES.md).
 
+📝 With the release of v3.0.0, v2.x enters [maintenance](https://docs.honeycomb.io/troubleshoot/product-lifecycle/release-stages/#maintenance) for support until April 1, 2026.
+We recommend [migrating to Refinery 3](https://docs.honeycomb.io/troubleshoot/product-lifecycle/recommended-migrations/upgrade-refinery/).
+
 ## Purpose
 
 Refinery is a tail-based sampling proxy and operates at the level of an entire [trace](https://docs.honeycomb.io/concepts/tracing/). Refinery examines whole traces and intelligently applies sampling decisions to each trace. These decisions determine whether to keep or drop the trace data in the sampled data forwarded to Honeycomb.
