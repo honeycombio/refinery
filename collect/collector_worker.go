@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"sort"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,8 +16,6 @@ import (
 	"github.com/honeycombio/refinery/sample"
 	"github.com/honeycombio/refinery/types"
 )
-
-const collectWorkerHealthPrefix = "collect-worker-"
 
 type sendEarly struct {
 	wg          *sync.WaitGroup
@@ -67,6 +64,9 @@ type CollectorWorker struct {
 	// span_processed doesn't need to be atomic because it's only accessed
 	// inside the CollectorWorker
 	localSpanProcessed int64
+
+	// Health status tracking - stores Unix timestamp in nanoseconds
+	lastHealthUpdate atomic.Int64
 }
 
 // NewCollectorWorker creates a new CollectorWorker instance
@@ -137,15 +137,12 @@ func (cl *CollectorWorker) addSpanFromPeer(sp *types.Span) error {
 func (cl *CollectorWorker) collect() {
 	defer cl.parent.workersWG.Done()
 
-	healthKey := collectWorkerHealthPrefix + strconv.Itoa(cl.ID)
-	cl.parent.Health.Register(healthKey, cl.parent.Config.GetHealthCheckTimeout())
-	defer cl.parent.Health.Unregister(healthKey)
-
 	tickerDuration := cl.parent.Config.GetTracesConfig().GetSendTickerValue()
 	ticker := cl.parent.Clock.NewTicker(tickerDuration)
 	defer ticker.Stop()
 
-	cl.parent.Health.Ready(healthKey, true)
+	// Initialize health timestamp
+	cl.lastHealthUpdate.Store(cl.parent.Clock.Now().UnixNano())
 	for {
 		ctx, span := otelutil.StartSpanWith(context.Background(), cl.parent.Tracer, "collect_loop", "loop_id", cl.ID)
 		startTime := cl.parent.Clock.Now()
@@ -165,7 +162,8 @@ func (cl *CollectorWorker) collect() {
 		default:
 			select {
 			case <-ticker.Chan():
-				cl.parent.Health.Ready(healthKey, true)
+				// Update health timestamp
+				cl.lastHealthUpdate.Store(cl.parent.Clock.Now().UnixNano())
 				cl.parent.Metrics.Count("span_processed", cl.getLastSpanProcessed())
 
 				cl.sendExpiredTracesInCache(ctx, cl.parent.Clock.Now())
