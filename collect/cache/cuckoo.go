@@ -44,6 +44,8 @@ type CuckooTraceChecker struct {
 const (
 	// This is how many items can be in the Add Queue before we start blocking on Add.
 	AddQueueDepth = 1000
+	// Number of worker goroutines processing inserts
+	NumInsertWorkers = 4
 )
 
 var cuckooTraceCheckerMetrics = []metrics.Metadata{
@@ -73,30 +75,32 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 		m.Register(metric)
 	}
 
-	// To try to avoid blocking on Add, we have a goroutine that pulls from a
-	// channel and adds to the filter.
-	c.shutdownWG.Add(1)
-	go func() {
-		defer c.shutdownWG.Done()
+	// Start multiple worker goroutines to process inserts.
+	// Multiple workers increase the chances that at least one can acquire
+	// the lock when competing with many Check() operations.
+	c.shutdownWG.Add(NumInsertWorkers)
+	for i := 0; i < NumInsertWorkers; i++ {
+		go func() {
+			defer c.shutdownWG.Done()
 
-		for {
-			select {
-			case t := <-c.addch:
-				batch := batchPool.Get().([]string)
-				batch = append(batch, t)
-				// insert 100 traceIDs at a time to reduce
-				// the amount of time this goroutine holding the write lock
-				for len(batch) < 1000 && len(c.addch) > 0 {
-					batch = append(batch, <-c.addch)
+			for {
+				select {
+				case t := <-c.addch:
+					batch := batchPool.Get().([]string)
+					batch = append(batch, t)
+					// Batch up to 1000 items to reduce lock acquisitions
+					for len(batch) < 1000 && len(c.addch) > 0 {
+						batch = append(batch, <-c.addch)
+					}
+
+					c.insertBatch(batch)
+
+				case <-c.done:
+					return
 				}
-
-				c.insertBatch(batch)
-
-			case <-c.done:
-				return
 			}
-		}
-	}()
+		}()
+	}
 
 	return c
 }
