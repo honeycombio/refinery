@@ -206,7 +206,7 @@ func (c *CuckooTraceChecker) Maintain() {
 	c.mut.RUnlock()
 
 	// once the current one is half loaded, we can start using the future one too
-	if futureLoadFactor != 0 && currentLoadFactor > 0.5 {
+	if futureLoadFactor == 0 && currentLoadFactor > 0.5 {
 		c.mut.Lock()
 		c.future = cuckoo.NewFilter(c.capacity)
 		c.mut.Unlock()
