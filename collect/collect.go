@@ -368,8 +368,7 @@ func (i *InMemCollector) monitor() {
 		select {
 		case <-ticker.Chan():
 			// Check worker health and report aggregated status
-			allWorkersHealthy := i.checkWorkersHealth()
-			i.Health.Ready(collectorHealthKey, allWorkersHealthy)
+			i.Health.Ready(collectorHealthKey, i.checkWorkersHealth())
 
 			// Aggregate metrics
 			totalIncoming := 0
