@@ -32,7 +32,7 @@ const (
 type CuckooTraceChecker struct {
 	current  *cuckoo.Filter
 	future   *cuckoo.Filter
-	mut      sync.RWMutex
+	mut      sync.Mutex
 	capacity uint
 	met      metrics.Metrics
 	addch    chan string
@@ -86,7 +86,7 @@ func NewCuckooTraceChecker(capacity uint, m metrics.Metrics) *CuckooTraceChecker
 				batch = append(batch, t)
 				// insert 100 traceIDs at a time to reduce
 				// the amount of time this goroutine holding the write lock
-				for len(batch) < 100 && len(c.addch) > 0 {
+				for len(batch) < 1000 && len(c.addch) > 0 {
 					batch = append(batch, <-c.addch)
 				}
 
@@ -184,8 +184,8 @@ func (c *CuckooTraceChecker) Add(traceID string) {
 
 // Check tests if a traceID is (very probably) in the filter.
 func (c *CuckooTraceChecker) Check(traceID string) bool {
-	c.mut.RLock()
-	defer c.mut.RUnlock()
+	c.mut.Lock()
+	defer c.mut.Unlock()
 	return c.current.Lookup([]byte(traceID))
 }
 
@@ -197,13 +197,13 @@ func (c *CuckooTraceChecker) Maintain() {
 	c.drain()
 
 	var futureLoadFactor float64
-	c.mut.RLock()
+	c.mut.Lock()
 	currentLoadFactor := c.current.LoadFactor()
 	if c.future != nil {
 		futureLoadFactor = c.future.LoadFactor()
 	}
 	currentCapacity := c.capacity
-	c.mut.RUnlock()
+	c.mut.Unlock()
 
 	// once the current one is half loaded, we can start using the future one too
 	if futureLoadFactor == 0 && currentLoadFactor > 0.5 {
