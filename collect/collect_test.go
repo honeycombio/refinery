@@ -1795,6 +1795,65 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	require.Equal(t, trace.SendBy.Unix(), updatedTrace.SendBy.Unix())
 }
 
+// TestWorkerHealthReporting tests that:
+// 2. InMemCollector aggregates worker health
+// 3. InMemCollector reports unhealthy when any worker stops updating
+// 4. InMemCollector reports healthy when all workers are healthy again
+func TestWorkerHealthReporting(t *testing.T) {
+	healthCheckTimeout := 500 * time.Millisecond
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(50 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		GetCollectionConfigVal: config.CollectionConfig{
+			NumCollectLoops:    4, // Use multiple workers to test aggregation
+			ShutdownDelay:      config.Duration(1 * time.Millisecond),
+			IncomingQueueSize:  5,
+			PeerQueueSize:      5,
+			HealthCheckTimeout: config.Duration(healthCheckTimeout),
+		},
+	}
+
+	coll := newTestCollector(t, conf)
+
+	healthReporter := coll.Health.(*health.Health)
+	assert.Eventually(t, func() bool {
+		return healthReporter.IsReady()
+	}, 2*time.Second, 50*time.Millisecond, "InMemCollector should initially be healthy")
+
+	for i, worker := range coll.workers {
+		lastUpdate := worker.healthCheckInAt.Load()
+		assert.NotZero(t, lastUpdate, "Worker %d should have initialized health timestamp", i)
+	}
+
+	// Pause one worker to simulate it becoming unhealthy
+	pausedWorkerIdx := 1
+	pauseChan := make(chan struct{})
+	coll.workers[pausedWorkerIdx].pause <- pauseChan
+
+	assert.Eventually(t, func() bool {
+		return !healthReporter.IsReady()
+	}, 2*time.Second, 50*time.Millisecond, "InMemCollector should be unhealthy when a worker stops reporting")
+
+	// Resume the paused worker
+	close(pauseChan)
+
+	assert.Eventually(t, func() bool {
+		return healthReporter.IsReady()
+	}, 2*time.Second, 50*time.Millisecond, "InMemCollector should be healthy again after worker resumes")
+}
+
 // BenchmarkCollectorWithSamplers runs benchmarks for different sampler configurations.
 // This is a tricky benchmark to interpret because just setting up the input data
 // can easily be more expensive than the collector's routing code. The goal is to
