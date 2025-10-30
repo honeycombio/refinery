@@ -332,20 +332,8 @@ func (i *InMemCollector) isReady() bool {
 	timeout := i.Config.GetHealthCheckTimeout()
 
 	for _, worker := range i.workers {
-		lastUpdate := worker.lastHealthUpdate.Load()
-		if lastUpdate == 0 {
-			// Worker hasn't initialized yet, consider it not healthy
-			ready = false
-		}
-
-		lastUpdateTime := time.Unix(0, lastUpdate)
-		if now.Sub(lastUpdateTime) > timeout {
-			// Worker hasn't reported in within timeout period
-			i.Logger.Warn().
-				WithField("worker_id", worker.ID).
-				WithField("last_update", lastUpdateTime).
-				WithField("timeout", timeout).
-				Logf("Worker is unhealthy - hasn't reported within timeout")
+		healthy := worker.IsHealthy(now, timeout)
+		if !healthy {
 			ready = false
 		}
 	}

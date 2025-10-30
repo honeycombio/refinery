@@ -1839,7 +1839,7 @@ func TestWorkerHealthReporting(t *testing.T) {
 	}, 2*time.Second, 50*time.Millisecond, "InMemCollector should initially be healthy")
 
 	for i, worker := range coll.workers {
-		lastUpdate := worker.lastHealthUpdate.Load()
+		lastUpdate := worker.healthCheckInAt.Load()
 		assert.NotZero(t, lastUpdate, "Worker %d should have initialized health timestamp", i)
 	}
 

@@ -66,7 +66,7 @@ type CollectorWorker struct {
 	localSpanProcessed int64
 
 	// Health status tracking - stores Unix timestamp in nanoseconds
-	lastHealthUpdate atomic.Int64
+	healthCheckInAt atomic.Int64
 }
 
 // NewCollectorWorker creates a new CollectorWorker instance
@@ -142,7 +142,7 @@ func (cl *CollectorWorker) collect() {
 	defer ticker.Stop()
 
 	// Initialize health timestamp
-	cl.lastHealthUpdate.Store(cl.parent.Clock.Now().UnixNano())
+	cl.healthCheckInAt.Store(cl.parent.Clock.Now().UnixNano())
 	for {
 		ctx, span := otelutil.StartSpanWith(context.Background(), cl.parent.Tracer, "collect_loop", "loop_id", cl.ID)
 		startTime := cl.parent.Clock.Now()
@@ -163,7 +163,7 @@ func (cl *CollectorWorker) collect() {
 			select {
 			case <-ticker.Chan():
 				// Update health timestamp
-				cl.lastHealthUpdate.Store(cl.parent.Clock.Now().UnixNano())
+				cl.healthCheckInAt.Store(cl.parent.Clock.Now().UnixNano())
 				cl.parent.Metrics.Count("span_processed", cl.getLastSpanProcessed())
 
 				cl.sendExpiredTracesInCache(ctx, cl.parent.Clock.Now())
@@ -479,4 +479,24 @@ func (cl *CollectorWorker) makeDecision(ctx context.Context, trace *types.Trace,
 	}
 
 	return s, nil
+}
+
+func (cw *CollectorWorker) IsHealthy(now time.Time, timeout time.Duration) bool {
+	lastCheckInAt := cw.healthCheckInAt.Load()
+	if lastCheckInAt == 0 {
+		// Worker hasn't initialized yet, consider it unhealthy
+		return false
+	}
+
+	lastCheckInTime := time.Unix(0, lastCheckInAt)
+	if now.Sub(lastCheckInTime) > timeout {
+		cw.parent.Logger.Warn().
+			WithField("worker_id", cw.ID).
+			WithField("last_update", lastCheckInTime).
+			WithField("timeout", timeout).
+			Logf("Worker is unhealthy - hasn't reported within timeout")
+		return false
+	}
+
+	return true
 }
