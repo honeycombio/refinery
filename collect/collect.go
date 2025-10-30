@@ -323,10 +323,11 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	runtime.GC()
 }
 
-// checkWorkersHealth checks if all workers are healthy by verifying they've
+// isReady checks if all workers are healthy by verifying they've
 // updated their health status within the configured timeout period.
 // Returns true if all workers are healthy, false if any worker is unhealthy.
-func (i *InMemCollector) checkWorkersHealth() bool {
+func (i *InMemCollector) isReady() bool {
+	var ready = true // assume ready until proven otherwise
 	now := i.Clock.Now()
 	timeout := i.Config.GetHealthCheckTimeout()
 
@@ -334,7 +335,7 @@ func (i *InMemCollector) checkWorkersHealth() bool {
 		lastUpdate := worker.lastHealthUpdate.Load()
 		if lastUpdate == 0 {
 			// Worker hasn't initialized yet, consider it not healthy
-			return false
+			ready = false
 		}
 
 		lastUpdateTime := time.Unix(0, lastUpdate)
@@ -345,11 +346,11 @@ func (i *InMemCollector) checkWorkersHealth() bool {
 				WithField("last_update", lastUpdateTime).
 				WithField("timeout", timeout).
 				Logf("Worker is unhealthy - hasn't reported within timeout")
-			return false
+			ready = false
 		}
 	}
 
-	return true
+	return ready
 }
 
 // monitor runs background maintenance tasks including:
@@ -368,7 +369,7 @@ func (i *InMemCollector) monitor() {
 		select {
 		case <-ticker.Chan():
 			// Check worker health and report aggregated status
-			i.Health.Ready(collectorHealthKey, i.checkWorkersHealth())
+			i.Health.Ready(collectorHealthKey, i.isReady())
 
 			// Aggregate metrics
 			totalIncoming := 0
