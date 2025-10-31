@@ -53,6 +53,10 @@ func GetMetricsImplementation(c config.Config) *MultiMetrics {
 	return NewMultiMetrics()
 }
 
+const (
+	RtMetricNameMemory = "/memory/classes/heap/objects:bytes"
+)
+
 func ConvertBoolToFloat(val bool) float64 {
 	if val {
 		return 1

@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	rtmetrics "runtime/metrics"
 	"sync"
 	"time"
 
@@ -157,9 +158,12 @@ func (o *OTelMetrics) Start() error {
 	name = "memory_inuse"
 	// This is just reporting the gauge we already track under a different name.
 	var fmem metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
-		stats := &runtime.MemStats{}
-		runtime.ReadMemStats(stats)
-		result.Observe(float64(stats.HeapAlloc))
+		memMetricSample := make([]rtmetrics.Sample, 1)
+		memMetricSample[0].Name = RtMetricNameMemory
+		rtmetrics.Read(memMetricSample)
+		currentAlloc := memMetricSample[0].Value.Uint64()
+
+		result.Observe(float64(currentAlloc))
 		return nil
 	}
 	g, err = o.meter.Float64ObservableGauge(name, metric.WithFloat64Callback(fmem))
