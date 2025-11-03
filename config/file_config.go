@@ -150,7 +150,10 @@ func (a *AccessKeyConfig) GetReplaceKey(apiKey string) (string, error) {
 				}
 			}
 		}
-		apiKey = overwriteWith
+
+		if overwriteWith != "" {
+			apiKey = overwriteWith
+		}
 	}
 
 	if apiKey == "" {
