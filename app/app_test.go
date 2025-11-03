@@ -225,8 +225,9 @@ func defaultConfigWithGRPC(basePort int, redisDB int, apiURL string, enableGRPC 
 			TraceTimeout: config.Duration(10 * time.Millisecond),
 			MaxBatchSize: 500,
 		},
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		PeerManagementType: "redis",
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		AddRuleReasonToTrace: true,
+		PeerManagementType:   "redis",
 		GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
 			Prefix:   "refinery-app-test",
 			Timeout:  config.Duration(1 * time.Second),
@@ -433,6 +434,72 @@ func TestAppIntegration(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAppIntegrationSendKey(t *testing.T) {
+	t.Parallel()
+	port := 10550
+	redisDB := 1
+
+	testServer := newTestAPIServer(t)
+	cfg := defaultConfig(port, redisDB, testServer.server.URL)
+	cfg.GetAccessKeyConfigVal = config.AccessKeyConfig{
+		SendKey:     nonLegacyAPIKey,
+		SendKeyMode: "all",
+	}
+	cfg.Samplers = map[string]*config.V2SamplerChoice{
+		"test": {
+			RulesBasedSampler: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "test",
+						SampleRate: 1,
+					},
+				},
+			},
+		},
+		"__default__": {
+			RulesBasedSampler: &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "default",
+						SampleRate: 1,
+					},
+				},
+			},
+		},
+	}
+	app, graph := newStartedApp(t, nil, nil, cfg)
+	app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
+	app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
+
+	// Send a root span, it should be sent in short order.
+	req := httptest.NewRequest(
+		"POST",
+		fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
+	)
+	req.Header.Set("X-Honeycomb-Team", "bogus-key")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := http.DefaultTransport.RoundTrip(req)
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	resp.Body.Close()
+
+	time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+
+	require.EventuallyWithT(t, func(collect *assert.CollectT) {
+		events := testServer.getEvents()
+		require.Len(collect, events, 1)
+		assert.Equal(collect, "dataset", events[0].Dataset)
+		assert.Equal(collect, "bar", events[0].Data.Get("foo"))
+		assert.Equal(collect, "1", events[0].Data.Get("trace.trace_id"))
+		assert.Equal(collect, int64(1), events[0].Data.Get(types.MetaRefineryOriginalSampleRate))
+		assert.Equal(collect, "rules/trace/test", events[0].Data.Get(types.MetaRefineryReason), "reason should match with the rule defined for test environment")
+	}, 2*time.Second, 10*time.Millisecond)
+
+	err = startstop.Stop(graph.Objects(), nil)
+	assert.NoError(t, err)
+}
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	// Parallel integration tests need different ports!
 	t.Parallel()

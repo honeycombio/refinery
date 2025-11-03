@@ -62,6 +62,10 @@ type MockConfig struct {
 	CfgHash                          string
 	RulesHash                        string
 
+	// Samplers allows per-dataset/environment sampler configuration
+	// Map key is the dataset name or environment, value is the sampler choice
+	Samplers map[string]*V2SamplerChoice
+
 	Mux sync.RWMutex
 }
 
@@ -252,11 +256,27 @@ func (m *MockConfig) GetOTelTracingConfig() OTelTracingConfig {
 	return m.GetOTelTracingConfigVal
 }
 
-// TODO: allow per-dataset mock values
+// GetSamplerConfigForDestName returns the sampler config for the given dataset/environment.
+// If Samplers map is populated, it will look up the dataset-specific config.
+// Falls back to GetSamplerTypeVal if Samplers is not set (backwards compatible).
 func (m *MockConfig) GetSamplerConfigForDestName(dataset string) (interface{}, string) {
 	m.Mux.RLock()
 	defer m.Mux.RUnlock()
 
+	// If Samplers map is configured, use it (mimics fileConfig behavior)
+	if m.Samplers != nil {
+		// Try to find the specific dataset/environment
+		if sampler, ok := m.Samplers[dataset]; ok {
+			return sampler.Sampler()
+		}
+
+		// Fall back to __default__
+		if sampler, ok := m.Samplers["__default__"]; ok {
+			return sampler.Sampler()
+		}
+	}
+
+	// Fall back to legacy behavior for backwards compatibility
 	return m.GetSamplerTypeVal, m.GetSamplerTypeName
 }
 
@@ -468,6 +488,31 @@ func (f *MockConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
 }
 
 func (f *MockConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	// If Samplers map is configured, use it to get the correct sampler
+	if f.Samplers != nil {
+		// Try specific dataset/environment first
+		if sampler, ok := f.Samplers[samplerKey]; ok {
+			if cfg, _ := sampler.Sampler(); cfg != nil {
+				if fielder, ok := cfg.(GetSamplingFielder); ok {
+					return fielder.GetSamplingFields()
+				}
+			}
+		}
+
+		// Fall back to __default__
+		if sampler, ok := f.Samplers["__default__"]; ok {
+			if cfg, _ := sampler.Sampler(); cfg != nil {
+				if fielder, ok := cfg.(GetSamplingFielder); ok {
+					return fielder.GetSamplingFields()
+				}
+			}
+		}
+	}
+
+	// Fall back to legacy behavior
 	switch sampler := f.GetSamplerTypeVal.(type) {
 	case *DeterministicSamplerConfig:
 		return sampler.GetSamplingFields()
@@ -482,5 +527,4 @@ func (f *MockConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string
 	default:
 		return nil
 	}
-
 }
