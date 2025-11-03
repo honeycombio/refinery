@@ -95,11 +95,11 @@ type AccessKeyConfig struct {
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
 }
 
-// IsAccepted checks if the given key is in the list of accepted keys.
-// if the key is not in the list, it returns an error with the key truncated to 8 characters for logging.
+// IsAccepted checks if the given key is in the list of received keys or a configured SendKey.
+// if not, it returns an error with the key truncated to 8 characters for logging.
 func (a *AccessKeyConfig) IsAccepted(key string) error {
 	if a.AcceptOnlyListedKeys {
-		if slices.Contains(a.ReceiveKeys, key) {
+		if key == a.SendKey || slices.Contains(a.ReceiveKeys, key) {
 			return nil
 		}
 

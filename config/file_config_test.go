@@ -67,11 +67,11 @@ func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 			}
 			got, err := a.GetReplaceKey(tt.apiKey)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AccessKeyConfig.CheckAndMaybeReplaceKey() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("AccessKeyConfig.GetReplaceKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("AccessKeyConfig.CheckAndMaybeReplaceKey() = '%v', want '%v'", got, tt.want)
+				t.Errorf("AccessKeyConfig.GetReplaceKey() = '%v', want '%v'", got, tt.want)
 			}
 		})
 	}

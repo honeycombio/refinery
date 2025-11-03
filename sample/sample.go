@@ -63,7 +63,7 @@ func (s *SamplerFactory) Start() error {
 // GetSamplerImplementationForKey returns the sampler implementation for the given
 // samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined
 func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampler {
-	c, _ := s.Config.GetSamplerConfigForDestName(samplerKey)
+	c, name := s.Config.GetSamplerConfigForDestName(samplerKey)
 
 	var sampler Sampler
 
@@ -83,7 +83,7 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampl
 	case *config.WindowedThroughputSamplerConfig:
 		sampler = &WindowedThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	default:
-		s.Logger.Error().Logf("unknown sampler type %T. Exiting.", c)
+		s.Logger.Error().Logf("can not continue with an unknown sampler type %T with name %s. Exiting.", c, name)
 		os.Exit(1)
 	}
 
