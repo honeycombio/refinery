@@ -303,7 +303,6 @@ func TestOTLPHandler(t *testing.T) {
 		for _, tC := range testCases {
 			t.Run(tC.name, func(t *testing.T) {
 				muxxer := mux.NewRouter()
-				muxxer.Use(router.apiKeyProcessor)
 				router.AddOTLPMuxxer(muxxer)
 				server := httptest.NewServer(muxxer)
 				defer server.Close()

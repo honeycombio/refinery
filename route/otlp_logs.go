@@ -18,6 +18,10 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 	apicfg := r.Config.GetAccessKeyConfig()
+	if err := apicfg.IsAccepted(ri.ApiKey); err != nil {
+		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
+		return
+	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey)
 
 	if err := ri.ValidateLogsHeaders(); err != nil {

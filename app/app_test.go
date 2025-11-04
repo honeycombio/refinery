@@ -43,6 +43,7 @@ import (
 	"github.com/honeycombio/refinery/types"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	common "go.opentelemetry.io/proto/otlp/common/v1"
+	v1 "go.opentelemetry.io/proto/otlp/resource/v1"
 	trace "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -703,58 +704,151 @@ func TestAppIntegrationSendKey(t *testing.T) {
 
 			})
 
-			// Send a span with the specified incoming API key
-			req := httptest.NewRequest(
-				"POST",
-				fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
-				strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
-			)
-			if tt.incomingAPIKey != "" {
-				req.Header.Set("X-Honeycomb-Team", tt.incomingAPIKey)
-			}
-			req.Header.Set("Content-Type", "application/json")
+			t.Run("batch_endpoint", func(t *testing.T) {
+				// Send a span with the specified incoming API key
+				req := httptest.NewRequest(
+					"POST",
+					fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+					strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
+				)
+				if tt.incomingAPIKey != "" {
+					req.Header.Set("X-Honeycomb-Team", tt.incomingAPIKey)
+				}
+				req.Header.Set("Content-Type", "application/json")
 
-			resp, err := http.DefaultTransport.RoundTrip(req)
-			require.NoError(t, err)
-			defer resp.Body.Close()
-
-			if tt.shouldSucceed {
-				// Verify successful processing
-				assert.Equal(t, http.StatusOK, resp.StatusCode, tt.description)
-
-				time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
-
-				require.EventuallyWithT(t, func(collect *assert.CollectT) {
-					events := testServer.getEvents()
-					if !assert.Len(collect, events, 1, "Expected exactly 1 event") {
-						return
-					}
-
-					event := events[0]
-					assert.Equal(collect, tt.expectedUpstreamKey, event.APIKey, "API key sent upstream should match expected")
-					assert.Equal(collect, "dataset", event.Dataset)
-					assert.Equal(collect, "bar", event.Data.Get("foo"))
-					assert.Equal(collect, "1", event.Data.Get("trace.trace_id"))
-					assert.Equal(collect, int64(1), event.Data.Get(types.MetaRefineryOriginalSampleRate))
-					if tt.expectedReason != "" {
-						assert.Equal(collect, tt.expectedReason, event.Data.Get(types.MetaRefineryReason), "Reason should match environment-specific rule")
-					}
-				}, 2*time.Second, 10*time.Millisecond)
-			} else {
-				assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, tt.description)
-				body, err := io.ReadAll(resp.Body)
+				resp, err := http.DefaultTransport.RoundTrip(req)
 				require.NoError(t, err)
-				if len(tt.incomingAPIKey) == 0 {
-					assert.Contains(t, string(body), "blank API key is not permitted", tt.description)
+				defer resp.Body.Close()
+
+				if tt.shouldSucceed {
+					// Verify successful processing
+					assert.Equal(t, http.StatusOK, resp.StatusCode, tt.description)
+
+					time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+
+					require.EventuallyWithT(t, func(collect *assert.CollectT) {
+						events := testServer.getEvents()
+						if !assert.Len(collect, events, 1, "Expected exactly 1 event") {
+							return
+						}
+
+						event := events[0]
+						assert.Equal(collect, tt.expectedUpstreamKey, event.APIKey, "API key sent upstream should match expected")
+						assert.Equal(collect, "dataset", event.Dataset)
+						assert.Equal(collect, "bar", event.Data.Get("foo"))
+						assert.Equal(collect, "1", event.Data.Get("trace.trace_id"))
+						assert.Equal(collect, int64(1), event.Data.Get(types.MetaRefineryOriginalSampleRate))
+						if tt.expectedReason != "" {
+							assert.Equal(collect, tt.expectedReason, event.Data.Get(types.MetaRefineryReason), "Reason should match environment-specific rule")
+						}
+					}, 2*time.Second, 10*time.Millisecond)
 				} else {
-					assert.Contains(t, string(body), "not found in list of authorized keys", tt.description)
+					assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, tt.description)
+					body, err := io.ReadAll(resp.Body)
+					require.NoError(t, err)
+					if len(tt.incomingAPIKey) == 0 {
+						assert.Contains(t, string(body), "blank API key is not permitted", tt.description)
+					} else {
+						assert.Contains(t, string(body), "not found in list of authorized keys", tt.description)
+					}
+
+					// Verify no events were sent upstream
+					time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+					events := testServer.getEvents()
+					assert.Len(t, events, 0, "No events should be sent for rejected requests")
+				}
+			})
+
+			t.Run("otlp_http_endpoint", func(t *testing.T) {
+				// Clear any previous events from the batch endpoint test
+				testServer.mutex.Lock()
+				testServer.events = nil
+				testServer.mutex.Unlock()
+
+				// Create OTLP protobuf request
+				otlpReq := &collectortrace.ExportTraceServiceRequest{
+					ResourceSpans: []*trace.ResourceSpans{{
+						Resource: &v1.Resource{
+							Attributes: []*common.KeyValue{
+								{
+									Key:   "service.name",
+									Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "dataset"}},
+								},
+							},
+						},
+						ScopeSpans: []*trace.ScopeSpans{{
+							Spans: []*trace.Span{{
+								TraceId:           []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+								SpanId:            []byte{0, 0, 0, 0, 0, 0, 0, 1},
+								Name:              "test-span",
+								StartTimeUnixNano: uint64(time.Now().UnixNano()),
+								EndTimeUnixNano:   uint64(time.Now().UnixNano()),
+								Attributes: []*common.KeyValue{{
+									Key:   "foo",
+									Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "bar"}},
+								}},
+							}},
+						}},
+					}},
 				}
 
-				// Verify no events were sent upstream
-				time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
-				events := testServer.getEvents()
-				assert.Len(t, events, 0, "No events should be sent for rejected requests")
-			}
+				// Marshal to protobuf
+				body, err := proto.Marshal(otlpReq)
+				require.NoError(t, err)
+
+				// Send OTLP protobuf request via HTTP
+				httpReq := httptest.NewRequest(
+					"POST",
+					fmt.Sprintf("http://localhost:%d/v1/traces", port),
+					bytes.NewReader(body),
+				)
+				if tt.incomingAPIKey != "" {
+					httpReq.Header.Set("X-Honeycomb-Team", tt.incomingAPIKey)
+					httpReq.Header.Set("X-Honeycomb-Dataset", "dataset")
+				}
+				httpReq.Header.Set("Content-Type", "application/protobuf")
+
+				resp, err := http.DefaultTransport.RoundTrip(httpReq)
+				require.NoError(t, err)
+				defer resp.Body.Close()
+
+				if tt.shouldSucceed {
+					// Verify successful processing
+					assert.Equal(t, http.StatusOK, resp.StatusCode, tt.description)
+
+					time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+
+					require.EventuallyWithT(t, func(collect *assert.CollectT) {
+						events := testServer.getEvents()
+						if !assert.Len(collect, events, 1, "Expected exactly 1 event from OTLP endpoint") {
+							return
+						}
+
+						event := events[0]
+						assert.Equal(collect, tt.expectedUpstreamKey, event.APIKey, "API key sent upstream should match expected")
+						assert.Equal(collect, "dataset", event.Dataset)
+						assert.Equal(collect, "bar", event.Data.Get("foo"))
+						assert.Equal(collect, "test-span", event.Data.Get("name"))
+						if tt.expectedReason != "" {
+							assert.Equal(collect, tt.expectedReason, event.Data.Get(types.MetaRefineryReason), "Reason should match environment-specific rule")
+						}
+					}, 2*time.Second, 10*time.Millisecond)
+				} else {
+					assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, tt.description)
+					body, err := io.ReadAll(resp.Body)
+					require.NoError(t, err)
+					if len(tt.incomingAPIKey) == 0 {
+						assert.Contains(t, string(body), "missing 'x-honeycomb-team' header", tt.description)
+					} else {
+						assert.Contains(t, string(body), "not found in list of authorized keys", tt.description)
+					}
+
+					// Verify no events were sent upstream
+					time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+					events := testServer.getEvents()
+					assert.Len(t, events, 0, "No events should be sent for rejected OTLP requests")
+				}
+			})
 		})
 	}
 }
@@ -795,39 +889,6 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, "bar", events[0].Data.Get("foo"))
 	assert.Equal(t, "1", events[0].Data.Get("trace.trace_id"))
 	assert.Equal(t, int64(1), events[0].Data.Get(types.MetaRefineryOriginalSampleRate))
-
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
-}
-
-func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
-	// Parallel integration tests need different ports!
-	t.Parallel()
-	port := 10700
-	redisDB := 4
-
-	testServer := newTestAPIServer(t)
-	cfg := defaultConfig(port, redisDB, testServer.server.URL)
-	a, graph := newStartedApp(t, nil, nil, cfg)
-	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
-	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
-
-	// Send a root span, it should be sent in short order.
-	req := httptest.NewRequest(
-		"POST",
-		fmt.Sprintf("http://localhost:%d/v1/traces", port),
-		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
-	)
-	req.Header.Set("X-Honeycomb-Team", "badkey")
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	assert.NoError(t, err)
-	assert.Equal(t, 401, resp.StatusCode)
-	data, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err)
-	assert.Contains(t, string(data), "not found in list of authorized keys")
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)

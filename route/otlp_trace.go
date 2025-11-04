@@ -26,6 +26,10 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 	apicfg := r.Config.GetAccessKeyConfig()
+	if err := apicfg.IsAccepted(ri.ApiKey); err != nil {
+		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
+		return
+	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey)
 
 	if err := ri.ValidateTracesHeaders(); err != nil {
@@ -49,11 +53,11 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	var err error
 	switch ri.ContentType {
 	case "application/json":
-    r.Metrics.Increment(r.metricsNames.routerOtlpTraceHttpJson)
-    err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
+		r.Metrics.Increment(r.metricsNames.routerOtlpTraceHttpJson)
+		err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
 	case "application/x-protobuf", "application/protobuf":
 		r.Metrics.Increment(r.metricsNames.routerOtlpTraceHttpProto)
-    err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
+		err = r.processOTLPRequestWithMsgp(ctx, w, req, ri, keyToUse)
 	default:
 		err = errors.New("unsupported content type")
 	}
