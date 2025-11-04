@@ -855,7 +855,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	// Parallel integration tests need different ports!
 	t.Parallel()
-	port := 10600
+	port := 10700
 	redisDB := 3
 
 	testServer := newTestAPIServer(t)
