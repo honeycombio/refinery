@@ -99,7 +99,7 @@ type AccessKeyConfig struct {
 // if not, it returns an error with the key truncated to 8 characters for logging.
 func (a *AccessKeyConfig) IsAccepted(key string) error {
 	if a.AcceptOnlyListedKeys {
-		if key == a.SendKey || slices.Contains(a.ReceiveKeys, key) {
+		if (len(a.SendKey) > 0 && key == a.SendKey) || slices.Contains(a.ReceiveKeys, key) {
 			return nil
 		}
 
