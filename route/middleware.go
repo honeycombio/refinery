@@ -50,6 +50,15 @@ func (r *Router) apiKeyProcessor(next http.Handler) http.Handler {
 			return
 		}
 
+		replacement, err := keycfg.GetReplaceKey(apiKey)
+		if err != nil {
+			r.handlerReturnWithError(w, ErrAuthInvalid, err)
+			return
+		}
+		if replacement != apiKey {
+			req.Header.Set(types.APIKeyHeader, replacement)
+		}
+
 		next.ServeHTTP(w, req)
 	})
 }

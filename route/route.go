@@ -265,7 +265,6 @@ func (r *Router) LnS() {
 	authedMuxxer.Handle("/events/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.event), "handle_event")).Name("event")
 	authedMuxxer.Handle("/batch/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.batch), "handle_batch")).Name("batch")
 
-	// require an auth header for OTLP requests
 	r.AddOTLPMuxxer(muxxer)
 
 	// pass everything else through unmolested
@@ -1173,9 +1172,8 @@ func (r *Router) startGRPCHealthMonitor() {
 
 // AddOTLPMuxxer adds muxxer for OTLP requests
 func (r *Router) AddOTLPMuxxer(muxxer *mux.Router) {
-	// require an auth header for OTLP requests
+	// auth header is handled inside the postOTLPTrace and postOTLPLogs to prioritize content-type error handling
 	otlpMuxxer := muxxer.PathPrefix("/v1/").Methods("POST").Subrouter()
-	otlpMuxxer.Use(r.apiKeyProcessor)
 
 	// handle OTLP trace requests
 	otlpMuxxer.HandleFunc("/traces", r.postOTLPTrace).Name("otlp_traces")

@@ -1351,18 +1351,6 @@ func (i *InMemCollector) sendTraces() {
 		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.outgoingTraces)))
 		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "outgoingTraces_size": len(i.outgoingTraces)})
 
-		// if we have a key replacement rule, we should
-		// replace the key with the new key
-		keycfg := i.Config.GetAccessKeyConfig()
-		overwriteWith, err := keycfg.GetReplaceKey(t.APIKey)
-		if err != nil {
-			i.Logger.Warn().Logf("error replacing key: %s", err.Error())
-			continue
-		}
-		if overwriteWith != t.APIKey {
-			t.APIKey = overwriteWith
-		}
-
 		for _, sp := range t.GetSpans() {
 			if sp.IsDecisionSpan() {
 				continue

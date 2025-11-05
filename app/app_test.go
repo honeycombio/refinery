@@ -43,6 +43,7 @@ import (
 	"github.com/honeycombio/refinery/types"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	common "go.opentelemetry.io/proto/otlp/common/v1"
+	v1 "go.opentelemetry.io/proto/otlp/resource/v1"
 	trace "go.opentelemetry.io/proto/otlp/trace/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -225,8 +226,9 @@ func defaultConfigWithGRPC(basePort int, redisDB int, apiURL string, enableGRPC 
 			TraceTimeout: config.Duration(10 * time.Millisecond),
 			MaxBatchSize: 500,
 		},
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
-		PeerManagementType: "redis",
+		GetSamplerTypeVal:    &config.DeterministicSamplerConfig{SampleRate: 1},
+		AddRuleReasonToTrace: true,
+		PeerManagementType:   "redis",
 		GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
 			Prefix:   "refinery-app-test",
 			Timeout:  config.Duration(1 * time.Second),
@@ -433,10 +435,427 @@ func TestAppIntegration(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestAppIntegrationSendKey(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		sendKey             string
+		sendKeyMode         string
+		receiveKeys         []string
+		acceptOnlyListed    bool
+		incomingAPIKey      string
+		expectedUpstreamKey string
+		shouldSucceed       bool
+		expectedReason      string
+		description         string
+	}{
+		// Some applications have custom keys, others should use central key
+		{
+			name:                "missingonly_blank_key_replaced",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "missingonly",
+			receiveKeys:         []string{},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      "",
+			expectedUpstreamKey: nonLegacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.environment",
+			description:         "Blank key should be replaced with SendKey",
+		},
+		{
+			name:                "missingonly_custom_key_preserved",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "missingonly",
+			receiveKeys:         []string{},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      "custom-app-key",
+			expectedUpstreamKey: "custom-app-key",
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.default",
+			description:         "Custom key should be preserved",
+		},
+
+		// Only applications knowing a specific secret should be able to send telemetry
+		{
+			name:                "listedonly_secret_accepted_and_replaced",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "listedonly",
+			receiveKeys:         []string{"internal-secret"},
+			acceptOnlyListed:    true,
+			incomingAPIKey:      "internal-secret",
+			expectedUpstreamKey: nonLegacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.environment",
+			description:         "Secret key in list should be replaced with central key",
+		},
+		{
+			name:                "listedonly_sendkey_accepted_and_preserved",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "listedonly",
+			receiveKeys:         []string{"internal-secret"},
+			acceptOnlyListed:    true,
+			incomingAPIKey:      nonLegacyAPIKey,
+			expectedUpstreamKey: nonLegacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.environment",
+			description:         "SendKey itself should be accepted and preserved",
+		},
+		{
+			name:             "listedonly_unlisted_rejected",
+			sendKey:          nonLegacyAPIKey,
+			sendKeyMode:      "listedonly",
+			receiveKeys:      []string{"internal-secret"},
+			acceptOnlyListed: true,
+			incomingAPIKey:   "unauthorized-key",
+			shouldSucceed:    false,
+			description:      "Unlisted key should be rejected (401)",
+		},
+
+		// Replace specific keys used by certain applications with the central key
+		{
+			name:                "listedonly_no_restrict_listed_replaced",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "listedonly",
+			receiveKeys:         []string{"old-app-key-1", "old-app-key-2"},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      "old-app-key-1",
+			expectedUpstreamKey: nonLegacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.environment",
+			description:         "Listed key should be replaced with central key",
+		},
+		{
+			name:                "listedonly_no_restrict_unlisted_preserved",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "listedonly",
+			receiveKeys:         []string{"old-app-key-1", "old-app-key-2"},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      "other-valid-key",
+			expectedUpstreamKey: "other-valid-key",
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.default",
+			description:         "Unlisted key should be preserved as-is",
+		},
+
+		// Replace all incoming keys with SendKey
+		{
+			name:                "all_mode_replaces_everything",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "all",
+			receiveKeys:         []string{},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      "any-key-at-all",
+			expectedUpstreamKey: nonLegacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.environment",
+			description:         "All keys replaced with central key",
+		},
+		{
+			name:                "all_mode_blank_key_replaced",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "all",
+			receiveKeys:         []string{},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      "",
+			expectedUpstreamKey: nonLegacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.environment",
+			description:         "Even blank keys are replaced in 'all' mode",
+		},
+		// Require applications send with api keys but replace all of them with SendKey
+		{
+			name:                "nonblank_replaces_nonblank",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "nonblank",
+			receiveKeys:         []string{},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      "some-key",
+			expectedUpstreamKey: nonLegacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.environment",
+			description:         "Non-blank key should be replaced",
+		},
+		{
+			name:             "nonblank_blank_rejected",
+			sendKey:          nonLegacyAPIKey,
+			sendKeyMode:      "nonblank",
+			receiveKeys:      []string{},
+			acceptOnlyListed: false,
+			incomingAPIKey:   "",
+			shouldSucceed:    false,
+			description:      "Blank key should be rejected in nonblank mode",
+		},
+		{
+			name:                "unlisted_replaces_unlisted_only",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "unlisted",
+			receiveKeys:         []string{legacyAPIKey},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      "unlisted-key",
+			expectedUpstreamKey: nonLegacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.environment",
+			description:         "Unlisted key should be replaced",
+		},
+		// Replace all keys but the ones defined in receiveKeys list
+		{
+			name:                "unlisted_preserves_listed",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "unlisted",
+			receiveKeys:         []string{legacyAPIKey},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      legacyAPIKey,
+			expectedUpstreamKey: legacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.dataset", // Legacy key uses dataset, not environment
+			description:         "Listed key should be preserved",
+		},
+		{
+			name:             "unlisted_blank_rejected",
+			sendKey:          nonLegacyAPIKey,
+			sendKeyMode:      "unlisted",
+			receiveKeys:      []string{legacyAPIKey},
+			acceptOnlyListed: false,
+			incomingAPIKey:   "",
+			shouldSucceed:    false,
+			description:      "Blank keys should be rejected",
+		},
+		// default mode should not replace any keys
+		{
+			name:                "none_mode_preserves_key (default)",
+			sendKey:             nonLegacyAPIKey,
+			sendKeyMode:         "none",
+			receiveKeys:         []string{legacyAPIKey},
+			acceptOnlyListed:    false,
+			incomingAPIKey:      legacyAPIKey,
+			expectedUpstreamKey: legacyAPIKey,
+			shouldSucceed:       true,
+			expectedReason:      "rules/trace/match.dataset", // Legacy key uses dataset, not environment
+			description:         "None mode should not replace any keys",
+		},
+	}
+
+	basePort := 10550
+	for i, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			port := basePort + (i * 10)
+			redisDB := 1 + i
+
+			testServer := newTestAPIServer(t)
+			cfg := defaultConfig(port, redisDB, testServer.server.URL)
+			cfg.GetAccessKeyConfigVal = config.AccessKeyConfig{
+				SendKey:              tt.sendKey,
+				SendKeyMode:          tt.sendKeyMode,
+				ReceiveKeys:          tt.receiveKeys,
+				AcceptOnlyListedKeys: tt.acceptOnlyListed,
+			}
+
+			// Configure environment-specific sampler rules
+			cfg.Samplers = map[string]*config.V2SamplerChoice{
+				"environment": {
+					RulesBasedSampler: &config.RulesBasedSamplerConfig{
+						Rules: []*config.RulesBasedSamplerRule{
+							{
+								Name:       "match.environment",
+								SampleRate: 1,
+							},
+						},
+					},
+				},
+				"dataset": {
+					RulesBasedSampler: &config.RulesBasedSamplerConfig{
+						Rules: []*config.RulesBasedSamplerRule{
+							{
+								Name:       "match.dataset",
+								SampleRate: 1,
+							},
+						},
+					},
+				},
+				"__default__": {
+					RulesBasedSampler: &config.RulesBasedSamplerConfig{
+						Rules: []*config.RulesBasedSamplerRule{
+							{
+								Name:       "match.default",
+								SampleRate: 1,
+							},
+						},
+					},
+				},
+			}
+
+			app, graph := newStartedApp(t, nil, nil, cfg)
+			defer startstop.Stop(graph.Objects(), nil)
+
+			app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {
+				if s == nonLegacyAPIKey {
+					return "environment", nil
+				}
+				return "", nil
+			})
+			app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {
+				if s == nonLegacyAPIKey {
+					return "environment", nil
+				}
+				return "", nil
+
+			})
+
+			t.Run("batch_endpoint", func(t *testing.T) {
+				// Send a span with the specified incoming API key
+				req := httptest.NewRequest(
+					"POST",
+					fmt.Sprintf("http://localhost:%d/1/batch/dataset", port),
+					strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
+				)
+				if tt.incomingAPIKey != "" {
+					req.Header.Set("X-Honeycomb-Team", tt.incomingAPIKey)
+				}
+				req.Header.Set("Content-Type", "application/json")
+
+				resp, err := http.DefaultTransport.RoundTrip(req)
+				require.NoError(t, err)
+				defer resp.Body.Close()
+
+				if tt.shouldSucceed {
+					// Verify successful processing
+					assert.Equal(t, http.StatusOK, resp.StatusCode, tt.description)
+
+					time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+
+					require.EventuallyWithT(t, func(collect *assert.CollectT) {
+						events := testServer.getEvents()
+						if !assert.Len(collect, events, 1, "Expected exactly 1 event") {
+							return
+						}
+
+						event := events[0]
+						assert.Equal(collect, tt.expectedUpstreamKey, event.APIKey, "API key sent upstream should match expected")
+						assert.Equal(collect, "dataset", event.Dataset)
+						assert.Equal(collect, "bar", event.Data.Get("foo"))
+						assert.Equal(collect, "1", event.Data.Get("trace.trace_id"))
+						assert.Equal(collect, int64(1), event.Data.Get(types.MetaRefineryOriginalSampleRate))
+						if tt.expectedReason != "" {
+							assert.Equal(collect, tt.expectedReason, event.Data.Get(types.MetaRefineryReason), "Reason should match environment-specific rule")
+						}
+					}, 2*time.Second, 10*time.Millisecond)
+				} else {
+					assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, tt.description)
+					body, err := io.ReadAll(resp.Body)
+					require.NoError(t, err)
+					if len(tt.incomingAPIKey) == 0 {
+						assert.Contains(t, string(body), "blank API key is not permitted", tt.description)
+					} else {
+						assert.Contains(t, string(body), "not found in list of authorized keys", tt.description)
+					}
+
+					// Verify no events were sent upstream
+					time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+					events := testServer.getEvents()
+					assert.Len(t, events, 0, "No events should be sent for rejected requests")
+				}
+			})
+
+			t.Run("otlp_http_endpoint", func(t *testing.T) {
+				// Clear any previous events from the batch endpoint test
+				testServer.mutex.Lock()
+				testServer.events = nil
+				testServer.mutex.Unlock()
+
+				// Create OTLP protobuf request
+				otlpReq := &collectortrace.ExportTraceServiceRequest{
+					ResourceSpans: []*trace.ResourceSpans{{
+						Resource: &v1.Resource{
+							Attributes: []*common.KeyValue{
+								{
+									Key:   "service.name",
+									Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "dataset"}},
+								},
+							},
+						},
+						ScopeSpans: []*trace.ScopeSpans{{
+							Spans: []*trace.Span{{
+								TraceId:           []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1},
+								SpanId:            []byte{0, 0, 0, 0, 0, 0, 0, 1},
+								Name:              "test-span",
+								StartTimeUnixNano: uint64(time.Now().UnixNano()),
+								EndTimeUnixNano:   uint64(time.Now().UnixNano()),
+								Attributes: []*common.KeyValue{{
+									Key:   "foo",
+									Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: "bar"}},
+								}},
+							}},
+						}},
+					}},
+				}
+
+				// Marshal to protobuf
+				body, err := proto.Marshal(otlpReq)
+				require.NoError(t, err)
+
+				// Send OTLP protobuf request via HTTP
+				httpReq := httptest.NewRequest(
+					"POST",
+					fmt.Sprintf("http://localhost:%d/v1/traces", port),
+					bytes.NewReader(body),
+				)
+				if tt.incomingAPIKey != "" {
+					httpReq.Header.Set("X-Honeycomb-Team", tt.incomingAPIKey)
+					httpReq.Header.Set("X-Honeycomb-Dataset", "dataset")
+				}
+				httpReq.Header.Set("Content-Type", "application/protobuf")
+
+				resp, err := http.DefaultTransport.RoundTrip(httpReq)
+				require.NoError(t, err)
+				defer resp.Body.Close()
+
+				if tt.shouldSucceed {
+					// Verify successful processing
+					assert.Equal(t, http.StatusOK, resp.StatusCode, tt.description)
+
+					time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+
+					require.EventuallyWithT(t, func(collect *assert.CollectT) {
+						events := testServer.getEvents()
+						if !assert.Len(collect, events, 1, "Expected exactly 1 event from OTLP endpoint") {
+							return
+						}
+
+						event := events[0]
+						assert.Equal(collect, tt.expectedUpstreamKey, event.APIKey, "API key sent upstream should match expected")
+						assert.Equal(collect, "dataset", event.Dataset)
+						assert.Equal(collect, "bar", event.Data.Get("foo"))
+						assert.Equal(collect, "test-span", event.Data.Get("name"))
+						if tt.expectedReason != "" {
+							assert.Equal(collect, tt.expectedReason, event.Data.Get(types.MetaRefineryReason), "Reason should match environment-specific rule")
+						}
+					}, 2*time.Second, 10*time.Millisecond)
+				} else {
+					assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, tt.description)
+					body, err := io.ReadAll(resp.Body)
+					require.NoError(t, err)
+					if len(tt.incomingAPIKey) == 0 {
+						assert.Contains(t, string(body), "missing 'x-honeycomb-team' header", tt.description)
+					} else {
+						assert.Contains(t, string(body), "not found in list of authorized keys", tt.description)
+					}
+
+					// Verify no events were sent upstream
+					time.Sleep(5 * app.Config.GetTracesConfig().GetSendTickerValue())
+					events := testServer.getEvents()
+					assert.Len(t, events, 0, "No events should be sent for rejected OTLP requests")
+				}
+			})
+		})
+	}
+}
 func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	// Parallel integration tests need different ports!
 	t.Parallel()
-	port := 10600
+	port := 10700
 	redisDB := 3
 
 	testServer := newTestAPIServer(t)
@@ -470,39 +889,6 @@ func TestAppIntegrationWithNonLegacyKey(t *testing.T) {
 	assert.Equal(t, "bar", events[0].Data.Get("foo"))
 	assert.Equal(t, "1", events[0].Data.Get("trace.trace_id"))
 	assert.Equal(t, int64(1), events[0].Data.Get(types.MetaRefineryOriginalSampleRate))
-
-	err = startstop.Stop(graph.Objects(), nil)
-	assert.NoError(t, err)
-}
-
-func TestAppIntegrationWithUnauthorizedKey(t *testing.T) {
-	// Parallel integration tests need different ports!
-	t.Parallel()
-	port := 10700
-	redisDB := 4
-
-	testServer := newTestAPIServer(t)
-	cfg := defaultConfig(port, redisDB, testServer.server.URL)
-	a, graph := newStartedApp(t, nil, nil, cfg)
-	a.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
-	a.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) { return "test", nil })
-
-	// Send a root span, it should be sent in short order.
-	req := httptest.NewRequest(
-		"POST",
-		fmt.Sprintf("http://localhost:%d/v1/traces", port),
-		strings.NewReader(`[{"data":{"trace.trace_id":"1","foo":"bar"}}]`),
-	)
-	req.Header.Set("X-Honeycomb-Team", "badkey")
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultTransport.RoundTrip(req)
-	assert.NoError(t, err)
-	assert.Equal(t, 401, resp.StatusCode)
-	data, err := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err)
-	assert.Contains(t, string(data), "not found in list of authorized keys")
 
 	err = startstop.Stop(graph.Objects(), nil)
 	assert.NoError(t, err)

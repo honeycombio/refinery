@@ -67,11 +67,11 @@ func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 			}
 			got, err := a.GetReplaceKey(tt.apiKey)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("AccessKeyConfig.CheckAndMaybeReplaceKey() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("AccessKeyConfig.GetReplaceKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("AccessKeyConfig.CheckAndMaybeReplaceKey() = '%v', want '%v'", got, tt.want)
+				t.Errorf("AccessKeyConfig.GetReplaceKey() = '%v', want '%v'", got, tt.want)
 			}
 		})
 	}
@@ -93,7 +93,9 @@ func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 		{"no keys", fields{}, "key1", nil},
 		{"known key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key1", nil},
 		{"unknown key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key2", errors.New("api key key2... not found in list of authorized keys")},
-		{"accept missing key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "", errors.New("api key ... not found in list of authorized keys")},
+		{"reject missing key with sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "", errors.New("api key ... not found in list of authorized keys")},
+		{"reject missing key without sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "", errors.New("api key ... not found in list of authorized keys")},
+		{"accept sendkey", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "key2", nil},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
