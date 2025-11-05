@@ -460,7 +460,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      "",
 			expectedUpstreamKey: nonLegacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/test",
+			expectedReason:      "rules/trace/match.environment",
 			description:         "Blank key should be replaced with SendKey",
 		},
 		{
@@ -472,7 +472,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      "custom-app-key",
 			expectedUpstreamKey: "custom-app-key",
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/default",
+			expectedReason:      "rules/trace/match.default",
 			description:         "Custom key should be preserved",
 		},
 
@@ -486,7 +486,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      "internal-secret",
 			expectedUpstreamKey: nonLegacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/test",
+			expectedReason:      "rules/trace/match.environment",
 			description:         "Secret key in list should be replaced with central key",
 		},
 		{
@@ -498,7 +498,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      nonLegacyAPIKey,
 			expectedUpstreamKey: nonLegacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/test",
+			expectedReason:      "rules/trace/match.environment",
 			description:         "SendKey itself should be accepted and preserved",
 		},
 		{
@@ -522,7 +522,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      "old-app-key-1",
 			expectedUpstreamKey: nonLegacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/test",
+			expectedReason:      "rules/trace/match.environment",
 			description:         "Listed key should be replaced with central key",
 		},
 		{
@@ -534,7 +534,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      "other-valid-key",
 			expectedUpstreamKey: "other-valid-key",
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/default",
+			expectedReason:      "rules/trace/match.default",
 			description:         "Unlisted key should be preserved as-is",
 		},
 
@@ -548,7 +548,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      "any-key-at-all",
 			expectedUpstreamKey: nonLegacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/test",
+			expectedReason:      "rules/trace/match.environment",
 			description:         "All keys replaced with central key",
 		},
 		{
@@ -560,7 +560,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      "",
 			expectedUpstreamKey: nonLegacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/test",
+			expectedReason:      "rules/trace/match.environment",
 			description:         "Even blank keys are replaced in 'all' mode",
 		},
 		// Require applications send with api keys but replace all of them with SendKey
@@ -573,7 +573,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      "some-key",
 			expectedUpstreamKey: nonLegacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/test",
+			expectedReason:      "rules/trace/match.environment",
 			description:         "Non-blank key should be replaced",
 		},
 		{
@@ -595,7 +595,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      "unlisted-key",
 			expectedUpstreamKey: nonLegacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/test",
+			expectedReason:      "rules/trace/match.environment",
 			description:         "Unlisted key should be replaced",
 		},
 		// Replace all keys but the ones defined in receiveKeys list
@@ -608,7 +608,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      legacyAPIKey,
 			expectedUpstreamKey: legacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/dataset", // Legacy key uses dataset, not environment
+			expectedReason:      "rules/trace/match.dataset", // Legacy key uses dataset, not environment
 			description:         "Listed key should be preserved",
 		},
 		{
@@ -623,7 +623,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 		},
 		// default mode should not replace any keys
 		{
-			name:                "none_mode_preserves_key",
+			name:                "none_mode_preserves_key (default)",
 			sendKey:             nonLegacyAPIKey,
 			sendKeyMode:         "none",
 			receiveKeys:         []string{legacyAPIKey},
@@ -631,7 +631,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 			incomingAPIKey:      legacyAPIKey,
 			expectedUpstreamKey: legacyAPIKey,
 			shouldSucceed:       true,
-			expectedReason:      "rules/trace/dataset", // Legacy key uses dataset, not environment
+			expectedReason:      "rules/trace/match.dataset", // Legacy key uses dataset, not environment
 			description:         "None mode should not replace any keys",
 		},
 	}
@@ -655,11 +655,11 @@ func TestAppIntegrationSendKey(t *testing.T) {
 
 			// Configure environment-specific sampler rules
 			cfg.Samplers = map[string]*config.V2SamplerChoice{
-				"test": {
+				"environment": {
 					RulesBasedSampler: &config.RulesBasedSamplerConfig{
 						Rules: []*config.RulesBasedSamplerRule{
 							{
-								Name:       "test",
+								Name:       "match.environment",
 								SampleRate: 1,
 							},
 						},
@@ -669,7 +669,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 					RulesBasedSampler: &config.RulesBasedSamplerConfig{
 						Rules: []*config.RulesBasedSamplerRule{
 							{
-								Name:       "dataset",
+								Name:       "match.dataset",
 								SampleRate: 1,
 							},
 						},
@@ -679,7 +679,7 @@ func TestAppIntegrationSendKey(t *testing.T) {
 					RulesBasedSampler: &config.RulesBasedSamplerConfig{
 						Rules: []*config.RulesBasedSamplerRule{
 							{
-								Name:       "default",
+								Name:       "match.default",
 								SampleRate: 1,
 							},
 						},
@@ -692,13 +692,13 @@ func TestAppIntegrationSendKey(t *testing.T) {
 
 			app.IncomingRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {
 				if s == nonLegacyAPIKey {
-					return "test", nil
+					return "environment", nil
 				}
 				return "", nil
 			})
 			app.PeerRouter.SetEnvironmentCache(time.Second, func(s string) (string, error) {
 				if s == nonLegacyAPIKey {
-					return "test", nil
+					return "environment", nil
 				}
 				return "", nil
 
