@@ -50,7 +50,7 @@ const (
 
 var batchPool = sync.Pool{
 	New: func() any {
-		return make([]string, 1000)
+		return make([]string, 0, AddQueueDepth)
 	},
 }
 
