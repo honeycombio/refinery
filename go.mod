@@ -15,12 +15,12 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/honeycombio/dynsampler-go v0.6.3
 	github.com/honeycombio/hpsf v0.14.0
-	github.com/honeycombio/husky v0.39.2
+	github.com/honeycombio/husky v0.39.3
 	github.com/honeycombio/libhoney-go v1.25.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jonboulle/clockwork v0.5.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.1
 	github.com/open-telemetry/opamp-go v0.20.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.131.0
 	github.com/panmari/cuckoofilter v1.0.6
@@ -33,7 +33,7 @@ require (
 	github.com/sourcegraph/conc v0.3.0
 	github.com/stretchr/testify v1.11.1
 	github.com/tidwall/gjson v1.18.0
-	github.com/tinylib/msgp v1.4.0
+	github.com/tinylib/msgp v1.5.0
 	github.com/valyala/fastjson v1.6.4
 	github.com/vmihailenco/msgpack/v5 v5.4.1
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.62.0
@@ -49,8 +49,8 @@ require (
 	go.opentelemetry.io/proto/otlp v1.7.0
 	golang.org/x/exp v0.0.0-20250531010427-b6e5de432a8b
 	golang.org/x/sync v0.16.0
-	google.golang.org/grpc v1.75.0
-	google.golang.org/protobuf v1.36.8
+	google.golang.org/grpc v1.76.0
+	google.golang.org/protobuf v1.36.10
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -64,7 +64,7 @@ require (
 	github.com/hashicorp/go-version v1.7.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.131.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.134.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.138.0 // indirect
 	github.com/otiai10/copy v1.10.0 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/sergi/go-diff v1.2.0 // indirect
@@ -73,7 +73,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
-	go.opentelemetry.io/collector/featuregate v1.40.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.44.0 // indirect
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0 // indirect
 	k8s.io/klog/v2 v2.90.1 // indirect
 )
@@ -105,15 +105,15 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
-	go.opentelemetry.io/collector/pdata v1.40.0
+	go.opentelemetry.io/collector/pdata v1.44.0
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/mod v0.26.0
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.27.0 // indirect
 	golang.org/x/tools v0.35.0
-	google.golang.org/genproto/googleapis/api v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250707201910-8d1bb00bc6a7 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20250804133106-a7a43d27e69b // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250804133106-a7a43d27e69b // indirect
 )
 
 tool github.com/google/go-licenses/v2
