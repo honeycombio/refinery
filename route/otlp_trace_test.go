@@ -633,7 +633,7 @@ func TestOTLPHandler(t *testing.T) {
 		event := events[0]
 		// Note: GRPC clients override the user-agent header with their own value.
 		// This is expected behavior and differs from HTTP where custom user-agents are preserved.
-		assert.Equal(t, "grpc-go/1.75.0", event.Data.MetaRefineryIncomingUserAgent)
+		assert.Equal(t, "grpc-go/1.76.0", event.Data.MetaRefineryIncomingUserAgent)
 	})
 
 	t.Run("spans record incoming user agent - HTTP", func(t *testing.T) {
