@@ -137,21 +137,12 @@ queueLoop:
 		}
 	}
 
-	// TODO: we could have a goroutine to do this work
 	c.mut.Lock()
 	// we don't start the timer until we have the lock, because we don't want to be counting
 	// the time we're waiting for the lock.
 	lockStart := time.Now()
-	timeout := time.NewTimer(1 * time.Millisecond)
 
-insertLoop:
 	for _, b := range batch {
-		select {
-		case <-timeout.C:
-			break insertLoop
-		default:
-		}
-
 		c.current.Insert([]byte(b))
 		// don't add anything to future if it doesn't exist yet
 		if c.future != nil {
@@ -162,7 +153,6 @@ insertLoop:
 	batch = batch[:0]
 	batchPool.Put(batch)
 
-	timeout.Stop()
 	qlt := time.Since(lockStart)
 	c.met.Histogram(AddQueueLockTime, float64(qlt.Microseconds()))
 }
