@@ -129,6 +129,9 @@ queueLoop:
 			if !ok {
 				break queueLoop
 			}
+			if len(batch) >= AddQueueDepth {
+				break queueLoop
+			}
 			// building up the queue
 			batch = append(batch, t)
 		default:
