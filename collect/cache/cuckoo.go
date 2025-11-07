@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"runtime"
 	"sync"
 	"time"
 
@@ -48,6 +49,8 @@ const (
 	AddQueueDepth = 10000
 	// Maximum number of concurrent workers processing batches
 	MaxNumWorkers = 50
+	// Maximum time a worker can hold the write lock during insertions before yielding
+	MaxInsertionLockTime = 1 * time.Millisecond
 )
 
 var batchPool = sync.Pool{
@@ -177,30 +180,51 @@ func (c *CuckooTraceChecker) spawnWorker(batch []string) {
 }
 
 // insertBatch grabs the write lock and inserts all items in the batch into
-// the current and future cuckoo filters. It has a 1ms timeout to avoid holding
-// the lock for too long.
+// the current and future cuckoo filters. To prevent any single worker from
+// monopolizing the lock, it will release and re-acquire the lock after
+// MaxInsertionLockTime has elapsed, allowing other operations to proceed.
 func (c *CuckooTraceChecker) insertBatch(batch []string) {
 	if len(batch) == 0 {
 		batchPool.Put(batch)
 		return
 	}
 
-	c.mut.Lock()
-	// we don't start the timer until we have the lock, because we don't want to be counting
-	// the time we're waiting for the lock.
-	lockStart := time.Now()
-	for _, traceID := range batch {
+	var totalLockTime time.Duration
+	i := 0
 
-		c.current.Insert([]byte(traceID))
-		// don't add anything to future if it doesn't exist yet
-		if c.future != nil {
-			c.future.Insert([]byte(traceID))
+	// Process the batch in time-limited chunks
+	for i < len(batch) {
+		c.mut.Lock()
+		// Start the timer after we have the lock
+		lockStart := time.Now()
+
+		// Insert items until we run out or exceed the time limit
+		for i < len(batch) {
+			c.current.Insert([]byte(batch[i]))
+			// don't add anything to future if it doesn't exist yet
+			if c.future != nil {
+				c.future.Insert([]byte(batch[i]))
+			}
+			i++
+
+			// Check if we've held the lock for too long
+			if time.Since(lockStart) >= MaxInsertionLockTime {
+				break
+			}
+		}
+
+		elapsed := time.Since(lockStart)
+		totalLockTime += elapsed
+		c.mut.Unlock()
+
+		// If there are more items to process, yield to allow other goroutines to run
+		if i < len(batch) {
+			runtime.Gosched()
 		}
 	}
-	c.mut.Unlock()
 
-	qlt := time.Since(lockStart)
-	c.met.Histogram(AddQueueLockTime, float64(qlt.Microseconds()))
+	// Report the total time spent holding the lock across all chunks
+	c.met.Histogram(AddQueueLockTime, float64(totalLockTime.Microseconds()))
 
 	batchPool.Put(batch)
 }
