@@ -317,10 +317,10 @@ type CollectionConfig struct {
 	MaxKeptDecisionBatchSize int      `yaml:"-"`
 	KeptDecisionSendInterval Duration `yaml:"-"`
 
-	// NumCollectLoops controls the number of parallel collection loops.
-	// Each loop processes a subset of traces independently.
+	// WorkerCount controls the number of parallel collection workers.
+	// Each worker processes a subset of traces independently.
 	// Higher values can improve throughput on multi-core systems.
-	NumCollectLoops int `yaml:"NumCollectLoops"` // default: GOMAXPROCS
+	WorkerCount int `yaml:"WorkerCount"` // default: GOMAXPROCS
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
@@ -332,24 +332,24 @@ func (c CollectionConfig) GetMaxAlloc() MemorySize {
 	return c.AvailableMemory * MemorySize(c.MaxMemoryPercentage) / 100
 }
 
-// GetPeerQueueSizePerLoop returns the capacity per collect loop worker of the in-memory channel for peer traces.
-// It divides queue sizes among loops, rounding up to make sure total queue size across loops is equal to or greater than configured.
-func (c CollectionConfig) GetPeerQueueSizePerLoop() int {
-	numLoops := c.GetNumCollectLoops()
-	return (c.PeerQueueSize + numLoops - 1) / numLoops
+// GetPeerQueueSizePerWorker returns the capacity per collect worker of the in-memory channel for peer traces.
+// It divides queue sizes among workers, rounding up to make sure total queue size across workers is equal to or greater than configured.
+func (c CollectionConfig) GetPeerQueueSizePerWorker() int {
+	numWorkers := c.GetWorkerCount()
+	return (c.PeerQueueSize + numWorkers - 1) / numWorkers
 }
 
-// GetIncomingQueueSizePerLoop returns the capacity per collect loop worker of the in-memory channel for incoming traces.
-// It divides queue sizes among loops, rounding up to make sure total queue size across loops is equal to or greater than configured.
-func (c CollectionConfig) GetIncomingQueueSizePerLoop() int {
-	numLoops := c.GetNumCollectLoops()
-	return (c.IncomingQueueSize + numLoops - 1) / numLoops
+// GetIncomingQueueSizePerWorker returns the capacity per collect worker of the in-memory channel for incoming traces.
+// It divides queue sizes among workers, rounding up to make sure total queue size across workers is equal to or greater than configured.
+func (c CollectionConfig) GetIncomingQueueSizePerWorker() int {
+	numWorkers := c.GetWorkerCount()
+	return (c.IncomingQueueSize + numWorkers - 1) / numWorkers
 }
 
-// GetNumCollectLoops returns the number of parallel collection loops.
+// GetWorkerCount returns how many parallel collection workers to run.
 // Ensures the value is at least 1.
-func (c CollectionConfig) GetNumCollectLoops() int {
-	num := c.NumCollectLoops
+func (c CollectionConfig) GetWorkerCount() int {
+	num := c.WorkerCount
 	if num == 0 {
 		num = runtime.GOMAXPROCS(0)
 	}

@@ -9,46 +9,46 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_GetNumCollectLoops(t *testing.T) {
+func Test_GetWorkerCount(t *testing.T) {
 	for _, tC := range []struct {
-		name     string
-		numLoops int
-		want     int
+		name       string
+		numWorkers int
+		want       int
 	}{
 		{"default", 0, runtime.GOMAXPROCS(0)},
 		{"configured/one worker", 1, 1},       // minimum allowed
 		{"configured/multiple workers", 4, 4}, // custom value
 	} {
 		t.Run(tC.name, func(t *testing.T) {
-			c := &CollectionConfig{NumCollectLoops: tC.numLoops}
-			assert.Equal(t, tC.want, c.GetNumCollectLoops())
+			c := &CollectionConfig{WorkerCount: tC.numWorkers}
+			assert.Equal(t, tC.want, c.GetWorkerCount())
 		})
 	}
 }
 
-func Test_GetQueueSizesPerLoop(t *testing.T) {
+func Test_GetQueueSizesPerWorker(t *testing.T) {
 	for _, tC := range []struct {
-		name                string
-		incomingQueueSize   int
-		peerQueueSize       int
-		numCollectLoops     int
-		wantIncomingPerLoop int
-		wantPeerPerLoop     int
+		name                  string
+		incomingQueueSize     int
+		peerQueueSize         int
+		numWorkers            int
+		wantIncomingPerWorker int
+		wantPeerPerWorker     int
 	}{
-		{"single loop/default", 30000, 30000, 1, 30000, 30000},
-		{"multiple loops/default", 30000, 30000, 8, 3750, 3750},
-		{"multiple loops/even division", 100, 50, 5, 20, 10},
-		{"multiple loops/uneven division", 5, 5, 2, 3, 3},            // rounds up
-		{"multiple loops/more loops than queue size", 3, 2, 5, 1, 1}, // minimum 1 per loop
+		{"single worker/default", 30000, 30000, 1, 30000, 30000},
+		{"multiple workers/default", 30000, 30000, 8, 3750, 3750},
+		{"multiple workers/even division", 100, 50, 5, 20, 10},
+		{"multiple workers/uneven division", 5, 5, 2, 3, 3},              // rounds up
+		{"multiple workers/more workers than queue size", 3, 2, 5, 1, 1}, // minimum 1 per worker
 	} {
 		t.Run(tC.name, func(t *testing.T) {
 			c := &CollectionConfig{
 				IncomingQueueSize: tC.incomingQueueSize,
 				PeerQueueSize:     tC.peerQueueSize,
-				NumCollectLoops:   tC.numCollectLoops,
+				WorkerCount:       tC.numWorkers,
 			}
-			assert.Equal(t, tC.wantIncomingPerLoop, c.GetIncomingQueueSizePerLoop())
-			assert.Equal(t, tC.wantPeerPerLoop, c.GetPeerQueueSizePerLoop())
+			assert.Equal(t, tC.wantIncomingPerWorker, c.GetIncomingQueueSizePerWorker())
+			assert.Equal(t, tC.wantPeerPerWorker, c.GetPeerQueueSizePerWorker())
 		})
 	}
 }
