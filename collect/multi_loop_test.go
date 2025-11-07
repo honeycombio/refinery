@@ -19,10 +19,10 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-// getAllTracesFromLoops is a test helper that efficiently gets all traces from all workers.
+// getAllTracesFromWorkers is a test helper that efficiently gets all traces from all workers.
 // It pauses each worker, then extracts all traces. Note the traces themselves aren't locked
 // so there is still a hypothetical race condition after this function returns.
-func getAllTracesFromLoops(collector *InMemCollector) map[string]*types.Trace {
+func getAllTracesFromWorkers(collector *InMemCollector) map[string]*types.Trace {
 	ch := make(chan struct{})
 	defer close(ch)
 
@@ -38,8 +38,8 @@ func getAllTracesFromLoops(collector *InMemCollector) map[string]*types.Trace {
 	return allTraces
 }
 
-// TestMultiLoopProcessing tests that multiple collect loops can process spans concurrently
-func TestMultiLoopProcessing(t *testing.T) {
+// TestMultiWorkerProcessing tests that multiple collect workers can process spans concurrently
+func TestMultiWorkerProcessing(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(100 * time.Millisecond),
@@ -62,21 +62,21 @@ func TestMultiLoopProcessing(t *testing.T) {
 		},
 	}
 
-	// Test with different numbers of loops
-	for _, numLoops := range []int{2, 4, 8} {
-		t.Run(fmt.Sprintf("%d_loops", numLoops), func(t *testing.T) {
-			conf.GetCollectionConfigVal.NumCollectLoops = numLoops
+	// Test with different numbers of workers
+	for _, numWorkers := range []int{2, 4, 8} {
+		t.Run(fmt.Sprintf("%d_workers", numWorkers), func(t *testing.T) {
+			conf.GetCollectionConfigVal.WorkerCount = numWorkers
 
 			collector := newTestCollector(t, conf)
 
 			// Verify workers were created
-			assert.Equal(t, numLoops, len(collector.workers))
+			assert.Equal(t, numWorkers, len(collector.workers))
 
 			assert.Eventually(t, func() bool {
 				return collector.Health.(health.Reporter).IsReady()
 			}, 5*time.Second, 10*time.Millisecond)
 
-			// Send spans to different traces (should go to different loops)
+			// Send spans to different traces (should go to different workers)
 			numTraces := 100
 			spansPerTrace := 10
 			spansAdded := int32(0)
@@ -126,12 +126,12 @@ func TestMultiLoopProcessing(t *testing.T) {
 			}
 
 			// All workers should have been used (with high probability)
-			assert.Equal(t, numLoops, len(workerUsage))
+			assert.Equal(t, numWorkers, len(workerUsage))
 
 			// Wait for all spans to be processed into traces
 			assert.Eventually(t, func() bool {
 				// Get all traces at once to avoid multiple mutex acquisitions
-				allTraces := getAllTracesFromLoops(collector)
+				allTraces := getAllTracesFromWorkers(collector)
 
 				// Count how many of our test traces we found
 				foundCount := 0
@@ -196,19 +196,19 @@ func TestMultiLoopProcessing(t *testing.T) {
 	}
 }
 
-// TestTraceIDSharding verifies that traces are consistently routed to the same loop.
+// TestTraceIDSharding verifies that traces are consistently routed to the same worker.
 func TestTraceIDSharding(t *testing.T) {
-	// Test with different numbers of loops and their expected deterministic distributions
+	// Test with different numbers of workers and their expected deterministic distributions
 	// These distributions were empirically discovered for trace-0 through trace-99
 	testCases := []struct {
 		name                 string
-		numLoops             int
+		numWorkers           int
 		expectedDistribution []int
 	}{
-		{"single_loop", 1, []int{100}},
-		{"two_loops", 2, []int{54, 46}},
-		{"four_loops", 4, []int{26, 20, 28, 26}},
-		{"eight_loops", 8, []int{12, 10, 15, 10, 14, 10, 13, 16}},
+		{"single_worker", 1, []int{100}},
+		{"two_workers", 2, []int{54, 46}},
+		{"four_workers", 4, []int{26, 20, 28, 26}},
+		{"eight_workers", 8, []int{12, 10, 15, 10, 14, 10, 13, 16}},
 	}
 
 	for _, tc := range testCases {
@@ -223,7 +223,7 @@ func TestTraceIDSharding(t *testing.T) {
 				GetCollectionConfigVal: config.CollectionConfig{
 					IncomingQueueSize: 3000,
 					PeerQueueSize:     3000,
-					NumCollectLoops:   tc.numLoops,
+					WorkerCount:       tc.numWorkers,
 				},
 				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 2},
 				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -258,11 +258,11 @@ func TestTraceIDSharding(t *testing.T) {
 
 				// Verify the worker index is within bounds
 				assert.GreaterOrEqual(t, firstWorker, 0)
-				assert.Less(t, firstWorker, tc.numLoops)
+				assert.Less(t, firstWorker, tc.numWorkers)
 			}
 
 			// Count traces per worker for distribution analysis
-			workerCounts := make([]int, tc.numLoops)
+			workerCounts := make([]int, tc.numWorkers)
 			for _, worker := range traceToWorker {
 				workerCounts[worker]++
 			}
@@ -271,7 +271,7 @@ func TestTraceIDSharding(t *testing.T) {
 			assert.Equal(t, tc.expectedDistribution, workerCounts)
 
 			// Also verify all workers are used appropriately
-			assert.Equal(t, tc.numLoops, len(workerCounts), "Worker counts should match number of workers")
+			assert.Equal(t, tc.numWorkers, len(workerCounts), "Worker counts should match number of workers")
 			totalTraces := 0
 			for worker, count := range workerCounts {
 				assert.Greater(t, count, 0, "Worker %d should have at least some traces", worker)
@@ -302,7 +302,7 @@ func TestParallelCollectRaceConditions(t *testing.T) {
 		GetCollectionConfigVal: config.CollectionConfig{
 			IncomingQueueSize: 30000,
 			PeerQueueSize:     30000,
-			NumCollectLoops:   4,
+			WorkerCount:       4,
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 2},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -405,7 +405,7 @@ func TestParallelCollectRaceConditions(t *testing.T) {
 	wg.Wait()
 
 	// Now that all the events have been enqueued, advance time to allow transmisison.
-	clock.BlockUntilContext(t.Context(), conf.GetCollectionConfig().NumCollectLoops+1)
+	clock.BlockUntilContext(t.Context(), conf.GetCollectionConfig().WorkerCount+1)
 	clock.Advance(time.Second)
 
 	// Wait for spans to be processed and sent
@@ -519,7 +519,7 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 	assert.Greater(t, count, 0.0)
 }
 
-// TestCoordinatedReload verifies config reload coordination across loops
+// TestCoordinatedReload verifies config reload coordination across workers
 func TestCoordinatedReload(t *testing.T) {
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
@@ -531,7 +531,7 @@ func TestCoordinatedReload(t *testing.T) {
 		GetCollectionConfigVal: config.CollectionConfig{
 			IncomingQueueSize: 3000,
 			PeerQueueSize:     3000,
-			NumCollectLoops:   4,
+			WorkerCount:       4,
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
@@ -571,7 +571,7 @@ func TestCoordinatedReload(t *testing.T) {
 		return atomic.LoadInt32(&processedInitial) >= 8
 	}, 2*time.Second, 10*time.Millisecond, "Initial spans should be processed")
 
-	// Trigger a reload - this should cause loops to recreate their samplers
+	// Trigger a reload - this should cause workers to recreate their samplers
 	collector.sendReloadSignal("hash1", "hash2")
 
 	// Give a moment for the reload signal to be processed (reload is async)

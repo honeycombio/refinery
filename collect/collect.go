@@ -179,7 +179,7 @@ func (i *InMemCollector) Start() error {
 	defer func() { i.Logger.Debug().Logf("Finished starting InMemCollector") }()
 	imcConfig := i.Config.GetCollectionConfig()
 
-	numWorkers := imcConfig.GetNumCollectLoops()
+	numWorkers := imcConfig.GetWorkerCount()
 
 	i.Logger.Info().WithField("num_workers", numWorkers).Logf("Starting InMemCollector with %d workers", numWorkers)
 
@@ -189,7 +189,7 @@ func (i *InMemCollector) Start() error {
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
 
 	// Find or create a test, make sure we signal health based (somehow)
-	// on all the collect loops running.
+	// on all the collect workers running.
 	i.Health.Register(collectorHealthKey, i.Config.GetHealthCheckTimeout())
 
 	for _, metric := range inMemCollectorMetrics {
@@ -219,9 +219,9 @@ func (i *InMemCollector) Start() error {
 
 	i.workers = make([]*CollectorWorker, numWorkers)
 
-	for loopID := range i.workers {
-		worker := NewCollectorWorker(loopID, i, imcConfig.GetIncomingQueueSizePerLoop(), imcConfig.GetPeerQueueSizePerLoop())
-		i.workers[loopID] = worker
+	for workerID := range i.workers {
+		worker := NewCollectorWorker(workerID, i, imcConfig.GetIncomingQueueSizePerWorker(), imcConfig.GetPeerQueueSizePerWorker())
+		i.workers[workerID] = worker
 
 		// Start the collect goroutine for this worker
 		i.workersWG.Add(1)

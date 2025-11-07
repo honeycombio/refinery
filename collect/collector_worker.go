@@ -34,7 +34,7 @@ type CollectorWorker struct {
 	// parent is a reference to the parent InMemCollector manager for accessing shared resources
 	parent *InMemCollector
 
-	// Input channels specific to this loop
+	// Input channels specific to this worker
 	incoming chan *types.Span
 	fromPeer chan *types.Span
 
@@ -144,7 +144,7 @@ func (cl *CollectorWorker) collect() {
 	// Initialize health timestamp
 	cl.healthCheckInAt.Store(cl.parent.Clock.Now().UnixNano())
 	for {
-		ctx, span := otelutil.StartSpanWith(context.Background(), cl.parent.Tracer, "collect_loop", "loop_id", cl.ID)
+		ctx, span := otelutil.StartSpanWith(context.Background(), cl.parent.Tracer, "collect_worker", "worker_id", cl.ID)
 		startTime := cl.parent.Clock.Now()
 
 		// Always drain peer channel before doing anything else. By processing peer
@@ -204,7 +204,7 @@ func (cl *CollectorWorker) collect() {
 
 // processSpan handles a single span, adding it to the cache or forwarding it
 func (cl *CollectorWorker) processSpan(ctx context.Context, sp *types.Span) {
-	ctx, span := otelutil.StartSpanWith(ctx, cl.parent.Tracer, "processSpan", "loop_id", cl.ID)
+	ctx, span := otelutil.StartSpanWith(ctx, cl.parent.Tracer, "processSpan", "worker_id", cl.ID)
 	defer func() {
 		cl.localSpanProcessed++
 		cl.localSpansWaiting.Add(-1)
@@ -298,7 +298,7 @@ func (cl *CollectorWorker) processSpan(ctx context.Context, sp *types.Span) {
 
 // sendExpiredTracesInCache finds and sends traces that have exceeded their timeout
 func (cl *CollectorWorker) sendExpiredTracesInCache(ctx context.Context, now time.Time) {
-	ctx, span := otelutil.StartSpanWith(ctx, cl.parent.Tracer, "sendExpiredTracesInCache", "loop_id", cl.ID)
+	ctx, span := otelutil.StartSpanWith(ctx, cl.parent.Tracer, "sendExpiredTracesInCache", "worker_id", cl.ID)
 	startTime := cl.parent.Clock.Now()
 	defer func() {
 		cl.parent.Metrics.Histogram("collector_send_expired_traces_in_cache_dur_ms", float64(cl.parent.Clock.Since(startTime).Milliseconds()))

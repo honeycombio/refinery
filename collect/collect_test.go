@@ -160,7 +160,7 @@ func TestAddRootSpan(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -238,7 +238,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -324,7 +324,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -370,7 +370,7 @@ func TestAddSpan(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -455,7 +455,7 @@ func TestDryRunMode(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -584,7 +584,7 @@ func TestSampleConfigReload(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   1,
+			WorkerCount:       1,
 			IncomingQueueSize: 10,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 		},
@@ -715,7 +715,7 @@ func TestStableMaxAlloc(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 1000,
 			PeerQueueSize:     5,
@@ -773,8 +773,8 @@ func TestStableMaxAlloc(t *testing.T) {
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 
-	// With parallel loops, memory management is more aggressive as each loop
-	// gets 1/numLoops of the memory limit. Set a higher threshold to get
+	// With parallel workers, memory management is more aggressive as each worker
+	// gets 1/numWorkers of the memory limit. Set a higher threshold to get
 	// partial eviction rather than complete eviction.
 	conf.SetMaxAlloc(config.MemorySize(mem.Alloc * 98 / 100)) // More conservative than 99.5%
 	coll.reloadConfigs()
@@ -820,7 +820,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 10,
 			PeerQueueSize:     10,
@@ -911,7 +911,7 @@ func TestAddCountsToRoot(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 9,
 			PeerQueueSize:     9,
@@ -1010,7 +1010,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 10,
 			PeerQueueSize:     10,
@@ -1095,7 +1095,7 @@ func TestAddSpanCount(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1173,7 +1173,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1239,7 +1239,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1303,7 +1303,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 			"other": "bar",
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1362,8 +1362,8 @@ func TestStressReliefSampleRate(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops: 2,
-			ShutdownDelay:   config.Duration(1 * time.Millisecond),
+			WorkerCount:   2,
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
 		},
 	}
 
@@ -1454,7 +1454,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 			SamplingRate:      100,
 		},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 5,
 			PeerQueueSize:     5,
@@ -1553,7 +1553,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		ParentIdFieldNames:   []string{"trace.parent_id", "parentId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			ShutdownDelay:     config.Duration(1 * time.Millisecond),
 			IncomingQueueSize: 10,
 			PeerQueueSize:     10,
@@ -1657,7 +1657,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 		TraceIdFieldNames:    []string{"trace.trace_id", "traceId"},
 		AddRuleReasonToTrace: true,
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:   2,
+			WorkerCount:       2,
 			IncomingQueueSize: 500,
 			PeerQueueSize:     500,
 		},
@@ -1734,8 +1734,8 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops: 2,
-			ShutdownDelay:   config.Duration(1 * time.Millisecond),
+			WorkerCount:   2,
+			ShutdownDelay: config.Duration(1 * time.Millisecond),
 		},
 	}
 
@@ -1817,7 +1817,7 @@ func TestWorkerHealthReporting(t *testing.T) {
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		GetCollectionConfigVal: config.CollectionConfig{
-			NumCollectLoops:    4, // Use multiple workers to test aggregation
+			WorkerCount:        4, // Use multiple workers to test aggregation
 			ShutdownDelay:      config.Duration(1 * time.Millisecond),
 			IncomingQueueSize:  5,
 			PeerQueueSize:      5,
@@ -2118,7 +2118,7 @@ func setupBenchmarkCollector(b *testing.B, samplerConfig any) *InMemCollector {
 			HealthCheckTimeout: config.Duration(100 * time.Millisecond),
 			IncomingQueueSize:  100000,
 			PeerQueueSize:      100000,
-			NumCollectLoops:    16,
+			WorkerCount:        16,
 		},
 		AddCountsToRoot:        true,
 		AddSpanCountToRoot:     true,

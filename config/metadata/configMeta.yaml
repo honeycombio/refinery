@@ -1278,7 +1278,7 @@ groups:
         description: >
           NOTE: This setting is now deprecated and no longer controls the cache size.
           Instead the maximum memory usage is controlled by `MaxMemoryPercentage` and `MaxAlloc`.
-          
+
           Setting this value does still set the default PeerQueueSize to (3 x CacheCapacity) and IncomingQueueSize
           to (3 x CacheCapacity) if they are not set. This behavior will be removed in the future.
           Instead, set PeerQueueSize and IncomingQueueSize to the exact values you want.
@@ -1514,7 +1514,7 @@ groups:
         description: >
           Sets the time interval for sending accumulated kept decisions in batches. This ensures that kept decisions are processed at regular intervals, improving efficiency by reducing the frequency of network transmissions. If the maximum batch size (MaxKeptDecisionBatchSize) is reached before this interval elapses, the batch will be sent immediately.
 
-      - name: NumCollectLoops
+      - name: WorkerCount
         type: int
         valuetype: nondefault
         default: 0
@@ -1522,10 +1522,10 @@ groups:
         validations:
           - type: minimum
             arg: 0
-        summary: is the number of parallel collection loops to run for trace processing.
+        summary: is the number of parallel collection workers to run for trace processing.
         description: >
-          Controls the number of parallel collection loops used for processing traces.
-          Each loop processes a subset of traces independently using consistent hashing.
+          Controls the number of parallel collection workers used for processing traces.
+          Each worker processes a subset of traces independently using consistent hashing.
           Values greater than 1 enable parallel processing which can improve throughput
           on multi-core systems.
           The default of 0 means Refinery will automatically set this value to the number of logical CPUs available at startup.
