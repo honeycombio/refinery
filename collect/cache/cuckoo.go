@@ -121,6 +121,7 @@ func (c *CuckooTraceChecker) drain() {
 		return
 	}
 	batch := batchPool.Get().([]string)
+	timeout := time.NewTimer(500 * time.Microsecond)
 queueLoop:
 	for i := 0; i < n; i++ {
 		select {
@@ -129,11 +130,10 @@ queueLoop:
 			if !ok {
 				break queueLoop
 			}
-			if len(batch) >= AddQueueDepth {
-				break queueLoop
-			}
 			// building up the queue
 			batch = append(batch, t)
+		case <-timeout.C:
+			break queueLoop
 		default:
 			// if the channel is empty, stop
 			break queueLoop
