@@ -195,10 +195,12 @@ func (c *CuckooTraceChecker) insertBatch(batch []string) {
 	// Process the batch in time-limited chunks
 	for i < len(batch) {
 		c.mut.Lock()
-		// Start the timer after we have the lock
 		lockStart := time.Now()
+		timer := time.NewTimer(MaxInsertionLockTime)
+		timedOut := false
 
 		// Insert items until we run out or exceed the time limit
+	insertLoop:
 		for i < len(batch) {
 			c.current.Insert([]byte(batch[i]))
 			// don't add anything to future if it doesn't exist yet
@@ -207,9 +209,23 @@ func (c *CuckooTraceChecker) insertBatch(batch []string) {
 			}
 			i++
 
-			// Check if we've held the lock for too long
-			if time.Since(lockStart) >= MaxInsertionLockTime {
-				break
+			select {
+			case <-timer.C:
+				timedOut = true
+				break insertLoop
+			default:
+				// Timer hasn't fired yet, continue
+			}
+		}
+
+		// Clean up timer
+		if !timedOut {
+			if !timer.Stop() {
+				// Timer already fired, drain the channel
+				select {
+				case <-timer.C:
+				default:
+				}
 			}
 		}
 
