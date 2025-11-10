@@ -1,5 +1,20 @@
 # Refinery Changelog
 
+## 3.0.1 2025-11-10
+
+### 🐛 Fixes
+
+- fix: use sendKey for rule matching if it's configured by @VinozzZ in https://github.com/honeycombio/refinery/pull/1735
+- fix: sampleRate incoming as resource attribute by @robbkidd in https://github.com/honeycombio/refinery/pull/1739
+
+### 🛠 Maintenance
+
+- maint: correct README.md to reflect the latest changes by @VinozzZ in https://github.com/honeycombio/refinery/pull/1690
+- maint: upgrade to go 1.25 by @robbkidd in https://github.com/honeycombio/refinery/pull/1715
+- maint: remove automaxprocs dependency by @robbkidd in https://github.com/honeycombio/refinery/pull/1725
+- fix(ci): publish multi-arch image to multiple registry by @VinozzZ in https://github.com/honeycombio/refinery/pull/1709
+- docs: update to document v2.x limited support by @robbkidd in https://github.com/honeycombio/refinery/pull/1729
+
 ## 3.0.0 2025-10-02
 
 This is a performance improvement release, focused on memory and CPU efficiency.
