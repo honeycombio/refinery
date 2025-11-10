@@ -835,10 +835,13 @@ func TestAddSpanNoBlock(t *testing.T) {
 
 	coll := newTestCollector(t, conf)
 
-	stc, err := newCache()
-	require.NoError(t, err)
+	// Set the cache on all workers
+	for _, worker := range coll.workers {
+		stc, err := newCache()
+		require.NoError(t, err)
 
-	coll.sampleTraceCache = stc
+		worker.sampleTraceCache = stc
+	}
 
 	// Block the worker so nothing gets processed
 	ch := make(chan struct{})
@@ -862,7 +865,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 	}
 
 	// Errors instead of blocking
-	err = coll.AddSpan(span)
+	err := coll.AddSpan(span)
 	assert.Error(t, err)
 	err = coll.AddSpanFromPeer(span)
 	assert.Error(t, err)
@@ -1376,9 +1379,12 @@ func TestStressReliefSampleRate(t *testing.T) {
 	coll := newTestCollector(t, conf)
 	transmission := coll.Transmission.(*transmit.MockTransmission)
 
-	stc, err := newCache()
-	require.NoError(t, err)
-	coll.sampleTraceCache = stc
+	// Set the cache on all workers
+	for _, worker := range coll.workers {
+		stc, err := newCache()
+		require.NoError(t, err)
+		worker.sampleTraceCache = stc
+	}
 
 	var traceID = "traceABC"
 
@@ -1402,7 +1408,9 @@ func TestStressReliefSampleRate(t *testing.T) {
 	require.True(t, processed)
 	require.True(t, kept)
 
-	tr, _, found := coll.sampleTraceCache.CheckTrace(traceID)
+	// Find which worker owns this trace
+	workerIndex := coll.getWorkerIDForTrace(traceID)
+	tr, _, found := coll.workers[workerIndex].sampleTraceCache.CheckTrace(traceID)
 	require.True(t, found)
 	require.NotNil(t, tr)
 	assert.Equal(t, uint(100), tr.Rate())
@@ -1426,7 +1434,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 	require.True(t, processed2)
 	require.True(t, kept2)
 
-	tr2, _, found2 := coll.sampleTraceCache.CheckTrace(traceID)
+	tr2, _, found2 := coll.workers[workerIndex].sampleTraceCache.CheckTrace(traceID)
 	require.True(t, found2)
 	require.NotNil(t, tr2)
 	assert.Equal(t, uint(100), tr2.Rate())
@@ -1753,10 +1761,13 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	defer close(ch)
 	coll.workers[0].pause <- ch
 
-	sampleTraceCache, err := newCache()
-	require.NoError(t, err)
+	// Set the cache on all workers
+	for _, worker := range coll.workers {
+		sampleTraceCache, err := newCache()
+		require.NoError(t, err)
 
-	coll.sampleTraceCache = sampleTraceCache
+		worker.sampleTraceCache = sampleTraceCache
+	}
 
 	traceID := "span-limit-trace"
 
