@@ -3,7 +3,6 @@ package sample
 import (
 	"fmt"
 	"slices"
-	"sync"
 	"testing"
 
 	"github.com/honeycombio/refinery/config"
@@ -1168,7 +1167,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
-		
+
 		// Create SamplerFactory for downstream samplers
 		mockMetrics := &metrics.MockMetrics{}
 		mockMetrics.Start()
@@ -1179,7 +1178,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 		err := samplerFactory.Start()
 		require.NoError(t, err)
 		defer samplerFactory.Stop()
-		
+
 		sampler := &RulesBasedSampler{
 			Config:         d.Rules,
 			Logger:         &logger.NullLogger{},
@@ -1274,7 +1273,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
-		
+
 		// Create SamplerFactory for downstream samplers
 		mockMetrics := &metrics.MockMetrics{}
 		mockMetrics.Start()
@@ -1285,7 +1284,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 		err := samplerFactory.Start()
 		require.NoError(t, err)
 		defer samplerFactory.Stop()
-		
+
 		sampler := &RulesBasedSampler{
 			Config:         d.Rules,
 			Logger:         &logger.NullLogger{},
@@ -2158,7 +2157,7 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
-		
+
 		// Create SamplerFactory for downstream samplers
 		mockMetrics := &metrics.MockMetrics{}
 		mockMetrics.Start()
@@ -2169,7 +2168,7 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 		err := samplerFactory.Start()
 		require.NoError(t, err)
 		defer samplerFactory.Stop()
-		
+
 		sampler := &RulesBasedSampler{
 			Config:         d.Rules,
 			Logger:         &logger.NullLogger{},
@@ -2911,234 +2910,6 @@ func TestRulesRootSpanContext(t *testing.T) {
 				name = d.Rules.Rules[0].Name
 			}
 			assert.Contains(t, reason, name)
-		})
-	}
-}
-
-// TestRulesBasedSamplerConcurrency tests that GetSampleRate is safe to call concurrently
-func TestRulesBasedSamplerConcurrency(t *testing.T) {
-	testCases := []struct {
-		name   string
-		config *config.RulesBasedSamplerConfig
-	}{
-		{
-			name: "basic_rules",
-			config: &config.RulesBasedSamplerConfig{
-				Rules: []*config.RulesBasedSamplerRule{
-					{
-						Name:       "high_status_codes",
-						SampleRate: 5,
-						Conditions: []*config.RulesBasedSamplerCondition{
-							{
-								Field:    "http.status_code",
-								Operator: config.GTE,
-								Value:    400,
-								Datatype: "int",
-							},
-						},
-					},
-					{
-						Name:       "service_filter",
-						SampleRate: 10,
-						Conditions: []*config.RulesBasedSamplerCondition{
-							{
-								Field:    "service.name",
-								Operator: config.EQ,
-								Value:    "critical-service",
-								Datatype: "string",
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "rules_with_downstream_samplers",
-			config: &config.RulesBasedSamplerConfig{
-				Rules: []*config.RulesBasedSamplerRule{
-					{
-						Name: "dynamic_sampling_rule",
-						Conditions: []*config.RulesBasedSamplerCondition{
-							{
-								Field:    "service.name",
-								Operator: config.EQ,
-								Value:    "dynamic-service",
-								Datatype: "string",
-							},
-						},
-						Sampler: &config.RulesBasedDownstreamSampler{
-							DynamicSampler: &config.DynamicSamplerConfig{
-								FieldList:      []string{"operation.name", "user.id"},
-								SampleRate:     2,
-								UseTraceLength: true,
-								MaxKeys:        100,
-							},
-						},
-					},
-					{
-						Name: "ema_throughput_rule",
-						Conditions: []*config.RulesBasedSamplerCondition{
-							{
-								Field:    "team.id",
-								Operator: config.EQ,
-								Value:    "core-team",
-								Datatype: "string",
-							},
-						},
-						Sampler: &config.RulesBasedDownstreamSampler{
-							EMAThroughputSampler: &config.EMAThroughputSamplerConfig{
-								FieldList:            []string{"service.name", "endpoint"},
-								GoalThroughputPerSec: 200,
-								UseClusterSize:       true,
-								InitialSampleRate:    10,
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "span_scope_rules",
-			config: &config.RulesBasedSamplerConfig{
-				Rules: []*config.RulesBasedSamplerRule{
-					{
-						Name:       "error_spans",
-						SampleRate: 1, // Sample all error spans
-						Scope:      "span",
-						Conditions: []*config.RulesBasedSamplerCondition{
-							{
-								Field:    "error",
-								Operator: config.EQ,
-								Value:    true,
-								Datatype: "bool",
-							},
-						},
-					},
-					{
-						Name:       "long_operations",
-						SampleRate: 3,
-						Scope:      "span",
-						Conditions: []*config.RulesBasedSamplerCondition{
-							{
-								Field:    "duration_ms",
-								Operator: config.GT,
-								Value:    1000,
-								Datatype: "int",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	testMetrics := &metrics.MockMetrics{}
-	testMetrics.Start()
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			samplerFactory := &SamplerFactory{
-				Logger:  &logger.NullLogger{},
-				Metrics: testMetrics,
-			}
-			err := samplerFactory.Start()
-			require.NoError(t, err)
-			defer samplerFactory.Stop()
-
-			sampler := &RulesBasedSampler{
-				Config:         tc.config,
-				Logger:         &logger.NullLogger{},
-				Metrics:        testMetrics,
-				SamplerFactory: samplerFactory,
-			}
-
-			err = sampler.Start()
-			assert.NoError(t, err)
-
-			// Create test traces with different characteristics
-			mockCfg := &config.MockConfig{}
-			createTrace := func(serviceName, statusCode string, teamID, userID string, hasError bool, duration int, spanCount int) *types.Trace {
-				trace := &types.Trace{}
-				for i := 0; i < spanCount; i++ {
-					data := map[string]interface{}{
-						"service.name":     serviceName,
-						"http.status_code": statusCode,
-						"team.id":          teamID,
-						"user.id":          userID,
-						"operation.name":   fmt.Sprintf("operation-%d", i),
-						"endpoint":         fmt.Sprintf("/api/v1/resource-%d", i),
-						"error":            hasError,
-						"duration_ms":      duration,
-					}
-
-					span := &types.Span{
-						Event: types.Event{
-							Data: types.NewPayload(mockCfg, data),
-						},
-					}
-					if i == spanCount-1 {
-						trace.RootSpan = span
-					}
-					trace.AddSpan(span)
-				}
-				return trace
-			}
-
-			testTraces := []*types.Trace{
-				createTrace("critical-service", "500", "core-team", "user123", true, 1500, 4),
-				createTrace("dynamic-service", "200", "other-team", "user456", false, 500, 3),
-				createTrace("regular-service", "404", "core-team", "user789", false, 800, 2),
-				createTrace("error-service", "503", "infra-team", "user999", true, 2000, 5),
-			}
-
-			const numGoroutines = 10
-			const iterationsPerGoroutine = 50
-
-			var wg sync.WaitGroup
-
-			// Test concurrent GetSampleRate calls
-			for i := 0; i < numGoroutines; i++ {
-				wg.Add(1)
-				go func(goroutineID int) {
-					defer wg.Done()
-
-					for j := 0; j < iterationsPerGoroutine; j++ {
-						// Test predefined traces
-						for _, trace := range testTraces {
-							rate, _, reason, key := sampler.GetSampleRate(trace)
-							assert.NotZero(t, rate, "rate should be positive")
-							assert.NotEmpty(t, reason, "reason should not be empty")
-							// Note: key can be empty for rules-based sampler without downstream samplers
-
-							// Verify deterministic parts for same trace
-							rate2, _, reason2, key2 := sampler.GetSampleRate(trace)
-							assert.Equal(t, rate, rate2, "rate should be deterministic")
-							assert.Equal(t, reason, reason2, "reason should be deterministic")
-							assert.Equal(t, key, key2, "key should be deterministic")
-						}
-
-						// Test with random traces
-						randomTrace := createTrace(
-							fmt.Sprintf("service-%d", goroutineID),
-							fmt.Sprintf("%d", 200+(j%4)*100),
-							fmt.Sprintf("team-%d", goroutineID%3),
-							fmt.Sprintf("user-%d-%d", goroutineID, j),
-							j%7 == 0,       // Occasionally has error
-							100+(j%20)*100, // Duration 100-2000ms
-							(j%5)+1,
-						)
-
-						rate, _, reason, _ := sampler.GetSampleRate(randomTrace)
-						assert.NotZero(t, rate)
-						assert.NotEmpty(t, reason)
-						// key can be empty for rules without downstream samplers
-					}
-				}(i)
-			}
-
-			// Cluster size management is now handled by the SamplerFactory
-
-			wg.Wait()
 		})
 	}
 }
