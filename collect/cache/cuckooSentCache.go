@@ -236,8 +236,6 @@ func (c *cuckooSentCache) Record(trace KeptTrace, keep bool, reason string) {
 		trace.SetKeptReason(c.keptReasons.Set(reason))
 		sentRecord := NewKeptTraceCacheEntry(trace)
 
-		c.keptMut.Lock()
-		defer c.keptMut.Unlock()
 		c.kept.Add(trace.ID(), sentRecord)
 
 		return
@@ -260,9 +258,6 @@ func (c *cuckooSentCache) CheckSpan(span *types.Span) (TraceSentRecord, string, 
 		// we recognize it as dropped, so just say so; there's nothing else to do
 		return &cuckooDroppedRecord{}, "", true
 	}
-	// was it kept?
-	c.keptMut.Lock()
-	defer c.keptMut.Unlock()
 	if sentRecord, found := c.kept.Get(span.TraceID); found {
 		// if we kept it, then this span being checked needs counting too
 		sentRecord.Count(span)
@@ -283,8 +278,6 @@ func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
 	// what will fit in the new one, discard the oldest ones
 	// (we don't have to do anything with the ones we discard, this is
 	// the trace decisions cache).
-	c.keptMut.Lock()
-	defer c.keptMut.Unlock()
 	keys := c.kept.Keys()
 	if len(keys) > int(cfg.KeptSize) {
 		keys = keys[len(keys)-int(cfg.KeptSize):]
@@ -317,9 +310,6 @@ func (c *cuckooSentCache) CheckTrace(traceID string) (TraceSentRecord, string, b
 		// we recognize it as dropped, so just say so; there's nothing else to do
 		return &cuckooDroppedRecord{}, "", true
 	}
-	// was it kept?
-	c.keptMut.Lock()
-	defer c.keptMut.Unlock()
 	if sentRecord, found := c.kept.Get(traceID); found {
 		reason, _ := c.keptReasons.Get(uint(sentRecord.reason))
 		return sentRecord, reason, true
