@@ -104,8 +104,6 @@ type InMemCollector struct {
 	// mutex must be held whenever non-channel internal fields are accessed.
 	mutex sync.RWMutex
 
-	sampleTraceCache cache.TraceSentCache
-
 	monitorWG    sync.WaitGroup // WaitGroup for background monitoring goroutine
 	workersWG    sync.WaitGroup // Separate WaitGroup for workers
 	sendTracesWG sync.WaitGroup
@@ -196,13 +194,6 @@ func (i *InMemCollector) Start() error {
 		i.Metrics.Register(metric)
 	}
 
-	sampleCacheConfig := i.Config.GetSampleCacheConfig()
-	var err error
-	i.sampleTraceCache, err = cache.NewCuckooSentCache(sampleCacheConfig, i.Metrics)
-	if err != nil {
-		return err
-	}
-
 	i.tracesToSend = make(chan sendableTrace, 100_000)
 	i.done = make(chan struct{})
 	i.reload = make(chan struct{}, 1)
@@ -255,7 +246,7 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.StressRelief.UpdateFromConfig()
 
-	// Send reload signals to all workers to clear their local samplers
+	// Send reload signals to all workers to clear their local samplers and resize their caches
 	// so that the new configuration will be propagated
 	for _, worker := range i.workers {
 		select {
@@ -446,8 +437,12 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 	_, span := otelutil.StartSpanWith(context.Background(), i.Tracer, "collector.ProcessSpanImmediately", "trace_id", sp.TraceID)
 	defer span.End()
 
+	// Find which worker owns this trace
+	workerIndex := i.getWorkerIDForTrace(sp.TraceID)
+	worker := i.workers[workerIndex]
+
 	var rate uint
-	record, reason, found := i.sampleTraceCache.CheckSpan(sp)
+	record, reason, found := worker.sampleTraceCache.CheckSpan(sp)
 	if !found {
 		rate, keep, reason = i.StressRelief.GetSampleRate(sp.TraceID)
 		now := i.Clock.Now()
@@ -462,7 +457,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 		trace.SetSampleRate(rate)
 		// we do want a record of how we disposed of traces in case more come in after we've
 		// turned off stress relief (if stress relief is on we'll keep making the same decisions)
-		i.sampleTraceCache.Record(trace, keep, reason)
+		worker.sampleTraceCache.Record(trace, keep, reason)
 	} else {
 		rate = record.Rate()
 		keep = record.Kept()
@@ -673,9 +668,8 @@ func (i *InMemCollector) Stop() error {
 	}
 	i.workersWG.Wait()
 
-	// Stop the sample trace cache
-	if i.sampleTraceCache != nil {
-		i.sampleTraceCache.Stop()
+	for _, worker := range i.workers {
+		worker.Stop()
 	}
 
 	// Now it's safe to close the traces to send channel
