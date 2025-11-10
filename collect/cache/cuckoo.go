@@ -48,6 +48,12 @@ const (
 	AddQueueSleepTime = 100 * time.Microsecond
 )
 
+var batchPool = sync.Pool{
+	New: func() any {
+		return make([]string, 0, AddQueueDepth)
+	},
+}
+
 var cuckooTraceCheckerMetrics = []metrics.Metadata{
 	{Name: CurrentCapacity, Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "current capacity of the cuckoo filter"},
 	{Name: FutureLoadFactor, Type: metrics.Gauge, Unit: metrics.Percent, Description: "the fraction of slots occupied in the future cuckoo filter"},
@@ -114,34 +120,42 @@ func (c *CuckooTraceChecker) drain() {
 	if n == 0 {
 		return
 	}
-	c.mut.Lock()
-	// we don't start the timer until we have the lock, because we don't want to be counting
-	// the time we're waiting for the lock.
-	lockStart := time.Now()
-	timeout := time.NewTimer(1 * time.Millisecond)
-outer:
+	batch := batchPool.Get().([]string)
+	timeout := time.NewTimer(500 * time.Microsecond)
+queueLoop:
 	for i := 0; i < n; i++ {
 		select {
 		case t, ok := <-c.addch:
 			// if the channel is closed, we will stop processing
 			if !ok {
-				break outer
+				break queueLoop
 			}
-			s := []byte(t)
-			c.current.Insert(s)
-			// don't add anything to future if it doesn't exist yet
-			if c.future != nil {
-				c.future.Insert(s)
-			}
+			// building up the queue
+			batch = append(batch, t)
 		case <-timeout.C:
-			break outer
+			break queueLoop
 		default:
 			// if the channel is empty, stop
-			break outer
+			break queueLoop
+		}
+	}
+
+	c.mut.Lock()
+	// we don't start the timer until we have the lock, because we don't want to be counting
+	// the time we're waiting for the lock.
+	lockStart := time.Now()
+
+	for _, b := range batch {
+		c.current.Insert([]byte(b))
+		// don't add anything to future if it doesn't exist yet
+		if c.future != nil {
+			c.future.Insert([]byte(b))
 		}
 	}
 	c.mut.Unlock()
-	timeout.Stop()
+	batch = batch[:0]
+	batchPool.Put(batch)
+
 	qlt := time.Since(lockStart)
 	c.met.Histogram(AddQueueLockTime, float64(qlt.Microseconds()))
 }
