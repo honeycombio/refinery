@@ -720,7 +720,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	debugLog = debugLog.WithString("trace_id", ev.Data.MetaTraceID)
 
 	span := &types.Span{
-		Event:   *ev,
+		Event:   ev,
 		TraceID: ev.Data.MetaTraceID,
 		IsRoot:  ev.Data.MetaRefineryRoot.Value,
 	}
