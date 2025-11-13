@@ -45,21 +45,16 @@ For details about all supported special fields, check out our [Refinery Telemetr
 
 ### Virtual Fields
 
-To handle specific scenarios when rules are evaluated before the arrival of root spans, Refinery introduces the concept of virtual fields. These fields provide metadata about traces that have timed out while waiting for their root span.
+To handle some specific trace-aware scenarios, Refinery introduces the concept of virtual fields.
+All virtual fields are prefixed with `?.` to distinguish them from normal fields.
 
-This example shows a rule that drops traces containing more than 1000 spans by using the virtual field `?.NUM_DESCENDANTS`.
+Currently only one virtual field is supported.
 
-```yaml
-Rules:
-    - Name: Drop any big traces
-      Drop: true
-      Conditions:
-        Field: "?.NUM_DESCENDANTS"
-        Operator: ">"
-        Value: 1000
-        Datatype: int
+- `?.NUM_DESCENDANTS`: the current number of child elements contained within a trace.
 
-```
+#### `?.NUM_DESCENDANTS`
+
+##### Example: drop single-span traces
 
 This example shows a rule to drop traces consisting of only a root span:
 
@@ -75,12 +70,33 @@ This example shows a rule to drop traces consisting of only a root span:
           Datatype: int
 ```
 
-#### Supported Virtual Fields
+##### Example: drop large traces
 
-All virtual fields are prefixed with `?.` to distinguish them from normal fields.
-Currently only one virtual field is supported.
+This example shows a rule that drops traces containing more than 1000 spans.
 
-- `?.NUM_DESCENDANTS`: the current number of child elements contained within a trace.
+```yaml
+Rules:
+    - Name: Drop any big traces
+      Drop: true
+      Conditions:
+        Field: "?.NUM_DESCENDANTS"
+        Operator: ">="
+        Value: 1000
+        Datatype: int
+```
+
+Combine this rule with setting the Traces -> SpanLimit config option to the same number.
+
+```yaml
+Traces:
+  SpanLimit: 1000
+```
+
+The config change results in Refinery making a sampling decision for a trace once the 1,000th span for that trace arrives.
+For the sampling decision, the rule will match, the trace marked for drop, and the trace's current spans will be removed from Refinery's in-memory cache.
+Future arriving spans for the trace will be dropped and memory load on the cluster will be reduced.
+
+
 
 ## `Fields`
 
