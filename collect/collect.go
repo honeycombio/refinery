@@ -675,7 +675,7 @@ func (i *InMemCollector) sendExpiredTracesInCache(ctx context.Context, now time.
 		// publish the trace decision again
 		dc := i.createDecisionSpan(&types.Span{
 			TraceID: trace.ID(),
-			Event: types.Event{
+			Event: &types.Event{
 				Context: trace.GetSpans()[0].Context,
 				APIKey:  trace.APIKey,
 				Dataset: trace.Dataset,

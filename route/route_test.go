@@ -969,7 +969,7 @@ func TestProcessEventMetrics(t *testing.T) {
 			}
 			event.Data.ExtractMetadata()
 			span := &types.Span{
-				Event:   *event,
+				Event:   event,
 				TraceID: "trace-123",
 				IsRoot:  true,
 			}

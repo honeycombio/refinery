@@ -150,7 +150,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: traceID1,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
 		},
@@ -171,7 +171,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	span = &types.Span{
 		TraceID: traceID2,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
 		},
@@ -197,7 +197,7 @@ func TestAddRootSpan(t *testing.T) {
 	decisionSpanTraceID := "decision_root_span"
 	span = &types.Span{
 		TraceID: decisionSpanTraceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
@@ -222,7 +222,7 @@ func TestAddRootSpan(t *testing.T) {
 
 	peerSpan := &types.Span{
 		TraceID: peerTraceIDs[0],
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
 		},
@@ -286,7 +286,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		sendAttemptCount++
 		span := &types.Span{
 			TraceID: fmt.Sprintf("trace-%v", sendAttemptCount),
-			Event: types.Event{
+			Event: &types.Event{
 				Dataset:    "aoeu",
 				APIKey:     legacyAPIKey,
 				SampleRate: originalSampleRate,
@@ -312,7 +312,7 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	// Generate one more event with no upstream sampling applied.
 	err := coll.AddSpan(&types.Span{
 		TraceID: fmt.Sprintf("trace-%v", 1000),
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset:    "no-upstream-sampling",
 			APIKey:     legacyAPIKey,
 			SampleRate: 0, // no upstream sampling
@@ -379,7 +379,7 @@ func TestTransmittedSpansShouldHaveASampleRateOfAtLeastOne(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: fmt.Sprintf("trace-%v", 1),
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset:    "aoeu",
 			APIKey:     legacyAPIKey,
 			SampleRate: 0, // This should get lifted to 1
@@ -434,7 +434,7 @@ func TestAddSpan(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
@@ -460,7 +460,7 @@ func TestAddSpan(t *testing.T) {
 	sendBy := coll.Clock.Now().Add(10 * time.Second).Unix()
 	spanFromPeer := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id":        "unused",
@@ -499,7 +499,7 @@ func TestAddSpan(t *testing.T) {
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
@@ -577,7 +577,7 @@ func TestDryRunMode(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: traceID1,
-		Event: types.Event{
+		Event: &types.Event{
 			Data:   types.NewPayload(coll.Config, nil),
 			APIKey: legacyAPIKey,
 		},
@@ -597,7 +597,7 @@ func TestDryRunMode(t *testing.T) {
 	// add a non-root span, create the trace in the cache
 	span = &types.Span{
 		TraceID: traceID2,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
@@ -617,7 +617,7 @@ func TestDryRunMode(t *testing.T) {
 
 	span = &types.Span{
 		TraceID: traceID2,
-		Event: types.Event{
+		Event: &types.Event{
 			Data:   types.NewPayload(coll.Config, nil),
 			APIKey: legacyAPIKey,
 		},
@@ -639,7 +639,7 @@ func TestDryRunMode(t *testing.T) {
 
 	span = &types.Span{
 		TraceID: traceID3,
-		Event: types.Event{
+		Event: &types.Event{
 			Data:   types.NewPayload(coll.Config, nil),
 			APIKey: legacyAPIKey,
 		},
@@ -693,7 +693,7 @@ func TestSampleConfigReload(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: "1",
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 		},
@@ -721,7 +721,7 @@ func TestSampleConfigReload(t *testing.T) {
 
 	span = &types.Span{
 		TraceID: "2",
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 		},
@@ -789,7 +789,7 @@ func TestStableMaxAlloc(t *testing.T) {
 	for i := 0; i < 500; i++ {
 		span := &types.Span{
 			TraceID: strconv.Itoa(i),
-			Event: types.Event{
+			Event: &types.Event{
 				Dataset: "aoeu",
 				Data:    types.NewPayload(coll.Config, spandata[i]),
 				APIKey:  legacyAPIKey,
@@ -904,7 +904,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 	// Don't start collect(), so the queues are never drained
 	span := &types.Span{
 		TraceID: "1",
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			APIKey:  legacyAPIKey,
 		},
@@ -992,7 +992,7 @@ func TestAddCountsToRoot(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		span := &types.Span{
 			TraceID: traceID,
-			Event: types.Event{
+			Event: &types.Event{
 				Dataset: "aoeu",
 				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id": "unused",
@@ -1016,7 +1016,7 @@ func TestAddCountsToRoot(t *testing.T) {
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
@@ -1105,7 +1105,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		span := &types.Span{
 			TraceID: traceID,
-			Event: types.Event{
+			Event: &types.Event{
 				Dataset: "aoeu",
 				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id": "unused",
@@ -1137,7 +1137,7 @@ func TestLateRootGetsCounts(t *testing.T) {
 	// now we add the root span and verify that both got sent and that the root span had the span count
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
@@ -1196,7 +1196,7 @@ func TestAddSpanCount(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
@@ -1207,7 +1207,7 @@ func TestAddSpanCount(t *testing.T) {
 	span.Data.ExtractMetadata()
 	decisionSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id":        "unused",
@@ -1236,7 +1236,7 @@ func TestAddSpanCount(t *testing.T) {
 	// ok now let's add the root span and verify that both got sent
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
@@ -1294,7 +1294,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
@@ -1311,7 +1311,7 @@ func TestLateRootGetsSpanCount(t *testing.T) {
 	// now we add the root span and verify that both got sent and that the root span had the span count
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
@@ -1368,7 +1368,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
@@ -1380,7 +1380,7 @@ func TestLateSpanNotDecorated(t *testing.T) {
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
@@ -1438,7 +1438,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
@@ -1451,7 +1451,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
@@ -1498,7 +1498,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
@@ -1527,7 +1527,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset:    "aoeu",
 			Data:       types.NewPayload(coll.Config, nil),
 			APIKey:     legacyAPIKey,
@@ -1598,7 +1598,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 
 	span := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id": "unused",
@@ -1610,7 +1610,7 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
@@ -1702,7 +1702,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 
 	for i := 0; i < 4; i++ {
 		span := &types.Span{
-			Event: types.Event{
+			Event: &types.Event{
 				Dataset: "aoeu",
 				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id":  "unused",
@@ -1737,7 +1737,7 @@ func TestSpanWithRuleReasons(t *testing.T) {
 		assert.Nil(t, coll.getFromCache(traceID), "trace should have been sent although the root span hasn't arrived")
 		rootSpan := &types.Span{
 			TraceID: traceID,
-			Event: types.Event{
+			Event: &types.Event{
 				Dataset: "aoeu",
 				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"http.status_code": 200,
@@ -1820,7 +1820,7 @@ func TestRedistributeTraces(t *testing.T) {
 	s.Other = &sharder.TestShard{Addr: "api2", TraceIDs: []string{peerTraceID}}
 	acutalSpan := &types.Span{
 		TraceID: peerTraceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 			Data:    types.NewPayload(coll.Config, nil),
@@ -1858,7 +1858,7 @@ func TestRedistributeTraces(t *testing.T) {
 	myTraceID := "1"
 	span := &types.Span{
 		TraceID: myTraceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 			APIHost: "api1",
@@ -1869,7 +1869,7 @@ func TestRedistributeTraces(t *testing.T) {
 	span.Data.ExtractMetadata()
 	decisionSpan := &types.Span{
 		TraceID: myTraceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: dataset,
 			APIKey:  legacyAPIKey,
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
@@ -2034,7 +2034,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:                 "Trace already has decision, should be sent",
 			traceID:              "traceID1",
-			span:                 &types.Span{TraceID: "traceID1", Event: types.Event{Dataset: "aoeu", Data: types.NewPayload(coll.Config, nil)}},
+			span:                 &types.Span{TraceID: "traceID1", Event: &types.Event{Dataset: "aoeu", Data: types.NewPayload(coll.Config, nil)}},
 			preRecordTrace:       true,
 			expectedSent:         1,
 			expectedForwarded:    0,
@@ -2043,7 +2043,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:                 "Trace cannot be decided yet, should be forwarded",
 			traceID:              "traceID2",
-			span:                 &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test2", Data: types.NewPayload(coll.Config, nil)}},
+			span:                 &types.Span{TraceID: "traceID2", Event: &types.Event{Dataset: "test2", Data: types.NewPayload(coll.Config, nil)}},
 			preRecordTrace:       false,
 			expectedSent:         0,
 			expectedForwarded:    1,
@@ -2054,7 +2054,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:    "decision spans that already has decision should be ignored and discarded",
 			traceID: "traceID3",
-			span: &types.Span{TraceID: "traceID3", Event: types.Event{Dataset: "test3", Data: types.NewPayload(coll.Config, map[string]interface{}{
+			span: &types.Span{TraceID: "traceID3", Event: &types.Event{Dataset: "test3", Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"meta.refinery.min_span": true,
 			})}},
 			preRecordTrace:       true,
@@ -2065,7 +2065,7 @@ func TestDrainTracesOnShutdown(t *testing.T) {
 		{
 			name:    "decision spans that belongs to other peers should be ignored and discarded",
 			traceID: "traceID2",
-			span: &types.Span{TraceID: "traceID2", Event: types.Event{Dataset: "test4", Data: types.NewPayload(coll.Config, map[string]interface{}{
+			span: &types.Span{TraceID: "traceID2", Event: &types.Event{Dataset: "test4", Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"meta.refinery.min_span": true,
 			})}},
 			preRecordTrace:       false,
@@ -2169,7 +2169,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 	for i := 0; i < spanlimit; i++ {
 		span := &types.Span{
 			TraceID: traceID,
-			Event: types.Event{
+			Event: &types.Event{
 				Dataset: "aoeu",
 				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id": "unused",
@@ -2188,7 +2188,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 	// now we add the root span and verify that it got sent and that the root span had the span count
 	rootSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data:    types.NewPayload(coll.Config, nil),
 			APIKey:  legacyAPIKey,
@@ -2246,7 +2246,7 @@ func TestCreateDecisionSpan(t *testing.T) {
 
 	nonrootSpan := &types.Span{
 		TraceID: traceID1,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "aoeu",
 			Data: types.NewPayload(coll.Config, map[string]interface{}{
 				"trace.parent_id":        "unused",
@@ -2441,7 +2441,7 @@ func TestExpiredTracesCleanup(t *testing.T) {
 		}
 		trace.AddSpan(&types.Span{
 			TraceID: trace.ID(),
-			Event: types.Event{
+			Event: &types.Event{
 				Context: context.Background(),
 			},
 		})
@@ -2529,7 +2529,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	for i := 0; i <= spanLimit; i++ {
 		trace.AddSpan(&types.Span{
 			TraceID: traceID,
-			Event: types.Event{
+			Event: &types.Event{
 				Dataset: "test-dataset",
 				Data: types.NewPayload(coll.Config, map[string]interface{}{
 					"trace.parent_id": "unused",
@@ -2544,7 +2544,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 	// process another span for the same trace that exceeds the span limit should not change the SendBy time
 	lateSpan := &types.Span{
 		TraceID: traceID,
-		Event: types.Event{
+		Event: &types.Event{
 			Dataset: "test-dataset",
 			APIKey:  legacyAPIKey,
 		},
@@ -2740,7 +2740,7 @@ func createBenchmarkSpans(traceID string, spanIdx int, isRoot bool, cfg config.C
 		payload.ExtractMetadata()
 
 		span = &types.Span{
-			Event: types.Event{
+			Event: &types.Event{
 				Dataset: "benchmark-dataset",
 				APIKey:  "test-api-key",
 				Data:    payload,

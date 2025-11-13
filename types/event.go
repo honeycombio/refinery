@@ -234,7 +234,7 @@ func (sp *Span) IsDecisionSpan() bool {
 // ExtractDecisionContext returns a new Event that contains only the data that is
 // relevant to the decision-making process.
 func (sp *Span) ExtractDecisionContext(config config.Config) *Event {
-	decisionCtx := sp.Event
+	decisionCtx := *sp.Event
 	dataSize := sp.Event.GetDataSize()
 
 	// Create a new empty payload and set metadata fields directly
@@ -250,7 +250,7 @@ func (sp *Span) ExtractDecisionContext(config config.Config) *Event {
 		decisionCtx.Data.MetaRefinerySendBy = sp.Data.MetaRefinerySendBy
 	}
 
-	return decisionCtx
+	return &decisionCtx
 }
 
 func (sp *Span) SetSendBy(sendBy time.Time) {
