@@ -872,19 +872,19 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 	record, reason, found := i.sampleTraceCache.CheckSpan(sp)
 	if !found {
 		rate, keep, reason = i.StressRelief.GetSampleRate(sp.TraceID)
-		now := i.Clock.Now()
-		trace := &types.Trace{
-			APIHost:     sp.APIHost,
-			APIKey:      sp.APIKey,
-			Dataset:     sp.Dataset,
-			TraceID:     sp.TraceID,
-			ArrivalTime: now,
-			SendBy:      now,
-		}
-		trace.SetSampleRate(rate)
-		// we do want a record of how we disposed of traces in case more come in after we've
-		// turned off stress relief (if stress relief is on we'll keep making the same decisions)
-		i.sampleTraceCache.Record(trace, keep, reason)
+		//		now := i.Clock.Now()
+		//		trace := &types.Trace{
+		//			APIHost:     sp.APIHost,
+		//			APIKey:      sp.APIKey,
+		//			Dataset:     sp.Dataset,
+		//			TraceID:     sp.TraceID,
+		//			ArrivalTime: now,
+		//			SendBy:      now,
+		//		}
+		//		trace.SetSampleRate(rate)
+		//		// we do want a record of how we disposed of traces in case more come in after we've
+		//		// turned off stress relief (if stress relief is on we'll keep making the same decisions)
+		//		i.sampleTraceCache.Record(trace, keep, reason)
 	} else {
 		rate = record.Rate()
 		keep = record.Kept()
