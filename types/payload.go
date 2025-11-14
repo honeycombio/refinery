@@ -385,7 +385,7 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 		}
 	}
 
-	if keysFound < len(samplingKeyFields) {
+	if keysFound > 0 && keysFound < len(samplingKeyFields) {
 		// If we didn't find all key fields, add them to missingFields
 		if p.missingFields == nil {
 			p.missingFields = make(map[string]struct{}, len(samplingKeyFields)-keysFound)
