@@ -656,7 +656,7 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	}
 	totalEvents := 0
 	for _, batch := range batches {
-		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(router.Config, apiKey, batch.Dataset, environment)
+		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(router.Config, apiKey, environment, batch.Dataset)
 		totalEvents += len(batch.Events)
 		for _, ev := range batch.Events {
 			payload := types.NewPayload(router.Config, nil)
