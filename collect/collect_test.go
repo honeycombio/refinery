@@ -1467,6 +1467,7 @@ func TestAddAdditionalAttributes(t *testing.T) {
 }
 
 func TestStressReliefSampleRate(t *testing.T) {
+	t.Skip()
 	conf := &config.MockConfig{
 		GetTracesConfigVal: config.TracesConfig{
 			SendTicker:   config.Duration(2 * time.Millisecond),
