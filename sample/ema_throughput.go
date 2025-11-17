@@ -2,7 +2,6 @@ package sample
 
 import (
 	"math/rand"
-	"sync"
 	"time"
 
 	dynsampler "github.com/honeycombio/dynsampler-go"
@@ -41,7 +40,6 @@ type EMAThroughputSampler struct {
 	Metrics metrics.Metrics
 
 	key                      *traceKey
-	keyMu                    sync.Mutex
 	keyFields, nonRootFields []string
 
 	dynsampler      *dynsampler.EMAThroughput
@@ -70,11 +68,8 @@ func (d *EMAThroughputSampler) Start() error {
 	return nil
 }
 
-
 func (d *EMAThroughputSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
-	d.keyMu.Lock()
 	key, n := d.key.build(trace)
-	d.keyMu.Unlock()
 
 	if n == maxKeyLength {
 		d.Logger.Debug().Logf("trace key hit max length of %d, truncating", maxKeyLength)
