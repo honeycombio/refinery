@@ -49,11 +49,12 @@ func getFromCache(coll *InMemCollector, traceID string) *types.Trace {
 	return cl.cache.Get(traceID)
 }
 
-func newCache() (cache.TraceSentCache, error) {
+func newCache(workerCount uint) (cache.TraceSentCache, error) {
 	cfg := config.SampleCacheConfig{
 		KeptSize:          100,
 		DroppedSize:       100,
 		SizeCheckInterval: config.Duration(1 * time.Second),
+		WorkerCount:       workerCount,
 	}
 
 	return cache.NewCuckooSentCache(cfg, &metrics.NullMetrics{})
@@ -837,7 +838,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 
 	// Set the cache on all workers
 	for _, worker := range coll.workers {
-		stc, err := newCache()
+		stc, err := newCache(uint(conf.GetCollectionConfigVal.WorkerCount))
 		require.NoError(t, err)
 
 		worker.sampleTraceCache = stc
@@ -1381,7 +1382,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 
 	// Set the cache on all workers
 	for _, worker := range coll.workers {
-		stc, err := newCache()
+		stc, err := newCache(uint(conf.GetCollectionConfigVal.WorkerCount))
 		require.NoError(t, err)
 		worker.sampleTraceCache = stc
 	}
@@ -1763,7 +1764,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 
 	// Set the cache on all workers
 	for _, worker := range coll.workers {
-		sampleTraceCache, err := newCache()
+		sampleTraceCache, err := newCache(uint(conf.GetCollectionConfigVal.WorkerCount))
 		require.NoError(t, err)
 
 		worker.sampleTraceCache = sampleTraceCache

@@ -78,15 +78,13 @@ func NewCollectorWorker(
 	parent *InMemCollector,
 	incomingSize int,
 	peerSize int,
-) *CollectorWorker {
+) (*CollectorWorker, error) {
 	// Create a sample trace cache for this worker
 	sampleCacheConfig := parent.Config.GetSampleCacheConfig()
 	sampleCache, err := cache.NewCuckooSentCache(sampleCacheConfig, parent.Metrics)
 	if err != nil {
-		// Log error but continue - this shouldn't prevent worker creation
 		parent.Logger.Error().Logf("Failed to create sample trace cache for worker %d: %v", id, err)
-		// Create a null cache as fallback
-		sampleCache = nil
+		return nil, err
 	}
 
 	return &CollectorWorker{
@@ -105,7 +103,7 @@ func NewCollectorWorker(
 		// Initialize local sampler cache and reload channel
 		datasetSamplers: make(map[string]sample.Sampler),
 		reload:          make(chan struct{}, 1),
-	}
+	}, nil
 }
 
 // addSpan adds a span to this worker's incoming channel (called by the parent manager)

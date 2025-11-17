@@ -211,7 +211,10 @@ func (i *InMemCollector) Start() error {
 	i.workers = make([]*CollectorWorker, numWorkers)
 
 	for workerID := range i.workers {
-		worker := NewCollectorWorker(workerID, i, imcConfig.GetIncomingQueueSizePerWorker(), imcConfig.GetPeerQueueSizePerWorker())
+		worker, err := NewCollectorWorker(workerID, i, imcConfig.GetIncomingQueueSizePerWorker(), imcConfig.GetPeerQueueSizePerWorker())
+		if err != nil {
+			return err
+		}
 		i.workers[workerID] = worker
 
 		// Start the collect goroutine for this worker
@@ -246,7 +249,7 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.StressRelief.UpdateFromConfig()
 
-	// Send reload signals to all workers to clear their local samplers and resize their caches
+	// Send reload signals to all workers to clear their local samplers
 	// so that the new configuration will be propagated
 	for _, worker := range i.workers {
 		select {
