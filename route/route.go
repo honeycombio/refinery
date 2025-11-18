@@ -548,7 +548,13 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
 
-	batchedEvents := newBatchedEvents(r.Config, apiKey, environment, dataset)
+	batchedEvents := newBatchedEvents(
+		types.CoreFieldsUnmarshalerOptions{
+			Config:  r.Config,
+			APIKey:  apiKey,
+			Env:     environment,
+			Dataset: dataset,
+		})
 	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
 	if err != nil {
 		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("body", string(bodyBuffer.Bytes())).Logf("error parsing json")
@@ -657,7 +663,12 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	}
 	totalEvents := 0
 	for _, batch := range batches {
-		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(router.Config, apiKey, batch.Dataset, environment)
+		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
+			Config:  router.Config,
+			APIKey:  apiKey,
+			Env:     environment,
+			Dataset: batch.Dataset,
+		})
 		totalEvents += len(batch.Events)
 		for _, ev := range batch.Events {
 			payload := types.NewPayload(router.Config, nil)
