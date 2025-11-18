@@ -49,14 +49,24 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 	}
 
 	// Create batchedEvents struct and set events
-	batchStruct := newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+	batchStruct := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+		Config:  mockCfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
 	batchStruct.events = events
 
 	serialized, err := msgpack.Marshal(batchStruct.events) // Marshal the slice directly
 	require.NoError(t, err)
 
 	// Create new batchedEvents for unmarshaling
-	deserialized := newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+	deserialized := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+		Config:  mockCfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
 	_, err = deserialized.UnmarshalMsg(serialized)
 	require.NoError(t, err)
 
@@ -75,7 +85,12 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	// Reset the deserialized batch
-	deserialized = newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+	deserialized = newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+		Config:  mockCfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
 	_, err = deserialized.UnmarshalMsg(serialized)
 	require.NoError(t, err)
 
@@ -162,7 +177,12 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 	}
 
 	// Test the optimized unmarshal
-	batch := newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+	batch := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+		Config:  mockCfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
 
 	remaining, err := batch.UnmarshalMsg(buf)
 	require.NoError(t, err)

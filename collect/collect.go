@@ -253,8 +253,6 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.SamplerFactory.ClearDynsamplers()
 
-	i.sampleTraceCache.Resize(i.Config.GetSampleCacheConfig())
-
 	i.StressRelief.UpdateFromConfig()
 
 	// Send reload signals to all workers to clear their local samplers
@@ -266,7 +264,6 @@ func (i *InMemCollector) reloadConfigs() {
 			// Channel already has a signal pending, skip
 		}
 	}
-	// TODO add resizing the LRU sent trace cache on config reload
 }
 
 // checkAlloc performs memory monitoring using runtime/metrics instead of

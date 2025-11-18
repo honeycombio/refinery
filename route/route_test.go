@@ -200,7 +200,12 @@ func TestUnmarshal(t *testing.T) {
 	// Test batchedEvents unmarshaling (used in batch)
 	t.Run("batchedEvents", func(t *testing.T) {
 		t.Run("json", func(t *testing.T) {
-			batch := newBatchedEvents(mockCfg, "api-key", "", "")
+			batch := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+				Config:  mockCfg,
+				APIKey:  "api-key",
+				Env:     "",
+				Dataset: "",
+			})
 			batch.events = []batchedEvent{
 				{
 					Timestamp:  now.Format(time.RFC3339Nano),
@@ -223,7 +228,12 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
 					req.Header.Set("Content-Type", contentType)
 
-					result := newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+					result := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+						Config:  mockCfg,
+						APIKey:  "api-key",
+						Env:     "env",
+						Dataset: "dataset",
+					})
 					err = unmarshal(req, readAll(t, req.Body), result)
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
@@ -271,7 +281,12 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", buf)
 					req.Header.Set("Content-Type", contentType)
 
-					result := newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+					result := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+						Config:  mockCfg,
+						APIKey:  "api-key",
+						Env:     "env",
+						Dataset: "dataset",
+					})
 					err = unmarshal(req, readAll(t, req.Body), result)
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
@@ -1035,7 +1050,12 @@ func newBatchRouter(t testing.TB) *Router {
 
 func createBatchEvents(mockCfg config.Config) *batchedEvents {
 	now := time.Now().UTC()
-	batch := newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+	batch := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+		Config:  mockCfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
 	batch.events = []batchedEvent{
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
@@ -1170,7 +1190,12 @@ func createBatchEventsWithLargeAttributes(numEvents int, cfg config.Config) *bat
 	mediumText := strings.Repeat("y", 500)
 	smallText := strings.Repeat("z", 100)
 
-	batchEvents := newBatchedEvents(cfg, "api-key", "env", "dataset")
+	batchEvents := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+		Config:  cfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
 	batchEvents.events = make([]batchedEvent, numEvents)
 
 	for i := 0; i < numEvents; i++ {
