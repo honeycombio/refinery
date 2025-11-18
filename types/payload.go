@@ -500,13 +500,28 @@ func NewCoreFieldsUnmarshaler(opt CoreFieldsUnmarshalerOptions) CoreFieldsUnmars
 	}
 }
 
+// UnmarshalPayloadCompleteMetadatOnly is similar to UnmarshalPayload, but it does not return
+// the remaining bytes. It's expected to be used on a single message
+// where the entire byte slice is consumed.
+// It memoizes metadata fields only. If you need sampling key fields to be memoized, please use
+// UnmarshalPayloadComplete.
+// CAUTION: This should only be used when the entire byte slice is safe for the payload to keep.
+func (cu CoreFieldsUnmarshaler) UnmarshalPayloadCompleteMetadatOnly(bts []byte, payload *Payload) error {
+	return cu.unmarshalPayloadComplete(bts, payload, nil)
+}
+
 // UnmarshalPayloadComplete is similar to UnmarshalPayload, but it does not return
 // the remaining bytes. It's expected to be used on a single message
 // where the entire byte slice is consumed.
 // CAUTION: This should only be used when the entire byte slice is safe for the payload to keep.
 func (cu CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Payload) error {
+	return cu.unmarshalPayloadComplete(bts, payload, cu.samplingKeyFields)
+}
+
+// unmarshalPayloadComplete is the common implementation for unmarshaling a complete payload.
+func (cu CoreFieldsUnmarshaler) unmarshalPayloadComplete(bts []byte, payload *Payload, samplingKeyFields []string) error {
 	_, err := payload.extractCriticalFieldsFromBytes(bts,
-		cu.traceIdFieldNames, cu.parentIdFieldNames, cu.samplingKeyFields)
+		cu.traceIdFieldNames, cu.parentIdFieldNames, samplingKeyFields)
 	if err != nil {
 		return err
 	}
