@@ -107,11 +107,11 @@ type batchedEvents struct {
 	coreFieldsExtractor types.CoreFieldsUnmarshaler
 }
 
-func newBatchedEvents(cfg config.Config, apiKey, env, dataset string) *batchedEvents {
+func newBatchedEvents(opts types.CoreFieldsUnmarshalerOptions) *batchedEvents {
 	return &batchedEvents{
 		events:              make([]batchedEvent, 0),
-		cfg:                 cfg,
-		coreFieldsExtractor: types.NewCoreFieldsUnmarshaler(cfg, apiKey, env, dataset),
+		cfg:                 opts.Config,
+		coreFieldsExtractor: types.NewCoreFieldsUnmarshaler(opts),
 	}
 }
 
