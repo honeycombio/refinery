@@ -348,7 +348,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
+		unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+			Config:  mockConfig,
+			APIKey:  "test-api-key",
+			Env:     "test-env",
+			Dataset: "test-dataset",
+		})
 
 		// Create payload and unmarshal
 		payload := &Payload{config: mockConfig}
@@ -440,7 +445,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
+		unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+			Config:  mockConfig,
+			APIKey:  "test-api-key",
+			Env:     "test-env",
+			Dataset: "test-dataset",
+		})
 
 		// Unmarshal first payload
 		payload1 := &Payload{config: mockConfig}
@@ -477,7 +487,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
+		unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+			Config:  mockConfig,
+			APIKey:  "test-api-key",
+			Env:     "test-env",
+			Dataset: "test-dataset",
+		})
 		payload := &Payload{config: mockConfig}
 
 		doTest := func(t *testing.T) {
@@ -748,7 +763,12 @@ func BenchmarkUnmarshalPayload(b *testing.B) {
 		},
 	}
 
-	unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
+	unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+		Config:  mockConfig,
+		APIKey:  "test-api-key",
+		Env:     "test-env",
+		Dataset: "test-dataset",
+	})
 
 	b.Run("UnmarshalPayload", func(b *testing.B) {
 		for b.Loop() {
