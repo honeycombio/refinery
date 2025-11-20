@@ -672,7 +672,7 @@ func (router *Router) processOTLPRequestBatchMsgp(
 		totalEvents += len(batch.Events)
 		for _, ev := range batch.Events {
 			payload := types.NewPayload(router.Config, nil)
-			err := coreFieldsUnmarshaler.UnmarshalPayloadCompleteMetadatOnly(ev.Attributes, &payload)
+			err := coreFieldsUnmarshaler.UnmarshalPayloadCompleteMetadataOnly(ev.Attributes, &payload)
 			if err != nil {
 				router.Logger.Error().Logf("Error unmarshaling payload: " + err.Error())
 				continue

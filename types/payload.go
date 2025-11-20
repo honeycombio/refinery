@@ -500,13 +500,13 @@ func NewCoreFieldsUnmarshaler(opt CoreFieldsUnmarshalerOptions) CoreFieldsUnmars
 	}
 }
 
-// UnmarshalPayloadCompleteMetadatOnly is similar to UnmarshalPayload, but it does not return
+// UnmarshalPayloadCompleteMetadataOnly is similar to UnmarshalPayload, but it does not return
 // the remaining bytes. It's expected to be used on a single message
 // where the entire byte slice is consumed.
 // It memoizes metadata fields only. If you need sampling key fields to be memoized, please use
 // UnmarshalPayloadComplete.
 // CAUTION: This should only be used when the entire byte slice is safe for the payload to keep.
-func (cu CoreFieldsUnmarshaler) UnmarshalPayloadCompleteMetadatOnly(bts []byte, payload *Payload) error {
+func (cu CoreFieldsUnmarshaler) UnmarshalPayloadCompleteMetadataOnly(bts []byte, payload *Payload) error {
 	return cu.unmarshalPayloadComplete(bts, payload, nil)
 }
 
