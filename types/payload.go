@@ -232,9 +232,11 @@ type Payload struct {
 
 	// Deserialized fields, either from the internal msgpMap, or set externally.
 	memoizedFields map[string]any
-	// missingFields is a set of fields that were not found in the payload.
+	// missingFields is a list of fields that were not found in the payload.
 	// this is used to avoid repeatedly deserializing fields that are not present.
-	missingFields map[string]struct{}
+	// Using a slice instead of a map because the number of missing fields is typically small (0-5),
+	// and a slice has much lower memory overhead (~40 bytes vs ~192 bytes for small counts).
+	missingFields []string
 
 	hasExtractedMetadata bool
 
@@ -370,11 +372,11 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 	if keysFound < len(samplingKeyFields) {
 		// If we didn't find all key fields, add them to missingFields
 		if p.missingFields == nil {
-			p.missingFields = make(map[string]struct{}, len(samplingKeyFields)-keysFound)
+			p.missingFields = make([]string, 0, len(samplingKeyFields)-keysFound)
 		}
 		for _, field := range samplingKeyFields {
 			if _, found := p.memoizedFields[field]; !found {
-				p.missingFields[field] = struct{}{}
+				p.missingFields = append(p.missingFields, field)
 			}
 		}
 	}
@@ -586,9 +588,6 @@ func (p *Payload) MemoizeFields(keys ...string) {
 	if p.memoizedFields == nil {
 		p.memoizedFields = make(map[string]any, len(keys))
 	}
-	if p.missingFields == nil {
-		p.missingFields = make(map[string]struct{}, len(keys))
-	}
 
 	// It is rare for a key field to not be memoized.
 	// Intentionally not allocating memory for keysToFind because it is rarely needed.
@@ -599,7 +598,7 @@ func (p *Payload) MemoizeFields(keys ...string) {
 	// we should reevaluate this optimization
 	keysToFind := make(map[string]struct{})
 	for _, key := range keys {
-		if _, ok := p.missingFields[key]; ok {
+		if slices.Contains(p.missingFields, key) {
 			continue
 		}
 		if _, ok := p.memoizedFields[key]; !ok {
@@ -641,7 +640,7 @@ func (p *Payload) MemoizeFields(keys ...string) {
 
 	for key := range keysToFind {
 		if _, ok := p.memoizedFields[key]; !ok {
-			p.missingFields[key] = struct{}{}
+			p.missingFields = append(p.missingFields, key)
 		}
 	}
 }
@@ -660,10 +659,8 @@ func (p *Payload) Exists(key string) bool {
 		}
 	}
 
-	if p.missingFields != nil {
-		if _, ok := p.missingFields[key]; ok {
-			return false
-		}
+	if slices.Contains(p.missingFields, key) {
+		return false
 	}
 
 	iter, err := newMsgpPayloadMapIter(p.msgpData)
@@ -703,10 +700,8 @@ func (p *Payload) Get(key string) any {
 		}
 	}
 
-	if p.missingFields != nil {
-		if _, ok := p.missingFields[key]; ok {
-			return nil
-		}
+	if slices.Contains(p.missingFields, key) {
+		return nil
 	}
 
 	iter, err := newMsgpPayloadMapIter(p.msgpData)
