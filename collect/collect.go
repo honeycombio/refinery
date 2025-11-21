@@ -264,7 +264,6 @@ func (i *InMemCollector) reloadConfigs() {
 			// Channel already has a signal pending, skip
 		}
 	}
-	// TODO add resizing the LRU sent trace cache on config reload
 }
 
 // checkAlloc performs memory monitoring using runtime/metrics instead of

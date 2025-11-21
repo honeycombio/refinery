@@ -370,7 +370,7 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 	if keysFound < len(samplingKeyFields) {
 		// If we didn't find all key fields, add them to missingFields
 		if p.missingFields == nil {
-			p.missingFields = make(map[string]struct{}, len(samplingKeyFields))
+			p.missingFields = make(map[string]struct{}, len(samplingKeyFields)-keysFound)
 		}
 		for _, field := range samplingKeyFields {
 			if _, found := p.memoizedFields[field]; !found {
@@ -482,24 +482,46 @@ type CoreFieldsUnmarshaler struct {
 	samplingKeyFields  []string
 }
 
-func NewCoreFieldsUnmarshaler(cfg config.Config, apiKey, env, dataset string) CoreFieldsUnmarshaler {
-	samplerKey := cfg.DetermineSamplerKey(apiKey, env, dataset)
-	keyFields, _ := config.GetKeyFields(cfg.GetSamplingKeyFieldsForDestName(samplerKey))
+type CoreFieldsUnmarshalerOptions struct {
+	Config  config.Config
+	APIKey  string
+	Env     string
+	Dataset string
+}
+
+func NewCoreFieldsUnmarshaler(opt CoreFieldsUnmarshalerOptions) CoreFieldsUnmarshaler {
+	samplerKey := opt.Config.DetermineSamplerKey(opt.APIKey, opt.Env, opt.Dataset)
+	keyFields, _ := config.GetKeyFields(opt.Config.GetSamplingKeyFieldsForDestName(samplerKey))
 
 	return CoreFieldsUnmarshaler{
-		traceIdFieldNames:  cfg.GetTraceIdFieldNames(),
-		parentIdFieldNames: cfg.GetParentIdFieldNames(),
+		traceIdFieldNames:  opt.Config.GetTraceIdFieldNames(),
+		parentIdFieldNames: opt.Config.GetParentIdFieldNames(),
 		samplingKeyFields:  keyFields, // AllFields includes both root and non-root fields
 	}
 }
 
-// UnmarshalPayloadComplete is similar to UnmarshalPayload, but it does not return
+// UnmarshalMsgpEventMetadataOnly is similar to UnmarshalPayload, but it does not return
+// the remaining bytes. It's expected to be used on a single message
+// where the entire byte slice is consumed.
+// It memoizes metadata fields only. If you need sampling key fields to be memoized, please use
+// UnmarshalPayloadComplete.
+// CAUTION: This should only be used when the entire byte slice is safe for the payload to keep.
+func (cu CoreFieldsUnmarshaler) UnmarshalMsgpEventMetadataOnly(bts []byte, payload *Payload) error {
+	return cu.unmarshalMsgpEvent(bts, payload, nil)
+}
+
+// UnmarshalMsgpEvent is similar to UnmarshalPayload, but it does not return
 // the remaining bytes. It's expected to be used on a single message
 // where the entire byte slice is consumed.
 // CAUTION: This should only be used when the entire byte slice is safe for the payload to keep.
-func (cu CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Payload) error {
+func (cu CoreFieldsUnmarshaler) UnmarshalMsgpEvent(bts []byte, payload *Payload) error {
+	return cu.unmarshalMsgpEvent(bts, payload, cu.samplingKeyFields)
+}
+
+// unmarshalMsgpEvent is the common implementation for unmarshaling a complete payload.
+func (cu CoreFieldsUnmarshaler) unmarshalMsgpEvent(bts []byte, payload *Payload, samplingKeyFields []string) error {
 	_, err := payload.extractCriticalFieldsFromBytes(bts,
-		cu.traceIdFieldNames, cu.parentIdFieldNames, cu.samplingKeyFields)
+		cu.traceIdFieldNames, cu.parentIdFieldNames, samplingKeyFields)
 	if err != nil {
 		return err
 	}
@@ -508,11 +530,11 @@ func (cu CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Pa
 	return nil
 }
 
-// UnmarshalPayload creates and unmarshals a new Payload. It supports operating on a partial message
+// UnmarshalMsgpFirstEvent creates and unmarshals a new Payload. It supports operating on a partial message
 // and will extract the critical fields from the byte slice, leaving the rest of the data in the Payload's
 // msgpMap. This is useful for cases where the Payload is part of a larger message and we want to avoid
 // unnecessary allocations.
-func (cu CoreFieldsUnmarshaler) UnmarshalPayload(bts []byte, payload *Payload) ([]byte, error) {
+func (cu CoreFieldsUnmarshaler) UnmarshalMsgpFirstEvent(bts []byte, payload *Payload) ([]byte, error) {
 	consumed, err := payload.extractCriticalFieldsFromBytes(bts,
 		cu.traceIdFieldNames, cu.parentIdFieldNames, cu.samplingKeyFields)
 	if err != nil {

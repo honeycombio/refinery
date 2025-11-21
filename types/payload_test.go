@@ -348,7 +348,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
+		unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+			Config:  mockConfig,
+			APIKey:  "test-api-key",
+			Env:     "test-env",
+			Dataset: "test-dataset",
+		})
 
 		// Create payload and unmarshal
 		payload := &Payload{config: mockConfig}
@@ -407,13 +412,13 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.Equal(t, int64(42), payload.Get("another_field"))
 		}
 
-		remainder, err := unmarshaler.UnmarshalPayload(msgpData, payload)
+		remainder, err := unmarshaler.UnmarshalMsgpFirstEvent(msgpData, payload)
 		require.NoError(t, err)
 		assert.Empty(t, remainder)
 		t.Run("UnmarshalPayload", doTest)
 
 		payload = &Payload{config: mockConfig}
-		require.NoError(t, unmarshaler.UnmarshalPayloadComplete(msgpData, payload))
+		require.NoError(t, unmarshaler.UnmarshalMsgpEvent(msgpData, payload))
 		t.Run("UnmarshalPayloadComplete", doTest)
 
 	})
@@ -440,11 +445,16 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-dataset", "test-env")
+		unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+			Config:  mockConfig,
+			APIKey:  "test-api-key",
+			Env:     "test-env",
+			Dataset: "test-dataset",
+		})
 
 		// Unmarshal first payload
 		payload1 := &Payload{config: mockConfig}
-		remainder, err := unmarshaler.UnmarshalPayload(combined, payload1)
+		remainder, err := unmarshaler.UnmarshalMsgpFirstEvent(combined, payload1)
 		require.NoError(t, err)
 		assert.Equal(t, "trace1", payload1.MetaTraceID)
 		assert.Equal(t, "value1", payload1.memoizedFields["sampling_field"])
@@ -452,7 +462,7 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 
 		// Verify we can unmarshal the remainder
 		payload2 := &Payload{config: mockConfig}
-		remainder2, err := unmarshaler.UnmarshalPayload(remainder, payload2)
+		remainder2, err := unmarshaler.UnmarshalMsgpFirstEvent(remainder, payload2)
 		require.NoError(t, err)
 		assert.Equal(t, "trace2", payload2.MetaTraceID)
 		assert.Equal(t, "value2", payload2.memoizedFields["sampling_field"])
@@ -477,7 +487,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-dataset", "test-env")
+		unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+			Config:  mockConfig,
+			APIKey:  "test-api-key",
+			Env:     "test-env",
+			Dataset: "test-dataset",
+		})
 		payload := &Payload{config: mockConfig}
 
 		doTest := func(t *testing.T) {
@@ -491,12 +506,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.Equal(t, "should-not-be-extracted", payload.Get("regular_field"))
 		}
 
-		_, err = unmarshaler.UnmarshalPayload(msgpData, payload)
+		_, err = unmarshaler.UnmarshalMsgpFirstEvent(msgpData, payload)
 		require.NoError(t, err)
 		t.Run("UnmarshalPayload", doTest)
 
 		payload = &Payload{config: mockConfig}
-		require.NoError(t, unmarshaler.UnmarshalPayloadComplete(msgpData, payload))
+		require.NoError(t, unmarshaler.UnmarshalMsgpEvent(msgpData, payload))
 		t.Run("UnmarshalPayloadComplete", doTest)
 
 	})
@@ -748,19 +763,24 @@ func BenchmarkUnmarshalPayload(b *testing.B) {
 		},
 	}
 
-	unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
+	unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+		Config:  mockConfig,
+		APIKey:  "test-api-key",
+		Env:     "test-env",
+		Dataset: "test-dataset",
+	})
 
 	b.Run("UnmarshalPayload", func(b *testing.B) {
 		for b.Loop() {
 			payload := &Payload{config: mockConfig}
-			_, _ = unmarshaler.UnmarshalPayload(msgpData, payload)
+			_, _ = unmarshaler.UnmarshalMsgpFirstEvent(msgpData, payload)
 		}
 	})
 
 	b.Run("UnmarshalPayloadComplete", func(b *testing.B) {
 		for b.Loop() {
 			payload := &Payload{config: mockConfig}
-			_ = unmarshaler.UnmarshalPayloadComplete(msgpData, payload)
+			_ = unmarshaler.UnmarshalMsgpEvent(msgpData, payload)
 		}
 	})
 }
