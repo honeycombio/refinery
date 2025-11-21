@@ -672,7 +672,15 @@ func (router *Router) processOTLPRequestBatchMsgp(
 		totalEvents += len(batch.Events)
 		for _, ev := range batch.Events {
 			payload := types.NewPayload(router.Config, nil)
-			err := coreFieldsUnmarshaler.UnmarshalPayloadComplete(ev.Attributes, &payload)
+			// In large Refinery deployments, most incoming spans are forwarded to peers for sampling,
+			// so the ingesting node doesn't need to extract or memoize sampling key fields. Skipping
+			// this work reduces allocations and improves memory efficiency.
+			//
+			// This optimization currently applies only to OTLP data because OTLP is accepted only from
+			// external sources, not from peers.
+			//
+			// TODO: Apply this optimization to all incoming data instead of relying on OTLP-specific behavior.
+			err := coreFieldsUnmarshaler.UnmarshalMsgpEventMetadataOnly(ev.Attributes, &payload)
 			if err != nil {
 				router.Logger.Error().Logf("Error unmarshaling payload: " + err.Error())
 				continue

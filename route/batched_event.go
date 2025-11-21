@@ -83,7 +83,7 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			}
 		case bytes.Equal(field, []byte("data")):
 			b.Data = types.NewPayload(b.cfg, nil) // Initialize with config
-			bts, err = b.coreFieldsExtractor.UnmarshalPayload(bts, &b.Data)
+			bts, err = b.coreFieldsExtractor.UnmarshalMsgpFirstEvent(bts, &b.Data)
 			if err != nil {
 				err = msgp.WrapError(err, "Data")
 				return
@@ -227,7 +227,7 @@ func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v
 		}
 
 		// Use the same optimized unmarshaling logic as UnmarshalMsg
-		_, err = event.coreFieldsExtractor.UnmarshalPayload(*buf, &event.Data)
+		_, err = event.coreFieldsExtractor.UnmarshalMsgpFirstEvent(*buf, &event.Data)
 		return err
 	}
 
