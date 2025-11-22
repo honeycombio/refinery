@@ -29,7 +29,7 @@ func TestDynamicEMAAddSampleRateKeyToTrace(t *testing.T) {
 	mockCfg := &config.MockConfig{}
 	for i := 0; i < spanCount; i++ {
 		trace.AddSpan(&types.Span{
-			Event: types.Event{
+			Event: &types.Event{
 				Data: types.NewPayload(mockCfg, map[string]interface{}{
 					"http.status_code": 200,
 					"app.team.id":      float64(4),

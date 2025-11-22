@@ -90,7 +90,7 @@ func TestMultiWorkerProcessing(t *testing.T) {
 
 					for j := 0; j < spansPerTrace; j++ {
 						span := &types.Span{
-							Event: types.Event{
+							Event: &types.Event{
 								APIHost:    "http://api.honeycomb.io",
 								APIKey:     legacyAPIKey,
 								Dataset:    "test.dataset",
@@ -369,7 +369,7 @@ func TestParallelCollectRaceConditions(t *testing.T) {
 
 			for i := startIdx; i < endIdx; i++ {
 				span := &types.Span{
-					Event: types.Event{
+					Event: &types.Event{
 						APIHost:    "http://api.honeycomb.io",
 						APIKey:     legacyAPIKey,
 						Dataset:    "test.dataset",
@@ -482,7 +482,7 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 
 				for j := 0; j < spansPerTrace; j++ {
 					span := &types.Span{
-						Event: types.Event{
+						Event: &types.Event{
 							APIHost:    "http://api.honeycomb.io",
 							APIKey:     legacyAPIKey,
 							Dataset:    "test.dataset",
@@ -549,7 +549,7 @@ func TestCoordinatedReload(t *testing.T) {
 	processedInitial := int32(0)
 	for i := 0; i < 10; i++ {
 		span := &types.Span{
-			Event: types.Event{
+			Event: &types.Event{
 				APIHost:    "http://api.honeycomb.io",
 				APIKey:     legacyAPIKey,
 				Dataset:    fmt.Sprintf("dataset-%d", i%3),
@@ -582,7 +582,7 @@ func TestCoordinatedReload(t *testing.T) {
 	processedAfterReload := int32(0)
 	for i := 0; i < 20; i++ {
 		span := &types.Span{
-			Event: types.Event{
+			Event: &types.Event{
 				APIHost:    "http://api.honeycomb.io",
 				APIKey:     legacyAPIKey,
 				Dataset:    "test.reload",
@@ -612,7 +612,7 @@ func TestCoordinatedReload(t *testing.T) {
 	processedAfterSecondReload := int32(0)
 	for i := 0; i < 20; i++ {
 		span := &types.Span{
-			Event: types.Event{
+			Event: &types.Event{
 				APIHost:    "http://api.honeycomb.io",
 				APIKey:     legacyAPIKey,
 				Dataset:    "test.reload2",

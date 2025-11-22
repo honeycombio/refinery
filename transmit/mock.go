@@ -66,7 +66,7 @@ func (m *MockTransmission) EnqueueEvent(ev *types.Event) {
 	m.Events <- ev
 }
 func (m *MockTransmission) EnqueueSpan(ev *types.Span) {
-	m.Events <- &ev.Event
+	m.Events <- ev.Event
 }
 
 func (m *MockTransmission) RegisterMetrics() {}
