@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -392,15 +393,11 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.True(t, v)
 
 			// Verify missing field is tracked
-			_, ok = payload.missingFields["missing_field"]
-			assert.True(t, ok)
-			_, ok = payload.missingFields["dynamic_missing_field"]
-			assert.True(t, ok)
-			_, ok = payload.missingFields["test"]
-			assert.True(t, ok)
+			assert.True(t, slices.Contains(payload.missingFields, "missing_field"))
+			assert.True(t, slices.Contains(payload.missingFields, "dynamic_missing_field"))
+			assert.True(t, slices.Contains(payload.missingFields, "test"))
 			// Verify computed field is not extracted
-			_, ok = payload.missingFields["?.NUMBER_DESCENDANTS"]
-			assert.False(t, ok)
+			assert.False(t, slices.Contains(payload.missingFields, "?.NUMBER_DESCENDANTS"))
 
 			// Verify field not in sampling config is NOT extracted
 			assert.Nil(t, payload.memoizedFields["missing_in_config"])
