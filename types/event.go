@@ -203,7 +203,7 @@ func (t *Trace) SpanEventCount() uint32 {
 // Span is an event that shows up with a trace ID, so will be part of a Trace
 // This is not thread-safe; only one goroutine should be working with a span object at a time.
 type Span struct {
-	Event
+	*Event
 	TraceID        string
 	ArrivalTime    time.Time
 	IsRoot         bool

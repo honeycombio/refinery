@@ -34,7 +34,7 @@ func TestSpan_GetDataSize(t *testing.T) {
 			payload := NewPayload(&config.MockConfig{}, data)
 			sp := &Span{
 				TraceID: tt.name,
-				Event: Event{
+				Event: &Event{
 					Data: payload,
 				},
 			}
@@ -64,7 +64,7 @@ func TestSpan_GetDataSizeSlice(t *testing.T) {
 			}
 			payload := NewPayload(&config.MockConfig{}, map[string]any{"data": sliceData})
 			sp := &Span{
-				Event: Event{
+				Event: &Event{
 					Data: payload,
 				},
 			}
@@ -94,7 +94,7 @@ func TestSpan_GetDataSizeMap(t *testing.T) {
 			}
 			payload := NewPayload(&config.MockConfig{}, map[string]any{"data": mapData})
 			sp := &Span{
-				Event: Event{
+				Event: &Event{
 					Data: payload,
 				},
 			}
@@ -120,7 +120,7 @@ func TestSpan_AnnotationType(t *testing.T) {
 			payload := NewPayload(&config.MockConfig{}, tt.data)
 			payload.ExtractMetadata()
 			sp := &Span{
-				Event: Event{
+				Event: &Event{
 					Data: payload,
 				},
 			}
@@ -146,7 +146,7 @@ func BenchmarkSpan_CalculateSizeSmall(b *testing.B) {
 	}
 	payload := NewPayload(&config.MockConfig{}, data)
 	sp := &Span{
-		Event: Event{
+		Event: &Event{
 			Data: payload,
 		},
 	}
@@ -166,7 +166,7 @@ func BenchmarkSpan_CalculateSizeLarge(b *testing.B) {
 	}
 	payload := NewPayload(&config.MockConfig{}, data)
 	sp := &Span{
-		Event: Event{
+		Event: &Event{
 			Data: payload,
 		},
 	}

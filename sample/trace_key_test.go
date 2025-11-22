@@ -122,7 +122,7 @@ func TestKeyLimits(t *testing.T) {
 	// generate too many spans with different unique values
 	for i := 0; i < 160; i++ {
 		trace.AddSpan(&types.Span{
-			Event: types.Event{
+			Event: &types.Event{
 				Data: types.NewPayload(config, map[string]interface{}{
 					"fieldA": fmt.Sprintf("value%d", i),
 					"fieldB": i,
@@ -132,7 +132,7 @@ func TestKeyLimits(t *testing.T) {
 	}
 
 	trace.RootSpan = &types.Span{
-		Event: types.Event{
+		Event: &types.Event{
 			Data: types.NewPayload(config, map[string]interface{}{
 				"service_name": "test",
 			}),
@@ -459,7 +459,7 @@ func BenchmarkTraceKeyBuild(b *testing.B) {
 				}
 
 				span := &types.Span{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(config, spanData),
 					},
 				}
@@ -501,7 +501,7 @@ func createTestTrace(t *testing.T, spans []testSpan, config *config.MockConfig) 
 
 	for _, s := range spans {
 		span := &types.Span{
-			Event: types.Event{
+			Event: &types.Event{
 				Data: types.NewPayload(config, s.data),
 			},
 		}
