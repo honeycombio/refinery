@@ -60,7 +60,9 @@ func (ps *LocalPubSub) Close() {
 	defer ps.mut.Unlock()
 	for _, subs := range ps.topics {
 		for i := range subs {
+			subs[i].mut.Lock()
 			subs[i].cb = nil
+			subs[i].mut.Unlock()
 		}
 	}
 	ps.topics = make(map[string][]*LocalSubscription, 0)
