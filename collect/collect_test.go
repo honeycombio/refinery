@@ -841,7 +841,7 @@ func TestAddSpanNoBlock(t *testing.T) {
 		stc, err := newCache(uint(conf.GetCollectionConfigVal.WorkerCount))
 		require.NoError(t, err)
 
-		worker.sampleTraceCache = stc
+		worker.sampleCache = stc
 	}
 
 	// Block the worker so nothing gets processed
@@ -1384,7 +1384,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 	for _, worker := range coll.workers {
 		stc, err := newCache(uint(conf.GetCollectionConfigVal.WorkerCount))
 		require.NoError(t, err)
-		worker.sampleTraceCache = stc
+		worker.sampleCache = stc
 	}
 
 	var traceID = "traceABC"
@@ -1411,7 +1411,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 
 	// Find which worker owns this trace
 	workerIndex := coll.getWorkerIDForTrace(traceID)
-	tr, _, found := coll.workers[workerIndex].sampleTraceCache.CheckTrace(traceID)
+	tr, _, found := coll.workers[workerIndex].sampleCache.CheckTrace(traceID)
 	require.True(t, found)
 	require.NotNil(t, tr)
 	assert.Equal(t, uint(100), tr.Rate())
@@ -1435,7 +1435,7 @@ func TestStressReliefSampleRate(t *testing.T) {
 	require.True(t, processed2)
 	require.True(t, kept2)
 
-	tr2, _, found2 := coll.workers[workerIndex].sampleTraceCache.CheckTrace(traceID)
+	tr2, _, found2 := coll.workers[workerIndex].sampleCache.CheckTrace(traceID)
 	require.True(t, found2)
 	require.NotNil(t, tr2)
 	assert.Equal(t, uint(100), tr2.Rate())
@@ -1767,7 +1767,7 @@ func TestSpanLimitSendByPreservation(t *testing.T) {
 		sampleTraceCache, err := newCache(uint(conf.GetCollectionConfigVal.WorkerCount))
 		require.NoError(t, err)
 
-		worker.sampleTraceCache = sampleTraceCache
+		worker.sampleCache = sampleTraceCache
 	}
 
 	traceID := "span-limit-trace"

@@ -445,7 +445,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 	worker := i.workers[workerIndex]
 
 	var rate uint
-	record, reason, found := worker.sampleTraceCache.CheckSpan(sp)
+	record, reason, found := worker.sampleCache.CheckSpan(sp)
 	if !found {
 		rate, keep, reason = i.StressRelief.GetSampleRate(sp.TraceID)
 		now := i.Clock.Now()
@@ -460,7 +460,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 		trace.SetSampleRate(rate)
 		// we do want a record of how we disposed of traces in case more come in after we've
 		// turned off stress relief (if stress relief is on we'll keep making the same decisions)
-		worker.sampleTraceCache.Record(trace, keep, reason)
+		worker.sampleCache.Record(trace, keep, reason)
 	} else {
 		rate = record.Rate()
 		keep = record.Kept()

@@ -294,7 +294,7 @@ func TestGetSamplingKeyFieldsForDestName(t *testing.T) {
 	}
 }
 
-func Test_GetKeptSizePerWorker(t *testing.T) {
+func Test_GetSampleCacheSizePerWorker(t *testing.T) {
 	for _, tC := range []struct {
 		name        string
 		input       uint

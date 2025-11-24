@@ -387,6 +387,8 @@ type SampleCacheConfig struct {
 	DroppedSize       uint     `yaml:"DroppedSize" default:"1_000_000"`
 	SizeCheckInterval Duration `yaml:"SizeCheckInterval" default:"10s"`
 
+	// WorkerCount is set during initialization to match the number of collection workers.
+	// It is not intended to be set directly in this struct other than in testing.
 	WorkerCount uint `yaml:"-"`
 }
 
