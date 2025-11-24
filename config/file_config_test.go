@@ -295,3 +295,34 @@ func TestGetSamplingKeyFieldsForDestName(t *testing.T) {
 		})
 	}
 }
+
+func Test_GetSampleCacheSizePerWorker(t *testing.T) {
+	for _, tC := range []struct {
+		name        string
+		input       uint
+		workerCount uint
+		want        uint
+	}{
+		{"single worker", 10000, 1, 10000},
+		{"even division", 100, 5, 20},
+		{"uneven division/rounds up", 100, 3, 34},            // (100 + 3 - 1) / 3 = 34
+		{"more workers than size", 5, 10, 1},                 // minimum 1 per worker
+		{"large size with many workers", 1000000, 128, 7813}, // (1000000 + 128 - 1) / 128 = 7813
+	} {
+
+		t.Run("keptSize/"+tC.name, func(t *testing.T) {
+			c := &SampleCacheConfig{
+				KeptSize:    tC.input,
+				WorkerCount: tC.workerCount,
+			}
+			assert.Equal(t, tC.want, c.GetKeptSizePerWorker())
+		})
+		t.Run("droppedSize/"+tC.name, func(t *testing.T) {
+			c := &SampleCacheConfig{
+				DroppedSize: tC.input,
+				WorkerCount: tC.workerCount,
+			}
+			assert.Equal(t, tC.want, c.GetDroppedSizePerWorker())
+		})
+	}
+}

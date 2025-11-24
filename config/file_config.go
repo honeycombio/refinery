@@ -389,6 +389,18 @@ type SampleCacheConfig struct {
 	KeptSize          uint     `yaml:"KeptSize" default:"10_000"`
 	DroppedSize       uint     `yaml:"DroppedSize" default:"1_000_000"`
 	SizeCheckInterval Duration `yaml:"SizeCheckInterval" default:"10s"`
+
+	// WorkerCount is set during initialization to match the number of collection workers.
+	// It is not intended to be set directly in this struct other than in testing.
+	WorkerCount uint `yaml:"-"`
+}
+
+func (s SampleCacheConfig) GetKeptSizePerWorker() uint {
+	return (s.KeptSize + s.WorkerCount - 1) / max(s.WorkerCount, 1)
+}
+
+func (s SampleCacheConfig) GetDroppedSizePerWorker() uint {
+	return (s.DroppedSize + s.WorkerCount - 1) / max(s.WorkerCount, 1)
 }
 
 type StressReliefConfig struct {
@@ -548,6 +560,9 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 	if err != nil {
 		return nil, err
 	}
+
+	// Set workerCount on SampleCache once during initialization
+	mainconf.SampleCache.WorkerCount = uint(mainconf.Collection.GetWorkerCount())
 
 	cfg := &fileConfig{
 		mainConfig:  mainconf,

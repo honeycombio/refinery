@@ -168,11 +168,11 @@ var cuckooSentCacheMetrics = []metrics.Metadata{
 }
 
 func NewCuckooSentCache(cfg config.SampleCacheConfig, met metrics.Metrics) (TraceSentCache, error) {
-	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
+	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.GetKeptSizePerWorker()))
 	if err != nil {
 		return nil, err
 	}
-	dropped := NewCuckooTraceChecker(cfg.DroppedSize, met)
+	dropped := NewCuckooTraceChecker(cfg.GetDroppedSizePerWorker(), met)
 	// we want to keep track of the most recent dropped traces so we can avoid
 	// checking them in the dropped filter, which can have contention issues
 	// under high load. So we use a cache with TTL to keep track of the most
@@ -269,7 +269,8 @@ func (c *cuckooSentCache) CheckSpan(span *types.Span) (TraceSentRecord, string, 
 }
 
 func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
-	stc, err := lru.New[string, *keptTraceCacheEntry](int(cfg.KeptSize))
+	keptSize := int(cfg.GetKeptSizePerWorker())
+	stc, err := lru.New[string, *keptTraceCacheEntry](keptSize)
 	if err != nil {
 		return err
 	}
@@ -279,8 +280,8 @@ func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
 	// (we don't have to do anything with the ones we discard, this is
 	// the trace decisions cache).
 	keys := c.kept.Keys()
-	if len(keys) > int(cfg.KeptSize) {
-		keys = keys[len(keys)-int(cfg.KeptSize):]
+	if len(keys) > keptSize {
+		keys = keys[len(keys)-keptSize:]
 	}
 	// copy all the keys to the new cache in order
 	for _, k := range keys {
@@ -291,7 +292,7 @@ func (c *cuckooSentCache) Resize(cfg config.SampleCacheConfig) error {
 	c.kept = stc
 
 	// also set up the drop cache size to change eventually
-	c.dropped.SetNextCapacity(cfg.DroppedSize)
+	c.dropped.SetNextCapacity(cfg.GetDroppedSizePerWorker())
 
 	// shut down the old monitor and create a new one
 	c.done <- struct{}{}

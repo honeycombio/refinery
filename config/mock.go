@@ -418,7 +418,12 @@ func (f *MockConfig) GetSampleCacheConfig() SampleCacheConfig {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
 
-	return f.SampleCache
+	return SampleCacheConfig{
+		KeptSize:          f.SampleCache.KeptSize,
+		DroppedSize:       f.SampleCache.DroppedSize,
+		SizeCheckInterval: f.SampleCache.SizeCheckInterval,
+		WorkerCount:       uint(f.GetCollectionConfigVal.WorkerCount),
+	}
 }
 
 func (f *MockConfig) GetStressReliefConfig() StressReliefConfig {
