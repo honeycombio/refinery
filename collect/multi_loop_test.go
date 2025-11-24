@@ -442,6 +442,7 @@ func TestMemoryPressureWithConcurrency(t *testing.T) {
 			MaxAlloc:          config.MemorySize(maxAlloc),
 			IncomingQueueSize: 15000,
 			PeerQueueSize:     15000,
+			WorkerCount:       2,
 		},
 		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},

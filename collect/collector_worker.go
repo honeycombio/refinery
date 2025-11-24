@@ -48,9 +48,12 @@ type CollectorWorker struct {
 	// Channel for config reload signals
 	reload chan struct{}
 
-	// Our local trace cache. This deliberatly does not have a mutex around it;
+	// Our local cache of traces awaiting sampling decision. This deliberately does not have a mutex around it;
 	// there is no way to safely access this directly from the outside.
 	cache cache.Cache
+
+	// A cache for storing sampling decisions, kept or dropped.
+	sampleCache cache.TraceSentCache
 
 	// Our local samplers.
 	datasetSamplers map[string]sample.Sampler
@@ -75,14 +78,23 @@ func NewCollectorWorker(
 	parent *InMemCollector,
 	incomingSize int,
 	peerSize int,
-) *CollectorWorker {
+) (*CollectorWorker, error) {
+	// Create a sample trace cache for this worker
+	sampleCacheConfig := parent.Config.GetSampleCacheConfig()
+	sampleCache, err := cache.NewCuckooSentCache(sampleCacheConfig, parent.Metrics)
+	if err != nil {
+		parent.Logger.Error().Logf("Failed to create sample trace cache for worker %d: %v", id, err)
+		return nil, err
+	}
+
 	return &CollectorWorker{
-		ID:        id,
-		parent:    parent,
-		cache:     cache.NewInMemCache(parent.Metrics, parent.Logger),
-		incoming:  make(chan *types.Span, incomingSize),
-		fromPeer:  make(chan *types.Span, peerSize),
-		sendEarly: make(chan sendEarly, 1),
+		ID:          id,
+		parent:      parent,
+		cache:       cache.NewInMemCache(parent.Metrics, parent.Logger),
+		sampleCache: sampleCache,
+		incoming:    make(chan *types.Span, incomingSize),
+		fromPeer:    make(chan *types.Span, peerSize),
+		sendEarly:   make(chan sendEarly, 1),
 
 		// Important that this be unbuffered, so the sender blocks until the
 		// signal has been received.
@@ -91,7 +103,7 @@ func NewCollectorWorker(
 		// Initialize local sampler cache and reload channel
 		datasetSamplers: make(map[string]sample.Sampler),
 		reload:          make(chan struct{}, 1),
-	}
+	}, nil
 }
 
 // addSpan adds a span to this worker's incoming channel (called by the parent manager)
@@ -191,6 +203,10 @@ func (cl *CollectorWorker) collect() {
 			case <-cl.reload:
 				// Clear samplers on config reload
 				clear(cl.datasetSamplers)
+				// Resize the sample trace cache if needed
+				if cl.sampleCache != nil {
+					cl.sampleCache.Resize(cl.parent.Config.GetSampleCacheConfig())
+				}
 			case ch := <-cl.pause:
 				// We got a pause signal, wait until it unblocks.
 				<-ch
@@ -216,7 +232,7 @@ func (cl *CollectorWorker) processSpan(ctx context.Context, sp *types.Span) {
 	trace := cl.cache.Get(sp.TraceID)
 	if trace == nil {
 		// if the trace has already been sent, just pass along the span
-		if sr, keptReason, found := cl.parent.sampleTraceCache.CheckSpan(sp); found {
+		if sr, keptReason, found := cl.sampleCache.CheckSpan(sp); found {
 			cl.parent.Metrics.Increment("trace_sent_cache_hit")
 			// bump the count of records on this trace -- if the root span isn't
 			// the last late span, then it won't be perfect, but it will be better than
@@ -252,7 +268,7 @@ func (cl *CollectorWorker) processSpan(ctx context.Context, sp *types.Span) {
 	// if the trace we got back from the cache has already been sent, deal with the
 	// span.
 	if trace.Sent {
-		if sr, reason, found := cl.parent.sampleTraceCache.CheckSpan(sp); found {
+		if sr, reason, found := cl.sampleCache.CheckSpan(sp); found {
 			cl.parent.Metrics.Increment("trace_sent_cache_hit")
 			cl.parent.dealWithSentTrace(ctx, sr, reason, sp)
 			return
@@ -448,7 +464,7 @@ func (cl *CollectorWorker) makeDecision(ctx context.Context, trace *types.Trace,
 	// This will observe sample rate attempts even if the trace is dropped
 	cl.parent.Metrics.Histogram("trace_aggregate_sample_rate", float64(rate))
 
-	cl.parent.sampleTraceCache.Record(trace, shouldSend, reason)
+	cl.sampleCache.Record(trace, shouldSend, reason)
 
 	var hasRoot bool
 	if trace.RootSpan != nil {
@@ -499,4 +515,11 @@ func (cw *CollectorWorker) IsHealthy(now time.Time, timeout time.Duration) bool 
 	}
 
 	return true
+}
+
+// Stop stops the worker's sample trace cache
+func (cw *CollectorWorker) Stop() {
+	if cw.sampleCache != nil {
+		cw.sampleCache.Stop()
+	}
 }
