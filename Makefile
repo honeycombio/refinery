@@ -150,7 +150,8 @@ STD_LIBS := $(shell go list std | awk 'NR > 1 { printf(",") } { printf("%s",$$0)
 update-licenses: install-tools
 	@echo "\n+++ Updating ${LICENSES_DIR} with licenses of current dependencies."
 	rm -rf ${LICENSES_DIR}
-	go tool go-licenses save \
+# save dependency licenses for builds on supported OSes
+	GOOS=linux go-licenses save \
 		--save_path ${LICENSES_DIR} \
 		--ignore "github.com/honeycombio/refinery" \
 		--ignore ${STD_LIBS} \
