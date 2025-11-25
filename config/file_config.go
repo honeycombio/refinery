@@ -199,6 +199,7 @@ type TracesConfig struct {
 	SendTicker       Duration `yaml:"SendTicker" default:"100ms"`
 	SpanLimit        uint     `yaml:"SpanLimit"`
 	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"3000"`
+	MaxExpiredSpans  uint     `yaml:"MaxExpiredSpans" default:"100000"`
 }
 
 func (t TracesConfig) GetSendDelay() time.Duration {
@@ -219,6 +220,10 @@ func (t TracesConfig) GetMaxBatchSize() uint {
 
 func (t TracesConfig) GetMaxExpiredTraces() uint {
 	return t.MaxExpiredTraces
+}
+
+func (t TracesConfig) GetMaxExpiredSpans() uint {
+	return t.MaxExpiredSpans
 }
 
 func (t TracesConfig) GetSendTickerValue() time.Duration {
@@ -966,9 +971,17 @@ func (f *fileConfig) GetHealthCheckTimeout() time.Duration {
 	configured := time.Duration(f.mainConfig.Collection.HealthCheckTimeout)
 	var timeout time.Duration
 	if f.mainConfig.Traces.MaxExpiredTraces != 0 {
-		// assume each traces take 5ms to process, so we can use that
+		// assume each trace takes 5ms to process, so we can use that
 		// as a timeout for the health check.
 		timeout = time.Duration(f.mainConfig.Traces.MaxExpiredTraces) * time.Millisecond * 5
+	}
+
+	// Also consider span-based limit - assume 0.005ms per span
+	if f.mainConfig.Traces.MaxExpiredSpans != 0 {
+		spanTimeout := time.Duration(f.mainConfig.Traces.MaxExpiredSpans) * time.Microsecond * 5
+		if spanTimeout > timeout {
+			timeout = spanTimeout
+		}
 	}
 
 	if configured < timeout {

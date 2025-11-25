@@ -31,7 +31,9 @@ type Cache interface {
 
 	// Retrieve and remove all traces which are past their SendBy date.
 	// Does not check whether they've been sent.
-	TakeExpiredTraces(now time.Time, max int, filter func(*types.Trace) bool) []*types.Trace
+	// max limits the number of traces, maxSpans limits the total number of spans.
+	// Whichever limit is hit first stops the collection.
+	TakeExpiredTraces(now time.Time, max int, maxSpans int, filter func(*types.Trace) bool) []*types.Trace
 
 	// RemoveTraces accepts a set of trace IDs and removes any matching ones from
 	RemoveTraces(toDelete generics.Set[string])
@@ -113,11 +115,14 @@ func (d *DefaultInMemCache) GetCacheCapacity() int {
 // TakeExpiredTraces should be called to decide which traces are past their expiration time;
 // It removes and returns them.
 // If a filter is provided, it will be called with each trace to determine if it should be skipped.
-func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter func(*types.Trace) bool) []*types.Trace {
+// max limits the number of traces, maxSpans limits the total number of spans.
+// Whichever limit is hit first stops the collection.
+func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, maxSpans int, filter func(*types.Trace) bool) []*types.Trace {
 	d.Metrics.Histogram("worker_cache_entries", float64(len(d.cache)))
 
 	var expired, skipped []*types.Trace
-	for !d.pq.IsEmpty() && (max <= 0 || len(expired) < max) {
+	var totalSpans int
+	for !d.pq.IsEmpty() && (max <= 0 || len(expired) < max) && (maxSpans <= 0 || totalSpans < maxSpans) {
 		// pop the the next trace from the queue
 		traceID, sendBy, ok := d.pq.Pop()
 		if !ok {
@@ -136,6 +141,15 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 			break
 		}
 
+		// Check if adding this trace would exceed the span limit
+		traceSpanCount := int(trace.DescendantCount())
+		if maxSpans > 0 && totalSpans+traceSpanCount > maxSpans {
+			// Don't include this trace, we're at the span limit
+			// Put it back for next tick
+			d.pq.Push(traceID, sendBy)
+			break
+		}
+
 		// if a filter is provided and it returns false, skip it but remember it for later
 		if filter != nil && !filter(trace) {
 			skipped = append(skipped, trace)
@@ -144,6 +158,7 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 
 		// add the trace to the list of expired traces and remove it from the cache
 		expired = append(expired, trace)
+		totalSpans += traceSpanCount
 		delete(d.cache, traceID)
 	}
 

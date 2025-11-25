@@ -353,7 +353,7 @@ MaxExpiredTraces is the maximum number of expired traces to process.
 This setting controls how many traces are processed when it is time to make a sampling decision.
 Up to this many traces will be processed every `SendTicker` duration.
 If this number is too small it will mean Refinery is spending less time calculating sampling decisions, resulting in data arriving at Honeycomb slower.
-Additionally, MaxExpiredTraces indirectly affects the system’s health check behavior.
+Additionally, MaxExpiredTraces indirectly affects the system's health check behavior.
 The HealthCheckTimeout will be automatically adjusted based on this value to ensure health checks remain accurate relative to the configured processing load.
 If your `collector_collect_loop_duration_ms` is above 3 seconds it is recommended to reduce this value and the `SendTicker` duration.
 This will mean Refinery makes fewer sampling decision calculations each `SendTicker` tick, but gets the chance to make decisions more often.
@@ -361,6 +361,23 @@ This will mean Refinery makes fewer sampling decision calculations each `SendTic
 - Eligible for live reload.
 - Type: `int`
 - Default: `3000`
+
+### `MaxExpiredSpans`
+
+MaxExpiredSpans is the maximum number of spans to process across all expired traces.
+
+This setting provides an additional limit on trace processing based on total span count rather than trace count.
+This is the PRIMARY tuning parameter for controlling CPU usage and processing time consistency.
+When processing expired traces, Refinery will stop when EITHER `MaxExpiredTraces` or `MaxExpiredSpans` is reached, whichever comes first.
+This provides more predictable performance when dealing with workloads that have highly variable trace sizes.
+For example, with a limit of 100,000 spans, Refinery might process 3,000 small traces (average 33 spans each) or 20 large traces (average 5,000 spans each), ensuring consistent CPU usage per tick regardless of trace size distribution.
+This setting also affects the system's health check behavior.
+The HealthCheckTimeout will be automatically adjusted based on both this value and `MaxExpiredTraces` to ensure health checks remain accurate.
+Set `MaxExpiredTraces` to a high value (e.g., 10,000) as a safety valve for edge cases with many small traces, and use `MaxExpiredSpans` as your primary performance tuning parameter.
+
+- Eligible for live reload.
+- Type: `int`
+- Default: `100000`
 
 ## Debugging
 

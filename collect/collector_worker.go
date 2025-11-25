@@ -321,7 +321,8 @@ func (cl *CollectorWorker) sendExpiredTracesInCache(ctx context.Context, now tim
 		span.End()
 	}()
 
-	traces := cl.cache.TakeExpiredTraces(now, int(cl.parent.Config.GetTracesConfig().MaxExpiredTraces), nil)
+	tcfg := cl.parent.Config.GetTracesConfig()
+	traces := cl.cache.TakeExpiredTraces(now, int(tcfg.MaxExpiredTraces), int(tcfg.MaxExpiredSpans), nil)
 
 	dur := cl.parent.Clock.Since(startTime)
 
