@@ -141,16 +141,20 @@ install-tools:
 	go mod tidy
 
 LICENSES_DIR := LICENSES
+# We ignore the standard library (go list std) as a workaround for "https://github.com/google/go-licenses/issues/244."
+# The awk script converts the output of `go list std` (line separated modules)
+# to the input that `--ignore` expects (comma separated modules).
+STD_LIBS := $(shell go list std | awk 'NR > 1 { printf(",") } { printf("%s",$$0) } END { print "" }')
 
 .PHONY: update-licenses
 update-licenses: install-tools
 	@echo "\n+++ Updating ${LICENSES_DIR} with licenses of current dependencies."
 	rm -rf ${LICENSES_DIR}
-# We ignore the standard library (go list std) as a workaround for "https://github.com/google/go-licenses/issues/244."
-# The awk script converts the output of `go list std` (line separated modules)
-# to the input that `--ignore` expects (comma separated modules).
-	go tool go-licenses save --save_path ${LICENSES_DIR} --ignore "github.com/honeycombio/refinery" \
-		--ignore $(shell go list std | awk 'NR > 1 { printf(",") } { printf("%s",$$0) } END { print "" }') ./cmd/refinery
+	go tool go-licenses save \
+		--save_path ${LICENSES_DIR} \
+		--ignore "github.com/honeycombio/refinery" \
+		--ignore ${STD_LIBS} \
+		./cmd/refinery
 
 .PHONY: verify-licenses
 verify-licenses: update-licenses
