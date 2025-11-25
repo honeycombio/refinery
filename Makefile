@@ -137,7 +137,7 @@ clean:
 .PHONY: install-tools
 install-tools:
 	@echo "\n+++ Retrieving license checker tool."
-	go get -tool github.com/google/go-licenses/v2@v2.0.0-alpha.1
+# It's now a tool entry in go.mod, so let's clean up and retrieve dependencies.
 	go mod tidy
 
 LICENSES_DIR := LICENSES
