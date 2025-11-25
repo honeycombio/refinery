@@ -136,6 +136,7 @@ clean:
 
 .PHONY: install-tools
 install-tools:
+	@echo "\n+++ Retrieving license checker tool."
 	go get -tool github.com/google/go-licenses/v2@v2.0.0-alpha.1
 	go mod tidy
 
@@ -143,6 +144,7 @@ LICENSES_DIR := LICENSES
 
 .PHONY: update-licenses
 update-licenses: install-tools
+	@echo "\n+++ Updating ${LICENSES_DIR} with licenses of current dependencies."
 	rm -rf ${LICENSES_DIR}
 # We ignore the standard library (go list std) as a workaround for "https://github.com/google/go-licenses/issues/244."
 # The awk script converts the output of `go list std` (line separated modules)
@@ -152,7 +154,7 @@ update-licenses: install-tools
 
 .PHONY: verify-licenses
 verify-licenses: update-licenses
-	@echo "+++ Verifying ${LICENSES_DIR} directory is up to date."
+	@echo "\n+++ Verifying ${LICENSES_DIR} directory is up to date."
 	@if [ 0 -eq `git status --short -- ${LICENSES_DIR} | wc -l` ]; then \
 		echo "✅  Passed: no dependency license changes detected."; \
 	else \
