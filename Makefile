@@ -153,7 +153,7 @@ update-licenses: install-tools
 .PHONY: verify-licenses
 verify-licenses: update-licenses
 	@echo "+++ Verifying ${LICENSES_DIR} directory is up to date."
-	@if [[ 0 -eq `git status --short -- ${LICENSES_DIR} | wc -l` ]]; then \
+	@if [ 0 -eq `git status --short -- ${LICENSES_DIR} | wc -l` ]; then \
 		echo "✅  Passed: no dependency license changes detected."; \
 	else \
 		echo "⚠️  Licenses for dependencies appear to have changed since last recorded."; \
