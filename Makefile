@@ -137,8 +137,9 @@ clean:
 .PHONY: install-tools
 install-tools:
 	@echo "\n+++ Retrieving license checker tool."
-# It's now a tool entry in go.mod, so let's clean up and retrieve dependencies.
 	go mod tidy
+# We install the tool so the executable for the current runtime OS/arch is available on PATH.
+	go install $(shell grep "go-licenses.*\sv" go.mod | awk '{ print $$1 "@" $$2}')
 
 LICENSES_DIR := LICENSES
 # We ignore the standard library (go list std) as a workaround for "https://github.com/google/go-licenses/issues/244."
