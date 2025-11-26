@@ -3,11 +3,13 @@ package pubsub_test
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -231,6 +233,141 @@ func TestPubSubLatency(t *testing.T) {
 			require.Less(t, tmax, int64(500*time.Millisecond))
 		})
 	}
+}
+
+// TestPubSubWithPrefix verifies that when a prefix is configured:
+// 1. Messages are published to both original and prefixed topics
+// 2. Subscriptions listen to both original and prefixed topics
+func TestPubSubWithPrefix(t *testing.T) {
+	ctx := context.Background()
+
+	mockCfg := &config.MockConfig{
+		GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
+			Prefix: "testprefix",
+		},
+	}
+
+	m := &metrics.NullMetrics{}
+	m.Start()
+	tracer := noop.NewTracerProvider().Tracer("test")
+
+	ps := &pubsub.GoRedisPubSub{
+		Config:  mockCfg,
+		Metrics: m,
+		Tracer:  tracer,
+		Logger:  &logger.NullLogger{},
+	}
+	err := ps.Start()
+	require.NoError(t, err)
+	defer ps.Close()
+
+	// Create a listener for the original topic
+	listener := &pubsubListener{}
+	ps.Subscribe(ctx, "test-topic", listener.Listen)
+
+	// Give subscription time to be established
+	time.Sleep(100 * time.Millisecond)
+
+	// Publish a message
+	err = ps.Publish(ctx, "test-topic", "test message")
+	require.NoError(t, err)
+
+	// two messages should be received
+	require.Eventually(t, func() bool {
+		msgs := listener.Messages()
+		return len(msgs) > 0 && slices.Contains(msgs, "test message")
+	}, 1*time.Second, 100*time.Millisecond)
+}
+
+// TestPubSubRollingUpgrade simulates a rolling upgrade scenario:
+// - Old node (no prefix) publishes to original topic only
+// - New node (with prefix) subscribes to both topics
+// - New node (with prefix) publishes to both topics
+func TestPubSubRollingUpgrade(t *testing.T) {
+	ctx := context.Background()
+
+	m := &metrics.NullMetrics{}
+	m.Start()
+	tracer := noop.NewTracerProvider().Tracer("test")
+
+	// Old node (no prefix)
+	oldNodeCfg := &config.MockConfig{
+		GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
+			Prefix: "",
+		},
+	}
+	oldNode := &pubsub.GoRedisPubSub{
+		Config:  oldNodeCfg,
+		Metrics: m,
+		Tracer:  tracer,
+		Logger:  &logger.NullLogger{},
+	}
+	err := oldNode.Start()
+	require.NoError(t, err)
+	defer oldNode.Close()
+
+	// New node (with prefix)
+	newNodeCfg := &config.MockConfig{
+		GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
+			Prefix: "rolling",
+		},
+	}
+	newNode := &pubsub.GoRedisPubSub{
+		Config:  newNodeCfg,
+		Metrics: m,
+		Tracer:  tracer,
+		Logger:  &logger.NullLogger{},
+	}
+	err = newNode.Start()
+	require.NoError(t, err)
+	defer newNode.Close()
+
+	// New node subscribes (should listen to both topics)
+	newNodeListener := &pubsubListener{}
+	newNode.Subscribe(ctx, "upgrade-test", newNodeListener.Listen)
+
+	// Old node subscribes (listens to original topic only)
+	oldNodeListener := &pubsubListener{}
+	oldNode.Subscribe(ctx, "upgrade-test", oldNodeListener.Listen)
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Old node publishes (only to original topic)
+	err = oldNode.Publish(ctx, "upgrade-test", "message from old node")
+	require.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Both nodes should receive the message
+	newNodeMsgs := newNodeListener.Messages()
+	oldNodeMsgs := oldNodeListener.Messages()
+
+	assert.Contains(t, newNodeMsgs, "message from old node",
+		"new node should receive messages from old node")
+	assert.Contains(t, oldNodeMsgs, "message from old node",
+		"old node should receive its own messages")
+
+	// Clear messages
+	newNodeListener = &pubsubListener{}
+	newNode.Subscribe(ctx, "upgrade-test-2", newNodeListener.Listen)
+	oldNodeListener = &pubsubListener{}
+	oldNode.Subscribe(ctx, "upgrade-test-2", oldNodeListener.Listen)
+
+	time.Sleep(100 * time.Millisecond)
+
+	// New node publishes (to both topics)
+	err = newNode.Publish(ctx, "upgrade-test-2", "message from new node")
+	require.NoError(t, err)
+
+	time.Sleep(200 * time.Millisecond)
+
+	// Both nodes should receive the message
+	newNodeMsgs = newNodeListener.Messages()
+	oldNodeMsgs = oldNodeListener.Messages()
+
+	assert.NotEmpty(t, newNodeMsgs, "new node should receive messages")
+	assert.Contains(t, oldNodeMsgs, "message from new node",
+		"old node should receive messages from new node (via original topic)")
 }
 
 func BenchmarkPubSub(b *testing.B) {

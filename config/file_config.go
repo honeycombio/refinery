@@ -792,13 +792,6 @@ func (f *fileConfig) GetRedisUsername() string {
 	return f.mainConfig.RedisPeerManagement.Username
 }
 
-func (f *fileConfig) GetRedisPrefix() string {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.RedisPeerManagement.Prefix
-}
-
 func (f *fileConfig) GetRedisPassword() string {
 	f.mux.RLock()
 	defer f.mux.RUnlock()

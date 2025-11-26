@@ -32,6 +32,7 @@ type GoRedisPubSub struct {
 	client  redis.UniversalClient
 	subs    []*GoRedisSubscription
 	mut     sync.RWMutex
+	prefix  string // Redis key prefix for namespacing topics
 }
 
 // Ensure that GoRedisPubSub implements PubSub
@@ -53,6 +54,16 @@ var goredisPubSubMetrics = []metrics.Metadata{
 	{Name: "redis_pubsub_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "Number of messages received from Redis PubSub"},
 }
 
+// topicWithPrefix returns the topic name with the configured prefix.
+// If no prefix is configured, returns the original topic.
+// Format: "<prefix>:<topic>" (e.g., "prod:peers", "staging:cfg_update")
+func (ps *GoRedisPubSub) topicWithPrefix(topic string) string {
+	if ps.prefix == "" {
+		return topic
+	}
+	return ps.prefix + ":" + topic
+}
+
 func (ps *GoRedisPubSub) Start() error {
 	options := new(redis.UniversalOptions)
 	var (
@@ -71,6 +82,12 @@ func (ps *GoRedisPubSub) Start() error {
 		}
 
 		authcode = redisCfg.AuthCode
+
+		// Initialize prefix from config for topic namespacing
+		ps.prefix = ps.Config.GetRedisPeerManagement().Prefix
+		if ps.prefix != "" {
+			ps.Logger.Info().WithField("prefix", ps.prefix).Logf("Using Redis pubsub topic prefix for namespacing")
+		}
 
 		options.Addrs = hosts
 		options.Username = redisCfg.Username
@@ -137,21 +154,57 @@ func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) err
 
 	defer span.End()
 
+	// Phase 1 (v3.1.0): Dual-publish for backward compatibility during rolling upgrades
+	// Publish to the original (unprefixed) topic for compatibility with old nodes
+	err := ps.client.Publish(ctx, topic, message).Err()
+	if err != nil {
+		return err
+	}
 	ps.Metrics.Count("redis_pubsub_published", 1)
-	return ps.client.Publish(ctx, topic, message).Err()
+
+	// If a prefix is configured, also publish to the prefixed topic for new nodes
+	if ps.prefix != "" {
+		prefixedTopic := ps.topicWithPrefix(topic)
+		err := ps.client.Publish(ctx, prefixedTopic, message).Err()
+		if err != nil {
+			ps.Logger.Debug().WithFields(map[string]interface{}{
+				"topic":          topic,
+				"prefixed_topic": prefixedTopic,
+				"error":          err,
+			}).Logf("failed to publish to prefixed topic")
+		} else {
+			ps.Metrics.Count("redis_pubsub_published", 1)
+		}
+	}
+
+	return nil
 }
 
 // Subscribe creates a new Subscription to the given topic, and calls the provided callback
 // whenever a message is received on that topic.
 // Note that the same topic is Subscribed to multiple times, this will incur a separate
 // connection to Redis for each Subscription.
+//
+// Phase 1 (v3.1.0): When a prefix is configured, this will subscribe to BOTH the original
+// topic and the prefixed topic to ensure compatibility during rolling upgrades. This allows
+// old nodes (publishing to unprefixed topics) and new nodes (publishing to both) to communicate.
 func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback SubscriptionCallback) Subscription {
 	ctx, span := otelutil.StartSpanWith(ctx, ps.Tracer, "GoRedisPubSub.Subscribe", "topic", topic)
 	defer span.End()
 
+	topics := []string{topic} // Always subscribe to the original topic
+	if ps.prefix != "" {
+		// Also subscribe to the prefixed topic for compatibility with new nodes
+		topics = append(topics, ps.topicWithPrefix(topic))
+		ps.Logger.Debug().WithFields(map[string]interface{}{
+			"original_topic": topic,
+			"prefixed_topic": ps.topicWithPrefix(topic),
+		}).Logf("Subscribing to both original and prefixed topics for rolling upgrade compatibility")
+	}
+
 	sub := &GoRedisSubscription{
 		topic:  topic,
-		pubsub: ps.client.Subscribe(ctx, topic),
+		pubsub: ps.client.Subscribe(ctx, topics...),
 		cb:     callback,
 		done:   make(chan struct{}),
 	}
@@ -171,7 +224,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 					continue
 				}
 				receiveCtx, span := otelutil.StartSpanMulti(receiveRootCtx, ps.Tracer, "GoRedisPubSub.Receive", map[string]interface{}{
-					"topic":              topic,
+					"topic":              msg.Channel,
 					"message_queue_size": len(redisch),
 					"message":            msg.Payload,
 				})
