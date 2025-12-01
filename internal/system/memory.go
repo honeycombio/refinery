@@ -2,6 +2,7 @@ package system
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"math"
 	"os"
@@ -13,18 +14,16 @@ import (
 // It tries to read from cgroup limits first, then falls back to system memory.
 func GetTotalMemory() (uint64, error) {
 	// Try cgroup v2
-	mem, err := getCgroupV2Memory()
-	if err == nil {
+	if mem, err := getCgroupV2Memory(); err == nil {
 		return mem, nil
 	}
 
 	// Try cgroup v1
-	mem, err = getCgroupV1Memory()
-	if err == nil {
+	if mem, err := getCgroupV1Memory(); err == nil {
 		return mem, nil
 	}
 
-	// Fallback to system memory
+	// Fall back to system memory
 	return getSystemMemory()
 }
 
@@ -33,11 +32,11 @@ func getCgroupV2Memory() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	s := strings.TrimSpace(string(data))
-	if s == "max" {
+	s := bytes.TrimSpace(data)
+	if bytes.Equal(s, []byte("max")) {
 		return 0, errors.New("no limit set in cgroup v2")
 	}
-	return strconv.ParseUint(s, 10, 64)
+	return strconv.ParseUint(string(s), 10, 64)
 }
 
 func getCgroupV1Memory() (uint64, error) {
@@ -45,8 +44,8 @@ func getCgroupV1Memory() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	s := strings.TrimSpace(string(data))
-	mem, err := strconv.ParseUint(s, 10, 64)
+	s := bytes.TrimSpace(data)
+	mem, err := strconv.ParseUint(string(s), 10, 64)
 	if err != nil {
 		return 0, err
 	}
