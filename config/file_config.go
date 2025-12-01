@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -656,6 +657,8 @@ func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) error {
 	if f.mainHash == cfg.mainHash && f.rulesHash == cfg.rulesHash {
 		return nil
 	}
+
+	debug.SetMemoryLimit(int64(cfg.mainConfig.Collection.AvailableMemory))
 
 	// otherwise, update our state and call the callbacks
 	f.mux.Lock()
