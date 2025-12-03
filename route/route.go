@@ -264,6 +264,8 @@ func (r *Router) LnS() {
 	// Adds the OpenTelemetry instrumentation to the handler to enable tracing
 	authedMuxxer.Handle("/events/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.event), "handle_event")).Name("event")
 	authedMuxxer.Handle("/batch/{datasetName}", otelhttp.NewHandler(http.HandlerFunc(r.batch), "handle_batch")).Name("batch")
+	// any-dataset batch endpoint for peer communication (dataset in event payload, not URL)
+	authedMuxxer.Handle("/batch", otelhttp.NewHandler(http.HandlerFunc(r.batchAnyDataset), "handle_batch_any_dataset")).Name("batch_any_dataset")
 
 	r.AddOTLPMuxxer(muxxer)
 
@@ -580,6 +582,99 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 			addIncomingUserAgent(ev, userAgent)
 			err = r.processEvent(ev, reqID)
+		} else {
+			err = fmt.Errorf("empty event data")
+		}
+
+		var resp BatchResponse
+		switch {
+		case errors.Is(err, collect.ErrWouldBlock):
+			resp.Status = http.StatusTooManyRequests
+			resp.Error = err.Error()
+		case err != nil:
+			resp.Status = http.StatusBadRequest
+			resp.Error = err.Error()
+		default:
+			resp.Status = http.StatusAccepted
+		}
+		batchedResponses = append(batchedResponses, &resp)
+	}
+	response, err := json.Marshal(batchedResponses)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrJSONBuildFailed, err)
+		return
+	}
+	w.Write(response)
+}
+
+// batchAnyDataset is handler for /1/batch (without dataset in URL) - used for peer communication
+// where events can span multiple datasets. The dataset is extracted from each individual event.
+func (r *Router) batchAnyDataset(w http.ResponseWriter, req *http.Request) {
+	r.Metrics.Increment(r.metricsNames.routerBatch)
+
+	ctx := req.Context()
+	reqID := ctx.Value(types.RequestIDContextKey{})
+	debugLog := r.iopLogger.Debug().WithField("request_id", reqID)
+
+	bodyBuffer, err := r.readAndCloseMaybeCompressedBody(req)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrPostBody, err)
+		return
+	}
+	defer recycleHTTPBodyBuffer(bodyBuffer)
+
+	apiKey := req.Header.Get(types.APIKeyHeader)
+	if apiKey == "" {
+		apiKey = req.Header.Get(types.APIKeyHeaderShort)
+	}
+
+	// get environment name - will be empty for legacy keys
+	environment, err := r.getEnvironmentName(apiKey)
+	if err != nil {
+		r.handlerReturnWithError(w, ErrReqToEvent, err)
+		return
+	}
+
+	// For any-dataset batch, we don't pass a dataset to newBatchedEvents since each event has its own
+	batchedEvents := newBatchedEvents(
+		types.CoreFieldsUnmarshalerOptions{
+			Config: r.Config,
+			APIKey: apiKey,
+			Env:    environment,
+			// Dataset is empty - will be extracted from each event
+		})
+	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
+	if err != nil {
+		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("body", string(bodyBuffer.Bytes())).Logf("error parsing json")
+		r.handlerReturnWithError(w, ErrBatchToEvent, err)
+		return
+	}
+	r.Metrics.Count(r.metricsNames.routerBatchEvents, int64(len(batchedEvents.events)))
+
+	apiHost := r.Config.GetHoneycombAPI()
+	userAgent := getUserAgentFromRequest(req)
+	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
+	for _, bev := range batchedEvents.events {
+		if !bev.Data.IsEmpty() {
+			// Extract dataset from the event itself
+			dataset := bev.Dataset
+			if dataset == "" {
+				err = fmt.Errorf("missing dataset in event")
+			} else {
+				ev := &types.Event{
+					Context:     ctx,
+					APIHost:     apiHost,
+					APIKey:      apiKey,
+					Dataset:     dataset,
+					Environment: environment,
+					SampleRate:  bev.getSampleRate(),
+					Timestamp:   bev.getEventTime(),
+					Data:        bev.Data,
+				}
+
+				addIncomingUserAgent(ev, userAgent)
+				err = r.processEvent(ev, reqID)
+			}
 		} else {
 			err = fmt.Errorf("empty event data")
 		}

@@ -21,6 +21,7 @@ type batchedEvent struct {
 	MsgPackTimestamp    *time.Time    `msgpack:"time,omitempty"`
 	SampleRate          int64         `json:"samplerate" msgpack:"samplerate"`
 	Data                types.Payload `json:"data" msgpack:"data"`
+	Dataset             string        `json:"dataset,omitempty" msgpack:"dataset,omitempty"`
 	cfg                 config.Config `json:"-" msgpack:"-"`
 	coreFieldsExtractor types.CoreFieldsUnmarshaler
 }
@@ -86,6 +87,12 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 			bts, err = b.coreFieldsExtractor.UnmarshalMsgpFirstEvent(bts, &b.Data)
 			if err != nil {
 				err = msgp.WrapError(err, "Data")
+				return
+			}
+		case bytes.Equal(field, []byte("dataset")):
+			b.Dataset, bts, err = msgp.ReadStringBytes(bts)
+			if err != nil {
+				err = msgp.WrapError(err, "Dataset")
 				return
 			}
 		default:
@@ -208,6 +215,11 @@ func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v
 		case "data":
 			if v.Type() == fastjson.TypeObject {
 				dataValue = v
+			}
+		case "dataset":
+			if v.Type() == fastjson.TypeString {
+				s := v.GetStringBytes()
+				event.Dataset = string(s)
 			}
 		}
 	})

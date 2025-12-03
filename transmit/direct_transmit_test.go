@@ -1489,7 +1489,7 @@ func TestBuildRequestURL(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run("all at once/"+tc.name, func(t *testing.T) {
-			result, err := buildRequestURL(apiHost, tc.input)
+			result, err := buildRequestURL(apiHost, tc.input, types.TransmitTypeUpstream)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, result)
 		})

@@ -198,10 +198,14 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 	// Store enqueue time for queue time metrics
 	ev.EnqueuedUnixMicro = d.Clock.Now().UnixMicro()
 
+	// For peer transmission, we don't need to batch per dataset since peers can handle any dataset.
+	// For upstream transmission, we need to batch per dataset because the API endpoint requires it.
 	key := transmitKey{
 		apiHost: ev.APIHost,
 		apiKey:  ev.APIKey,
-		dataset: ev.Dataset,
+	}
+	if d.transmitType == types.TransmitTypeUpstream {
+		key.dataset = ev.Dataset
 	}
 
 	d.batchMutex.RLock()
@@ -392,6 +396,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 				time:       wholeBatch[i].Timestamp,
 				sampleRate: int64(wholeBatch[i].SampleRate),
 				data:       wholeBatch[i].Data,
+				dataset:    wholeBatch[i].Dataset,
 			}
 
 			var err error
@@ -433,7 +438,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		packed = packed[5-len(header):]
 		copy(packed, header)
 
-		apiURL, err := buildRequestURL(apiHost, dataset)
+		apiURL, err := buildRequestURL(apiHost, dataset, d.transmitType)
 		if err != nil {
 			d.Logger.Error().WithField("err", err.Error()).Logf("failed to create request URL")
 			d.handleBatchFailure(subBatch)
@@ -692,6 +697,7 @@ type batchedEvent struct {
 	time       time.Time     `msg:"time"`
 	sampleRate int64         `msg:"samplerate"`
 	data       types.Payload `msg:"data"`
+	dataset    string        `msg:"dataset"`
 }
 
 type batchResponse struct {
@@ -705,8 +711,8 @@ type batchResponse struct {
 // unreadable timestamps.
 func (z *batchedEvent) MarshalMsg(b []byte) (o []byte, err error) {
 	o = b
-	// map header (size 3), followed by string "time"
-	o = append(o, 0x83, 0xa4, 0x74, 0x69, 0x6d, 0x65)
+	// map header (size 4), followed by string "time"
+	o = append(o, 0x84, 0xa4, 0x74, 0x69, 0x6d, 0x65)
 	o = msgp.AppendTimeExt(o, z.time)
 	// string "samplerate"
 	o = append(o, 0xaa, 0x73, 0x61, 0x6d, 0x70, 0x6c, 0x65, 0x72, 0x61, 0x74, 0x65)
@@ -718,6 +724,9 @@ func (z *batchedEvent) MarshalMsg(b []byte) (o []byte, err error) {
 		err = msgp.WrapError(err, "data")
 		return
 	}
+	// string "dataset"
+	o = append(o, 0xa7, 0x64, 0x61, 0x74, 0x61, 0x73, 0x65, 0x74)
+	o = msgp.AppendString(o, z.dataset)
 	return
 }
 
@@ -725,8 +734,13 @@ type httpError interface {
 	Timeout() bool
 }
 
-func buildRequestURL(apiHost, dataset string) (string, error) {
-	escapedDataset := url.PathEscape(dataset)
+func buildRequestURL(apiHost, dataset string, transmitType types.TransmitType) (string, error) {
+	// For peer transmission, use the any-dataset endpoint that doesn't require dataset in URL
+	// For upstream transmission, use the dataset-specific endpoint required by Honeycomb API
+	if transmitType == types.TransmitTypePeer {
+		return url.JoinPath(apiHost, "/1/batch")
+	}
 
+	escapedDataset := url.PathEscape(dataset)
 	return url.JoinPath(apiHost, "/1/batch", escapedDataset)
 }
