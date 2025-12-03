@@ -17,13 +17,12 @@ import (
 var fastJsonParserPool fastjson.ParserPool
 
 type batchedEvent struct {
-	Timestamp           string        `json:"time"`
-	MsgPackTimestamp    *time.Time    `msgpack:"time,omitempty"`
-	SampleRate          int64         `json:"samplerate" msgpack:"samplerate"`
-	Data                types.Payload `json:"data" msgpack:"data"`
-	Dataset             string        `json:"dataset,omitempty" msgpack:"dataset,omitempty"`
-	cfg                 config.Config `json:"-" msgpack:"-"`
-	coreFieldsExtractor types.CoreFieldsUnmarshaler
+	Timestamp        string        `json:"time"`
+	MsgPackTimestamp *time.Time    `msgpack:"time,omitempty"`
+	SampleRate       int64         `json:"samplerate" msgpack:"samplerate"`
+	Data             types.Payload `json:"data" msgpack:"data"`
+	Dataset          string        `json:"dataset,omitempty" msgpack:"dataset,omitempty"`
+	cfg              config.Config `json:"-" msgpack:"-"`
 	// rawDataBytes stores the raw msgpack bytes for the data field, allowing
 	// deferred payload creation with the correct per-dataset unmarshaler
 	rawDataBytes []byte `json:"-" msgpack:"-"`
@@ -120,16 +119,14 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 
 // Create a type for []batchedEvent so we can give it an unmarshaler.
 type batchedEvents struct {
-	events              []batchedEvent
-	cfg                 config.Config
-	coreFieldsExtractor types.CoreFieldsUnmarshaler
+	events []batchedEvent
+	cfg    config.Config
 }
 
 func newBatchedEvents(opts types.CoreFieldsUnmarshalerOptions) *batchedEvents {
 	return &batchedEvents{
-		events:              make([]batchedEvent, 0),
-		cfg:                 opts.Config,
-		coreFieldsExtractor: types.NewCoreFieldsUnmarshaler(opts),
+		events: make([]batchedEvent, 0),
+		cfg:    opts.Config,
 	}
 }
 
@@ -144,7 +141,6 @@ func (b *batchedEvents) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	b.events = make([]batchedEvent, totalValues)
 	for i := range b.events {
 		b.events[i].cfg = b.cfg
-		b.events[i].coreFieldsExtractor = b.coreFieldsExtractor
 		bts, err = b.events[i].UnmarshalMsg(bts)
 		if err != nil {
 			err = msgp.WrapError(err, i)
@@ -180,7 +176,6 @@ func (b *batchedEvents) UnmarshalJSON(data []byte) error {
 	b.events = make([]batchedEvent, len(arr))
 	for i, eventValue := range arr {
 		b.events[i].cfg = b.cfg
-		b.events[i].coreFieldsExtractor = b.coreFieldsExtractor
 
 		// Parse each event directly using fastjson
 		err = b.unmarshalBatchedEventFromFastJSON(&b.events[i], eventValue)

@@ -655,12 +655,7 @@ func (r *Router) batchAnyDataset(w http.ResponseWriter, req *http.Request) {
 
 	// For any-dataset batch, we don't pass a dataset to newBatchedEvents since each event has its own
 	batchedEvents := newBatchedEvents(
-		types.CoreFieldsUnmarshalerOptions{
-			Config: r.Config,
-			APIKey: apiKey,
-			Env:    environment,
-			// Dataset is empty - will be extracted from each event
-		})
+		types.CoreFieldsUnmarshalerOptions{})
 	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
 	if err != nil {
 		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("body", string(bodyBuffer.Bytes())).Logf("error parsing json")
@@ -690,7 +685,7 @@ func (r *Router) batchAnyDataset(w http.ResponseWriter, req *http.Request) {
 
 			// Create the payload with the correct unmarshaler
 			payload := types.NewPayload(r.Config, nil)
-			_, err = coreFieldsUnmarshaler.UnmarshalMsgpFirstEvent(bev.rawDataBytes, &payload)
+			err = coreFieldsUnmarshaler.UnmarshalMsgpEvent(bev.rawDataBytes, &payload)
 			if err != nil {
 				err = fmt.Errorf("failed to unmarshal event data: %w", err)
 			} else if payload.IsEmpty() {

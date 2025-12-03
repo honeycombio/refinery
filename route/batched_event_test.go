@@ -72,6 +72,15 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 
 	require.Len(t, deserialized.events, 2)
 	deserializedEvents := deserialized.events
+
+	// Create unmarshaler for processing rawDataBytes
+	coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
+		Config:  mockCfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
+
 	for i := range deserializedEvents {
 		assert.WithinDuration(t, timestamp, *deserializedEvents[i].MsgPackTimestamp, 0)
 		assert.Equal(t, events[i].SampleRate, deserializedEvents[i].SampleRate)
@@ -79,7 +88,7 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 		// Process rawDataBytes into Payload using the unmarshaler
 		require.NotEmpty(t, deserializedEvents[i].rawDataBytes, "rawDataBytes should be populated")
 		payload := types.NewPayload(mockCfg, nil)
-		_, err = deserialized.coreFieldsExtractor.UnmarshalMsgpFirstEvent(deserializedEvents[i].rawDataBytes, &payload)
+		_, err = coreFieldsUnmarshaler.UnmarshalMsgpFirstEvent(deserializedEvents[i].rawDataBytes, &payload)
 		require.NoError(t, err)
 		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(payload.All()))
 	}
@@ -102,6 +111,15 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 
 	require.Len(t, deserialized.events, 2)
 	deserializedEvents = deserialized.events
+
+	// Create unmarshaler for processing rawDataBytes
+	coreFieldsUnmarshaler = types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
+		Config:  mockCfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
+
 	for i := range deserializedEvents {
 		assert.WithinDuration(t, timestamp, *deserializedEvents[i].MsgPackTimestamp, 0)
 		assert.Equal(t, events[i].SampleRate, deserializedEvents[i].SampleRate)
@@ -109,7 +127,7 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 		// Process rawDataBytes into Payload using the unmarshaler
 		require.NotEmpty(t, deserializedEvents[i].rawDataBytes, "rawDataBytes should be populated")
 		payload := types.NewPayload(mockCfg, nil)
-		_, err = deserialized.coreFieldsExtractor.UnmarshalMsgpFirstEvent(deserializedEvents[i].rawDataBytes, &payload)
+		_, err = coreFieldsUnmarshaler.UnmarshalMsgpFirstEvent(deserializedEvents[i].rawDataBytes, &payload)
 		require.NoError(t, err)
 		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(payload.All()))
 	}
@@ -204,11 +222,19 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 	batchEvents := batch.events
 	require.Len(t, batchEvents, 3)
 
+	// Create unmarshaler for processing rawDataBytes
+	coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
+		Config:  mockCfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
+
 	// Process rawDataBytes into Payloads for each event
 	for i := range batchEvents {
 		require.NotEmpty(t, batchEvents[i].rawDataBytes, "rawDataBytes should be populated for event %d", i)
 		payload := types.NewPayload(mockCfg, nil)
-		_, err = batch.coreFieldsExtractor.UnmarshalMsgpFirstEvent(batchEvents[i].rawDataBytes, &payload)
+		_, err = coreFieldsUnmarshaler.UnmarshalMsgpFirstEvent(batchEvents[i].rawDataBytes, &payload)
 		require.NoError(t, err)
 		batchEvents[i].Data = payload
 	}

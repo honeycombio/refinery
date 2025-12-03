@@ -238,11 +238,19 @@ func TestUnmarshal(t *testing.T) {
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
 
+					// Create unmarshaler for processing rawDataBytes
+					coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
+						Config:  mockCfg,
+						APIKey:  "api-key",
+						Env:     "env",
+						Dataset: "dataset",
+					})
+
 					// Process rawDataBytes into Payloads for each event
 					for i := range result.events {
 						require.NotEmpty(t, result.events[i].rawDataBytes, "rawDataBytes should be populated for event %d", i)
 						payload := types.NewPayload(mockCfg, nil)
-						_, err = result.coreFieldsExtractor.UnmarshalMsgpFirstEvent(result.events[i].rawDataBytes, &payload)
+						_, err = coreFieldsUnmarshaler.UnmarshalMsgpFirstEvent(result.events[i].rawDataBytes, &payload)
 						require.NoError(t, err)
 						result.events[i].Data = payload
 					}
@@ -300,11 +308,19 @@ func TestUnmarshal(t *testing.T) {
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
 
+					// Create unmarshaler for processing rawDataBytes
+					coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
+						Config:  mockCfg,
+						APIKey:  "api-key",
+						Env:     "env",
+						Dataset: "dataset",
+					})
+
 					// Process rawDataBytes into Payloads for each event
 					for i := range result.events {
 						require.NotEmpty(t, result.events[i].rawDataBytes, "rawDataBytes should be populated for event %d", i)
 						payload := types.NewPayload(mockCfg, nil)
-						_, err = result.coreFieldsExtractor.UnmarshalMsgpFirstEvent(result.events[i].rawDataBytes, &payload)
+						_, err = coreFieldsUnmarshaler.UnmarshalMsgpFirstEvent(result.events[i].rawDataBytes, &payload)
 						require.NoError(t, err)
 						result.events[i].Data = payload
 					}
