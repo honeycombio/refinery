@@ -75,7 +75,13 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 	for i := range deserializedEvents {
 		assert.WithinDuration(t, timestamp, *deserializedEvents[i].MsgPackTimestamp, 0)
 		assert.Equal(t, events[i].SampleRate, deserializedEvents[i].SampleRate)
-		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(deserializedEvents[i].Data.All()))
+
+		// Process rawDataBytes into Payload using the unmarshaler
+		require.NotEmpty(t, deserializedEvents[i].rawDataBytes, "rawDataBytes should be populated")
+		payload := types.NewPayload(mockCfg, nil)
+		_, err = deserialized.coreFieldsExtractor.UnmarshalMsgpFirstEvent(deserializedEvents[i].rawDataBytes, &payload)
+		require.NoError(t, err)
+		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(payload.All()))
 	}
 
 	// Test overwriting with another unmarshal, with swapped events order.
@@ -99,7 +105,13 @@ func TestBatchedEventRoundTrip(t *testing.T) {
 	for i := range deserializedEvents {
 		assert.WithinDuration(t, timestamp, *deserializedEvents[i].MsgPackTimestamp, 0)
 		assert.Equal(t, events[i].SampleRate, deserializedEvents[i].SampleRate)
-		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(deserializedEvents[i].Data.All()))
+
+		// Process rawDataBytes into Payload using the unmarshaler
+		require.NotEmpty(t, deserializedEvents[i].rawDataBytes, "rawDataBytes should be populated")
+		payload := types.NewPayload(mockCfg, nil)
+		_, err = deserialized.coreFieldsExtractor.UnmarshalMsgpFirstEvent(deserializedEvents[i].rawDataBytes, &payload)
+		require.NoError(t, err)
+		assert.Equal(t, maps.Collect(events[i].Data.All()), maps.Collect(payload.All()))
 	}
 }
 
@@ -188,9 +200,18 @@ func TestBatchedEventsUnmarshalMsgWithMetadata(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, remaining)
 
-	// Verify all events were unmarshaled with metadata
+	// Verify all events were unmarshaled with raw bytes
 	batchEvents := batch.events
 	require.Len(t, batchEvents, 3)
+
+	// Process rawDataBytes into Payloads for each event
+	for i := range batchEvents {
+		require.NotEmpty(t, batchEvents[i].rawDataBytes, "rawDataBytes should be populated for event %d", i)
+		payload := types.NewPayload(mockCfg, nil)
+		_, err = batch.coreFieldsExtractor.UnmarshalMsgpFirstEvent(batchEvents[i].rawDataBytes, &payload)
+		require.NoError(t, err)
+		batchEvents[i].Data = payload
+	}
 
 	// Event 0: root span (no parent)
 	assert.Equal(t, "trace-1", batchEvents[0].Data.MetaTraceID)

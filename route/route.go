@@ -566,22 +566,40 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 
 	apiHost := r.Config.GetHoneycombAPI()
 	userAgent := getUserAgentFromRequest(req)
+
+	// Create unmarshaler once for this dataset (all events in this batch have the same dataset)
+	coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
+		Config:  r.Config,
+		APIKey:  apiKey,
+		Env:     environment,
+		Dataset: dataset,
+	})
+
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
 	for _, bev := range batchedEvents.events {
-		if !bev.Data.IsEmpty() {
-			ev := &types.Event{
-				Context:     ctx,
-				APIHost:     apiHost,
-				APIKey:      apiKey,
-				Dataset:     dataset,
-				Environment: environment,
-				SampleRate:  bev.getSampleRate(),
-				Timestamp:   bev.getEventTime(),
-				Data:        bev.Data,
-			}
+		if len(bev.rawDataBytes) > 0 {
+			// Create the payload with the correct unmarshaler
+			payload := types.NewPayload(r.Config, nil)
+			_, err = coreFieldsUnmarshaler.UnmarshalMsgpFirstEvent(bev.rawDataBytes, &payload)
+			if err != nil {
+				err = fmt.Errorf("failed to unmarshal event data: %w", err)
+			} else if payload.IsEmpty() {
+				err = fmt.Errorf("empty event data")
+			} else {
+				ev := &types.Event{
+					Context:     ctx,
+					APIHost:     apiHost,
+					APIKey:      apiKey,
+					Dataset:     dataset,
+					Environment: environment,
+					SampleRate:  bev.getSampleRate(),
+					Timestamp:   bev.getEventTime(),
+					Data:        payload,
+				}
 
-			addIncomingUserAgent(ev, userAgent)
-			err = r.processEvent(ev, reqID)
+				addIncomingUserAgent(ev, userAgent)
+				err = r.processEvent(ev, reqID)
+			}
 		} else {
 			err = fmt.Errorf("empty event data")
 		}
@@ -655,11 +673,28 @@ func (r *Router) batchAnyDataset(w http.ResponseWriter, req *http.Request) {
 	userAgent := getUserAgentFromRequest(req)
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
 	for _, bev := range batchedEvents.events {
-		if !bev.Data.IsEmpty() {
-			// Extract dataset from the event itself
-			dataset := bev.Dataset
-			if dataset == "" {
-				err = fmt.Errorf("missing dataset in event")
+		// Extract dataset from the event itself
+		dataset := bev.Dataset
+		if dataset == "" {
+			err = fmt.Errorf("missing dataset in event")
+		} else if len(bev.rawDataBytes) == 0 {
+			err = fmt.Errorf("empty event data")
+		} else {
+			// Create per-dataset unmarshaler to extract the correct sampling key fields
+			coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
+				Config:  r.Config,
+				APIKey:  apiKey,
+				Env:     environment,
+				Dataset: dataset,
+			})
+
+			// Create the payload with the correct unmarshaler
+			payload := types.NewPayload(r.Config, nil)
+			_, err = coreFieldsUnmarshaler.UnmarshalMsgpFirstEvent(bev.rawDataBytes, &payload)
+			if err != nil {
+				err = fmt.Errorf("failed to unmarshal event data: %w", err)
+			} else if payload.IsEmpty() {
+				err = fmt.Errorf("empty event data")
 			} else {
 				ev := &types.Event{
 					Context:     ctx,
@@ -669,14 +704,12 @@ func (r *Router) batchAnyDataset(w http.ResponseWriter, req *http.Request) {
 					Environment: environment,
 					SampleRate:  bev.getSampleRate(),
 					Timestamp:   bev.getEventTime(),
-					Data:        bev.Data,
+					Data:        payload,
 				}
 
 				addIncomingUserAgent(ev, userAgent)
 				err = r.processEvent(ev, reqID)
 			}
-		} else {
-			err = fmt.Errorf("empty event data")
 		}
 
 		var resp BatchResponse

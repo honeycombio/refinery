@@ -24,6 +24,9 @@ type batchedEvent struct {
 	Dataset             string        `json:"dataset,omitempty" msgpack:"dataset,omitempty"`
 	cfg                 config.Config `json:"-" msgpack:"-"`
 	coreFieldsExtractor types.CoreFieldsUnmarshaler
+	// rawDataBytes stores the raw msgpack bytes for the data field, allowing
+	// deferred payload creation with the correct per-dataset unmarshaler
+	rawDataBytes []byte `json:"-" msgpack:"-"`
 }
 
 func (b *batchedEvent) getEventTime() time.Time {
@@ -83,12 +86,20 @@ func (b *batchedEvent) UnmarshalMsg(bts []byte) (o []byte, err error) {
 				return
 			}
 		case bytes.Equal(field, []byte("data")):
-			b.Data = types.NewPayload(b.cfg, nil) // Initialize with config
-			bts, err = b.coreFieldsExtractor.UnmarshalMsgpFirstEvent(bts, &b.Data)
+			// Store the starting position to capture raw bytes
+			dataStart := bts
+
+			// Skip over the data field to find its end
+			bts, err = msgp.Skip(bts)
 			if err != nil {
 				err = msgp.WrapError(err, "Data")
 				return
 			}
+
+			// Save raw msgpack bytes for later processing with correct unmarshaler
+			dataLen := len(dataStart) - len(bts)
+			b.rawDataBytes = make([]byte, dataLen)
+			copy(b.rawDataBytes, dataStart[:dataLen])
 		case bytes.Equal(field, []byte("dataset")):
 			b.Dataset, bts, err = msgp.ReadStringBytes(bts)
 			if err != nil {
@@ -224,8 +235,7 @@ func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v
 		}
 	})
 
-	// Convert data field to MessagePack and use optimized unmarshaling
-	event.Data = types.NewPayload(event.cfg, nil)
+	// Convert data field to MessagePack bytes for later processing
 	if dataValue != nil {
 		buf := bytesPool.Get().(*[]byte)
 		defer func() {
@@ -238,9 +248,9 @@ func (b *batchedEvents) unmarshalBatchedEventFromFastJSON(event *batchedEvent, v
 			return err
 		}
 
-		// Use the same optimized unmarshaling logic as UnmarshalMsg
-		_, err = event.coreFieldsExtractor.UnmarshalMsgpFirstEvent(*buf, &event.Data)
-		return err
+		// Save raw msgpack bytes for later processing with correct unmarshaler
+		event.rawDataBytes = make([]byte, len(*buf))
+		copy(event.rawDataBytes, *buf)
 	}
 
 	return nil

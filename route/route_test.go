@@ -238,6 +238,15 @@ func TestUnmarshal(t *testing.T) {
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
 
+					// Process rawDataBytes into Payloads for each event
+					for i := range result.events {
+						require.NotEmpty(t, result.events[i].rawDataBytes, "rawDataBytes should be populated for event %d", i)
+						payload := types.NewPayload(mockCfg, nil)
+						_, err = result.coreFieldsExtractor.UnmarshalMsgpFirstEvent(result.events[i].rawDataBytes, &payload)
+						require.NoError(t, err)
+						result.events[i].Data = payload
+					}
+
 					assert.Equal(t, now.UTC(), result.events[0].getEventTime())
 					assert.Equal(t, uint(2), result.events[0].getSampleRate())
 					assert.Equal(t, testData, maps.Collect(result.events[0].Data.All()))
@@ -290,6 +299,15 @@ func TestUnmarshal(t *testing.T) {
 					err = unmarshal(req, readAll(t, req.Body), result)
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
+
+					// Process rawDataBytes into Payloads for each event
+					for i := range result.events {
+						require.NotEmpty(t, result.events[i].rawDataBytes, "rawDataBytes should be populated for event %d", i)
+						payload := types.NewPayload(mockCfg, nil)
+						_, err = result.coreFieldsExtractor.UnmarshalMsgpFirstEvent(result.events[i].rawDataBytes, &payload)
+						require.NoError(t, err)
+						result.events[i].Data = payload
+					}
 
 					assert.Equal(t, now.UTC(), result.events[0].getEventTime())
 					assert.Equal(t, uint(3), result.events[0].getSampleRate())
