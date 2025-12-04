@@ -348,6 +348,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 					{
 						Conditions: []*config.RulesBasedSamplerCondition{
 							{
+								Field: "trace.trace_id",
+							},
+							{
+								Field: "span.parent_id",
+							},
+							{
 								Field: "sampling_key_field",
 							},
 							{
@@ -426,6 +432,11 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.True(t, ok)
 			// Verify computed field is not extracted
 			_, ok = payload.missingFields["?.NUMBER_DESCENDANTS"]
+			assert.False(t, ok)
+			// Verify trace ID and parent ID fields are not in missingFields
+			_, ok = payload.missingFields["trace.trace_id"]
+			assert.False(t, ok)
+			_, ok = payload.missingFields["span.parent_id"]
 			assert.False(t, ok)
 
 			// Verify field not in sampling config is NOT extracted
