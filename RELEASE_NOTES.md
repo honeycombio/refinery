@@ -79,6 +79,7 @@ Rules:
       - Operator: has-root-span
         Value: true
 ```
+
 ### Metrics (️⚠️ Breaking Changes!)
 
 Some metrics have been removed, some added, some renamed, and some behave slightly differently.
