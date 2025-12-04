@@ -48,6 +48,39 @@ You may need to update your Refinery configuration or the cluster will fail to s
     * Both metric types have the same configuration options.
     * Some metrics will have slightly different names after this change; see below for details.
 
+### Rules (️⚠️ Breaking Changes!)
+
+Fields used for identifying a span's parent ID are no longer available for use as a field in a rule condition.
+By default, the parent ID field name is `trace.parent_id`, but any field listed in the configuration option [ParentNames](https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/#parentnames) will not be available as a rule condition field.
+The most common use case for a parent ID field in a rule is to detect the presence of a trace root span.
+Use the `has-root-span` operator instead.
+This operator will match for any parent ID field name listed in `ParentNames`.
+
+#### Before
+
+```yaml
+Rules:
+  ...
+  - Name: only when root span present
+    ...
+    Conditions:
+      - Field: trace.parent_id
+        Operator: not-exists
+```
+
+#### After
+
+```yaml
+Rules:
+  ...
+  - Name: only when root span present
+    ...
+    Conditions:
+      - Operator: has-root-span
+        Value: true
+```
+
+
 ### Metrics (️⚠️ Breaking Changes!)
 
 Some metrics have been removed, some added, some renamed, and some behave slightly differently.
