@@ -392,6 +392,9 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 		}
 		for _, field := range samplingKeyFields {
 			if _, found := p.memoizedFields[field]; !found {
+				if slices.Contains(traceIdFieldNames, field) || slices.Contains(parentIdFieldNames, field) {
+					continue
+				}
 				p.missingFields[field] = struct{}{}
 			}
 		}
