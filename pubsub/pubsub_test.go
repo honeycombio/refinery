@@ -117,7 +117,7 @@ func TestPubSubMultiSubscriber(t *testing.T) {
 			go func() {
 				time.Sleep(100 * time.Millisecond)
 				for i := 0; i < messageCount; i++ {
-					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
+					err := ps.Publish(ctx, topic, fmt.Sprintf("message %d", i))
 					require.NoError(t, err)
 				}
 				time.Sleep(100 * time.Millisecond)
