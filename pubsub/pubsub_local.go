@@ -74,6 +74,11 @@ func (ps *LocalPubSub) ensureTopic(topic string) {
 	}
 }
 
+// FormatTopic returns the topic unchanged for LocalPubSub (no cluster namespacing needed)
+func (ps *LocalPubSub) FormatTopic(topic string) string {
+	return topic
+}
+
 func (ps *LocalPubSub) Publish(ctx context.Context, topic, message string) error {
 	ps.mut.Lock()
 	ps.ensureTopic(topic)

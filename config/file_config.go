@@ -298,7 +298,8 @@ type RedisPeerManagementConfig struct {
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
-	Prefix         string   `yaml:"Prefix,omitempty"`
+	ClusterName    string   `yaml:"ClusterName,omitempty"`
+	Prefix         string   `yaml:"Prefix,omitempty"` // Deprecated: Use ClusterName instead
 	Database       int      `yaml:"Database,omitempty"`
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `

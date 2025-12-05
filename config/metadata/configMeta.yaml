@@ -1149,6 +1149,22 @@ groups:
         description: >
           Many Redis installations do not use this field.
 
+      - name: ClusterName
+        type: string
+        valuetype: string
+        example: "production"
+        reload: false
+        validations:
+          - type: pattern
+            arg: alphanumeric
+        summary: is a cluster identifier used as a prefix for Redis pubsub channel names.
+        description: >
+          ClusterName is used to namespace Redis pubsub channels when multiple
+          Refinery clusters share the same Redis instance. If set, all pubsub
+          channel names will be prefixed with this value (e.g., "production:peers").
+          This allows multiple clusters to coexist without interfering with each other.
+          Must be alphanumeric if specified.
+
       - name: Prefix
         v1group: PeerManagement
         v1name: Prefix
@@ -1158,14 +1174,15 @@ groups:
         example: "customPrefix"
         reload: false
         lastversion: v2.6
+        deprecationtext: "Use ClusterName instead. Prefix was previously used for Redis keys but is now deprecated in favor of ClusterName for pubsub channel namespacing."
         validations:
           - type: notempty
         summary: is a string used as a prefix for the keys in Redis while
           storing the peer membership.
         description: >
-          It might be useful to override this in any situation where multiple
-          Refinery clusters or multiple applications want to share a single
-          Redis instance. It may not be blank.
+          DEPRECATED: Use ClusterName instead. It might be useful to override this
+          in any situation where multiple Refinery clusters or multiple applications
+          want to share a single Redis instance. It may not be blank.
 
       - name: Database
         v1group: PeerManagement
