@@ -50,11 +50,11 @@ You may need to update your Refinery configuration or the cluster will fail to s
 
 ### Rules (️⚠️ Breaking Changes!)
 
-Fields used for identifying a span's parent ID are no longer available for use as a field in a rule condition.
-By default, the parent ID field name is `trace.parent_id`, but any field listed in the configuration option [ParentNames](https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/#parentnames) will not be available as a rule condition field.
-The most common use case for a parent ID field in a rule is to detect the presence of a trace root span.
-Use the `has-root-span` operator instead.
-This operator will match for any parent ID field name listed in `ParentNames`.
+Fields often used to express a span's parent, such as `trace.parent_id` or any field listed in your [`ParentNames`](https://docs.honeycomb.io/manage-data-volume/sample/honeycomb-refinery/configure/#parentnames) configuration option, are no longer available for use in rule conditions.
+Refinery now uses them internally to identify root spans.
+
+If you previously matched on a parent ID–style field to detect root spans, use the `has-root-span` operator instead.
+This operator will match for `trace.parent_id` and any field defined in `ParentNames`.
 
 #### Before
 
