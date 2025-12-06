@@ -23,6 +23,13 @@ import (
 
 const stressReliefTopic = "refinery-stress-relief"
 
+// All of the numerator metrics are gauges. The denominator metrics are constants.
+var stressReliefCalculations = []StressReliefCalculation{
+	{Numerator: "collector_peer_queue_length", Denominator: "PEER_CAP", Algorithm: "sqrt", Reason: "PeerQueueSize"},
+	{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "IncomingQueueSize"},
+	{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
+}
+
 type StressReliever interface {
 	UpdateFromConfig()
 	Recalc() uint
@@ -98,7 +105,6 @@ type StressRelief struct {
 	minDuration        time.Duration
 
 	algorithms map[string]func(string, string) float64
-	calcs      []StressReliefCalculation
 
 	lock         sync.RWMutex
 	stressLevels map[string]stressReport
@@ -141,13 +147,6 @@ func (s *StressRelief) Start() error {
 		"sqrt":    s.sqrt,    // small values are inflated
 		"square":  s.square,  // big values are deflated
 		"sigmoid": s.sigmoid, // don't worry about small stuff, but if we cross the midline, start worrying quickly
-	}
-
-	// All of the numerator metrics are gauges. The denominator metrics are constants.
-	s.calcs = []StressReliefCalculation{
-		{Numerator: "collector_peer_queue_length", Denominator: "PEER_CAP", Algorithm: "sqrt", Reason: "PeerQueueSize"},
-		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "IncomingQueueSize"},
-		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
 	}
 
 	var err error
@@ -407,7 +406,7 @@ func (s *StressRelief) Recalc() uint {
 	var maximumLevel float64
 	var reason string
 	var formula string
-	for _, c := range s.calcs {
+	for _, c := range stressReliefCalculations {
 		stress := 100 * s.algorithms[c.Algorithm](c.Numerator, c.Denominator)
 		if stress > maximumLevel {
 			maximumLevel = stress

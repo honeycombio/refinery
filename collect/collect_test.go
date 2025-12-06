@@ -125,10 +125,6 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 
 	err = c.Start()
 	require.NoError(t, err)
-	_, ok := s.Get("INCOMING_CAP")
-	require.True(t, ok, "INCOMING_CAP metric should be present")
-	_, ok = s.Get("PEER_CAP")
-	require.True(t, ok, "PEER_CAP metric should be present")
 
 	t.Cleanup(func() {
 		err := c.Stop()
@@ -1508,6 +1504,30 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 	assert.Equal(t, 2, len(events), "adding a root span should send all spans in the trace")
 	assert.Equal(t, "host123", events[1].Data.Get("meta.refinery.local_hostname"))
 
+}
+
+func TestStressReliefMetrics(t *testing.T) {
+	c := newTestCollector(t, &config.MockConfig{
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Millisecond),
+		},
+	})
+	c.checkAlloc(context.Background())
+	require.EventuallyWithT(t, func(collectT *assert.CollectT) {
+		for _, s := range stressReliefCalculations {
+			_, ok := c.Metrics.Get(s.Numerator)
+			assert.True(collectT, ok, "%s metric should be present", s.Numerator)
+			_, ok = c.Metrics.Get(s.Denominator)
+			assert.True(collectT, ok, "%s metric should be present", s.Denominator)
+		}
+
+	}, 200*time.Millisecond, 50*time.Millisecond)
 }
 
 // TestSpanWithRuleReasons tests span decoration with sampling rule reasons
