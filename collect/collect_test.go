@@ -125,6 +125,10 @@ func newTestCollector(t testing.TB, conf config.Config, maybeClock ...clockwork.
 
 	err = c.Start()
 	require.NoError(t, err)
+	_, ok := s.Get("INCOMING_CAP")
+	require.True(t, ok, "INCOMING_CAP metric should be present")
+	_, ok = s.Get("PEER_CAP")
+	require.True(t, ok, "PEER_CAP metric should be present")
 
 	t.Cleanup(func() {
 		err := c.Stop()
