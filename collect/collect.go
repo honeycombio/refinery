@@ -182,6 +182,9 @@ func (i *InMemCollector) Start() error {
 	i.Logger.Info().WithField("num_workers", numWorkers).Logf("Starting InMemCollector with %d workers", numWorkers)
 
 	i.StressRelief.UpdateFromConfig()
+	// Set queue capacity metrics for stress relief calculations
+	i.Metrics.Store("INCOMING_CAP", float64(imcConfig.IncomingQueueSize))
+	i.Metrics.Store("PEER_CAP", float64(imcConfig.PeerQueueSize))
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
