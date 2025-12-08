@@ -111,6 +111,7 @@ type StressRelief struct {
 	stressed           bool
 	stayOnUntil        time.Time
 	minDuration        time.Duration
+	topic              string // formatted topic name
 
 	algorithms map[string]func(string, string) float64
 
@@ -165,9 +166,12 @@ func (s *StressRelief) Start() error {
 
 	s.stressLevels = make(map[string]stressReport)
 
+	// Format the topic name once during initialization (ClusterName is not hot-reloadable)
+	s.topic = s.PubSub.FormatTopic(stressReliefTopic)
+
 	// Subscribe to the stress relief topic so we can react to stress level
 	// changes in the cluster.
-	s.PubSub.Subscribe(context.Background(), stressReliefTopic, s.onStressLevelUpdate)
+	s.PubSub.Subscribe(context.Background(), s.topic, s.onStressLevelUpdate)
 
 	// start our monitor goroutine that periodically calls recalc
 	// and also reports that it's healthy
@@ -191,7 +195,7 @@ func (s *StressRelief) Start() error {
 				currentLevel := s.Recalc()
 
 				if lastLevel != currentLevel || tickCounter == maxTicksBetweenReports {
-					err := s.PubSub.Publish(context.Background(), stressReliefTopic, newStressReliefMessage(currentLevel, s.hostID).String())
+					err := s.PubSub.Publish(context.Background(), s.topic, newStressReliefMessage(currentLevel, s.hostID).String())
 					if err != nil {
 						s.Logger.Error().Logf("failed to publish stress level: %s", err)
 					}

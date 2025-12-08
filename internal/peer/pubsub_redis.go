@@ -102,6 +102,7 @@ type RedisPubsubPeers struct {
 	hash      uint64
 	callbacks []func()
 	sub       pubsub.Subscription
+	topic     string // formatted topic name
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
@@ -154,8 +155,11 @@ func (p *RedisPubsubPeers) Start() error {
 
 	p.peers = generics.NewMapWithTTL[string, string](PeerEntryTimeout, nil)
 	p.callbacks = make([]func(), 0)
+
+	p.topic = p.PubSub.FormatTopic("peers")
+
 	p.Logger.Info().Logf("subscribing to pubsub peers channel")
-	p.sub = p.PubSub.Subscribe(context.Background(), "peers", p.listen)
+	p.sub = p.PubSub.Subscribe(context.Background(), p.topic, p.listen)
 
 	for _, metric := range redisPubSubPeersMetrics {
 		p.Metrics.Register(metric)
@@ -196,7 +200,7 @@ func (p *RedisPubsubPeers) Ready() error {
 
 				// publish our presence periodically
 				ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
-				err := p.PubSub.Publish(ctx, "peers", newPeerCommand(Register, myaddr, p.InstanceID).marshal())
+				err := p.PubSub.Publish(ctx, p.topic, newPeerCommand(Register, myaddr, p.InstanceID).marshal())
 				if err != nil {
 					p.Logger.Error().WithFields(map[string]interface{}{
 						"error":       err,
@@ -229,7 +233,7 @@ func (p *RedisPubsubPeers) stop() {
 		return
 	}
 
-	err = p.PubSub.Publish(context.Background(), "peers", newPeerCommand(Unregister, myaddr, p.InstanceID).marshal())
+	err = p.PubSub.Publish(context.Background(), p.topic, newPeerCommand(Unregister, myaddr, p.InstanceID).marshal())
 	if err != nil {
 		p.Logger.Error().WithFields(map[string]interface{}{
 			"error":       err,

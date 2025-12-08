@@ -27,6 +27,10 @@ type PubSub interface {
 	// The subscription only exists to provide a way to stop receiving messages; if you don't need to stop,
 	// you can ignore the return value.
 	Subscribe(ctx context.Context, topic string, callback SubscriptionCallback) Subscription
+	// FormatTopic returns the topic name with any cluster-specific prefix applied.
+	// This should be called once during initialization to get the formatted topic name,
+	// which can then be passed to Publish and Subscribe methods.
+	FormatTopic(topic string) string
 	// Close shuts down all topics and the pubsub connection.
 	Close()
 

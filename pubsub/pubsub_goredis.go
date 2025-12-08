@@ -129,6 +129,16 @@ func (ps *GoRedisPubSub) Close() {
 	ps.client.Close()
 }
 
+// FormatTopic adds the cluster name prefix to the topic if a cluster name is configured.
+// ClusterName is set during Start() and never changes (not hot-reloadable).
+// Callers should call this once during initialization and pass the result to Publish/Subscribe.
+func (ps *GoRedisPubSub) FormatTopic(topic string) string {
+	if ps.Config.GetRedisPeerManagement().ClusterName != "" {
+		return ps.Config.GetRedisPeerManagement().ClusterName + ":" + topic
+	}
+	return topic
+}
+
 func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) error {
 	ctx, span := otelutil.StartSpanMulti(ctx, ps.Tracer, "GoRedisPubSub.Publish", map[string]interface{}{
 		"topic":   topic,
