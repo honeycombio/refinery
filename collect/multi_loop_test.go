@@ -177,9 +177,9 @@ func TestMultiWorkerProcessing(t *testing.T) {
 			// These metrics are nondeterministic, but we can at least confirm they were reported
 			for _, name := range []string{
 				"spans_waiting",
-				"memory_heap_allocation",
-				"collector_incoming_queue_length",
-				"collector_peer_queue_length",
+				NUMERATOR_MEMORY_HEAP_ALLOC,
+				NUMERATOR_INCOMING_QUEUE,
+				NUMERATOR_PEER_QUEUE,
 				"collector_cache_size",
 				"collector_num_workers",
 			} {

@@ -1506,6 +1506,30 @@ func TestStressReliefDecorateHostname(t *testing.T) {
 
 }
 
+func TestStressReliefMetrics(t *testing.T) {
+	c := newTestCollector(t, &config.MockConfig{
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			TraceTimeout: config.Duration(5 * time.Millisecond),
+		},
+	})
+	c.checkAlloc(context.Background())
+	require.EventuallyWithT(t, func(collectT *assert.CollectT) {
+		for _, s := range stressReliefCalculations {
+			_, ok := c.Metrics.Get(s.Numerator)
+			assert.True(collectT, ok, "%s metric should be present", s.Numerator)
+			_, ok = c.Metrics.Get(s.Denominator)
+			assert.True(collectT, ok, "%s metric should be present", s.Denominator)
+		}
+
+	}, 200*time.Millisecond, 50*time.Millisecond)
+}
+
 // TestSpanWithRuleReasons tests span decoration with sampling rule reasons
 func TestSpanWithRuleReasons(t *testing.T) {
 	conf := &config.MockConfig{
