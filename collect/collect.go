@@ -182,6 +182,9 @@ func (i *InMemCollector) Start() error {
 	i.Logger.Info().WithField("num_workers", numWorkers).Logf("Starting InMemCollector with %d workers", numWorkers)
 
 	i.StressRelief.UpdateFromConfig()
+	// Set queue capacity metrics for stress relief calculations
+	i.Metrics.Store(DENOMINATOR_INCOMING_CAP, float64(imcConfig.IncomingQueueSize))
+	i.Metrics.Store(DENOMINATOR_PEER_CAP, float64(imcConfig.PeerQueueSize))
 
 	// listen for config reloads
 	i.Config.RegisterReloadCallback(i.sendReloadSignal)
@@ -265,12 +268,12 @@ func (i *InMemCollector) reloadConfigs() {
 func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	inMemConfig := i.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
-	i.Metrics.Store("MEMORY_MAX_ALLOC", float64(maxAlloc))
+	i.Metrics.Store(DENOMINATOR_MEMORY_MAX_ALLOC, float64(maxAlloc))
 
 	rtmetrics.Read(i.memMetricSample)
 	currentAlloc := i.memMetricSample[0].Value.Uint64()
 
-	i.Metrics.Gauge("memory_heap_allocation", float64(currentAlloc))
+	i.Metrics.Gauge(NUMERATOR_MEMORY_HEAP_ALLOC, float64(currentAlloc))
 
 	// Check if we're within memory budget
 	if maxAlloc == 0 || currentAlloc < uint64(maxAlloc) {
@@ -368,8 +371,8 @@ func (i *InMemCollector) monitor() {
 			i.Metrics.Histogram("collector_incoming_queue", float64(totalIncoming))
 			i.Metrics.Histogram("collector_peer_queue", float64(totalPeer))
 			i.Metrics.Histogram("collect_cache_entries", float64(totalCacheSize))
-			i.Metrics.Gauge("collector_incoming_queue_length", float64(totalIncoming))
-			i.Metrics.Gauge("collector_peer_queue_length", float64(totalPeer))
+			i.Metrics.Gauge(NUMERATOR_INCOMING_QUEUE, float64(totalIncoming))
+			i.Metrics.Gauge(NUMERATOR_PEER_QUEUE, float64(totalPeer))
 			i.Metrics.Gauge("collector_cache_size", float64(totalCacheSize))
 			i.Metrics.Gauge("collector_num_workers", float64(len(i.workers)))
 
