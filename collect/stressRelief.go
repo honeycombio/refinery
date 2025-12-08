@@ -21,13 +21,21 @@ import (
 	"github.com/honeycombio/refinery/pubsub"
 )
 
-const stressReliefTopic = "refinery-stress-relief"
+const (
+	DENOMINATOR_PEER_CAP         = "PEER_CAP"
+	DENOMINATOR_INCOMING_CAP     = "INCOMING_CAP"
+	DENOMINATOR_MEMORY_MAX_ALLOC = "MEMORY_MAX_ALLOC"
+	NUMERATOR_PEER_QUEUE         = "collector_peer_queue_length"
+	NUMERATOR_INCOMING_QUEUE     = "collector_incoming_queue_length"
+	NUMERATOR_MEMORY_HEAP_ALLOC  = "memory_heap_allocation"
+	stressReliefTopic            = "refinery-stress-relief"
+)
 
 // All of the numerator metrics are gauges. The denominator metrics are constants.
 var stressReliefCalculations = []StressReliefCalculation{
-	{Numerator: "collector_peer_queue_length", Denominator: "PEER_CAP", Algorithm: "sqrt", Reason: "PeerQueueSize"},
-	{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "IncomingQueueSize"},
-	{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
+	{Numerator: NUMERATOR_PEER_QUEUE, Denominator: DENOMINATOR_PEER_CAP, Algorithm: "sqrt", Reason: "PeerQueueSize"},
+	{Numerator: NUMERATOR_INCOMING_QUEUE, Denominator: DENOMINATOR_INCOMING_CAP, Algorithm: "sqrt", Reason: "IncomingQueueSize"},
+	{Numerator: NUMERATOR_MEMORY_HEAP_ALLOC, Denominator: DENOMINATOR_MEMORY_MAX_ALLOC, Algorithm: "sigmoid", Reason: "MaxAlloc"},
 }
 
 type StressReliever interface {
