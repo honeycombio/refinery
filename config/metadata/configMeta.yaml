@@ -1155,7 +1155,7 @@ groups:
         example: "production"
         reload: false
         validations:
-          - type: pattern
+          - type: format
             arg: alphanumeric
         summary: is a cluster identifier used as a prefix for Redis pubsub channel names.
         description: >
