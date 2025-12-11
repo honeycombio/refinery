@@ -346,7 +346,7 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 			var val any
 			if idx, ok := sliceContains(samplingKeyFields, keyBytes); ok {
 				// only memoize the value if we haven't already found it
-				if p.memoizedFields[samplingKeyFields[idx]] == nil {
+				if _, ok := p.memoizedFields[samplingKeyFields[idx]]; !ok {
 					keysFound++
 
 					val, remaining, err = msgp.ReadIntfBytes(remaining)
