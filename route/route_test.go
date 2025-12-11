@@ -409,10 +409,12 @@ func TestUnmarshalRawJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Run("single event", func(t *testing.T) {
 				t.Skip("skip event endpoint for now until we have a cohesive plan for duplicated fields")
+				// single event JSON payloads are unmarshalled as map[string]interface{}
+				var result map[string]interface{}
+
 				req := httptest.NewRequest("POST", "/test", bytes.NewBufferString(tt.rawJSON))
 				req.Header.Set("Content-Type", "application/json")
 
-				var result map[string]interface{}
 				err := unmarshal(req, readAll(t, req.Body), &result)
 
 				if tt.expectError {
@@ -424,6 +426,9 @@ func TestUnmarshalRawJSON(t *testing.T) {
 			})
 
 			t.Run("event in batch", func(t *testing.T) {
+				// batched event JSON payloads are unmarshalled as batchedEvents
+				var result *batchedEvents
+
 				now := time.Now().UTC()
 
 				batchJSON := fmt.Sprintf(`[
@@ -437,7 +442,7 @@ func TestUnmarshalRawJSON(t *testing.T) {
 				req := httptest.NewRequest("POST", "/test", bytes.NewBufferString(batchJSON))
 				req.Header.Set("Content-Type", "application/json")
 
-				result := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+				result = newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
 					Config:  mockCfg,
 					APIKey:  "api-key",
 					Env:     "env",
