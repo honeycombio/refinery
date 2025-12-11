@@ -407,7 +407,7 @@ func TestUnmarshalRawJSON(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Run("map[string]interface{}", func(t *testing.T) {
+			t.Run("single event", func(t *testing.T) {
 				t.Skip("skip event endpoint for now until we have a cohesive plan for duplicated fields")
 				req := httptest.NewRequest("POST", "/test", bytes.NewBufferString(tt.rawJSON))
 				req.Header.Set("Content-Type", "application/json")
@@ -423,11 +423,10 @@ func TestUnmarshalRawJSON(t *testing.T) {
 				}
 			})
 
-			if !tt.expectError {
-				t.Run("batchedEvents", func(t *testing.T) {
-					now := time.Now().UTC()
+			t.Run("event in batch", func(t *testing.T) {
+				now := time.Now().UTC()
 
-					batchJSON := fmt.Sprintf(`[
+				batchJSON := fmt.Sprintf(`[
 						{
 							"time": "%s",
 							"samplerate": 2,
@@ -435,35 +434,38 @@ func TestUnmarshalRawJSON(t *testing.T) {
 						}
 					]`, now.Format(time.RFC3339Nano), tt.rawJSON)
 
-					req := httptest.NewRequest("POST", "/test", bytes.NewBufferString(batchJSON))
-					req.Header.Set("Content-Type", "application/json")
+				req := httptest.NewRequest("POST", "/test", bytes.NewBufferString(batchJSON))
+				req.Header.Set("Content-Type", "application/json")
 
-					result := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
-						Config:  mockCfg,
-						APIKey:  "api-key",
-						Env:     "env",
-						Dataset: "dataset",
-					})
-					err := unmarshal(req, readAll(t, req.Body), result)
-					require.NoError(t, err)
-					require.Len(t, result.events, 1)
-
-					assert.Equal(t, now.UTC(), result.events[0].getEventTime())
-					assert.Equal(t, uint(2), result.events[0].getSampleRate())
-
-					actualData := maps.Collect(result.events[0].Data.All())
-
-					for key, expectedVal := range tt.expectedData {
-						actualVal, exists := actualData[key]
-						require.True(t, exists, "key %s should exist in actual data", key)
-						assert.Equal(t, expectedVal, actualVal, "values should match for key %s", key)
-					}
-
-					// Remove meta fields added by Refinery before comparison
-					delete(actualData, "meta.refinery.root")
-					assert.Equal(t, len(tt.expectedData), len(actualData), "should have same number of keys")
+				result := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+					Config:  mockCfg,
+					APIKey:  "api-key",
+					Env:     "env",
+					Dataset: "dataset",
 				})
-			}
+				err := unmarshal(req, readAll(t, req.Body), result)
+				if tt.expectError {
+					require.Error(t, err)
+					return
+				}
+				require.NoError(t, err)
+				require.Len(t, result.events, 1)
+
+				assert.Equal(t, now.UTC(), result.events[0].getEventTime())
+				assert.Equal(t, uint(2), result.events[0].getSampleRate())
+
+				actualData := maps.Collect(result.events[0].Data.All())
+
+				for key, expectedVal := range tt.expectedData {
+					actualVal, exists := actualData[key]
+					require.True(t, exists, "key %s should exist in actual data", key)
+					assert.Equal(t, expectedVal, actualVal, "values should match for key %s", key)
+				}
+
+				// Remove meta fields added by Refinery before comparison
+				delete(actualData, "meta.refinery.root")
+				assert.Equal(t, len(tt.expectedData), len(actualData), "should have same number of keys")
+			})
 		})
 	}
 }
