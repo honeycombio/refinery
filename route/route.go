@@ -954,6 +954,42 @@ func makeDecoders(concurrency int) (*zstd.Decoder, error) {
 	return d, nil
 }
 
+// unmarshalJSON unmarshals JSON data into the given interface.
+// It has special handling for map[string]interface{} to employ first-value-wins
+// semantics for duplicate keys.
+// For other types, it falls back to standard unmarshaling, which uses last-value-wins semantics.
+func unmarshalJSON(data []byte, v interface{}) error {
+	switch d := v.(type) {
+	case *map[string]interface{}:
+		iter := jsoniter.ParseBytes(jsoniter.ConfigDefault, data)
+
+		*d = make(map[string]interface{})
+
+		iter.ReadObjectCB(func(iter *jsoniter.Iterator, field string) bool {
+			if _, ok := (*d)[field]; ok {
+				// duplicate key: skip its value so the first one stays
+				iter.Skip()
+				return true
+			}
+
+			var v any
+			iter.ReadVal(&v)
+			(*d)[field] = v
+			return true
+		})
+
+		if err := iter.Error; err != nil {
+			return err
+		}
+	default:
+		// Fallback to standard unmarshaling for other types
+		if err := jsoniter.Unmarshal(data, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func unmarshal(r *http.Request, data []byte, v interface{}) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
@@ -971,7 +1007,7 @@ func unmarshal(r *http.Request, data []byte, v interface{}) error {
 			err := unmarshaler.UnmarshalJSON(data)
 			return err
 		}
-		return jsoniter.Unmarshal(data, v)
+		return unmarshalJSON(data, v)
 	}
 }
 
