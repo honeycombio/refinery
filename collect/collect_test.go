@@ -191,6 +191,10 @@ func TestAddRootSpan(t *testing.T) {
 	events := transmission.GetBlock(1)
 	require.Equal(t, 1, len(events), "adding a root span should send the span")
 	assert.Equal(t, "aoeu", events[0].Dataset, "sending a root span should immediately send that span via transmission")
+	// assert send reason metric
+	v, ok := coll.Metrics.Get(TraceSendGotRoot)
+	require.True(t, ok, "should have a send reason metric for TraceSendGotRoot")
+	assert.Equal(t, float64(1), v, "should have incremented TraceSendGotRoot metric once")
 
 	assert.Nil(t, getFromCache(coll, traceID1), "after sending the span, it should be removed from the cache")
 
@@ -211,6 +215,9 @@ func TestAddRootSpan(t *testing.T) {
 	require.Equal(t, 1, len(events), "adding another root span should send the span")
 	assert.Equal(t, "aoeu", events[0].Dataset, "sending a root span should immediately send that span via transmission")
 
+	v, ok = coll.Metrics.Get(TraceSendGotRoot)
+	require.True(t, ok, "should have a send reason metric for TraceSendGotRoot")
+	assert.Equal(t, float64(2), v, "should have incremented TraceSendGotRoot metric twice")
 	assert.Nil(t, getFromCache(coll, traceID1), "after sending the span, it should be removed from the cache")
 }
 
@@ -746,15 +753,6 @@ func TestStableMaxAlloc(t *testing.T) {
 			},
 		}
 
-		// TODO: enable this once we want to turn on DisableTraceLocality
-		//	if i < 3 {
-		//		// add some spans that belongs to peer
-		//		span.TraceID = peerTraceIDs[i]
-		//		// add extrac data so that the peer traces have bigger
-		//		// cache impact, which will get evicted first
-		//		span.Data["extra_data"] = strings.Repeat("abc", 100)
-		//	}
-
 		coll.AddSpan(span)
 	}
 
@@ -790,15 +788,10 @@ func TestStableMaxAlloc(t *testing.T) {
 		return totalTraces < 500 // Wait for any eviction to start
 	}, 3*time.Second, 100*time.Millisecond, "Cache should evict some traces due to memory pressure")
 
-	// TODO: enable this once we want to turn on DisableTraceLocality
-	//	peerTracesLeft := 0
-	//	for _, trace := range traces {
-	//		if slices.Contains(peerTraceIDs, trace.TraceID) {
-	//			peerTracesLeft++
-	//		}
-	//	}
-	//	assert.Equal(t, 2, peerTracesLeft, "should have kept the peer traces")
-
+	// assert the send reason is recorded
+	v, ok := coll.Metrics.Get(TraceSendEjectedMemsize)
+	require.True(t, ok, "should have a send reason metric for TraceSendMemoryPressure")
+	assert.Equal(t, v, float64(500-totalTraces), "should have incremented TraceSendMemoryPressure metric")
 	// We discarded the most costly spans, and sent them.
 	assert.Equal(t, 500-totalTraces, len(transmission.GetBlock(500-totalTraces)), "should have sent traces that weren't kept")
 }
@@ -1720,6 +1713,10 @@ func TestBigTracesGoEarly(t *testing.T) {
 	// wait for all the events to be transmitted
 	childEvents := transmission.GetBlock(spanlimit)
 	assert.Equal(t, spanlimit, len(childEvents), "hitting the spanlimit should send the trace")
+	// span limit has send reason set
+	v, ok := coll.Metrics.Get(TraceSendSpanLimit)
+	require.True(t, ok, "should have a send reason metric for TraceSendSpanLimit")
+	assert.Equal(t, float64(1), v, "should have incremented TraceSendSpanLimit metric")
 
 	// now we add the root span and verify that it got sent and that the root span had the span count
 	rootSpan := &types.Span{
@@ -1734,6 +1731,7 @@ func TestBigTracesGoEarly(t *testing.T) {
 	coll.AddSpan(rootSpan)
 
 	rootEvents := transmission.GetBlock(1)
+	assert.Equal(t, v, float64(1), "should have incremented TraceSendLateSpan metric")
 	assert.Equal(t, 1, len(rootEvents), "hitting the spanlimit should send the trace")
 	assert.Equal(t, nil, childEvents[0].Data.Get("meta.span_count"), "child span metadata should NOT be populated with span count")
 	assert.Equal(t, "trace_send_span_limit", childEvents[0].Data.Get("meta.refinery.send_reason"), "child span metadata should set to trace_send_span_limit")
@@ -1743,6 +1741,10 @@ func TestBigTracesGoEarly(t *testing.T) {
 	assert.EqualValues(t, 2, rootEvents[0].SampleRate, "the late root span should sample rate set")
 	assert.Equal(t, "trace_send_late_span", rootEvents[0].Data.Get("meta.refinery.send_reason"), "send reason should indicate span count exceeded")
 
+	// late span has send reason set
+	v, ok = coll.Metrics.Get(TraceSendLateSpan)
+	require.True(t, ok, "should have a send reason metric for TraceSendLateSpan")
+	assert.Equal(t, float64(1), v, "should have incremented TraceSendLateSpan metric")
 }
 
 // TestSpanLimitSendByPreservation tests that once a trace has hit its span limit and been sent,
