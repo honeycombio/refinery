@@ -397,7 +397,7 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.8
-        default: 0
+        default: 32000
         reload: true
         summary: is the number of spans after which a trace becomes eligible for a trace decision.
         description: >
