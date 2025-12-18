@@ -16,6 +16,8 @@ type FilePeers struct {
 
 	publicAddr string
 	callbacks  []func()
+	draining   bool
+	drainDone  chan struct{}
 }
 
 // GetPeers returns the list of peers, including the host itself.
@@ -32,6 +34,24 @@ func (p *FilePeers) GetPeers() ([]string, error) {
 
 func (p *FilePeers) GetInstanceID() (string, error) {
 	return p.publicAddr, nil
+}
+
+// Drain signals that this peer is entering draining mode.
+// For file-based peers, this is a no-op since there's no peer coordination,
+// but we implement it to satisfy the interface.
+func (p *FilePeers) Drain() <-chan struct{} {
+	if p.draining {
+		return p.drainDone
+	}
+	p.draining = true
+	p.drainDone = make(chan struct{})
+	p.Logger.Info().Logf("entering draining state (file peers - no peer coordination)")
+	return p.drainDone
+}
+
+// IsDraining returns true if this peer is currently in draining mode.
+func (p *FilePeers) IsDraining() bool {
+	return p.draining
 }
 
 func (p *FilePeers) RegisterUpdatedPeersCallback(callback func()) {

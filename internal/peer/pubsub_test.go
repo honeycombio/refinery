@@ -56,3 +56,53 @@ func TestPeerActions(t *testing.T) {
 	b = cmd2.unmarshal("Rfoo")
 	assert.False(t, b)
 }
+
+func TestPeerDrainingAction(t *testing.T) {
+	cmd := newPeerCommand(Draining, "http://10.0.0.1:8081", "abcd1234")
+	marshaled := cmd.marshal()
+	assert.Equal(t, "Dhttp://10.0.0.1:8081,abcd1234", marshaled)
+
+	cmd2 := &peerCommand{}
+	ok := cmd2.unmarshal(marshaled)
+	assert.True(t, ok)
+	assert.Equal(t, Draining, cmd2.action)
+	assert.Equal(t, "http://10.0.0.1:8081", cmd2.address)
+	assert.Equal(t, "abcd1234", cmd2.id)
+}
+
+func TestMockPeersDraining(t *testing.T) {
+	peers := &MockPeers{
+		Peers: []string{"http://peer1:8081", "http://peer2:8081"},
+		ID:    "http://peer1:8081",
+	}
+
+	assert.False(t, peers.IsDraining())
+
+	drainDone := peers.Drain()
+	assert.NotNil(t, drainDone)
+	assert.True(t, peers.IsDraining())
+
+	drainDone2 := peers.Drain()
+	assert.Equal(t, drainDone, drainDone2)
+}
+
+func TestFilePeersDraining(t *testing.T) {
+	cfg := &config.MockConfig{
+		GetPeerListenAddrVal: "127.0.0.1:8081",
+		RedisIdentifier:      "testhost",
+	}
+
+	peers := &FilePeers{
+		Cfg:    cfg,
+		Logger: &logger.NullLogger{},
+	}
+
+	assert.False(t, peers.IsDraining())
+
+	drainDone := peers.Drain()
+	assert.NotNil(t, drainDone)
+	assert.True(t, peers.IsDraining())
+
+	drainDone2 := peers.Drain()
+	assert.Equal(t, drainDone, drainDone2)
+}

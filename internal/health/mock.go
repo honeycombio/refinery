@@ -3,9 +3,10 @@ package health
 import "sync"
 
 type MockHealthReporter struct {
-	isAlive bool
-	isReady bool
-	mutex   sync.Mutex
+	isAlive   bool
+	isReady   bool
+	isDrained bool
+	mutex     sync.Mutex
 }
 
 func (m *MockHealthReporter) SetAlive(isAlive bool) {
@@ -30,4 +31,16 @@ func (m *MockHealthReporter) IsReady() bool {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	return m.isReady
+}
+
+func (m *MockHealthReporter) SetDraining(isDraining bool) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.isDrained = isDraining
+}
+
+func (m *MockHealthReporter) IsDraining() bool {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	return m.isDrained
 }

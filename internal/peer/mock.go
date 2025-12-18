@@ -3,8 +3,10 @@ package peer
 var _ Peers = (*MockPeers)(nil)
 
 type MockPeers struct {
-	Peers []string
-	ID    string
+	Peers     []string
+	ID        string
+	draining  bool
+	drainDone chan struct{}
 }
 
 func (p *MockPeers) GetPeers() ([]string, error) {
@@ -28,4 +30,17 @@ func (p *MockPeers) Start() error {
 
 func (p *MockPeers) Ready() error {
 	return nil
+}
+
+func (p *MockPeers) Drain() <-chan struct{} {
+	if p.draining {
+		return p.drainDone
+	}
+	p.draining = true
+	p.drainDone = make(chan struct{})
+	return p.drainDone
+}
+
+func (p *MockPeers) IsDraining() bool {
+	return p.draining
 }

@@ -18,6 +18,8 @@ type Peers interface {
 	GetInstanceID() (string, error)
 	RegisterUpdatedPeersCallback(callback func())
 	Ready() error
+	Drain() <-chan struct{}
+	IsDraining() bool
 	// make it injectable
 	startstop.Starter
 }

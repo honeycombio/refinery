@@ -143,3 +143,61 @@ func TestNotReadyFromOneService(t *testing.T) {
 	// Stop the Health object
 	h.Stop()
 }
+
+func TestHealthDraining(t *testing.T) {
+	cl := clockwork.NewFakeClock()
+	h := &Health{
+		Clock: cl,
+	}
+	h.Start()
+
+	h.Register("foo", 1500*time.Millisecond)
+	h.Ready("foo", true)
+
+	assert.True(t, h.IsAlive())
+	assert.True(t, h.IsReady())
+	assert.False(t, h.IsDraining())
+
+	h.SetDraining(true)
+
+	assert.True(t, h.IsAlive())
+	assert.False(t, h.IsReady(), "draining service should not be ready")
+	assert.True(t, h.IsDraining())
+
+	h.Ready("foo", true)
+	assert.True(t, h.IsAlive())
+	assert.False(t, h.IsReady(), "draining service should not be ready even when subsystems report ready")
+	assert.True(t, h.IsDraining())
+
+	h.SetDraining(false)
+
+	assert.True(t, h.IsAlive())
+	assert.True(t, h.IsReady())
+	assert.False(t, h.IsDraining())
+
+	h.Stop()
+}
+
+func TestHealthDrainingWithMultipleServices(t *testing.T) {
+	cl := clockwork.NewFakeClock()
+	h := &Health{
+		Clock: cl,
+	}
+	h.Start()
+
+	h.Register("collector", 1500*time.Millisecond)
+	h.Register("router", 1500*time.Millisecond)
+	h.Ready("collector", true)
+	h.Ready("router", true)
+
+	assert.True(t, h.IsReady())
+
+	h.SetDraining(true)
+
+	h.Ready("collector", true)
+	h.Ready("router", true)
+	assert.False(t, h.IsReady())
+	assert.True(t, h.IsAlive())
+
+	h.Stop()
+}

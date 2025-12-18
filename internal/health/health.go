@@ -40,6 +40,16 @@ type Recorder interface {
 type Reporter interface {
 	IsAlive() bool
 	IsReady() bool
+	// IsDraining returns true if the system is currently draining.
+	IsDraining() bool
+}
+
+// Drainer is the interface for entering draining mode.
+type Drainer interface {
+	// SetDraining marks the system as draining. When draining:
+	// - IsReady() returns false (so load balancers stop sending new traffic)
+	// - IsAlive() returns true (so peer traffic can continue)
+	SetDraining(draining bool)
 }
 
 // TickerTime is the interval at which we will survey health of all of the
@@ -60,6 +70,7 @@ type Health struct {
 	timeLeft   map[string]time.Duration
 	readies    map[string]bool
 	alives     map[string]bool
+	draining   bool
 	mut        sync.RWMutex
 	done       chan struct{}
 	shutdownWG sync.WaitGroup
@@ -67,11 +78,13 @@ type Health struct {
 	startstop.Stopper
 	Recorder
 	Reporter
+	Drainer
 }
 
 var healthMetrics = []metrics.Metadata{
 	{Name: "is_ready", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "Whether the system is ready to receive traffic"},
 	{Name: "is_alive", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "Whether the system is alive and reporting in"},
+	{Name: "is_draining", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "Whether the system is draining (shutting down gracefully)"},
 }
 
 func (h *Health) Start() error {
@@ -218,11 +231,35 @@ func (h *Health) checkAlive() bool {
 	return true
 }
 
-// IsReady returns true if all registered subsystems are ready
+// IsReady returns true if all registered subsystems are ready and the system is not draining
 func (h *Health) IsReady() bool {
 	h.mut.RLock()
 	defer h.mut.RUnlock()
+	if h.draining {
+		return false
+	}
 	return h.checkReady()
+}
+
+// IsDraining returns true if the system is currently draining
+func (h *Health) IsDraining() bool {
+	h.mut.RLock()
+	defer h.mut.RUnlock()
+	return h.draining
+}
+
+// SetDraining marks the system as draining. When draining:
+// - IsReady() returns false (so load balancers stop sending new traffic)
+// - IsAlive() returns true (so peer traffic can continue)
+func (h *Health) SetDraining(draining bool) {
+	h.mut.Lock()
+	defer h.mut.Unlock()
+	if h.draining != draining {
+		h.Logger.Info().WithField("draining", draining).Logf("Health draining state changed")
+	}
+	h.draining = draining
+	h.Metrics.Gauge("is_draining", metrics.ConvertBoolToFloat(draining))
+	h.Metrics.Gauge("is_ready", metrics.ConvertBoolToFloat(!draining && h.checkReady()))
 }
 
 // checkReady returns true if all registered subsystems are ready

@@ -34,6 +34,7 @@ type peerAction string
 const (
 	Register   peerAction = "R"
 	Unregister peerAction = "U"
+	Draining   peerAction = "D"
 )
 
 type peerCommand struct {
@@ -60,10 +61,10 @@ func (p *peerCommand) unmarshal(msg string) bool {
 	if len(msg) < 2 || idx == -1 {
 		return false
 	}
-	// first letter indicates the action (eg register, unregister)
+	// first letter indicates the action (eg register, unregister, draining)
 	p.action = peerAction(msg[:1])
 	switch p.action {
-	case Register, Unregister:
+	case Register, Unregister, Draining:
 		// the remainder is the peer address and ID, separated by a comma
 		msgData := msg[1:]
 		p.address = msgData[:idx-1]
@@ -102,6 +103,13 @@ type RedisPubsubPeers struct {
 	hash      uint64
 	callbacks []func()
 	sub       pubsub.Subscription
+
+	// draining indicates whether this peer is currently draining.
+	// When draining, the peer stays in the cluster but signals to others
+	// that it's preparing to shut down.
+	draining bool
+	// drainDone is closed when draining is complete and the peer can fully shut down.
+	drainDone chan struct{}
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
@@ -129,6 +137,17 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 	case Unregister:
 		p.peers.Delete(cmd.id)
 	case Register:
+		// Peer is registering (or re-registering after draining was cancelled)
+		p.peers.Set(cmd.id, cmd.address)
+	case Draining:
+		// Peer is draining - it stays in the peer list but we log it.
+		// The peer will continue to refresh its registration while draining
+		// to stay in the hash ring until it's ready to fully shut down.
+		p.Logger.Info().WithFields(map[string]interface{}{
+			"peer_id":      cmd.id,
+			"peer_address": cmd.address,
+		}).Logf("peer entering draining state")
+		// Keep the peer in the list - it's still part of the hash ring
 		p.peers.Set(cmd.id, cmd.address)
 	}
 	p.checkHash()
@@ -138,6 +157,7 @@ var redisPubSubPeersMetrics = []metrics.Metadata{
 	{Name: "num_peers", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the active number of peers in the cluster"},
 	{Name: "peer_hash", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the hash of the current list of peers"},
 	{Name: "peer_messages", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of messages received by the peers service"},
+	{Name: "peer_draining", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "1 if this peer is draining, 0 otherwise"},
 }
 
 func (p *RedisPubsubPeers) Start() error {
@@ -255,6 +275,47 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 
 func (p *RedisPubsubPeers) GetInstanceID() (string, error) {
 	return publicAddr(p.Logger, p.Config)
+}
+
+// Drain signals that this peer is entering draining mode.
+// The peer stays in the cluster (hash ring) but signals to others that it's shutting down.
+// The peer will continue to accept spans for existing traces while it drains its cache.
+// Returns a channel that will be closed when the caller signals draining is complete
+// by closing the Done channel.
+func (p *RedisPubsubPeers) Drain() <-chan struct{} {
+	if p.draining {
+		return p.drainDone
+	}
+
+	p.draining = true
+	p.drainDone = make(chan struct{})
+	p.Metrics.Gauge("peer_draining", 1)
+
+	myaddr, err := publicAddr(p.Logger, p.Config)
+	if err != nil {
+		p.Logger.Error().Logf("failed to get public address for draining")
+		return p.drainDone
+	}
+
+	p.Logger.Info().WithField("address", myaddr).Logf("entering draining state - staying in cluster while draining traces")
+
+	ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
+	defer cancel()
+
+	err = p.PubSub.Publish(ctx, "peers", newPeerCommand(Draining, myaddr, p.InstanceID).marshal())
+	if err != nil {
+		p.Logger.Error().WithFields(map[string]interface{}{
+			"error":       err,
+			"hostaddress": myaddr,
+		}).Logf("failed to publish draining message")
+	}
+
+	return p.drainDone
+}
+
+// IsDraining returns true if this peer is currently in draining mode.
+func (p *RedisPubsubPeers) IsDraining() bool {
+	return p.draining
 }
 
 func (p *RedisPubsubPeers) RegisterUpdatedPeersCallback(callback func()) {

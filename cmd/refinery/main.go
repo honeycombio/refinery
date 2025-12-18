@@ -335,13 +335,46 @@ func main() {
 
 	// block on our signal handler to exit
 	sig := <-exitWait
-	// unregister ourselves before we go
-	close(done)
-	// wait for at least 2x the batch timeout to allow in-flight requests from peers to complete
-	time.Sleep(c.GetTracesConfig().GetBatchTimeout() * 2)
-	a.Logger.Error().WithField("signal", sig).Logf("Caught OS signal")
+	a.Logger.Error().WithField("signal", sig).Logf("Caught OS signal - starting graceful shutdown")
 
-	// these are the subsystems that might not shut down properly, so we're
+	// ========== PHASE 1: DRAINING ==========
+	// Enter draining mode but stay in the cluster.
+	// This allows us to continue receiving spans for traces we own while
+	// we expedite processing our trace cache.
+	a.Logger.Info().Logf("Phase 1: Entering draining mode - staying in cluster while draining traces")
+
+	// Mark health as draining - this makes /ready return 503 while /alive stays 200
+	// Load balancers will stop sending new traffic but peer traffic continues
+	refineryHealth.SetDraining(true)
+
+	// Signal peers that we're draining
+	peers.Drain()
+
+	// Wait for ShutdownDelay to allow traces to drain.
+	// During this time:
+	// - We stay in the peer list
+	// - We continue accepting spans for traces we own
+	// - The collector processes and sends traces as fast as possible
+	// - Health endpoint returns not ready (503) but alive (200)
+	shutdownDelay := time.Duration(c.GetCollectionConfig().ShutdownDelay)
+	if shutdownDelay == 0 {
+		shutdownDelay = 15 * time.Second // default
+	}
+	a.Logger.Info().WithField("shutdown_delay", shutdownDelay).Logf("Waiting for traces to drain")
+	time.Sleep(shutdownDelay)
+
+	// ========== PHASE 2: UNREGISTER AND SHUTDOWN ==========
+	// Now unregister from the peer list. This triggers:
+	// - Other peers to recalculate their hash rings
+	// - Our traces get redistributed to new owners
+	a.Logger.Info().Logf("Phase 2: Unregistering from peer list and shutting down")
+	close(done)
+
+	// Brief wait for in-flight peer requests to complete
+	time.Sleep(c.GetTracesConfig().GetBatchTimeout() * 2)
+
+	// Stop all subsystems
+	// These are the subsystems that might not shut down properly, so we're
 	// going to call this manually so that if something blocks on shutdown, you
 	// can still send a signal that will get heard.
 	startstop.Stop(g.Objects(), ststLogger)
