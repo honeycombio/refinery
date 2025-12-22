@@ -200,7 +200,7 @@ type TracesConfig struct {
 	TraceTimeout     Duration `yaml:"TraceTimeout" default:"60s"`
 	MaxBatchSize     uint     `yaml:"MaxBatchSize" default:"500"`
 	SendTicker       Duration `yaml:"SendTicker" default:"100ms"`
-	SpanLimit        uint     `yaml:"SpanLimit"`
+	SpanLimit        uint     `yaml:"SpanLimit" default:"32000"` // Set the default span limit to be the same as the limit for trace view in Honeycomb
 	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"3000"`
 }
 
