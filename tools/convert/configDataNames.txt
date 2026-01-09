@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2025-10-02 at 19:03:20 UTC.
+# Automatically generated on 2026-01-09 at 22:22:30 UTC.
 
 General:
   - ConfigurationVersion
@@ -19,6 +19,8 @@ Network:
   - HTTPIdleTimeout
 
   - HoneycombAPI
+
+  - AdditionalHeaders
 
 
 OpAMP:
