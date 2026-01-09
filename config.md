@@ -151,6 +151,19 @@ This setting is the destination to which Refinery sends all events that it decid
 - Environment variable: `REFINERY_HONEYCOMB_API`
 - Command line switch: `--honeycomb-api`
 
+### `AdditionalHeaders`
+
+AdditionalHeaders is a map of additional HTTP headers to add to all upstream Honeycomb API requests.
+
+These headers will be added to all HTTP requests made to the upstream Honeycomb API endpoint, including trace data, OTel metrics, OTel traces, and logs.
+This is useful for scenarios where requests need to pass through an mTLS proxy that requires additional headers like FORWARD_TO_URL.
+Both keys and values must be strings.
+Reserved Honeycomb headers cannot be overridden.
+
+- Eligible for live reload.
+- Type: `map`
+- Example: `FORWARD_TO_URL:https://api.honeycomb.io`
+
 ## OpAMP Configuration
 
 `OpAMP` contains OpAMP configuration options.

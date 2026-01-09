@@ -20,6 +20,8 @@ Network:
 
   - HoneycombAPI
 
+  - AdditionalHeaders
+
 
 OpAMP:
   - Enabled
