@@ -88,8 +88,12 @@ func (o *OTelMetrics) Start() error {
 			}
 		}),
 	}
-	// if we ever need to add user-specified headers, that would go here
-	hdrs := map[string]string{}
+	// Add custom headers from config first, then Honeycomb headers (which take precedence)
+	hdrs := make(map[string]string)
+	for k, v := range o.Config.GetAdditionalHeaders() {
+		hdrs[k] = v
+	}
+	// Honeycomb headers override any custom headers
 	if cfg.APIKey != "" {
 		hdrs["x-honeycomb-team"] = cfg.APIKey
 	}
