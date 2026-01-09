@@ -1400,3 +1400,66 @@ func BenchmarkIsLegacyAPIKey(b *testing.B) {
 		})
 	}
 }
+
+func TestAdditionalHeaders(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Network.AdditionalHeaders", map[string]string{
+			"FORWARD_TO_URL":  "https://proxy.example.com",
+			"X-Custom-Header": "custom-value",
+		},
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	expected := map[string]string{
+		"FORWARD_TO_URL":  "https://proxy.example.com",
+		"X-Custom-Header": "custom-value",
+	}
+	assert.Equal(t, expected, c.GetAdditionalHeaders())
+}
+
+func TestAdditionalHeadersEmpty(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	// Should return empty map (or nil) when not configured
+	headers := c.GetAdditionalHeaders()
+	assert.Empty(t, headers)
+}
+
+func TestAdditionalHeadersReservedHeadersRejected(t *testing.T) {
+	testCases := []struct {
+		name   string
+		header string
+	}{
+		{"x-honeycomb-team", "X-Honeycomb-Team"},
+		{"x-hny-team", "X-Hny-Team"},
+		{"x-honeycomb-dataset", "X-Honeycomb-Dataset"},
+		{"x-honeycomb-samplerate", "X-Honeycomb-Samplerate"},
+		{"x-honeycomb-event-time", "X-Honeycomb-Event-Time"},
+		{"lowercase honeycomb team", "x-honeycomb-team"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cm := makeYAML(
+				"General.ConfigurationVersion", 2,
+				"Network.AdditionalHeaders", map[string]string{
+					tc.header: "should-fail",
+				},
+			)
+			// Use --no-validate to skip YAML schema validation and test our header validation
+			rm := makeYAML("RulesVersion", 2)
+			config, rules := createTempConfigs(t, cm, rm)
+			_, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "reserved")
+		})
+	}
+}
