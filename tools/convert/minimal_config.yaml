@@ -10,6 +10,9 @@ Network:
   PeerListenAddr: "0.0.0.0:8081"
   HTTPIdleTimeout: 0s
   HoneycombAPI: "https://api.honeycomb.io"
+  AdditionalHeaders: 
+    FORWARD_TO_URL: "https://api.honeycomb.io"
+
 OpAMP:
 AccessKeys:
   ReceiveKeys: 
