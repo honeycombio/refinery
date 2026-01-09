@@ -143,7 +143,7 @@ func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batch
 
 	mockLogger := &logger.MockLogger{}
 
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 10, 100*time.Millisecond, 10*time.Second, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 10, 100*time.Millisecond, 10*time.Second, true, nil)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 	dt.Metrics = mockMetrics
@@ -499,7 +499,7 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Use max batch size of 3 for testing
 	testServer := newTestDirectAPIServer(t, 3)
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 3, 50*time.Millisecond, 10*time.Second, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 3, 50*time.Millisecond, 10*time.Second, true, nil)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 	dt.Metrics = mockMetrics
@@ -750,7 +750,7 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	mockLogger := &logger.MockLogger{}
 
 	testServer := newTestDirectAPIServer(t, 50)
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 50, 50*time.Millisecond, 10*time.Second, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 50, 50*time.Millisecond, 10*time.Second, true, nil)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 	dt.Metrics = mockMetrics
@@ -831,7 +831,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	fakeClock := clockwork.NewFakeClock()
 
 	// Use a 400ms batch timeout for testing
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 100, 400*time.Millisecond, 10*time.Second, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 100, 400*time.Millisecond, 10*time.Second, true, nil)
 	dt.Config = &config.MockConfig{}
 	dt.Logger = &logger.NullLogger{}
 	dt.Version = "test-version"
@@ -958,6 +958,7 @@ func TestDirectTransmissionQueueLengthGauge(t *testing.T) {
 		batchTimeout,
 		10*time.Second,
 		true,
+		nil,
 	)
 	dt.Config = &config.MockConfig{}
 	dt.Logger = &logger.NullLogger{}
@@ -1358,6 +1359,7 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 					libhoney.DefaultBatchTimeout,
 					60*time.Second, // this is the default batch send timeout in libhoney
 					false,
+					nil,
 				)
 				dt.Logger = &logger.NullLogger{}
 				dt.Version = "benchmark"
@@ -1494,4 +1496,160 @@ func TestBuildRequestURL(t *testing.T) {
 			assert.Equal(t, tc.expected, result)
 		})
 	}
+}
+
+func TestDirectTransmitAdditionalHeaders(t *testing.T) {
+	// Create test server that captures headers
+	var capturedHeaders http.Header
+	var headerMutex sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headerMutex.Lock()
+		capturedHeaders = r.Header.Clone()
+		headerMutex.Unlock()
+
+		// Read and discard body
+		io.ReadAll(r.Body)
+		r.Body.Close()
+
+		// Send proper response
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[{"status": 202}]`))
+	}))
+	defer server.Close()
+
+	// Create DirectTransmission with additional headers
+	additionalHeaders := map[string]string{
+		"FORWARD_TO_URL":  "https://proxy.example.com",
+		"X-Custom-Header": "custom-value",
+	}
+
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+	mockLogger := &logger.MockLogger{}
+
+	dt := NewDirectTransmission(
+		types.TransmitTypeUpstream,
+		http.DefaultTransport.(*http.Transport),
+		10,
+		100*time.Millisecond,
+		10*time.Second,
+		false, // no compression to simplify test
+		additionalHeaders,
+	)
+	dt.Logger = mockLogger
+	dt.Version = "test-version"
+	dt.Metrics = mockMetrics
+
+	err := dt.Start()
+	require.NoError(t, err)
+	defer dt.Stop()
+
+	// Send a test event
+	mockCfg := &config.MockConfig{}
+	eventData := types.NewPayload(mockCfg, map[string]any{"test": "value"})
+	eventData.ExtractMetadata()
+
+	event := &types.Event{
+		Context:    context.Background(),
+		APIHost:    server.URL,
+		APIKey:     "test-api-key",
+		Dataset:    "test-dataset",
+		SampleRate: 1,
+		Timestamp:  time.Now().UTC(),
+		Data:       eventData,
+	}
+	dt.EnqueueEvent(event)
+
+	// Wait for the event to be sent
+	require.Eventually(t, func() bool {
+		headerMutex.Lock()
+		defer headerMutex.Unlock()
+		return capturedHeaders != nil
+	}, 5*time.Second, 50*time.Millisecond, "headers should be captured")
+
+	// Verify custom headers were sent
+	headerMutex.Lock()
+	defer headerMutex.Unlock()
+	assert.Equal(t, "https://proxy.example.com", capturedHeaders.Get("FORWARD_TO_URL"))
+	assert.Equal(t, "custom-value", capturedHeaders.Get("X-Custom-Header"))
+
+	// Verify standard Honeycomb headers are also present
+	assert.Equal(t, "test-api-key", capturedHeaders.Get("X-Honeycomb-Team"))
+	assert.Equal(t, "application/msgpack", capturedHeaders.Get("Content-Type"))
+}
+
+func TestDirectTransmitNoAdditionalHeaders(t *testing.T) {
+	// Create test server that captures headers
+	var capturedHeaders http.Header
+	var headerMutex sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headerMutex.Lock()
+		capturedHeaders = r.Header.Clone()
+		headerMutex.Unlock()
+
+		io.ReadAll(r.Body)
+		r.Body.Close()
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[{"status": 202}]`))
+	}))
+	defer server.Close()
+
+	// Create DirectTransmission without additional headers (nil)
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+	mockLogger := &logger.MockLogger{}
+
+	dt := NewDirectTransmission(
+		types.TransmitTypeUpstream,
+		http.DefaultTransport.(*http.Transport),
+		10,
+		100*time.Millisecond,
+		10*time.Second,
+		false,
+		nil, // No additional headers
+	)
+	dt.Logger = mockLogger
+	dt.Version = "test-version"
+	dt.Metrics = mockMetrics
+
+	err := dt.Start()
+	require.NoError(t, err)
+	defer dt.Stop()
+
+	// Send a test event
+	mockCfg := &config.MockConfig{}
+	eventData := types.NewPayload(mockCfg, map[string]any{"test": "value"})
+	eventData.ExtractMetadata()
+
+	event := &types.Event{
+		Context:    context.Background(),
+		APIHost:    server.URL,
+		APIKey:     "test-api-key",
+		Dataset:    "test-dataset",
+		SampleRate: 1,
+		Timestamp:  time.Now().UTC(),
+		Data:       eventData,
+	}
+	dt.EnqueueEvent(event)
+
+	// Wait for the event to be sent
+	require.Eventually(t, func() bool {
+		headerMutex.Lock()
+		defer headerMutex.Unlock()
+		return capturedHeaders != nil
+	}, 5*time.Second, 50*time.Millisecond, "headers should be captured")
+
+	// Verify standard Honeycomb headers are present
+	headerMutex.Lock()
+	defer headerMutex.Unlock()
+	assert.Equal(t, "test-api-key", capturedHeaders.Get("X-Honeycomb-Team"))
+	assert.Equal(t, "application/msgpack", capturedHeaders.Get("Content-Type"))
+
+	// Custom headers should not be present
+	assert.Empty(t, capturedHeaders.Get("FORWARD_TO_URL"))
 }
