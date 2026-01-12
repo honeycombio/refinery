@@ -72,20 +72,7 @@ func getIdentifierFromInterface(logger logger.Logger, cfg config.Config) (string
 				Logf("IdentifierInterfaceName set but couldn't list addresses")
 			return "", err
 		}
-		var ipStr string
-		for _, addr := range addrs {
-			// ParseIP doesn't know what to do with the suffix
-			ip := net.ParseIP(strings.Split(addr.String(), "/")[0])
-			ipv6 := cfg.GetUseIPV6Identifier()
-			if ipv6 && ip.To16() != nil {
-				ipStr = fmt.Sprintf("[%s]", ip.String())
-				break
-			}
-			if !ipv6 && ip.To4() != nil {
-				ipStr = ip.String()
-				break
-			}
-		}
+		ipStr := selectIPFromAddrs(addrs, cfg.GetUseIPV6Identifier())
 		if ipStr == "" {
 			err = errors.New("could not find a valid IP to use from interface")
 			logger.Error().WithField("interface", ifc.Name).
@@ -98,4 +85,21 @@ func getIdentifierFromInterface(logger logger.Logger, cfg config.Config) (string
 	}
 
 	return myIdentifier, nil
+}
+
+// selectIPFromAddrs selects an IP address from a list of network addresses.
+// If useIPV6 is true, it returns the first IPv6 address wrapped in brackets.
+// If useIPV6 is false, it returns the first IPv4 address.
+func selectIPFromAddrs(addrs []net.Addr, useIPV6 bool) string {
+	for _, addr := range addrs {
+		// ParseIP doesn't know what to do with the suffix
+		ip := net.ParseIP(strings.Split(addr.String(), "/")[0])
+		if useIPV6 && ip.To16() != nil {
+			return fmt.Sprintf("[%s]", ip.String())
+		}
+		if !useIPV6 && ip.To4() != nil {
+			return ip.String()
+		}
+	}
+	return ""
 }

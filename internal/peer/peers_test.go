@@ -3,6 +3,7 @@ package peer
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -114,4 +115,81 @@ func TestPeerShutdown(t *testing.T) {
 		assert.NoError(t, err)
 		return len(peers) == 1
 	}, 5*time.Second, 200*time.Millisecond)
+}
+
+// mockAddr implements net.Addr for testing
+type mockAddr struct {
+	addr string
+}
+
+func (m mockAddr) Network() string { return "ip" }
+func (m mockAddr) String() string  { return m.addr }
+
+func TestSelectIPFromAddrs(t *testing.T) {
+	tests := []struct {
+		name     string
+		addrs    []net.Addr
+		useIPV6  bool
+		expected string
+	}{
+		{
+			name: "IPv4 only, useIPV6=false, should return IPv4",
+			addrs: []net.Addr{
+				mockAddr{"100.122.159.209/18"},
+			},
+			useIPV6:  false,
+			expected: "100.122.159.209",
+		},
+		{
+			name: "IPv4 only, useIPV6=true, should return empty (no IPv6 available)",
+			addrs: []net.Addr{
+				mockAddr{"100.122.159.209/18"},
+			},
+			useIPV6:  true,
+			expected: "",
+		},
+		{
+			name: "IPv6 only, useIPV6=true, should return bracketed IPv6",
+			addrs: []net.Addr{
+				mockAddr{"2600:1f18:2772:d500:a772:1d0e:8ef5:93de/128"},
+			},
+			useIPV6:  true,
+			expected: "[2600:1f18:2772:d500:a772:1d0e:8ef5:93de]",
+		},
+		{
+			name: "IPv6 only, useIPV6=false, should return empty (no IPv4 available)",
+			addrs: []net.Addr{
+				mockAddr{"2600:1f18:2772:d500:a772:1d0e:8ef5:93de/128"},
+			},
+			useIPV6:  false,
+			expected: "",
+		},
+		{
+			name: "Mixed IPv4 and IPv6, useIPV6=false, should return IPv4",
+			addrs: []net.Addr{
+				mockAddr{"100.122.159.209/18"},
+				mockAddr{"2600:1f18:2772:d500:a772:1d0e:8ef5:93de/128"},
+				mockAddr{"fe80::514d:14e3:9e02:b884/64"},
+			},
+			useIPV6:  false,
+			expected: "100.122.159.209",
+		},
+		{
+			name: "Mixed IPv4 and IPv6, useIPV6=true, should return bracketed IPv6 (not bracketed IPv4)",
+			addrs: []net.Addr{
+				mockAddr{"100.122.159.209/18"},
+				mockAddr{"2600:1f18:2772:d500:a772:1d0e:8ef5:93de/128"},
+				mockAddr{"fe80::514d:14e3:9e02:b884/64"},
+			},
+			useIPV6:  true,
+			expected: "[2600:1f18:2772:d500:a772:1d0e:8ef5:93de]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := selectIPFromAddrs(tt.addrs, tt.useIPV6)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
