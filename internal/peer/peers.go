@@ -92,9 +92,8 @@ func getIdentifierFromInterface(logger logger.Logger, cfg config.Config) (string
 // If useIPV6 is false, it returns the first IPv4 address.
 func selectIPFromAddrs(addrs []net.Addr, useIPV6 bool) string {
 	for _, addr := range addrs {
-		// ParseIP doesn't know what to do with the suffix
 		ip := net.ParseIP(strings.Split(addr.String(), "/")[0])
-		if useIPV6 && ip.To16() != nil {
+		if useIPV6 && ip.To4() == nil {
 			return fmt.Sprintf("[%s]", ip.String())
 		}
 		if !useIPV6 && ip.To4() != nil {
