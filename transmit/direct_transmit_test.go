@@ -1509,26 +1509,6 @@ func TestBuildRequestURL(t *testing.T) {
 }
 
 func TestDirectTransmitAdditionalHeaders(t *testing.T) {
-	// Create test server that captures headers
-	var capturedHeaders http.Header
-	var headerMutex sync.Mutex
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		headerMutex.Lock()
-		capturedHeaders = r.Header.Clone()
-		headerMutex.Unlock()
-
-		// Read and discard body
-		io.ReadAll(r.Body)
-		r.Body.Close()
-
-		// Send proper response
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[{"status": 202}]`))
-	}))
-	defer server.Close()
-
 	// Create DirectTransmission with additional headers
 	additionalHeaders := map[string]string{
 		"FORWARD_TO_URL":  "https://proxy.example.com",
@@ -1537,7 +1517,7 @@ func TestDirectTransmitAdditionalHeaders(t *testing.T) {
 
 	mockMetrics := &metrics.MockMetrics{}
 	mockMetrics.Start()
-	mockLogger := &logger.MockLogger{}
+	t.Cleanup(mockMetrics.Stop)
 
 	dt := NewDirectTransmission(
 		types.TransmitTypeUpstream,
@@ -1548,22 +1528,53 @@ func TestDirectTransmitAdditionalHeaders(t *testing.T) {
 		false, // no compression to simplify test
 		additionalHeaders,
 	)
-	dt.Logger = mockLogger
-	dt.Version = "test-version"
+	dt.Logger = &logger.MockLogger{}
 	dt.Metrics = mockMetrics
+	dt.Version = "additional-headers-test"
 
+	// Create test server that verifies the presence of additional headers
+	var requestReceived bool
+
+	validatingHeadersServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify custom headers were sent
+		assert.Equal(t, "https://proxy.example.com", r.Header.Get("FORWARD_TO_URL"))
+		assert.Equal(t, "custom-value", r.Header.Get("X-Custom-Header"))
+
+		// Verify standard Honeycomb headers are also present
+		assert.Equal(t, "test-api-key", r.Header.Get("X-Honeycomb-Team"))
+		assert.Equal(t, "application/msgpack", r.Header.Get("Content-Type"))
+
+		// Read and discard body
+		_, _ = io.ReadAll(r.Body)
+		r.Body.Close()
+
+		requestReceived = true
+
+		// If any assertion fails above, respond with an error like maybe a proxy would
+		if t.Failed() {
+			http.Error(w, "🦞 Your headers are bad and you should feel bad.", http.StatusTeapot)
+			return
+		}
+
+		// Send proper response
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[{"status": 202}]`))
+	}))
+	t.Cleanup(validatingHeadersServer.Close)
+
+	// Start the test DirectTransmission
 	err := dt.Start()
 	require.NoError(t, err)
-	defer dt.Stop()
+	t.Cleanup(func() { dt.Stop() })
 
 	// Send a test event
-	mockCfg := &config.MockConfig{}
-	eventData := types.NewPayload(mockCfg, map[string]any{"test": "value"})
+	eventData := types.NewPayload(&config.MockConfig{}, map[string]any{"test": "value"})
 	eventData.ExtractMetadata()
 
 	event := &types.Event{
 		Context:    context.Background(),
-		APIHost:    server.URL,
+		APIHost:    validatingHeadersServer.URL,
 		APIKey:     "test-api-key",
 		Dataset:    "test-dataset",
 		SampleRate: 1,
@@ -1572,47 +1583,17 @@ func TestDirectTransmitAdditionalHeaders(t *testing.T) {
 	}
 	dt.EnqueueEvent(event)
 
-	// Wait for the event to be sent
+	// Wait for the server to see the batch request, header assertions are done in the server handler
 	require.Eventually(t, func() bool {
-		headerMutex.Lock()
-		defer headerMutex.Unlock()
-		return capturedHeaders != nil
-	}, 5*time.Second, 50*time.Millisecond, "headers should be captured")
-
-	// Verify custom headers were sent
-	headerMutex.Lock()
-	defer headerMutex.Unlock()
-	assert.Equal(t, "https://proxy.example.com", capturedHeaders.Get("FORWARD_TO_URL"))
-	assert.Equal(t, "custom-value", capturedHeaders.Get("X-Custom-Header"))
-
-	// Verify standard Honeycomb headers are also present
-	assert.Equal(t, "test-api-key", capturedHeaders.Get("X-Honeycomb-Team"))
-	assert.Equal(t, "application/msgpack", capturedHeaders.Get("Content-Type"))
+		return requestReceived
+	}, 5*time.Second, 50*time.Millisecond, "request with headers should have been received")
 }
 
 func TestDirectTransmitNoAdditionalHeaders(t *testing.T) {
-	// Create test server that captures headers
-	var capturedHeaders http.Header
-	var headerMutex sync.Mutex
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		headerMutex.Lock()
-		capturedHeaders = r.Header.Clone()
-		headerMutex.Unlock()
-
-		io.ReadAll(r.Body)
-		r.Body.Close()
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`[{"status": 202}]`))
-	}))
-	defer server.Close()
-
-	// Create DirectTransmission without additional headers (nil)
+	// Create DirectTransmission with no additional headers
 	mockMetrics := &metrics.MockMetrics{}
 	mockMetrics.Start()
-	mockLogger := &logger.MockLogger{}
+	t.Cleanup(mockMetrics.Stop)
 
 	dt := NewDirectTransmission(
 		types.TransmitTypeUpstream,
@@ -1620,25 +1601,55 @@ func TestDirectTransmitNoAdditionalHeaders(t *testing.T) {
 		10,
 		100*time.Millisecond,
 		10*time.Second,
-		false,
-		nil, // No additional headers
+		false, // no compression to simplify test
+		map[string]string{"FORWARD_TO_URL": "https://proxy.example.com"},
 	)
-	dt.Logger = mockLogger
-	dt.Version = "test-version"
+	dt.Logger = &logger.MockLogger{}
 	dt.Metrics = mockMetrics
+	dt.Version = "no-additional-headers-test"
 
+	// Create test server that verifies the presence of additional headers
+	var requestReceived bool
+
+	validatingHeadersServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Verify standard Honeycomb headers are also present
+		assert.Equal(t, "test-api-key", r.Header.Get("X-Honeycomb-Team"))
+		assert.Equal(t, "application/msgpack", r.Header.Get("Content-Type"))
+
+		// Verify a custom headers was not sent
+		assert.Empty(t, r.Header.Get("FORWARD_TO_URL"), "A custom header should not have been sent")
+
+		// Read and discard body
+		_, _ = io.ReadAll(r.Body)
+		r.Body.Close()
+
+		requestReceived = true
+
+		// If any assertion fails above, respond with an error like maybe a  would
+		if t.Failed() {
+			http.Error(w, "🦞 Your headers are bad and you should feel bad.", http.StatusTeapot)
+			return
+		}
+
+		// Send proper response
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`[{"status": 202}]`))
+	}))
+	t.Cleanup(validatingHeadersServer.Close)
+
+	// Start the test DirectTransmission
 	err := dt.Start()
 	require.NoError(t, err)
-	defer dt.Stop()
+	t.Cleanup(func() { dt.Stop() })
 
 	// Send a test event
-	mockCfg := &config.MockConfig{}
-	eventData := types.NewPayload(mockCfg, map[string]any{"test": "value"})
+	eventData := types.NewPayload(&config.MockConfig{}, map[string]any{"test": "value"})
 	eventData.ExtractMetadata()
 
 	event := &types.Event{
 		Context:    context.Background(),
-		APIHost:    server.URL,
+		APIHost:    validatingHeadersServer.URL,
 		APIKey:     "test-api-key",
 		Dataset:    "test-dataset",
 		SampleRate: 1,
@@ -1647,19 +1658,8 @@ func TestDirectTransmitNoAdditionalHeaders(t *testing.T) {
 	}
 	dt.EnqueueEvent(event)
 
-	// Wait for the event to be sent
+	// Wait for the server to see the batch request, header assertions are done in the server handler
 	require.Eventually(t, func() bool {
-		headerMutex.Lock()
-		defer headerMutex.Unlock()
-		return capturedHeaders != nil
-	}, 5*time.Second, 50*time.Millisecond, "headers should be captured")
-
-	// Verify standard Honeycomb headers are present
-	headerMutex.Lock()
-	defer headerMutex.Unlock()
-	assert.Equal(t, "test-api-key", capturedHeaders.Get("X-Honeycomb-Team"))
-	assert.Equal(t, "application/msgpack", capturedHeaders.Get("Content-Type"))
-
-	// Custom headers should not be present
-	assert.Empty(t, capturedHeaders.Get("FORWARD_TO_URL"))
+		return requestReceived
+	}, 5*time.Second, 50*time.Millisecond, "request with headers should have been received")
 }
