@@ -1508,6 +1508,9 @@ func TestBuildRequestURL(t *testing.T) {
 	}
 }
 
+// TestDirectTransmission_AdditionalHeaders validates that additional headers configured
+// in Network.AdditionalHeaders are properly sent with HTTP requests.
+// Config-level validation (reserved headers, etc.) is tested in config/config_test.go
 func TestDirectTransmission_AdditionalHeaders(t *testing.T) {
 	testCases := []struct {
 		desc              string
@@ -1550,33 +1553,22 @@ func TestDirectTransmission_AdditionalHeaders(t *testing.T) {
 			dt.Metrics = mockMetrics
 			dt.Version = tC.desc + "-test"
 
-			// Create test server that verifies the presence of additional headers
-			var handlerCalled atomic.Bool
+			// Store http.Header(s) received for validation outside handler
+			var receivedHeaders atomic.Value
 
-			validatingHeadersServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if len(tC.additionalHeaders) > 0 {
-					// Verify custom headers were sent
-					for customHeaderName, customHeaderValue := range tC.additionalHeaders {
-						assert.Equal(t, customHeaderValue, r.Header.Get(customHeaderName), "Additional header '%s' has unexpected value", customHeaderName)
-					}
-				}
-
-				// Verify standard Honeycomb headers are present
-				assert.Equal(t, "test-additional-headers", r.Header.Get("X-Honeycomb-Team"))
-				assert.Equal(t, "application/msgpack", r.Header.Get("Content-Type"))
+			capturingHeadersServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				receivedHeaders.Store(r.Header.Clone())
 
 				// Read and discard body
 				_, _ = io.ReadAll(r.Body)
 				r.Body.Close()
-
-				handlerCalled.Store(true)
 
 				// Send proper response
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				w.Write([]byte(`[{"status": 202}]`))
 			}))
-			t.Cleanup(validatingHeadersServer.Close)
+			t.Cleanup(capturingHeadersServer.Close)
 
 			// Start the test DirectTransmission
 			err := dt.Start()
@@ -1589,7 +1581,7 @@ func TestDirectTransmission_AdditionalHeaders(t *testing.T) {
 
 			event := &types.Event{
 				Context:    context.Background(),
-				APIHost:    validatingHeadersServer.URL,
+				APIHost:    capturingHeadersServer.URL,
 				APIKey:     "test-additional-headers",
 				Dataset:    "test-dataset",
 				SampleRate: 1,
@@ -1598,10 +1590,22 @@ func TestDirectTransmission_AdditionalHeaders(t *testing.T) {
 			}
 			dt.EnqueueEvent(event)
 
-			// Wait for the server to see the batch request, header assertions are done in the server handler
+			// Wait for the server to receive the request
 			require.Eventually(t, func() bool {
-				return handlerCalled.Load()
+				return receivedHeaders.Load() != nil
 			}, 5*time.Second, 50*time.Millisecond, "request with headers should have been received")
+
+			// Validate headers
+			headers := receivedHeaders.Load().(http.Header)
+			if len(tC.additionalHeaders) > 0 {
+				for customHeaderName, customHeaderValue := range tC.additionalHeaders {
+					assert.Equal(t, customHeaderValue, headers.Get(customHeaderName),
+						"Additional header '%s' has unexpected value", customHeaderName)
+				}
+			}
+			assert.Equal(t, "test-additional-headers", headers.Get("X-Honeycomb-Team"))
+			assert.Equal(t, "application/msgpack", headers.Get("Content-Type"))
+			assert.Contains(t, headers.Get("User-Agent"), tC.desc+"-test")
 		})
 	}
 }
