@@ -1,5 +1,7 @@
 # The Flow of Data Through Refinery
 
+## High-Level Data Flow
+
 ```mermaid
 flowchart TB
     subgraph Ingestion["📥 Ingestion Layer"]
@@ -18,59 +20,30 @@ flowchart TB
         RouterType{"Router Type?"}
     end
 
-    subgraph Collector["📦 InMemCollector (collect.go)"]
+    subgraph Collector["📦 InMemCollector"]
         WorkerHash["Hash TraceID<br/>to Worker"]
 
         subgraph Workers["👷 CollectorWorkers (parallel)"]
-            subgraph Worker0["Worker 0"]
-                W0Incoming["incoming channel"]
-                W0Peer["fromPeer channel"]
-
-                subgraph W0Loop["collect() loop"]
-                    W0Select{"select"}
-                    W0ProcessSpan["processSpan()"]
-                    W0Ticker["ticker"]
-                    W0SendEarly["sendEarly<br/>(from memory monitor)"]
-                    W0ExpiredTraces["sendExpiredTracesInCache()"]
-                    W0TracesEarly["sendTracesEarly()"]
-                end
-
-                W0Cache["Trace Cache"]
-                W0SentCache["Sent Cache"]
-
-                subgraph W0Triggers["Decision Triggers"]
-                    TriggerRoot["TraceSendGotRoot"]
-                    TriggerLimit["TraceSendSpanLimit"]
-                    TriggerExpired["TraceSendExpired"]
-                    TriggerMemory["TraceSendEjectedMemsize"]
-                end
-            end
-
-            subgraph WorkerN["Worker N..."]
-                WNIncoming["incoming channel"]
-                WNPeer["fromPeer channel"]
-                WNLoop["collect() loop"]
-                WNCache["Trace Cache"]
-                WNSentCache["Sent Cache"]
-            end
+            Worker0["Worker 0"]
+            Worker1["Worker 1"]
+            WorkerN["Worker N..."]
         end
 
-        TracesToSend["tracesToSend channel"]
+        TracesToSend(["tracesToSend"])
         SendTraces["sendTraces()"]
     end
 
-    subgraph Sampling["🎯 Sampling Decision (per worker)"]
-        GetSampler["Get Sampler<br/>for dataset/env"]
-        Samplers["Samplers:<br/>• Deterministic<br/>• Dynamic/EMA<br/>• Rules-based<br/>• Throughput"]
-        MakeDecision["makeDecision()<br/>rate, keep, reason"]
+    subgraph StressRelief["⚡ Stress Relief"]
+        ImmediateDecision["ProcessSpanImmediately()<br/>(deterministic sampling)"]
+        WorkerSentCache["Worker's Sent Cache<br/>(record decision)"]
+        ProbeCheck{"My Shard?"}
     end
 
     subgraph Transmission["📤 Transmission Layer"]
         DecorateSpans["Decorate Spans<br/>(sample rate, metadata)"]
-        Batch["Batch by Destination<br/>(apiHost + apiKey + dataset)"]
-        Serialize["Serialize (msgpack)<br/>Compress (zstd)"]
-        UpstreamTX["Upstream<br/>Transmission"]
-        PeerTX["Peer<br/>Transmission"]
+        Batch["Batch by Destination"]
+        UpstreamTX["Upstream Transmission"]
+        PeerTX["Peer Transmission"]
     end
 
     subgraph Destinations["🎯 Destinations"]
@@ -78,12 +51,7 @@ flowchart TB
         PeerNodes["Peer Refinery Nodes"]
     end
 
-    subgraph StressRelief["⚡ Stress Relief"]
-        ImmediateDecision["ProcessSpanImmediately()<br/>(deterministic sampling)"]
-        ProbeCheck{"My Shard?"}
-    end
-
-    %% Ingestion flow - all sources go through same router flow
+    %% Ingestion flow
     HTTP --> Decompress
     GRPC --> Decompress
     PeerIn --> Decompress
@@ -97,82 +65,124 @@ flowchart TB
     %% Has trace ID - check stress
     HasTraceID -->|"Yes"| StressCheck
 
-    %% Stress relief path - bypasses collector entirely
+    %% Stress relief path
     StressCheck -->|"Yes"| ImmediateDecision
-    ImmediateDecision -->|"kept → send upstream"| UpstreamTX
-    ImmediateDecision -->|"kept → probe"| ProbeCheck
-    ImmediateDecision -->|"dropped"| Drop1["Drop"]
-    ProbeCheck -->|"No - notify peer"| PeerTX
-    ProbeCheck -->|"Yes - done"| Drop2["Done"]
+    ImmediateDecision --> WorkerSentCache
+    WorkerSentCache -->|"dropped"| Drop1["Drop"]
+    WorkerSentCache -->|"kept"| UpstreamTX
+    WorkerSentCache -->|"kept"| ProbeCheck
+    ProbeCheck -->|"different peer"| PeerTX
+    ProbeCheck -->|"my shard"| Drop2["Done"]
 
-    %% Normal path - check shard ownership
+    %% Normal path
     StressCheck -->|"No"| ShardCheck
-    ShardCheck -->|"No - different peer"| PeerTX
-    ShardCheck -->|"Yes - mine"| RouterType
+    ShardCheck -->|"different peer"| PeerTX
+    ShardCheck -->|"my shard"| RouterType
 
-    %% Router type determines method, then hash to worker
     RouterType -->|"IncomingRouter"| WorkerHash
     RouterType -->|"PeerRouter"| WorkerHash
 
-    %% Hash routes to specific worker's channel
-    WorkerHash -->|"AddSpan()"| W0Incoming
-    WorkerHash -->|"AddSpan()"| WNIncoming
-    WorkerHash -->|"AddSpanFromPeer()"| W0Peer
-    WorkerHash -->|"AddSpanFromPeer()"| WNPeer
+    %% Hash to workers via per-worker channels
+    WorkerHash -->|"worker ch"| Worker0
+    WorkerHash -->|"worker ch"| Worker1
+    WorkerHash -->|"worker ch"| WorkerN
 
-    %% Worker 0 detailed processing
-    W0Incoming --> W0Select
-    W0Peer --> W0Select
-    W0Ticker --> W0Select
-    W0SendEarly --> W0Select
-
-    W0Select -->|"span"| W0ProcessSpan
-    W0ProcessSpan --> W0Cache
-
-    W0Select -->|"tick"| W0ExpiredTraces
-    W0ExpiredTraces --> W0Cache
-
-    W0Select -->|"memory pressure"| W0TracesEarly
-    W0TracesEarly --> W0Cache
-
-    %% Decision triggers from cache
-    W0Cache -->|"root arrived"| TriggerRoot
-    W0Cache -->|"span limit"| TriggerLimit
-    W0Cache -->|"timeout"| TriggerExpired
-    W0Cache -->|"eviction"| TriggerMemory
-
-    TriggerRoot --> GetSampler
-    TriggerLimit --> GetSampler
-    TriggerExpired --> GetSampler
-    TriggerMemory --> GetSampler
-
-    %% Worker N (simplified)
-    WNIncoming --> WNLoop
-    WNPeer --> WNLoop
-    WNLoop --> WNCache
-
-    %% Sampling (shown once, applies to all workers)
-    GetSampler --> Samplers
-    Samplers --> MakeDecision
-    MakeDecision -->|"record"| W0SentCache
-
-    %% Workers send to shared channel
-    MakeDecision -->|"kept"| TracesToSend
+    %% Workers output
+    Worker0 --> TracesToSend
+    Worker1 --> TracesToSend
+    WorkerN --> TracesToSend
     TracesToSend --> SendTraces
 
     %% Transmission
     SendTraces --> DecorateSpans
     DecorateSpans --> Batch
-    Batch --> Serialize
-    Serialize --> UpstreamTX
+    Batch --> UpstreamTX
 
     %% Destinations
     UpstreamTX --> Honeycomb
     PeerTX --> PeerNodes
+```
 
-    %% Late spans
-    W0SentCache -.->|"late span<br/>lookup"| W0Loop
+## Worker Internals
 
+```mermaid
+flowchart TB
+    subgraph Inputs["📥 Input Channels"]
+        FromPeer(["telemetry from peers (priority)"])
+        Incoming(["incoming telemetry from clients"])
+        Ticker((("ticker<br/>(periodic)")))
+        SendEarly{{"sendEarly<br/>(memory pressure)"}}
+    end
+
+    subgraph CollectLoop["🔄 collect() loop"]
+        Select{"select"}
+        ProcessSpan["processSpan()"]
+        SendExpired["sendExpiredTracesInCache()"]
+        SendTracesEarly["sendTracesEarly()"]
+    end
+
+    subgraph Caches["💾 Caches"]
+        TraceCache["Trace Cache<br/>(active traces)"]
+        SentCache["Sent Cache<br/>(decisions)"]
+    end
+
+    subgraph Triggers["⏰ Decision Triggers"]
+        TriggerRoot["TraceSendGotRoot<br/>(root span arrived)"]
+        TriggerLimit["TraceSendSpanLimit<br/>(span limit exceeded)"]
+        TriggerExpired["TraceSendExpired<br/>(trace timeout)"]
+        TriggerMemory["TraceSendEjectedMemsize<br/>(memory eviction)"]
+    end
+
+    subgraph Sampling["🎯 Sampling"]
+        GetSampler["Get Sampler<br/>for dataset/env"]
+        Samplers["Samplers:<br/>• Deterministic<br/>• Dynamic/EMA<br/>• Rules-based<br/>• Throughput"]
+        MakeDecision["makeDecision()<br/>rate, keep, reason"]
+    end
+
+    Send["Send"]
+    Drop["Drop"]
+
+    %% Input to select
+    Incoming --> Select
+    FromPeer --> Select
+    Ticker --> Select
+    SendEarly --> Select
+
+    %% Select dispatches
+    Select -->|"span"| ProcessSpan
+    Select -->|"tick"| SendExpired
+    Select -->|"memory pressure"| SendTracesEarly
+
+    %% ProcessSpan flow
+    ProcessSpan -->|"check/add"| TraceCache
+    ProcessSpan -->|"cache miss or<br/>trace.Sent?"| SentCache
+
+    %% Late span handling from SentCache
+    SentCache -->|"late span kept"| Send
+    SentCache -->|"late span dropped"| Drop
+
+    %% Expiration checks cache
+    SendExpired --> TraceCache
+    SendTracesEarly --> TraceCache
+
+    %% Cache triggers decisions
+    TraceCache -->|"root arrived"| TriggerRoot
+    TraceCache -->|"span limit"| TriggerLimit
+    TraceCache -->|"timeout"| TriggerExpired
+    TraceCache -->|"eviction"| TriggerMemory
+
+    %% Triggers to sampling
+    TriggerRoot --> GetSampler
+    TriggerLimit --> GetSampler
+    TriggerExpired --> GetSampler
+    TriggerMemory --> GetSampler
+
+    %% Sampling flow
+    GetSampler --> Samplers
+    Samplers --> MakeDecision
+    MakeDecision -->|"record decision"| SentCache
+    MakeDecision -->|"kept"| Send
+    MakeDecision -->|"dropped"| Drop
 ```
 
 ## Key Data Flow Summary
@@ -187,7 +197,7 @@ flowchart TB
 
 ## Multi-Worker Architecture
 
-The InMemCollector now uses multiple parallel `CollectorWorker` instances:
+The InMemCollector uses multiple parallel `CollectorWorker` instances:
 
 | Component | Description |
 |-----------|-------------|
@@ -207,10 +217,10 @@ Each worker has:
 
 Refinery runs two separate Router instances that share the same processing logic:
 
-| Router | Listens On | Source | Collector Method |
-|--------|------------|--------|------------------|
-| **IncomingRouter** | `ListenAddr` | External clients | `AddSpan()` → worker's `incoming` channel |
-| **PeerRouter** | `PeerListenAddr` | Other Refinery nodes | `AddSpanFromPeer()` → worker's `fromPeer` channel |
+| Router             | Listens On        | Source               | Collector Method                                  |
+|--------------------|-------------------|----------------------|-----------------------------------------------    |
+| **IncomingRouter** | `ListenAddr`      | External clients     | `AddSpan()` → worker's `incoming` channel         |
+| **PeerRouter**     | `PeerListenAddr`  | Other Refinery nodes | `AddSpanFromPeer()` → worker's `fromPeer` channel |
 
 Both routers go through the same flow (decompress → unmarshal → extract → stress check → shard check), then the InMemCollector hashes the trace ID to select a worker.
 
@@ -224,18 +234,28 @@ When stressed, `ProcessSpanImmediately()` makes an immediate deterministic decis
 
 Stress relief completely bypasses the workers to reduce memory pressure.
 
+## Sent Cache Architecture
+
+Each `CollectorWorker` has its own `sampleCache` that records sampling decisions for traces it owns. This cache is used for:
+
+- **Normal operation** - recording decisions made by the worker's sampling logic
+- **Stress relief** - `ProcessSpanImmediately()` looks up the owning worker via `hash(traceID) % numWorkers` and records the decision in that worker's `sampleCache`
+
+This design ensures that late-arriving spans for a trace will always be routed to the same worker that made (or will make) the sampling decision, so the decision can be found in that worker's sent cache.
+
 ## Decision Triggers
 
 Within each worker's `collect()` loop, traces are sent for sampling decision based on these triggers:
 
-| Trigger | Metric | Condition |
-|---------|--------|-----------|
-| **TraceSendGotRoot** | `trace_send_got_root` | Root span arrived, trace ready after SendDelay |
-| **TraceSendSpanLimit** | `trace_send_span_limit` | Trace exceeded configured SpanLimit |
-| **TraceSendExpired** | `trace_send_expired` | Trace timeout (TraceTimeout) reached without root |
-| **TraceSendEjectedMemsize** | `trace_send_ejected_memsize` | Memory pressure triggered coordinated eviction |
+| Trigger                      | Metric / `meta.refinery.send_reason` | Condition                                          |
+|------------------------------|--------------------------------------|----------------------------------------------------|
+| **TraceSendGotRoot**         | `trace_send_got_root`                | Root span arrived, trace ready after SendDelay     |
+| **TraceSendSpanLimit**       | `trace_send_span_limit`              | Trace exceeded configured SpanLimit                |
+| **TraceSendExpired**         | `trace_send_expired`                 | Trace timeout (TraceTimeout) reached without root  |
+| **TraceSendEjectedMemsize**  | `trace_send_ejected_memsize`         | Memory pressure triggered coordinated eviction     |
 
 The `collect()` loop processes these via:
+
 - **processSpan()** - adds spans to cache, marks trace for sending if root or limit hit
 - **sendExpiredTracesInCache()** - called on ticker, finds traces past SendBy time
 - **sendTracesEarly()** - called when memory monitor signals eviction needed
