@@ -1533,7 +1533,7 @@ func TestDirectTransmitAdditionalHeaders(t *testing.T) {
 	dt.Version = "additional-headers-test"
 
 	// Create test server that verifies the presence of additional headers
-	var requestReceived bool
+	var handlerCalled atomic.Bool
 
 	validatingHeadersServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify custom headers were sent
@@ -1541,14 +1541,14 @@ func TestDirectTransmitAdditionalHeaders(t *testing.T) {
 		assert.Equal(t, "custom-value", r.Header.Get("X-Custom-Header"))
 
 		// Verify standard Honeycomb headers are also present
-		assert.Equal(t, "test-api-key", r.Header.Get("X-Honeycomb-Team"))
+		assert.Equal(t, "test-additional-headers", r.Header.Get("X-Honeycomb-Team"))
 		assert.Equal(t, "application/msgpack", r.Header.Get("Content-Type"))
 
 		// Read and discard body
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		requestReceived = true
+		handlerCalled.Store(true)
 
 		// If any assertion fails above, respond with an error like maybe a proxy would
 		if t.Failed() {
@@ -1575,7 +1575,7 @@ func TestDirectTransmitAdditionalHeaders(t *testing.T) {
 	event := &types.Event{
 		Context:    context.Background(),
 		APIHost:    validatingHeadersServer.URL,
-		APIKey:     "test-api-key",
+		APIKey:     "test-additional-headers",
 		Dataset:    "test-dataset",
 		SampleRate: 1,
 		Timestamp:  time.Now().UTC(),
@@ -1585,7 +1585,7 @@ func TestDirectTransmitAdditionalHeaders(t *testing.T) {
 
 	// Wait for the server to see the batch request, header assertions are done in the server handler
 	require.Eventually(t, func() bool {
-		return requestReceived
+		return handlerCalled.Load()
 	}, 5*time.Second, 50*time.Millisecond, "request with headers should have been received")
 }
 
@@ -1602,18 +1602,18 @@ func TestDirectTransmitNoAdditionalHeaders(t *testing.T) {
 		100*time.Millisecond,
 		10*time.Second,
 		false, // no compression to simplify test
-		map[string]string{"FORWARD_TO_URL": "https://proxy.example.com"},
+		nil,   // no additional headers
 	)
 	dt.Logger = &logger.MockLogger{}
 	dt.Metrics = mockMetrics
 	dt.Version = "no-additional-headers-test"
 
 	// Create test server that verifies the presence of additional headers
-	var requestReceived bool
+	var handlerCalled atomic.Bool
 
 	validatingHeadersServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify standard Honeycomb headers are also present
-		assert.Equal(t, "test-api-key", r.Header.Get("X-Honeycomb-Team"))
+		assert.Equal(t, "test-no-additional-headers", r.Header.Get("X-Honeycomb-Team"))
 		assert.Equal(t, "application/msgpack", r.Header.Get("Content-Type"))
 
 		// Verify a custom headers was not sent
@@ -1623,7 +1623,7 @@ func TestDirectTransmitNoAdditionalHeaders(t *testing.T) {
 		_, _ = io.ReadAll(r.Body)
 		r.Body.Close()
 
-		requestReceived = true
+		handlerCalled.Store(true)
 
 		// If any assertion fails above, respond with an error like maybe a  would
 		if t.Failed() {
@@ -1650,7 +1650,7 @@ func TestDirectTransmitNoAdditionalHeaders(t *testing.T) {
 	event := &types.Event{
 		Context:    context.Background(),
 		APIHost:    validatingHeadersServer.URL,
-		APIKey:     "test-api-key",
+		APIKey:     "test-no-additional-headers",
 		Dataset:    "test-dataset",
 		SampleRate: 1,
 		Timestamp:  time.Now().UTC(),
@@ -1660,6 +1660,6 @@ func TestDirectTransmitNoAdditionalHeaders(t *testing.T) {
 
 	// Wait for the server to see the batch request, header assertions are done in the server handler
 	require.Eventually(t, func() bool {
-		return requestReceived
+		return handlerCalled.Load()
 	}, 5*time.Second, 50*time.Millisecond, "request with headers should have been received")
 }
