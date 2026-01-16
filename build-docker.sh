@@ -40,20 +40,25 @@ fi
 
 ## CI release tagging: apply major, major.minor, major.minor.patch, and latest tags
 
-# if we're running off a git tag, it is a release which we tag with the versions as well as latest
-# caution: this means if we ever release an update to a previous version, it will be marked latest
-# it is probably best if people just use the major or minor version tags
+# If we're running off a git tag, it's a release build.
+# Stable releases (vX.Y.Z) get major, minor, patch, and latest tags.
+# Pre-releases (vX.Y.Z-suffix) only get the exact version tag.
 
 if [[ -n ${CIRCLE_TAG:-} ]]; then
   VERSION=${CIRCLE_TAG#"v"} # trim the v prefix per version-tagging convention
 
-  # Extract major, major.minor, and major.minor.patch versions
-  MAJOR_VERSION=${VERSION%%.*}
-  MINOR_VERSION=${VERSION%.*}
-
-  # Reset tag list: add major, major.minor, major.minor.patch, and latest
-  # So 2.1.1 would be tagged with "2","2.1","2.1.1", and "latest".
-  TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION,latest"
+  # Reset tag list based on release type
+  if [[ "${CIRCLE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    # Stable release: tag with major, minor, patch, and latest
+    # So v2.1.1 would be tagged with "2", "2.1", "2.1.1", and "latest".
+    MAJOR_VERSION=${VERSION%%.*}
+    MINOR_VERSION=${VERSION%.*}
+    TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION,latest"
+  else
+    # Pre-release: only the exact version tag
+    # So v3.0.0-rc1 would be tagged only with "3.0.0-rc1".
+    TAGS="$VERSION"
+  fi
 fi
 
 GIT_COMMIT=${CIRCLE_SHA1:-$(git rev-parse HEAD)}
