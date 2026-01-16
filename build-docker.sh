@@ -3,62 +3,57 @@ set -o nounset
 set -o pipefail
 set -o xtrace
 
-# Determine a version number based on most recent version tag in git.
-#   git describe - Return the most recent annotated tag that is reachable from a commit.
-#     --tags - OK, any tag, not just the annotated ones. We don't always remember to annotate a version tag.
-#     --match='v[0-9]*' - But of all those tags, only the version ones (starts with a v and a digit).
-#     --always - … and if a tag can't be found, fallback to the commit ID.
-# Ex: v2.1.1-45-ga1b2c3d
-#   - The build was on git commit ID a1b2c3d.
-#   - v2.1.1 is the most recent version tag in the history behind that commit
-#   - That commit is 45 commits ahead of that version tag.
+### Versioning and image tagging ###
+#
+# Three build scenarios:
+#   1. CI release build: triggered by git tag
+#      - Stable (vX.Y.Z): tagged with major, minor, patch, and "latest"
+#      - Pre-release (vX.Y.Z-suffix): tagged only with exact version
+#   2. CI branch build: version + CI job ID, tagged with branch name (+ "latest" if main)
+#   3. Local build: version from git describe, tagged with that version
+
+# Get version info from git (used by branch and local builds)
+#   --tags: use any tag, not just annotated ones
+#   --match='v[0-9]*': only version tags (starts with v and a digit)
+#   --always: fall back to commit ID if no tag found
+# e.g., v2.1.1-45-ga1b2c3d means commit a1b2c3d, 45 commits ahead of tag v2.1.1
 VERSION_FROM_GIT=$(git describe --tags --match='v[0-9]*' --always)
-# trim the v prefix per Docker image version-tagging conventions
-VERSION=${VERSION_FROM_GIT#'v'}
 
-# If we are doing a dev build on circle, append the build number (job id) to the version
-# Ex: v2.1.1-45-ga1b2c3d-ci8675309
-#   - The git information gleaned above plus ...
-#   - The build happened within CircleCI job 8675309.
-if [[ -n "${CIRCLE_BUILD_NUM:-}" ]]; then
-  VERSION="${VERSION}-ci${CIRCLE_BUILD_NUM}"
-fi
+if [[ -n "${CIRCLE_TAG:-}" ]]; then
+  # Release build (triggered by git tag)
+  VERSION=${CIRCLE_TAG#"v"}
 
-### Image tagging ###
-TAGS="${VERSION}"
-
-## CI dev tagging: append the dev branch name to image tags
-if [[ -n "${CIRCLE_BRANCH:-}" ]]; then
-  BRANCH_TAG=${CIRCLE_BRANCH//\//-}
-  TAGS+=",branch-${BRANCH_TAG}"
-
-  # If the dev build is on main, we tag it as latest in ECR
-  if [[ "${CIRCLE_BRANCH}" == "main" ]]; then
-      TAGS+=",latest"
-  fi
-fi
-
-## CI release tagging: apply major, major.minor, major.minor.patch, and latest tags
-
-# If we're running off a git tag, it's a release build.
-# Stable releases (vX.Y.Z) get major, minor, patch, and latest tags.
-# Pre-releases (vX.Y.Z-suffix) only get the exact version tag.
-
-if [[ -n ${CIRCLE_TAG:-} ]]; then
-  VERSION=${CIRCLE_TAG#"v"} # trim the v prefix per version-tagging convention
-
-  # Reset tag list based on release type
   if [[ "${CIRCLE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     # Stable release: tag with major, minor, patch, and latest
-    # So v2.1.1 would be tagged with "2", "2.1", "2.1.1", and "latest".
+    # e.g., v2.1.1 -> "2", "2.1", "2.1.1", "latest"
     MAJOR_VERSION=${VERSION%%.*}
     MINOR_VERSION=${VERSION%.*}
     TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION,latest"
   else
     # Pre-release: only the exact version tag
-    # So v3.0.0-rc1 would be tagged only with "3.0.0-rc1".
+    # e.g., v3.0.0-rc1 -> "3.0.0-rc1"
     TAGS="$VERSION"
   fi
+
+elif [[ -n "${CIRCLE_BRANCH:-}" ]]; then
+  # CI branch build
+  # Version from git describe + CI job ID
+  # e.g., 2.1.1-45-ga1b2c3d-ci8675309
+  VERSION="${VERSION_FROM_GIT#'v'}-ci${CIRCLE_BUILD_NUM}"
+  BRANCH_TAG=${CIRCLE_BRANCH//\//-}
+  TAGS="${VERSION},branch-${BRANCH_TAG}"
+
+  # Main branch builds are tagged "latest" in the private registry
+  if [[ "${CIRCLE_BRANCH}" == "main" ]]; then
+    TAGS+=",latest"
+  fi
+
+else
+  # Local build
+  # Version from git describe only
+  # e.g., 2.1.1-45-ga1b2c3d
+  VERSION=${VERSION_FROM_GIT#'v'}
+  TAGS="${VERSION}"
 fi
 
 GIT_COMMIT=${CIRCLE_SHA1:-$(git rev-parse HEAD)}
