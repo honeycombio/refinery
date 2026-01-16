@@ -62,6 +62,8 @@ unset GOOS
 unset GOARCH
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(make latest_modification_time)}
+export GOEXPERIMENT=greenteagc
+go version
 
 # Build the image once, either to a remote registry designated by PRIMARY_DOCKER_REPO
 # or to the local repository as "ko.local/refinery:<tags>" if PRIMARY_DOCKER_REPO is not set.
