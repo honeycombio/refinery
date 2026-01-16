@@ -82,10 +82,32 @@ type OpAMPConfig struct {
 }
 
 type NetworkConfig struct {
-	ListenAddr      string   `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
-	PeerListenAddr  string   `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
-	HoneycombAPI    string   `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
-	HTTPIdleTimeout Duration `yaml:"HTTPIdleTimeout"`
+	ListenAddr        string            `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
+	PeerListenAddr    string            `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
+	HoneycombAPI      string            `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
+	HTTPIdleTimeout   Duration          `yaml:"HTTPIdleTimeout"`
+	AdditionalHeaders map[string]string `yaml:"AdditionalHeaders" default:"{}"`
+}
+
+// reservedHeaders contains HTTP headers that cannot be overridden via AdditionalHeaders
+// because they are set by Refinery for proper Honeycomb API communication.
+var reservedHeaders = map[string]bool{
+	"x-honeycomb-team":       true,
+	"x-hny-team":             true,
+	"x-honeycomb-dataset":    true,
+	"x-honeycomb-samplerate": true,
+	"x-honeycomb-event-time": true,
+}
+
+// validateAdditionalHeaders checks that no reserved Honeycomb headers are specified
+// in the AdditionalHeaders configuration.
+func validateAdditionalHeaders(headers map[string]string) error {
+	for key := range headers {
+		if reservedHeaders[strings.ToLower(key)] {
+			return fmt.Errorf("cannot override reserved Honeycomb header %q in Network.AdditionalHeaders", key)
+		}
+	}
+	return nil
 }
 
 type AccessKeyConfig struct {
@@ -550,6 +572,11 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 		return nil, err
 	}
 
+	// Validate AdditionalHeaders doesn't contain reserved Honeycomb headers
+	if err := validateAdditionalHeaders(mainconf.Network.AdditionalHeaders); err != nil {
+		return nil, err
+	}
+
 	cfg := &fileConfig{
 		mainConfig:  mainconf,
 		mainHash:    mainhash,
@@ -860,6 +887,13 @@ func (f *fileConfig) GetHoneycombAPI() string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Network.HoneycombAPI
+}
+
+func (f *fileConfig) GetAdditionalHeaders() map[string]string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.Network.AdditionalHeaders
 }
 
 func (f *fileConfig) GetLoggerLevel() Level {

@@ -70,6 +70,10 @@ type Config interface {
 	// the upstream Honeycomb API server
 	GetHoneycombAPI() string
 
+	// GetAdditionalHeaders returns custom HTTP headers to add to all upstream
+	// Honeycomb API calls, both processed and generated telemetry
+	GetAdditionalHeaders() map[string]string
+
 	GetTracesConfig() TracesConfig
 
 	// GetLoggerType returns the type of the logger to use. Valid types are in

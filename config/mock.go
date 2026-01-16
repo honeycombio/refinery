@@ -56,6 +56,7 @@ type MockConfig struct {
 	SampleCache                      SampleCacheConfig
 	StressRelief                     StressReliefConfig
 	AdditionalAttributes             map[string]string
+	AdditionalHeaders                map[string]string
 	TraceIdFieldNames                []string
 	ParentIdFieldNames               []string
 	CfgMetadata                      []ConfigMetadata
@@ -460,6 +461,16 @@ func (f *MockConfig) GetAdditionalAttributes() map[string]string {
 	defer f.Mux.RUnlock()
 
 	return f.AdditionalAttributes
+}
+
+func (f *MockConfig) GetAdditionalHeaders() map[string]string {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	if f.AdditionalHeaders == nil {
+		return make(map[string]string)
+	}
+	return f.AdditionalHeaders
 }
 
 func (f *MockConfig) GetOpAMPConfig() OpAMPConfig {

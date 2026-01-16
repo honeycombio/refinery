@@ -103,7 +103,7 @@ func StartSpanMulti(ctx context.Context, tracer trace.Tracer, name string, field
 	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(fields)...))
 }
 
-func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resourceVersion string) (tracer trace.Tracer, shutdown func()) {
+func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resourceVersion string, additionalHeaders map[string]string) (tracer trace.Tracer, shutdown func()) {
 	if !cfg.Enabled {
 		pr := noop.NewTracerProvider()
 		return pr.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), func() {}
@@ -122,12 +122,14 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 
 	var sampleRatio float64 = 1.0 / float64(sampleRate)
 
-	// set up honeycomb specific headers if an API key is provided
+	// Add custom headers first, then Honeycomb headers (which take precedence)
 	headers := make(map[string]string)
+	for k, v := range additionalHeaders {
+		headers[k] = v
+	}
+	// Honeycomb headers override any custom headers
 	if cfg.APIKey != "" {
-		headers = map[string]string{
-			types.APIKeyHeader: cfg.APIKey,
-		}
+		headers[types.APIKeyHeader] = cfg.APIKey
 
 		if config.IsLegacyAPIKey(cfg.APIKey) {
 			headers[types.DatasetHeader] = cfg.Dataset
