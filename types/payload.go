@@ -48,6 +48,7 @@ const (
 	MetaSpanCount                  = "meta.span_count"
 	MetaEventCount                 = "meta.event_count"
 	MetaRefineryOriginalSampleRate = "meta.refinery.original_sample_rate"
+	MetaRefineryFinalSampleRate    = "meta.refinery.final_sample_rate"
 	MetaRefinerySampleKey          = "meta.refinery.sample_key"
 )
 
@@ -85,6 +86,7 @@ var metadataFields = map[string]metadataField{
 	MetaSpanCount:                  int64Field(MetaSpanCount, func(p *Payload) *int64 { return &p.MetaSpanCount }),
 	MetaEventCount:                 int64Field(MetaEventCount, func(p *Payload) *int64 { return &p.MetaEventCount }),
 	MetaRefineryOriginalSampleRate: int64Field(MetaRefineryOriginalSampleRate, func(p *Payload) *int64 { return &p.MetaRefineryOriginalSampleRate }),
+	MetaRefineryFinalSampleRate:    int64Field(MetaRefineryFinalSampleRate, func(p *Payload) *int64 { return &p.MetaRefineryFinalSampleRate }),
 	MetaRefinerySampleKey:          stringField(MetaRefinerySampleKey, func(p *Payload) *string { return &p.MetaRefinerySampleKey }),
 }
 
@@ -259,6 +261,7 @@ type Payload struct {
 	MetaSpanCount                  int64        // meta.span_count
 	MetaEventCount                 int64        // meta.event_count
 	MetaRefineryOriginalSampleRate int64        // meta.refinery.original_sample_rate
+	MetaRefineryFinalSampleRate    int64        // meta.refinery.final_sample_rate
 	MetaRefinerySampleKey          string       // meta.refinery.sample_key
 }
 
