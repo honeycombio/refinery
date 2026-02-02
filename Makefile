@@ -28,13 +28,11 @@ test_results:
 	@mkdir -p test_results
 
 local_image: export PRIMARY_DOCKER_REPO=ko.local
-local_image: export CIRCLE_TAG=$(shell git describe --always --match "v[0-9]*" --tags)
-local_image: export CIRCLE_BRANCH=$(shell git rev-parse --abbrev-ref HEAD)
-local_image: export CIRCLE_SHA1=$(shell git rev-parse HEAD)
 local_image: export SOURCE_DATE_EPOCH=$(call __latest_modification_time)
-#: build the release image locally, available as "ko.local/refinery:<commit>"
+#: build a dev image locally, available as "ko.local/refinery:<version>" and "ko.local/refinery:local"
 local_image: ko crane
 	./build-docker.sh
+	docker tag $$(docker images ko.local/refinery --quiet | head -1) ko.local/refinery:local
 
 .PHONY: wait_for_redis
 # wait for Redis to become available for test suite
@@ -136,31 +134,40 @@ clean:
 
 .PHONY: install-tools
 install-tools:
-	go get -tool github.com/google/go-licenses/v2@v2.0.0-alpha.1
+	@echo "\n+++ Retrieving license checker tool."
 	go mod tidy
+# We install the tool so the executable for the current runtime OS/arch is available on PATH.
+	go install $(shell grep "go-licenses.*\sv" go.mod | awk '{ print $$1 "@" $$2}')
+
+LICENSES_DIR := LICENSES
+# We ignore the standard library (go list std) as a workaround for "https://github.com/google/go-licenses/issues/244."
+# The awk script converts the output of `go list std` (line separated modules)
+# to the input that `--ignore` expects (comma separated modules).
+STD_LIBS := $(shell go list std | awk 'NR > 1 { printf(",") } { printf("%s",$$0) } END { print "" }')
 
 .PHONY: update-licenses
 update-licenses: install-tools
-	rm -rf LICENSES; \
-	#: We ignore the standard library (go list std) as a workaround for \
-	"https://github.com/google/go-licenses/issues/244." The awk script converts the output \
-  of `go list std` (line separated modules) to the input that `--ignore` expects (comma separated modules).
-	go tool go-licenses save --save_path LICENSES --ignore "github.com/honeycombio/refinery" \
-		--ignore $(shell go list std | awk 'NR > 1 { printf(",") } { printf("%s",$$0) } END { print "" }') ./cmd/refinery;
+	@echo "\n+++ Updating ${LICENSES_DIR} with licenses of current dependencies."
+	rm -rf ${LICENSES_DIR}
+# save dependency licenses for builds on supported OSes
+	GOOS=linux go-licenses save \
+		--save_path ${LICENSES_DIR} \
+		--ignore "github.com/honeycombio/refinery" \
+		--ignore ${STD_LIBS} \
+		./cmd/refinery
 
 .PHONY: verify-licenses
-verify-licenses: install-tools
-	go tool go-licenses save --save_path temp --ignore "github.com/honeycombio/refinery" \
-		--ignore $(shell go list std | awk 'NR > 1 { printf(",") } { printf("%s",$$0) } END { print "" }') ./cmd/refinery; \
-	chmod +r temp; \
-    if diff temp LICENSES; then \
-      echo "Passed"; \
-      rm -rf temp; \
-    else \
-      echo "LICENSES directory must be updated. Run make update-licenses"; \
-      rm -rf temp; \
-      exit 1; \
-    fi; \
+verify-licenses: update-licenses
+	@echo "\n+++ Verifying ${LICENSES_DIR} directory is up to date."
+	@if [ 0 -eq `git status --short -- ${LICENSES_DIR} | wc -l` ]; then \
+		echo "✅  Passed: no dependency license changes detected."; \
+	else \
+		echo "⚠️  Licenses for dependencies appear to have changed since last recorded."; \
+		echo ""; \
+		git status --short -- ${LICENSES_DIR}; \
+		echo "\nReview these licenses for compatibility and commit changes if acceptable."; \
+		exit 1; \
+	fi
 
 .PHONY: smoke
 smoke: dockerize local_image
