@@ -570,7 +570,9 @@ func mergeTraceAndSpanSampleRates(sp *types.Span, traceSampleRate uint, dryRunMo
 		sp.Data.Set("meta.dryrun.sample_rate", tempSampleRate*traceSampleRate)
 		sp.SampleRate = tempSampleRate
 	} else {
-		sp.SampleRate = tempSampleRate * traceSampleRate
+		finalSampleRate := tempSampleRate * traceSampleRate
+		sp.SampleRate = finalSampleRate
+		sp.Data.Set(types.MetaRefineryFinalSampleRate, int64(finalSampleRate))
 	}
 }
 

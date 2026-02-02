@@ -283,6 +283,8 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 		"metadata should be populated with original sample rate")
 	assert.Equal(t, originalSampleRate*uint(expectedDeterministicSampleRate), upstreamSampledEvent.SampleRate,
 		"sample rate for the event should be the original sample rate multiplied by the deterministic sample rate")
+	assert.Equal(t, int64(originalSampleRate*uint(expectedDeterministicSampleRate)), upstreamSampledEvent.Data.Get(types.MetaRefineryFinalSampleRate),
+		"meta.refinery.final_sample_rate should be set to the final sample rate")
 
 	// Generate one more event with no upstream sampling applied.
 	err := coll.AddSpan(&types.Span{
@@ -310,6 +312,8 @@ func TestOriginalSampleRateIsNotedInMetaField(t *testing.T) {
 	assert.Equal(t, "no-upstream-sampling", noUpstreamSampleRateEvent.Dataset)
 	assert.Nil(t, noUpstreamSampleRateEvent.Data.Get(types.MetaRefineryOriginalSampleRate),
 		"original sample rate should not be set in metadata when original sample rate is zero")
+	assert.Equal(t, int64(expectedDeterministicSampleRate), noUpstreamSampleRateEvent.Data.Get(types.MetaRefineryFinalSampleRate),
+		"meta.refinery.final_sample_rate should be set even when original sample rate is zero")
 }
 
 // HoneyComb treats a missing or 0 SampleRate the same as 1, but
@@ -556,6 +560,11 @@ func TestDryRunMode(t *testing.T) {
 	// check expected sampleRate against span data
 	assert.Equal(t, sampleRate1, events[0].Data.Get("meta.dryrun.sample_rate"))
 	assert.Equal(t, sampleRate2, events[1].Data.Get("meta.dryrun.sample_rate"))
+	// verify that meta.refinery.final_sample_rate is NOT set in dry run mode
+	assert.Nil(t, events[0].Data.Get(types.MetaRefineryFinalSampleRate),
+		"meta.refinery.final_sample_rate should NOT be set in dry run mode")
+	assert.Nil(t, events[1].Data.Get(types.MetaRefineryFinalSampleRate),
+		"meta.refinery.final_sample_rate should NOT be set in dry run mode")
 
 	span = &types.Span{
 		TraceID: traceID3,
