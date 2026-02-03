@@ -245,11 +245,26 @@ This is almost never desired behavior.
 ### has-root-span
 
 Tests if the trace as a whole has a root span.
-
 The `Value` parameter can either be `true` or `false`.
 
-NOTE: `has-root-span` does not check if a given span **is** a root span,
-it checks if the containing trace **has** a root span.
+WARNING: `has-root-span` is a trace-level operator that checks whether the trace **has** a root span, not whether a given span **is** a root span.
+It **cannot be used with `Scope: span`**.
+When a rule has `Scope: span`, all conditions must match on a single span, but `has-root-span` evaluates the entire trace.
+Combining them will cause the rule to fail evaluation and be skipped, meaning traces that should match will not be sampled as expected.
+Always use `has-root-span` with `Scope: trace` (the default) or omit the `Scope` parameter entirely.
+
+Example:
+```yaml
+- Name: Small Fast Traces
+  Scope: trace  # Use trace scope with has-root-span
+  Conditions:
+    - Operator: has-root-span
+      Value: true
+    - Field: root.duration_ms
+      Operator: '<'
+      Value: 1000
+      Datatype: int
+```
 
 ### `matches`
 
