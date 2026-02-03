@@ -600,7 +600,7 @@ func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !trace.KeepSample && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
-		i.Logger.Info().WithFields(logFields).Logf("Dropping trace because of sampling decision")
+		i.Logger.Debug().WithFields(logFields).Logf("Dropping trace because of sampling decision")
 		return
 	}
 
@@ -635,9 +635,9 @@ func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 
 	// ok, we're not dropping this trace; send all the spans
 	if i.Config.GetIsDryRun() && !trace.shouldSend {
-		i.Logger.Info().WithFields(logFields).Logf("Trace would have been dropped, but sending because dry run mode is enabled")
+		i.Logger.Debug().WithFields(logFields).Logf("Trace would have been dropped, but sending because dry run mode is enabled")
 	} else {
-		i.Logger.Info().WithFields(logFields).Logf("Sending trace")
+		i.Logger.Debug().WithFields(logFields).Logf("Sending trace")
 	}
 
 	i.tracesToSend <- trace
