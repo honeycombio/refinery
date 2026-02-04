@@ -2,11 +2,56 @@ package config
 
 import (
 	"errors"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func Test_GetWorkerCount(t *testing.T) {
+	for _, tC := range []struct {
+		name       string
+		numWorkers int
+		want       int
+	}{
+		{"default", 0, runtime.GOMAXPROCS(0)},
+		{"configured/one worker", 1, 1},       // minimum allowed
+		{"configured/multiple workers", 4, 4}, // custom value
+	} {
+		t.Run(tC.name, func(t *testing.T) {
+			c := &CollectionConfig{WorkerCount: tC.numWorkers}
+			assert.Equal(t, tC.want, c.GetWorkerCount())
+		})
+	}
+}
+
+func Test_GetQueueSizesPerWorker(t *testing.T) {
+	for _, tC := range []struct {
+		name                  string
+		incomingQueueSize     int
+		peerQueueSize         int
+		numWorkers            int
+		wantIncomingPerWorker int
+		wantPeerPerWorker     int
+	}{
+		{"single worker/default", 30000, 30000, 1, 30000, 30000},
+		{"multiple workers/default", 30000, 30000, 8, 3750, 3750},
+		{"multiple workers/even division", 100, 50, 5, 20, 10},
+		{"multiple workers/uneven division", 5, 5, 2, 3, 3},              // rounds up
+		{"multiple workers/more workers than queue size", 3, 2, 5, 1, 1}, // minimum 1 per worker
+	} {
+		t.Run(tC.name, func(t *testing.T) {
+			c := &CollectionConfig{
+				IncomingQueueSize: tC.incomingQueueSize,
+				PeerQueueSize:     tC.peerQueueSize,
+				WorkerCount:       tC.numWorkers,
+			}
+			assert.Equal(t, tC.wantIncomingPerWorker, c.GetIncomingQueueSizePerWorker())
+			assert.Equal(t, tC.wantPeerPerWorker, c.GetPeerQueueSizePerWorker())
+		})
+	}
+}
 
 func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 	type fields struct {
@@ -247,6 +292,37 @@ func TestGetSamplingKeyFieldsForDestName(t *testing.T) {
 				"getSamplingKeyFieldsForDestName(%q) = %v, want %v",
 				tc.destName, result, tc.expected,
 			)
+		})
+	}
+}
+
+func Test_GetSampleCacheSizePerWorker(t *testing.T) {
+	for _, tC := range []struct {
+		name        string
+		input       uint
+		workerCount uint
+		want        uint
+	}{
+		{"single worker", 10000, 1, 10000},
+		{"even division", 100, 5, 20},
+		{"uneven division/rounds up", 100, 3, 34},            // (100 + 3 - 1) / 3 = 34
+		{"more workers than size", 5, 10, 1},                 // minimum 1 per worker
+		{"large size with many workers", 1000000, 128, 7813}, // (1000000 + 128 - 1) / 128 = 7813
+	} {
+
+		t.Run("keptSize/"+tC.name, func(t *testing.T) {
+			c := &SampleCacheConfig{
+				KeptSize:    tC.input,
+				WorkerCount: tC.workerCount,
+			}
+			assert.Equal(t, tC.want, c.GetKeptSizePerWorker())
+		})
+		t.Run("droppedSize/"+tC.name, func(t *testing.T) {
+			c := &SampleCacheConfig{
+				DroppedSize: tC.input,
+				WorkerCount: tC.workerCount,
+			}
+			assert.Equal(t, tC.want, c.GetDroppedSizePerWorker())
 		})
 	}
 }

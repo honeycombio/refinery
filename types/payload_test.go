@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -27,13 +28,12 @@ func TestPayload(t *testing.T) {
 		"key4":   true,
 		"keyNil": nil,
 		// Add some metadata fields to test
-		"trace.trace_id":         "test-trace-123",
-		"meta.refinery.root":     true,
-		"meta.refinery.min_span": false,
-		"meta.annotation_type":   "span_event",
+		"trace.trace_id":       "test-trace-123",
+		"meta.refinery.root":   true,
+		"meta.annotation_type": "span_event",
 
 		// This is the wrong type, it should just be ignored and dropped from the data.
-		"meta.refinery.send_by": "never",
+		"meta.refinery.original_sample_rate": "not-a-number",
 	}
 	mockCfg := &config.MockConfig{
 		TraceIdFieldNames:  []string{"trace.trace_id"},
@@ -58,23 +58,17 @@ func TestPayload(t *testing.T) {
 		assert.True(t, ph.Exists("meta.refinery.root"))
 		assert.Equal(t, true, ph.Get("meta.refinery.root"))
 
-		assert.True(t, ph.Exists("meta.refinery.min_span"))
-		assert.Equal(t, false, ph.Get("meta.refinery.min_span"))
-
 		assert.True(t, ph.Exists("meta.annotation_type"))
 		assert.Equal(t, "span_event", ph.Get("meta.annotation_type"))
 
-		assert.Nil(t, ph.Get("meta.refinery.send_by"))
-		assert.False(t, ph.Exists("meta.refinery.send_by"))
+		assert.Nil(t, ph.Get("meta.refinery.original_sample_rate"))
+		assert.False(t, ph.Exists("meta.refinery.original_sample_rate"))
 
 		// Test dedicated fields - should be populated from initial data or unmarshal
 		assert.Equal(t, "test-trace-123", ph.MetaTraceID, "MetaTraceID should be populated")
 		assert.True(t, ph.MetaRefineryRoot.HasValue, "MetaRefineryRoot should be set")
 		assert.Equal(t, true, ph.MetaRefineryRoot.Value, "MetaRefineryRoot should be populated")
-		assert.True(t, ph.MetaRefineryMinSpan.HasValue, "MetaRefineryMinSpan should be set")
-		assert.Equal(t, false, ph.MetaRefineryMinSpan.Value, "MetaRefineryMinSpan should be populated")
 		assert.Equal(t, "span_event", ph.MetaAnnotationType, "MetaAnnotationType should be populated")
-		assert.Equal(t, int64(0), ph.MetaRefinerySendBy)
 
 		ph.Set("key5", "newvalue")
 		assert.True(t, ph.Exists("key5"))
@@ -82,11 +76,6 @@ func TestPayload(t *testing.T) {
 
 		// Test setting metadata fields through Set()
 		// Verify that Set() DOES update dedicated fields to keep them in sync
-
-		ph.Set("meta.refinery.span_data_size", int64(1234))
-		assert.Equal(t, int64(1234), ph.Get("meta.refinery.span_data_size"))
-		// Verify dedicated field WAS updated by Set()
-		assert.Equal(t, int64(1234), ph.MetaRefinerySpanDataSize, "Set() should update dedicated field")
 
 		ph.Set("meta.refinery.incoming_user_agent", "test-agent/1.0")
 		assert.Equal(t, "test-agent/1.0", ph.Get("meta.refinery.incoming_user_agent"))
@@ -101,9 +90,8 @@ func TestPayload(t *testing.T) {
 		expected := maps.Clone(data)
 		expected["key3"] = 4.13
 		expected["key5"] = "newvalue"
-		expected["meta.refinery.span_data_size"] = int64(1234)
 		expected["meta.refinery.incoming_user_agent"] = "test-agent/1.0"
-		delete(expected, "meta.refinery.send_by")
+		delete(expected, "meta.refinery.original_sample_rate") // This was ignored
 		found := maps.Collect(ph.All())
 		assert.Equal(t, expected, found)
 
@@ -268,26 +256,17 @@ func TestPayloadUnmarshalMsg(t *testing.T) {
 		assert.True(t, p.MetaRefineryProbe.Value)
 		assert.True(t, p.MetaRefineryRoot.HasValue)
 		assert.True(t, p.MetaRefineryRoot.Value) // Should be true because empty parent ID
-		assert.True(t, p.MetaRefineryMinSpan.HasValue)
-		assert.True(t, p.MetaRefineryMinSpan.Value)
-		assert.True(t, p.MetaRefineryExpiredTrace.HasValue)
-		assert.False(t, p.MetaRefineryExpiredTrace.Value)
-		assert.True(t, p.MetaRefineryShutdownSend.HasValue)
-		assert.True(t, p.MetaRefineryShutdownSend.Value)
 		assert.True(t, p.MetaStressed.HasValue)
 		assert.True(t, p.MetaStressed.Value)
 
 		// Verify string metadata fields
 		assert.Equal(t, "test-agent/1.0", p.MetaRefineryIncomingUserAgent)
-		assert.Equal(t, "192.168.1.1", p.MetaRefineryForwarded)
 		assert.Equal(t, "test-host", p.MetaRefineryLocalHostname)
 		assert.Equal(t, "deterministic", p.MetaRefineryReason)
 		assert.Equal(t, "trace_timeout", p.MetaRefinerySendReason)
 		assert.Equal(t, "sample-key-123", p.MetaRefinerySampleKey)
 
 		// Verify int64 metadata fields
-		assert.Equal(t, int64(1234567890), p.MetaRefinerySendBy)
-		assert.Equal(t, int64(2048), p.MetaRefinerySpanDataSize)
 		assert.Equal(t, int64(5), p.MetaSpanEventCount)
 		assert.Equal(t, int64(3), p.MetaSpanLinkCount)
 		assert.Equal(t, int64(10), p.MetaSpanCount)
@@ -370,7 +349,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
+		unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+			Config:  mockConfig,
+			APIKey:  "test-api-key",
+			Env:     "test-env",
+			Dataset: "test-dataset",
+		})
 
 		// Create payload and unmarshal
 		payload := &Payload{config: mockConfig}
@@ -385,26 +369,17 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.True(t, payload.MetaRefineryProbe.Value)
 			assert.True(t, payload.MetaRefineryRoot.HasValue)
 			assert.True(t, payload.MetaRefineryRoot.Value) // Should be true because empty parent ID
-			assert.True(t, payload.MetaRefineryMinSpan.HasValue)
-			assert.True(t, payload.MetaRefineryMinSpan.Value)
-			assert.True(t, payload.MetaRefineryExpiredTrace.HasValue)
-			assert.False(t, payload.MetaRefineryExpiredTrace.Value)
-			assert.True(t, payload.MetaRefineryShutdownSend.HasValue)
-			assert.True(t, payload.MetaRefineryShutdownSend.Value)
 			assert.True(t, payload.MetaStressed.HasValue)
 			assert.True(t, payload.MetaStressed.Value)
 
 			// Verify string metadata fields
 			assert.Equal(t, "test-agent/1.0", payload.MetaRefineryIncomingUserAgent)
-			assert.Equal(t, "192.168.1.1", payload.MetaRefineryForwarded)
 			assert.Equal(t, "test-host", payload.MetaRefineryLocalHostname)
 			assert.Equal(t, "deterministic", payload.MetaRefineryReason)
 			assert.Equal(t, "trace_timeout", payload.MetaRefinerySendReason)
 			assert.Equal(t, "sample-key-123", payload.MetaRefinerySampleKey)
 
 			// Verify int64 metadata fields
-			assert.Equal(t, int64(1234567890), payload.MetaRefinerySendBy)
-			assert.Equal(t, int64(2048), payload.MetaRefinerySpanDataSize)
 			assert.Equal(t, int64(5), payload.MetaSpanEventCount)
 			assert.Equal(t, int64(3), payload.MetaSpanLinkCount)
 			assert.Equal(t, int64(10), payload.MetaSpanCount)
@@ -418,15 +393,11 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.True(t, v)
 
 			// Verify missing field is tracked
-			_, ok = payload.missingFields["missing_field"]
-			assert.True(t, ok)
-			_, ok = payload.missingFields["dynamic_missing_field"]
-			assert.True(t, ok)
-			_, ok = payload.missingFields["test"]
-			assert.True(t, ok)
+			assert.True(t, slices.Contains(payload.missingFields, "missing_field"))
+			assert.True(t, slices.Contains(payload.missingFields, "dynamic_missing_field"))
+			assert.True(t, slices.Contains(payload.missingFields, "test"))
 			// Verify computed field is not extracted
-			_, ok = payload.missingFields["?.NUMBER_DESCENDANTS"]
-			assert.False(t, ok)
+			assert.False(t, slices.Contains(payload.missingFields, "?.NUMBER_DESCENDANTS"))
 
 			// Verify field not in sampling config is NOT extracted
 			assert.Nil(t, payload.memoizedFields["missing_in_config"])
@@ -438,13 +409,13 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.Equal(t, int64(42), payload.Get("another_field"))
 		}
 
-		remainder, err := unmarshaler.UnmarshalPayload(msgpData, payload)
+		remainder, err := unmarshaler.UnmarshalMsgpFirstEvent(msgpData, payload)
 		require.NoError(t, err)
 		assert.Empty(t, remainder)
 		t.Run("UnmarshalPayload", doTest)
 
 		payload = &Payload{config: mockConfig}
-		require.NoError(t, unmarshaler.UnmarshalPayloadComplete(msgpData, payload))
+		require.NoError(t, unmarshaler.UnmarshalMsgpEvent(msgpData, payload))
 		t.Run("UnmarshalPayloadComplete", doTest)
 
 	})
@@ -471,11 +442,16 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-dataset", "test-env")
+		unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+			Config:  mockConfig,
+			APIKey:  "test-api-key",
+			Env:     "test-env",
+			Dataset: "test-dataset",
+		})
 
 		// Unmarshal first payload
 		payload1 := &Payload{config: mockConfig}
-		remainder, err := unmarshaler.UnmarshalPayload(combined, payload1)
+		remainder, err := unmarshaler.UnmarshalMsgpFirstEvent(combined, payload1)
 		require.NoError(t, err)
 		assert.Equal(t, "trace1", payload1.MetaTraceID)
 		assert.Equal(t, "value1", payload1.memoizedFields["sampling_field"])
@@ -483,7 +459,7 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 
 		// Verify we can unmarshal the remainder
 		payload2 := &Payload{config: mockConfig}
-		remainder2, err := unmarshaler.UnmarshalPayload(remainder, payload2)
+		remainder2, err := unmarshaler.UnmarshalMsgpFirstEvent(remainder, payload2)
 		require.NoError(t, err)
 		assert.Equal(t, "trace2", payload2.MetaTraceID)
 		assert.Equal(t, "value2", payload2.memoizedFields["sampling_field"])
@@ -508,7 +484,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			},
 		}
 
-		unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-dataset", "test-env")
+		unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+			Config:  mockConfig,
+			APIKey:  "test-api-key",
+			Env:     "test-env",
+			Dataset: "test-dataset",
+		})
 		payload := &Payload{config: mockConfig}
 
 		doTest := func(t *testing.T) {
@@ -522,12 +503,12 @@ func TestCoreFieldsUnmarshaler(t *testing.T) {
 			assert.Equal(t, "should-not-be-extracted", payload.Get("regular_field"))
 		}
 
-		_, err = unmarshaler.UnmarshalPayload(msgpData, payload)
+		_, err = unmarshaler.UnmarshalMsgpFirstEvent(msgpData, payload)
 		require.NoError(t, err)
 		t.Run("UnmarshalPayload", doTest)
 
 		payload = &Payload{config: mockConfig}
-		require.NoError(t, unmarshaler.UnmarshalPayloadComplete(msgpData, payload))
+		require.NoError(t, unmarshaler.UnmarshalMsgpEvent(msgpData, payload))
 		t.Run("UnmarshalPayloadComplete", doTest)
 
 	})
@@ -564,19 +545,6 @@ func TestPayloadGetSetExistMetadataSync(t *testing.T) {
 		assert.False(t, ph.MetaRefineryRoot.Value)
 		assert.Equal(t, false, ph.Get("meta.refinery.root"))
 		assert.True(t, ph.Exists("meta.refinery.root"))
-
-		// Test int64 fields
-		assert.False(t, ph.Exists("meta.refinery.send_by"))
-		ph.Set("meta.refinery.send_by", int64(12345))
-		assert.Equal(t, int64(12345), ph.MetaRefinerySendBy)
-		assert.Equal(t, int64(12345), ph.Get("meta.refinery.send_by"))
-		assert.True(t, ph.Exists("meta.refinery.send_by"))
-
-		assert.False(t, ph.Exists("meta.refinery.span_data_size"))
-		ph.Set("meta.refinery.span_data_size", int64(67890))
-		assert.Equal(t, int64(67890), ph.MetaRefinerySpanDataSize)
-		assert.Equal(t, int64(67890), ph.Get("meta.refinery.span_data_size"))
-		assert.True(t, ph.Exists("meta.refinery.span_data_size"))
 	})
 
 	t.Run("Get returns from dedicated fields", func(t *testing.T) {
@@ -587,21 +555,18 @@ func TestPayloadGetSetExistMetadataSync(t *testing.T) {
 		ph.MetaTraceID = "direct-trace-123"
 		ph.MetaRefineryProbe.Set(true)
 		ph.MetaRefineryRoot.Set(false)
-		ph.MetaRefinerySendBy = 54321
 
 		// Get should return from dedicated fields
 		assert.Equal(t, "log", ph.Get("meta.signal_type"))
 		assert.Equal(t, "direct-trace-123", ph.Get("meta.trace_id"))
 		assert.Equal(t, true, ph.Get("meta.refinery.probe"))
 		assert.Equal(t, false, ph.Get("meta.refinery.root"))
-		assert.Equal(t, int64(54321), ph.Get("meta.refinery.send_by"))
 
 		// Exists should also work when fields are set directly
 		assert.True(t, ph.Exists("meta.signal_type"))
 		assert.True(t, ph.Exists("meta.trace_id"))
 		assert.True(t, ph.Exists("meta.refinery.probe"))
 		assert.True(t, ph.Exists("meta.refinery.root"))
-		assert.True(t, ph.Exists("meta.refinery.send_by"))
 	})
 
 	t.Run("Get returns nil for unset boolean fields", func(t *testing.T) {
@@ -613,12 +578,6 @@ func TestPayloadGetSetExistMetadataSync(t *testing.T) {
 
 		assert.Nil(t, ph.Get("meta.refinery.root"))
 		assert.False(t, ph.Exists("meta.refinery.root"))
-
-		assert.Nil(t, ph.Get("meta.refinery.min_span"))
-		assert.False(t, ph.Exists("meta.refinery.min_span"))
-
-		assert.Nil(t, ph.Get("meta.refinery.expired_trace"))
-		assert.False(t, ph.Exists("meta.refinery.expired_trace"))
 	})
 }
 
@@ -759,9 +718,6 @@ func BenchmarkUnmarshalPayload(b *testing.B) {
 	data["meta.annotation_type"] = "span_event"
 	data["meta.refinery.probe"] = true
 	data["meta.refinery.root"] = true
-	data["meta.refinery.min_span"] = false
-	data["meta.refinery.send_by"] = int64(1234567890)
-	data["meta.refinery.span_data_size"] = int64(2048)
 
 	data["trace.trace_id"] = "custom-trace-456"
 	data["span.parent_id"] = ""
@@ -804,19 +760,24 @@ func BenchmarkUnmarshalPayload(b *testing.B) {
 		},
 	}
 
-	unmarshaler := NewCoreFieldsUnmarshaler(mockConfig, "test-api-key", "test-env", "test-dataset")
+	unmarshaler := NewCoreFieldsUnmarshaler(CoreFieldsUnmarshalerOptions{
+		Config:  mockConfig,
+		APIKey:  "test-api-key",
+		Env:     "test-env",
+		Dataset: "test-dataset",
+	})
 
 	b.Run("UnmarshalPayload", func(b *testing.B) {
 		for b.Loop() {
 			payload := &Payload{config: mockConfig}
-			_, _ = unmarshaler.UnmarshalPayload(msgpData, payload)
+			_, _ = unmarshaler.UnmarshalMsgpFirstEvent(msgpData, payload)
 		}
 	})
 
 	b.Run("UnmarshalPayloadComplete", func(b *testing.B) {
 		for b.Loop() {
 			payload := &Payload{config: mockConfig}
-			_ = unmarshaler.UnmarshalPayloadComplete(msgpData, payload)
+			_ = unmarshaler.UnmarshalMsgpEvent(msgpData, payload)
 		}
 	})
 }
@@ -833,23 +794,17 @@ func createTestDataForPayload() map[string]any {
 		"meta.annotation_type": "span_event",
 
 		// Refinery boolean fields
-		"meta.refinery.probe":         true,
-		"meta.refinery.min_span":      true,
-		"meta.refinery.expired_trace": false,
-		"meta.refinery.shutdown_send": true,
-		"meta.stressed":               true,
+		"meta.refinery.probe": true,
+		"meta.stressed":       true,
 
 		// Refinery string fields
 		"meta.refinery.incoming_user_agent": "test-agent/1.0",
-		"meta.refinery.forwarded":           "192.168.1.1",
 		"meta.refinery.local_hostname":      "test-host",
 		"meta.refinery.reason":              "deterministic",
 		"meta.refinery.send_reason":         "trace_timeout",
 		"meta.refinery.sample_key":          "sample-key-123",
 
 		// Refinery int64 fields
-		"meta.refinery.send_by":              int64(1234567890),
-		"meta.refinery.span_data_size":       int64(2048),
 		"meta.span_event_count":              int64(5),
 		"meta.span_link_count":               int64(3),
 		"meta.span_count":                    int64(10),

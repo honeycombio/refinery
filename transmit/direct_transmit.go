@@ -244,7 +244,7 @@ func (d *DirectTransmission) EnqueueEvent(ev *types.Event) {
 
 func (d *DirectTransmission) EnqueueSpan(sp *types.Span) {
 	// we don't need the trace ID anymore, but it's convenient to accept spans.
-	d.EnqueueEvent(&sp.Event)
+	d.EnqueueEvent(sp.Event)
 }
 
 // registerMetrics registers the metrics used by the DirectTransmission.

@@ -36,11 +36,6 @@ const (
 	MetaRefineryProbe             = "meta.refinery.probe"
 	MetaRefineryRoot              = "meta.refinery.root"
 	MetaRefineryIncomingUserAgent = "meta.refinery.incoming_user_agent"
-	MetaRefinerySendBy            = "meta.refinery.send_by"
-	MetaRefinerySpanDataSize      = "meta.refinery.span_data_size"
-	MetaRefineryMinSpan           = "meta.refinery.min_span"
-	MetaRefineryForwarded         = "meta.refinery.forwarded"
-	MetaRefineryExpiredTrace      = "meta.refinery.expired_trace"
 
 	// These fields are not used by the refinery itself for sampling decisions.
 	// They are used to pass information from refinery to honeycomb.
@@ -53,7 +48,7 @@ const (
 	MetaSpanCount                  = "meta.span_count"
 	MetaEventCount                 = "meta.event_count"
 	MetaRefineryOriginalSampleRate = "meta.refinery.original_sample_rate"
-	MetaRefineryShutdownSend       = "meta.refinery.shutdown_send"
+	MetaRefineryFinalSampleRate    = "meta.refinery.final_sample_rate"
 	MetaRefinerySampleKey          = "meta.refinery.sample_key"
 )
 
@@ -81,11 +76,6 @@ var metadataFields = map[string]metadataField{
 	MetaRefineryProbe:             boolField(MetaRefineryProbe, func(p *Payload) *nullableBool { return &p.MetaRefineryProbe }),
 	MetaRefineryRoot:              boolField(MetaRefineryRoot, func(p *Payload) *nullableBool { return &p.MetaRefineryRoot }),
 	MetaRefineryIncomingUserAgent: stringField(MetaRefineryIncomingUserAgent, func(p *Payload) *string { return &p.MetaRefineryIncomingUserAgent }),
-	MetaRefinerySendBy:            int64Field(MetaRefinerySendBy, func(p *Payload) *int64 { return &p.MetaRefinerySendBy }),
-	MetaRefinerySpanDataSize:      int64Field(MetaRefinerySpanDataSize, func(p *Payload) *int64 { return &p.MetaRefinerySpanDataSize }),
-	MetaRefineryMinSpan:           boolField(MetaRefineryMinSpan, func(p *Payload) *nullableBool { return &p.MetaRefineryMinSpan }),
-	MetaRefineryForwarded:         stringField(MetaRefineryForwarded, func(p *Payload) *string { return &p.MetaRefineryForwarded }),
-	MetaRefineryExpiredTrace:      boolField(MetaRefineryExpiredTrace, func(p *Payload) *nullableBool { return &p.MetaRefineryExpiredTrace }),
 
 	MetaRefineryLocalHostname:      stringField(MetaRefineryLocalHostname, func(p *Payload) *string { return &p.MetaRefineryLocalHostname }),
 	MetaStressed:                   boolField(MetaStressed, func(p *Payload) *nullableBool { return &p.MetaStressed }),
@@ -96,7 +86,7 @@ var metadataFields = map[string]metadataField{
 	MetaSpanCount:                  int64Field(MetaSpanCount, func(p *Payload) *int64 { return &p.MetaSpanCount }),
 	MetaEventCount:                 int64Field(MetaEventCount, func(p *Payload) *int64 { return &p.MetaEventCount }),
 	MetaRefineryOriginalSampleRate: int64Field(MetaRefineryOriginalSampleRate, func(p *Payload) *int64 { return &p.MetaRefineryOriginalSampleRate }),
-	MetaRefineryShutdownSend:       boolField(MetaRefineryShutdownSend, func(p *Payload) *nullableBool { return &p.MetaRefineryShutdownSend }),
+	MetaRefineryFinalSampleRate:    int64Field(MetaRefineryFinalSampleRate, func(p *Payload) *int64 { return &p.MetaRefineryFinalSampleRate }),
 	MetaRefinerySampleKey:          stringField(MetaRefinerySampleKey, func(p *Payload) *string { return &p.MetaRefinerySampleKey }),
 }
 
@@ -244,9 +234,11 @@ type Payload struct {
 
 	// Deserialized fields, either from the internal msgpMap, or set externally.
 	memoizedFields map[string]any
-	// missingFields is a set of fields that were not found in the payload.
+	// missingFields is a list of fields that were not found in the payload.
 	// this is used to avoid repeatedly deserializing fields that are not present.
-	missingFields map[string]struct{}
+	// Using a slice instead of a map because the number of missing fields is typically small (0-10),
+	// and a slice has much lower memory overhead
+	missingFields []string
 
 	hasExtractedMetadata bool
 
@@ -259,11 +251,6 @@ type Payload struct {
 	MetaRefineryProbe             nullableBool // meta.refinery.probe
 	MetaRefineryRoot              nullableBool // meta.refinery.root
 	MetaRefineryIncomingUserAgent string       // meta.refinery.incoming_user_agent
-	MetaRefinerySendBy            int64        // meta.refinery.send_by (Unix timestamp)
-	MetaRefinerySpanDataSize      int64        // meta.refinery.span_data_size
-	MetaRefineryMinSpan           nullableBool // meta.refinery.min_span
-	MetaRefineryForwarded         string       // meta.refinery.forwarded
-	MetaRefineryExpiredTrace      nullableBool // meta.refinery.expired_trace
 
 	MetaRefineryLocalHostname      string       // meta.refinery.local_hostname
 	MetaStressed                   nullableBool // meta.stressed
@@ -274,7 +261,7 @@ type Payload struct {
 	MetaSpanCount                  int64        // meta.span_count
 	MetaEventCount                 int64        // meta.event_count
 	MetaRefineryOriginalSampleRate int64        // meta.refinery.original_sample_rate
-	MetaRefineryShutdownSend       nullableBool // meta.refinery.shutdown_send
+	MetaRefineryFinalSampleRate    int64        // meta.refinery.final_sample_rate
 	MetaRefinerySampleKey          string       // meta.refinery.sample_key
 }
 
@@ -361,19 +348,18 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 			// Check if the key matches any of the key fields
 			var val any
 			if idx, ok := sliceContains(samplingKeyFields, keyBytes); ok {
-				if p.memoizedFields[samplingKeyFields[idx]] != nil {
-					// If we already have this key, skip it
-					continue
-				}
-				keysFound++
+				// only memoize the value if we haven't already found it
+				if _, ok := p.memoizedFields[samplingKeyFields[idx]]; !ok {
+					keysFound++
 
-				val, remaining, err = msgp.ReadIntfBytes(remaining)
-				if err != nil {
-					return len(data) - len(remaining), fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
-				}
+					val, remaining, err = msgp.ReadIntfBytes(remaining)
+					if err != nil {
+						return len(data) - len(remaining), fmt.Errorf("failed to read value for key %s: %w", string(keyBytes), err)
+					}
 
-				p.Set(samplingKeyFields[idx], val)
-				handled = true
+					p.Set(samplingKeyFields[idx], val)
+					handled = true
+				}
 			}
 		}
 
@@ -388,11 +374,11 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 	if keysFound < len(samplingKeyFields) {
 		// If we didn't find all key fields, add them to missingFields
 		if p.missingFields == nil {
-			p.missingFields = make(map[string]struct{}, len(samplingKeyFields))
+			p.missingFields = make([]string, 0, len(samplingKeyFields)-keysFound)
 		}
 		for _, field := range samplingKeyFields {
 			if _, found := p.memoizedFields[field]; !found {
-				p.missingFields[field] = struct{}{}
+				p.missingFields = append(p.missingFields, field)
 			}
 		}
 	}
@@ -500,24 +486,46 @@ type CoreFieldsUnmarshaler struct {
 	samplingKeyFields  []string
 }
 
-func NewCoreFieldsUnmarshaler(cfg config.Config, apiKey, env, dataset string) CoreFieldsUnmarshaler {
-	samplerKey := cfg.DetermineSamplerKey(apiKey, env, dataset)
-	keyFields, _ := config.GetKeyFields(cfg.GetSamplingKeyFieldsForDestName(samplerKey))
+type CoreFieldsUnmarshalerOptions struct {
+	Config  config.Config
+	APIKey  string
+	Env     string
+	Dataset string
+}
+
+func NewCoreFieldsUnmarshaler(opt CoreFieldsUnmarshalerOptions) CoreFieldsUnmarshaler {
+	samplerKey := opt.Config.DetermineSamplerKey(opt.APIKey, opt.Env, opt.Dataset)
+	keyFields, _ := config.GetKeyFields(opt.Config.GetSamplingKeyFieldsForDestName(samplerKey))
 
 	return CoreFieldsUnmarshaler{
-		traceIdFieldNames:  cfg.GetTraceIdFieldNames(),
-		parentIdFieldNames: cfg.GetParentIdFieldNames(),
+		traceIdFieldNames:  opt.Config.GetTraceIdFieldNames(),
+		parentIdFieldNames: opt.Config.GetParentIdFieldNames(),
 		samplingKeyFields:  keyFields, // AllFields includes both root and non-root fields
 	}
 }
 
-// UnmarshalPayloadComplete is similar to UnmarshalPayload, but it does not return
+// UnmarshalMsgpEventMetadataOnly is similar to UnmarshalPayload, but it does not return
+// the remaining bytes. It's expected to be used on a single message
+// where the entire byte slice is consumed.
+// It memoizes metadata fields only. If you need sampling key fields to be memoized, please use
+// UnmarshalPayloadComplete.
+// CAUTION: This should only be used when the entire byte slice is safe for the payload to keep.
+func (cu CoreFieldsUnmarshaler) UnmarshalMsgpEventMetadataOnly(bts []byte, payload *Payload) error {
+	return cu.unmarshalMsgpEvent(bts, payload, nil)
+}
+
+// UnmarshalMsgpEvent is similar to UnmarshalPayload, but it does not return
 // the remaining bytes. It's expected to be used on a single message
 // where the entire byte slice is consumed.
 // CAUTION: This should only be used when the entire byte slice is safe for the payload to keep.
-func (cu CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Payload) error {
+func (cu CoreFieldsUnmarshaler) UnmarshalMsgpEvent(bts []byte, payload *Payload) error {
+	return cu.unmarshalMsgpEvent(bts, payload, cu.samplingKeyFields)
+}
+
+// unmarshalMsgpEvent is the common implementation for unmarshaling a complete payload.
+func (cu CoreFieldsUnmarshaler) unmarshalMsgpEvent(bts []byte, payload *Payload, samplingKeyFields []string) error {
 	_, err := payload.extractCriticalFieldsFromBytes(bts,
-		cu.traceIdFieldNames, cu.parentIdFieldNames, cu.samplingKeyFields)
+		cu.traceIdFieldNames, cu.parentIdFieldNames, samplingKeyFields)
 	if err != nil {
 		return err
 	}
@@ -526,11 +534,11 @@ func (cu CoreFieldsUnmarshaler) UnmarshalPayloadComplete(bts []byte, payload *Pa
 	return nil
 }
 
-// UnmarshalPayload creates and unmarshals a new Payload. It supports operating on a partial message
+// UnmarshalMsgpFirstEvent creates and unmarshals a new Payload. It supports operating on a partial message
 // and will extract the critical fields from the byte slice, leaving the rest of the data in the Payload's
 // msgpMap. This is useful for cases where the Payload is part of a larger message and we want to avoid
 // unnecessary allocations.
-func (cu CoreFieldsUnmarshaler) UnmarshalPayload(bts []byte, payload *Payload) ([]byte, error) {
+func (cu CoreFieldsUnmarshaler) UnmarshalMsgpFirstEvent(bts []byte, payload *Payload) ([]byte, error) {
 	consumed, err := payload.extractCriticalFieldsFromBytes(bts,
 		cu.traceIdFieldNames, cu.parentIdFieldNames, cu.samplingKeyFields)
 	if err != nil {
@@ -582,13 +590,17 @@ func (p *Payload) MemoizeFields(keys ...string) {
 	if p.memoizedFields == nil {
 		p.memoizedFields = make(map[string]any, len(keys))
 	}
-	if p.missingFields == nil {
-		p.missingFields = make(map[string]struct{}, len(keys))
-	}
 
-	keysToFind := make(map[string]struct{}, len(keys))
+	// It is rare for a key field to not be memoized.
+	// Intentionally not allocating memory for keysToFind because it is rarely needed.
+	// It is worth the compute cost to grow this map on those rare occassions instead
+	// of allocating memory we rarely use.
+	// CAUTION: This optimization is under the assumption that MemoizeFields() are only
+	// called after the first memoization operation. If this assumption ever changes,
+	// we should reevaluate this optimization
+	keysToFind := make(map[string]struct{})
 	for _, key := range keys {
-		if _, ok := p.missingFields[key]; ok {
+		if slices.Contains(p.missingFields, key) {
 			continue
 		}
 		if _, ok := p.memoizedFields[key]; !ok {
@@ -630,7 +642,7 @@ func (p *Payload) MemoizeFields(keys ...string) {
 
 	for key := range keysToFind {
 		if _, ok := p.memoizedFields[key]; !ok {
-			p.missingFields[key] = struct{}{}
+			p.missingFields = append(p.missingFields, key)
 		}
 	}
 }
@@ -649,10 +661,8 @@ func (p *Payload) Exists(key string) bool {
 		}
 	}
 
-	if p.missingFields != nil {
-		if _, ok := p.missingFields[key]; ok {
-			return false
-		}
+	if slices.Contains(p.missingFields, key) {
+		return false
 	}
 
 	iter, err := newMsgpPayloadMapIter(p.msgpData)
@@ -692,10 +702,8 @@ func (p *Payload) Get(key string) any {
 		}
 	}
 
-	if p.missingFields != nil {
-		if _, ok := p.missingFields[key]; ok {
-			return nil
-		}
+	if slices.Contains(p.missingFields, key) {
+		return nil
 	}
 
 	iter, err := newMsgpPayloadMapIter(p.msgpData)

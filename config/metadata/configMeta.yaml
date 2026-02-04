@@ -397,7 +397,7 @@ groups:
         type: int
         valuetype: nondefault
         firstversion: v2.8
-        default: 0
+        default: 32000
         reload: true
         summary: is the number of spans after which a trace becomes eligible for a trace decision.
         description: >
@@ -1149,6 +1149,22 @@ groups:
         description: >
           Many Redis installations do not use this field.
 
+      - name: ClusterName
+        type: string
+        valuetype: string
+        example: "production"
+        reload: false
+        validations:
+          - type: format
+            arg: alphanumeric
+        summary: is a cluster identifier used as a prefix for Redis pubsub channel names.
+        description: >
+          ClusterName is used to namespace Redis pubsub channels when multiple
+          Refinery clusters share the same Redis instance. If set, all pubsub
+          channel names will be prefixed with this value (e.g., "production:peers").
+          This allows multiple clusters to coexist without interfering with each other.
+          Must be alphanumeric if specified.
+
       - name: Prefix
         v1group: PeerManagement
         v1name: Prefix
@@ -1158,14 +1174,15 @@ groups:
         example: "customPrefix"
         reload: false
         lastversion: v2.6
+        deprecationtext: "Use ClusterName instead. Prefix was previously used for Redis keys but is now deprecated in favor of ClusterName for pubsub channel namespacing."
         validations:
           - type: notempty
         summary: is a string used as a prefix for the keys in Redis while
           storing the peer membership.
         description: >
-          It might be useful to override this in any situation where multiple
-          Refinery clusters or multiple applications want to share a single
-          Redis instance. It may not be blank.
+          DEPRECATED: Use ClusterName instead. It might be useful to override this
+          in any situation where multiple Refinery clusters or multiple applications
+          want to share a single Redis instance. It may not be blank.
 
       - name: Database
         v1group: PeerManagement
@@ -1278,7 +1295,7 @@ groups:
         description: >
           NOTE: This setting is now deprecated and no longer controls the cache size.
           Instead the maximum memory usage is controlled by `MaxMemoryPercentage` and `MaxAlloc`.
-          
+
           Setting this value does still set the default PeerQueueSize to (3 x CacheCapacity) and IncomingQueueSize
           to (3 x CacheCapacity) if they are not set. This behavior will be removed in the future.
           Instead, set PeerQueueSize and IncomingQueueSize to the exact values you want.
@@ -1513,6 +1530,22 @@ groups:
         summary: Interval for sending kept decisions in batches.
         description: >
           Sets the time interval for sending accumulated kept decisions in batches. This ensures that kept decisions are processed at regular intervals, improving efficiency by reducing the frequency of network transmissions. If the maximum batch size (MaxKeptDecisionBatchSize) is reached before this interval elapses, the batch will be sent immediately.
+
+      - name: WorkerCount
+        type: int
+        valuetype: nondefault
+        default: 0
+        reload: false
+        validations:
+          - type: minimum
+            arg: 0
+        summary: is the number of parallel collection workers to run for trace processing.
+        description: >
+          Controls the number of parallel collection workers used for processing traces.
+          Each worker processes a subset of traces independently using consistent hashing.
+          Values greater than 1 enable parallel processing which can improve throughput
+          on multi-core systems.
+          The default of 0 means Refinery will automatically set this value to the number of logical CPUs available at startup.
 
   - name: BufferSizes
     title: "Buffer Sizes"

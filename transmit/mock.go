@@ -28,6 +28,7 @@ func (m *MockTransmission) Stop() error {
 		select {
 		case <-m.Events:
 		default:
+			close(m.Events)
 			return nil
 		}
 	}
@@ -36,16 +37,14 @@ func (m *MockTransmission) Stop() error {
 // GetBlock will return up to `expectedCount` events from the channel. If there are
 // fewer than `expectedCount` events in the channel, it will block until there
 // are enough events to return.
-// If `expectedCount` is 0, it will retry up to 3 times before returning the
-// events that are in the channel.
+// If `expectedCount` is 0, will wait WaitTime for events.
 func (m *MockTransmission) GetBlock(expectedCount int) []*types.Event {
 	events := make([]*types.Event, 0, len(m.Events))
-	var ticker *time.Ticker
+	var expiry <-chan time.Time
 
 	// Initialize ticker only if expectedCount is zero
 	if expectedCount == 0 {
-		ticker = time.NewTicker(m.WaitTime)
-		defer ticker.Stop()
+		expiry = time.After(m.WaitTime)
 	}
 
 	for {
@@ -57,22 +56,8 @@ func (m *MockTransmission) GetBlock(expectedCount int) []*types.Event {
 			if expectedCount > 0 && len(events) == expectedCount {
 				return events
 			}
-
-		default:
-			// Only check the ticker if it was initialized
-			if ticker != nil {
-				select {
-				case <-ticker.C:
-					return events
-				default:
-					// Continue to prevent blocking if ticker channel is not ready
-				}
-			}
-
-			// Return early if expectedCount is reached
-			if expectedCount > 0 && len(events) >= expectedCount {
-				return events
-			}
+		case <-expiry:
+			return events
 		}
 	}
 }
@@ -81,7 +66,7 @@ func (m *MockTransmission) EnqueueEvent(ev *types.Event) {
 	m.Events <- ev
 }
 func (m *MockTransmission) EnqueueSpan(ev *types.Span) {
-	m.Events <- &ev.Event
+	m.Events <- ev.Event
 }
 
 func (m *MockTransmission) RegisterMetrics() {}
