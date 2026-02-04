@@ -405,7 +405,8 @@ func (r *RulesBasedSamplerCondition) Init() error {
 }
 
 func (r *RulesBasedSamplerCondition) String() string {
-	return fmt.Sprintf("%+v", *r)
+	return fmt.Sprintf("{Field:%s Fields:%v Operator:%s Value:%v Datatype:%s Matches:%p}",
+		r.Field, r.Fields, r.Operator, r.Value, r.Datatype, r.Matches)
 }
 
 func (r *RulesBasedSamplerCondition) GetComputedField() (ComputedField, bool) {
