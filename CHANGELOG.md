@@ -43,6 +43,7 @@ It also includes enhanced multi-deployment support for Redis-based clustering an
 
 ### 🛠 Maintenance
 
+- maint(deps): bump the minor-patch group across 1 directory with 27 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1783
 - maint: merge concurrent-collect-loop-work-branch into main by @VinozzZ in https://github.com/honeycombio/refinery/pull/1782
 - maint(doc): add warning for has-root-span usage with rules' scope by @VinozzZ in https://github.com/honeycombio/refinery/pull/1781
 - maint: update dynsampler-go to v0.6.4 by @VinozzZ in https://github.com/honeycombio/refinery/pull/1779
