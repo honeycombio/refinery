@@ -33,6 +33,7 @@ type ConfigWatcher struct {
 	msgTime time.Time
 	done    chan struct{}
 	mut     sync.RWMutex
+	topic   string // formatted topic name
 	startstop.Starter
 	startstop.Stopper
 }
@@ -61,7 +62,7 @@ func (cw *ConfigWatcher) ReloadCallback(cfgHash, rulesHash string) {
 
 	message := now.Format(time.RFC3339)
 	otelutil.AddSpanFields(span, map[string]any{"sending": true, "message": message})
-	cw.PubSub.Publish(ctx, ConfigPubsubTopic, message)
+	cw.PubSub.Publish(ctx, cw.topic, message)
 }
 
 // SubscriptionListener listens for messages on the config pubsub topic and reloads the config
@@ -113,10 +114,13 @@ func (cw *ConfigWatcher) Start() error {
 	if cw.Config.GetOpAMPConfig().Enabled {
 		return nil
 	}
+
+	cw.topic = cw.PubSub.FormatTopic(ConfigPubsubTopic)
+
 	if cw.Config.GetGeneralConfig().ConfigReloadInterval != 0 {
 		go cw.monitor()
 	}
-	cw.subscr = cw.PubSub.Subscribe(context.Background(), ConfigPubsubTopic, cw.SubscriptionListener)
+	cw.subscr = cw.PubSub.Subscribe(context.Background(), cw.topic, cw.SubscriptionListener)
 	cw.Config.RegisterReloadCallback(cw.ReloadCallback)
 	return nil
 }

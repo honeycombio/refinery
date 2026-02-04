@@ -36,7 +36,9 @@ func Test_OTelMetrics_MultipleRegistrations(t *testing.T) {
 		Type: Counter,
 	})
 
-	assert.Contains(t, o.counters, "test")
+	// Check that the counter exists in the sync.Map
+	_, exists := o.counters.Load("test")
+	assert.True(t, exists)
 }
 
 func Test_OTelMetrics_Raciness(t *testing.T) {
@@ -83,7 +85,14 @@ func Test_OTelMetrics_Raciness(t *testing.T) {
 	}
 
 	wg.Wait()
-	assert.Len(t, o.counters, loopLength+1)
+
+	// Count the number of counters in the sync.Map
+	counterCount := 0
+	o.counters.Range(func(key, value interface{}) bool {
+		counterCount++
+		return true
+	})
+	assert.Equal(t, loopLength+1, counterCount)
 
 	rm := metricdata.ResourceMetrics{}
 	err = rdr.Collect(t.Context(), &rm)

@@ -4,12 +4,13 @@ import (
 	"math"
 	"time"
 
+	"github.com/rdleal/go-priorityq/kpq"
+	"golang.org/x/exp/maps"
+
 	"github.com/honeycombio/refinery/generics"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
-	"github.com/rdleal/go-priorityq/kpq"
-	"golang.org/x/exp/maps"
 )
 
 // Cache is a non-threadsafe cache. It must not be used for concurrent access.
@@ -53,7 +54,7 @@ type DefaultInMemCache struct {
 const DefaultInMemCacheCapacity = 10000
 
 var collectCacheMetrics = []metrics.Metadata{
-	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "The number of traces currently stored in the cache"},
+	{Name: "worker_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "The number of traces currently stored in the trace cache per worker"},
 }
 
 func NewInMemCache(
@@ -113,7 +114,7 @@ func (d *DefaultInMemCache) GetCacheCapacity() int {
 // It removes and returns them.
 // If a filter is provided, it will be called with each trace to determine if it should be skipped.
 func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter func(*types.Trace) bool) []*types.Trace {
-	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
+	d.Metrics.Histogram("worker_cache_entries", float64(len(d.cache)))
 
 	var expired, skipped []*types.Trace
 	for !d.pq.IsEmpty() && (max <= 0 || len(expired) < max) {
@@ -157,7 +158,7 @@ func (d *DefaultInMemCache) TakeExpiredTraces(now time.Time, max int, filter fun
 // RemoveTraces accepts a set of trace IDs and removes any matching ones from
 // the insertion list. This is used in the case of a cache overrun.
 func (d *DefaultInMemCache) RemoveTraces(toDelete generics.Set[string]) {
-	d.Metrics.Histogram("collect_cache_entries", float64(len(d.cache)))
+	d.Metrics.Histogram("worker_cache_entries", float64(len(d.cache)))
 
 	for _, traceID := range toDelete.Members() {
 		delete(d.cache, traceID)

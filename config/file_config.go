@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -199,7 +200,7 @@ type TracesConfig struct {
 	TraceTimeout     Duration `yaml:"TraceTimeout" default:"60s"`
 	MaxBatchSize     uint     `yaml:"MaxBatchSize" default:"500"`
 	SendTicker       Duration `yaml:"SendTicker" default:"100ms"`
-	SpanLimit        uint     `yaml:"SpanLimit"`
+	SpanLimit        uint     `yaml:"SpanLimit" default:"32000"` // Set the default span limit to be the same as the limit for trace view in Honeycomb
 	MaxExpiredTraces uint     `yaml:"MaxExpiredTraces" default:"3000"`
 }
 
@@ -297,7 +298,8 @@ type RedisPeerManagementConfig struct {
 	Username       string   `yaml:"Username" cmdenv:"RedisUsername"`
 	Password       string   `yaml:"Password" cmdenv:"RedisPassword"`
 	AuthCode       string   `yaml:"AuthCode" cmdenv:"RedisAuthCode"`
-	Prefix         string   `yaml:"Prefix,omitempty"`
+	ClusterName    string   `yaml:"ClusterName,omitempty"`
+	Prefix         string   `yaml:"Prefix,omitempty"` // Deprecated: Use ClusterName instead
 	Database       int      `yaml:"Database,omitempty"`
 	UseTLS         bool     `yaml:"UseTLS" `
 	UseTLSInsecure bool     `yaml:"UseTLSInsecure" `
@@ -312,16 +314,17 @@ type CollectionConfig struct {
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
 
-	DisableRedistribution *DefaultTrue `yaml:"-"` // Avoid pointer woe on access, use GetDisableRedistribution() instead.
-	RedistributionDelay   Duration     `yaml:"-"`
-
-	ShutdownDelay     Duration `yaml:"ShutdownDelay" default:"15s"`
-	TraceLocalityMode string   `yaml:"-"`
+	ShutdownDelay Duration `yaml:"ShutdownDelay" default:"15s"`
 
 	MaxDropDecisionBatchSize int      `yaml:"-"`
 	DropDecisionSendInterval Duration `yaml:"-"`
 	MaxKeptDecisionBatchSize int      `yaml:"-"`
 	KeptDecisionSendInterval Duration `yaml:"-"`
+
+	// WorkerCount controls the number of parallel collection workers.
+	// Each worker processes a subset of traces independently.
+	// Higher values can improve throughput on multi-core systems.
+	WorkerCount int `yaml:"WorkerCount"` // default: GOMAXPROCS
 }
 
 // GetMaxAlloc returns the maximum amount of memory to use for the cache.
@@ -333,31 +336,28 @@ func (c CollectionConfig) GetMaxAlloc() MemorySize {
 	return c.AvailableMemory * MemorySize(c.MaxMemoryPercentage) / 100
 }
 
-// GetPeerBufferCapacity returns the capacity of the in-memory channel for peer traces.
-// If PeerBufferCapacity is not set, it uses 3x the cache capacity.
-// The minimum value is 3x the cache capacity.
-func (c CollectionConfig) GetPeerQueueSize() int {
-	return c.PeerQueueSize
+// GetPeerQueueSizePerWorker returns the capacity per collect worker of the in-memory channel for peer traces.
+// It divides queue sizes among workers, rounding up to make sure total queue size across workers is equal to or greater than configured.
+func (c CollectionConfig) GetPeerQueueSizePerWorker() int {
+	numWorkers := c.GetWorkerCount()
+	return (c.PeerQueueSize + numWorkers - 1) / numWorkers
 }
 
-// GetIncomingBufferCapacity returns the capacity of the in-memory channel for incoming traces.
-// If IncomingBufferCapacity is not set, it uses 3x the cache capacity.
-// The minimum value is 3x the cache capacity.
-func (c CollectionConfig) GetIncomingQueueSize() int {
-	return c.IncomingQueueSize
+// GetIncomingQueueSizePerWorker returns the capacity per collect worker of the in-memory channel for incoming traces.
+// It divides queue sizes among workers, rounding up to make sure total queue size across workers is equal to or greater than configured.
+func (c CollectionConfig) GetIncomingQueueSizePerWorker() int {
+	numWorkers := c.GetWorkerCount()
+	return (c.IncomingQueueSize + numWorkers - 1) / numWorkers
 }
 
-// TraceLocalityEnabled returns whether trace locality is enabled.
-func (c CollectionConfig) TraceLocalityEnabled() bool {
-	switch c.TraceLocalityMode {
-	case "concentrated":
-		return true
-	case "distributed":
-		return false
-	default:
-		//  Default to true for backwards compatibility
-		return true
+// GetWorkerCount returns how many parallel collection workers to run.
+// Ensures the value is at least 1.
+func (c CollectionConfig) GetWorkerCount() int {
+	num := c.WorkerCount
+	if num == 0 {
+		num = runtime.GOMAXPROCS(0)
 	}
+	return max(num, 1)
 }
 
 type SpecializedConfig struct {
@@ -390,6 +390,18 @@ type SampleCacheConfig struct {
 	KeptSize          uint     `yaml:"KeptSize" default:"10_000"`
 	DroppedSize       uint     `yaml:"DroppedSize" default:"1_000_000"`
 	SizeCheckInterval Duration `yaml:"SizeCheckInterval" default:"10s"`
+
+	// WorkerCount is set during initialization to match the number of collection workers.
+	// It is not intended to be set directly in this struct other than in testing.
+	WorkerCount uint `yaml:"-"`
+}
+
+func (s SampleCacheConfig) GetKeptSizePerWorker() uint {
+	return (s.KeptSize + s.WorkerCount - 1) / max(s.WorkerCount, 1)
+}
+
+func (s SampleCacheConfig) GetDroppedSizePerWorker() uint {
+	return (s.DroppedSize + s.WorkerCount - 1) / max(s.WorkerCount, 1)
 }
 
 type StressReliefConfig struct {
@@ -549,6 +561,9 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 	if err != nil {
 		return nil, err
 	}
+
+	// Set workerCount on SampleCache once during initialization
+	mainconf.SampleCache.WorkerCount = uint(mainconf.Collection.GetWorkerCount())
 
 	cfg := &fileConfig{
 		mainConfig:  mainconf,
@@ -971,13 +986,6 @@ func (f *fileConfig) GetCollectionConfig() CollectionConfig {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Collection
-}
-
-func (f *fileConfig) GetDisableRedistribution() bool {
-	f.mux.RLock()
-	defer f.mux.RUnlock()
-
-	return f.mainConfig.Collection.DisableRedistribution.Get()
 }
 
 func (f *fileConfig) GetPrometheusMetricsConfig() PrometheusMetricsConfig {

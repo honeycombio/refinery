@@ -547,7 +547,13 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
 
-	batchedEvents := newBatchedEvents(r.Config, apiKey, environment, dataset)
+	batchedEvents := newBatchedEvents(
+		types.CoreFieldsUnmarshalerOptions{
+			Config:  r.Config,
+			APIKey:  apiKey,
+			Env:     environment,
+			Dataset: dataset,
+		})
 	err = unmarshal(req, bodyBuffer.Bytes(), batchedEvents)
 	if err != nil {
 		debugLog.WithField("error", err.Error()).WithField("request.url", req.URL).WithField("body", string(bodyBuffer.Bytes())).Logf("error parsing json")
@@ -656,11 +662,24 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	}
 	totalEvents := 0
 	for _, batch := range batches {
-		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(router.Config, apiKey, batch.Dataset, environment)
+		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
+			Config:  router.Config,
+			APIKey:  apiKey,
+			Env:     environment,
+			Dataset: batch.Dataset,
+		})
 		totalEvents += len(batch.Events)
 		for _, ev := range batch.Events {
 			payload := types.NewPayload(router.Config, nil)
-			err := coreFieldsUnmarshaler.UnmarshalPayloadComplete(ev.Attributes, &payload)
+			// In large Refinery deployments, most incoming spans are forwarded to peers for sampling,
+			// so the ingesting node doesn't need to extract or memoize sampling key fields. Skipping
+			// this work reduces allocations and improves memory efficiency.
+			//
+			// This optimization currently applies only to OTLP data because OTLP is accepted only from
+			// external sources, not from peers.
+			//
+			// TODO: Apply this optimization to all incoming data instead of relying on OTLP-specific behavior.
+			err := coreFieldsUnmarshaler.UnmarshalMsgpEventMetadataOnly(ev.Attributes, &payload)
 			if err != nil {
 				router.Logger.Error().Logf("Error unmarshaling payload: " + err.Error())
 				continue
@@ -720,7 +739,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	debugLog = debugLog.WithString("trace_id", ev.Data.MetaTraceID)
 
 	span := &types.Span{
-		Event:   *ev,
+		Event:   ev,
 		TraceID: ev.Data.MetaTraceID,
 		IsRoot:  ev.Data.MetaRefineryRoot.Value,
 	}
@@ -742,41 +761,37 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	isProbe := false
 	if r.Collector.Stressed() {
 		// only process spans that are not decision spans through stress relief
-		if !span.IsDecisionSpan() {
-			processed, kept := r.Collector.ProcessSpanImmediately(span)
+		processed, kept := r.Collector.ProcessSpanImmediately(span)
 
-			if processed {
-				if !kept {
-					return nil
+		if processed {
+			if !kept {
+				return nil
 
-				}
-
-				// If the span was kept, we want to generate a probe that we'll forward
-				// to a peer IF this span would have been forwarded.
-				ev.Data.MetaRefineryProbe.Set(true)
-				isProbe = true
 			}
+
+			// If the span was kept, we want to generate a probe that we'll forward
+			// to a peer IF this span would have been forwarded.
+			ev.Data.MetaRefineryProbe.Set(true)
+			isProbe = true
 		}
 	}
 
-	if r.Config.GetCollectionConfig().TraceLocalityEnabled() {
-		// Figure out if we should handle this span locally or pass on to a peer
-		targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
-		if !targetShard.Equals(r.Sharder.MyShard()) {
-			r.Metrics.Increment(r.metricsNames.routerPeer)
-			debugLog.
-				WithString("peer", targetShard.GetAddress()).
-				WithField("isprobe", isProbe).
-				Logf("Sending span from batch to peer")
+	// Figure out if we should handle this span locally or pass on to a peer
+	targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
+	if !targetShard.Equals(r.Sharder.MyShard()) {
+		r.Metrics.Increment(r.metricsNames.routerPeer)
+		debugLog.
+			WithString("peer", targetShard.GetAddress()).
+			WithField("isprobe", isProbe).
+			Logf("Sending span from batch to peer")
 
-			ev.APIHost = targetShard.GetAddress()
+		ev.APIHost = targetShard.GetAddress()
 
-			// Unfortunately this doesn't tell us if the event was actually
-			// enqueued; we need to watch the response channel to find out, at
-			// which point it's too late to tell the client.
-			r.PeerTransmission.EnqueueEvent(ev)
-			return nil
-		}
+		// Unfortunately this doesn't tell us if the event was actually
+		// enqueued; we need to watch the response channel to find out, at
+		// which point it's too late to tell the client.
+		r.PeerTransmission.EnqueueEvent(ev)
+		return nil
 	}
 
 	if isProbe {

@@ -11,16 +11,32 @@ import (
 
 	"github.com/dgryski/go-wyhash"
 	"github.com/facebookgo/startstop"
+	"github.com/jonboulle/clockwork"
+
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
-	"github.com/jonboulle/clockwork"
 )
 
-const stressReliefTopic = "refinery-stress-relief"
+const (
+	DENOMINATOR_PEER_CAP         = "PEER_CAP"
+	DENOMINATOR_INCOMING_CAP     = "INCOMING_CAP"
+	DENOMINATOR_MEMORY_MAX_ALLOC = "MEMORY_MAX_ALLOC"
+	NUMERATOR_PEER_QUEUE         = "collector_peer_queue_length"
+	NUMERATOR_INCOMING_QUEUE     = "collector_incoming_queue_length"
+	NUMERATOR_MEMORY_HEAP_ALLOC  = "memory_heap_allocation"
+	stressReliefTopic            = "refinery-stress-relief"
+)
+
+// All of the numerator metrics are gauges. The denominator metrics are constants.
+var stressReliefCalculations = []StressReliefCalculation{
+	{Numerator: NUMERATOR_PEER_QUEUE, Denominator: DENOMINATOR_PEER_CAP, Algorithm: "sqrt", Reason: "PeerQueueSize"},
+	{Numerator: NUMERATOR_INCOMING_QUEUE, Denominator: DENOMINATOR_INCOMING_CAP, Algorithm: "sqrt", Reason: "IncomingQueueSize"},
+	{Numerator: NUMERATOR_MEMORY_HEAP_ALLOC, Denominator: DENOMINATOR_MEMORY_MAX_ALLOC, Algorithm: "sigmoid", Reason: "MaxAlloc"},
+}
 
 type StressReliever interface {
 	UpdateFromConfig()
@@ -95,9 +111,9 @@ type StressRelief struct {
 	stressed           bool
 	stayOnUntil        time.Time
 	minDuration        time.Duration
+	topic              string // formatted topic name
 
 	algorithms map[string]func(string, string) float64
-	calcs      []StressReliefCalculation
 
 	lock         sync.RWMutex
 	stressLevels map[string]stressReport
@@ -142,13 +158,6 @@ func (s *StressRelief) Start() error {
 		"sigmoid": s.sigmoid, // don't worry about small stuff, but if we cross the midline, start worrying quickly
 	}
 
-	// All of the numerator metrics are gauges. The denominator metrics are constants.
-	s.calcs = []StressReliefCalculation{
-		{Numerator: "collector_peer_queue_length", Denominator: "PEER_CAP", Algorithm: "sqrt", Reason: "PeerQueueSize"},
-		{Numerator: "collector_incoming_queue_length", Denominator: "INCOMING_CAP", Algorithm: "sqrt", Reason: "IncomingQueueSize"},
-		{Numerator: "memory_heap_allocation", Denominator: "MEMORY_MAX_ALLOC", Algorithm: "sigmoid", Reason: "MaxAlloc"},
-	}
-
 	var err error
 	s.hostID, err = s.Peer.GetInstanceID()
 	if err != nil {
@@ -157,9 +166,12 @@ func (s *StressRelief) Start() error {
 
 	s.stressLevels = make(map[string]stressReport)
 
+	// Format the topic name once during initialization (ClusterName is not hot-reloadable)
+	s.topic = s.PubSub.FormatTopic(stressReliefTopic)
+
 	// Subscribe to the stress relief topic so we can react to stress level
 	// changes in the cluster.
-	s.PubSub.Subscribe(context.Background(), stressReliefTopic, s.onStressLevelUpdate)
+	s.PubSub.Subscribe(context.Background(), s.topic, s.onStressLevelUpdate)
 
 	// start our monitor goroutine that periodically calls recalc
 	// and also reports that it's healthy
@@ -183,7 +195,7 @@ func (s *StressRelief) Start() error {
 				currentLevel := s.Recalc()
 
 				if lastLevel != currentLevel || tickCounter == maxTicksBetweenReports {
-					err := s.PubSub.Publish(context.Background(), stressReliefTopic, newStressReliefMessage(currentLevel, s.hostID).String())
+					err := s.PubSub.Publish(context.Background(), s.topic, newStressReliefMessage(currentLevel, s.hostID).String())
 					if err != nil {
 						s.Logger.Error().Logf("failed to publish stress level: %s", err)
 					}
@@ -406,7 +418,7 @@ func (s *StressRelief) Recalc() uint {
 	var maximumLevel float64
 	var reason string
 	var formula string
-	for _, c := range s.calcs {
+	for _, c := range stressReliefCalculations {
 		stress := 100 * s.algorithms[c.Algorithm](c.Numerator, c.Denominator)
 		if stress > maximumLevel {
 			maximumLevel = stress
@@ -429,9 +441,6 @@ func (s *StressRelief) Recalc() uint {
 	// If a single node is under significant stress, it can activate stress relief mode
 	overallStressLevel := uint(math.Max(float64(clusterStressLevel), float64(localLevel)))
 
-	if !s.Config.GetCollectionConfig().TraceLocalityEnabled() {
-		overallStressLevel = clusterStressLevel
-	}
 	s.overallStressLevel = overallStressLevel
 	s.RefineryMetrics.Gauge("stress_level", float64(s.overallStressLevel))
 

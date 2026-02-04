@@ -200,7 +200,12 @@ func TestUnmarshal(t *testing.T) {
 	// Test batchedEvents unmarshaling (used in batch)
 	t.Run("batchedEvents", func(t *testing.T) {
 		t.Run("json", func(t *testing.T) {
-			batch := newBatchedEvents(mockCfg, "api-key", "", "")
+			batch := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+				Config:  mockCfg,
+				APIKey:  "api-key",
+				Env:     "",
+				Dataset: "",
+			})
 			batch.events = []batchedEvent{
 				{
 					Timestamp:  now.Format(time.RFC3339Nano),
@@ -223,7 +228,12 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", bytes.NewReader(jsonData))
 					req.Header.Set("Content-Type", contentType)
 
-					result := newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+					result := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+						Config:  mockCfg,
+						APIKey:  "api-key",
+						Env:     "env",
+						Dataset: "dataset",
+					})
 					err = unmarshal(req, readAll(t, req.Body), result)
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
@@ -271,7 +281,12 @@ func TestUnmarshal(t *testing.T) {
 					req := httptest.NewRequest("POST", "/test", buf)
 					req.Header.Set("Content-Type", contentType)
 
-					result := newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+					result := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+						Config:  mockCfg,
+						APIKey:  "api-key",
+						Env:     "env",
+						Dataset: "dataset",
+					})
 					err = unmarshal(req, readAll(t, req.Body), result)
 					require.NoError(t, err)
 					require.Len(t, result.events, 2)
@@ -288,6 +303,176 @@ func TestUnmarshal(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestUnmarshalRawJSON(t *testing.T) {
+	mockCfg := &config.MockConfig{
+		TraceIdFieldNames:  []string{"trace.trace_id"},
+		ParentIdFieldNames: []string{"trace.span_id"},
+		GetSamplerTypeVal: &config.DynamicSamplerConfig{
+			FieldList: []string{"service.name", "status_code"},
+		},
+	}
+
+	tests := []struct {
+		name         string
+		rawJSON      string
+		expectedData map[string]interface{}
+		expectError  bool
+	}{
+		{
+			name: "duplicate keys - first value wins",
+			rawJSON: `{
+				"trace.trace_id": "first-trace",
+				"service.name": "first",
+				"service.name": "second"
+			}`,
+			expectedData: map[string]interface{}{
+				"trace.trace_id": "first-trace",
+				"service.name":   "first",
+			},
+		},
+		{
+			name: "numbers without decimals become float64",
+			rawJSON: `{
+				"int_field": 42,
+				"float_field": 42.5,
+				"large_int": 9007199254740991
+			}`,
+			expectedData: map[string]interface{}{
+				"int_field":   float64(42),
+				"float_field": float64(42.5),
+				"large_int":   float64(9007199254740991),
+			},
+		},
+		{
+			name: "nested objects",
+			rawJSON: `{
+				"trace.trace_id": "trace-123",
+				"nested": {
+					"level1": {
+						"level2": {
+							"value": "deep"
+						}
+					}
+				},
+				"array": [1, 2, 3],
+				"mixed_array": ["string", 42, true, null]
+			}`,
+			expectedData: map[string]interface{}{
+				"trace.trace_id": "trace-123",
+				"nested": map[string]interface{}{
+					"level1": map[string]interface{}{
+						"level2": map[string]interface{}{
+							"value": "deep",
+						},
+					},
+				},
+				"array":       []interface{}{float64(1), float64(2), float64(3)},
+				"mixed_array": []interface{}{"string", float64(42), true, nil},
+			},
+		},
+		{
+			name: "null values",
+			rawJSON: `{
+				"trace.trace_id": "trace-123",
+				"null_field": null,
+				"present_field": "value"
+			}`,
+			expectedData: map[string]interface{}{
+				"trace.trace_id": "trace-123",
+				"null_field":     nil,
+				"present_field":  "value",
+			},
+		},
+		{
+			name: "empty values",
+			rawJSON: `{
+				"empty_string": "",
+				"empty_object": {},
+				"empty_array": []
+			}`,
+			expectedData: map[string]interface{}{
+				"empty_string": "",
+				"empty_object": map[string]interface{}{},
+				"empty_array":  []interface{}{},
+			},
+		},
+		{
+			name:        "invalid JSON - missing closing brace",
+			rawJSON:     `{"trace.trace_id": "trace-123"`,
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Run("single event", func(t *testing.T) {
+				t.Skip("skip event endpoint for now until we have a cohesive plan for duplicated fields")
+				// single event JSON payloads are unmarshalled as map[string]interface{}
+				var result map[string]interface{}
+
+				req := httptest.NewRequest("POST", "/test", bytes.NewBufferString(tt.rawJSON))
+				req.Header.Set("Content-Type", "application/json")
+
+				err := unmarshal(req, readAll(t, req.Body), &result)
+
+				if tt.expectError {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+					assert.Equal(t, tt.expectedData, result)
+				}
+			})
+
+			t.Run("event in batch", func(t *testing.T) {
+				// batched event JSON payloads are unmarshalled as batchedEvents
+				var result *batchedEvents
+
+				now := time.Now().UTC()
+
+				batchJSON := fmt.Sprintf(`[
+						{
+							"time": "%s",
+							"samplerate": 2,
+							"data": %s
+						}
+					]`, now.Format(time.RFC3339Nano), tt.rawJSON)
+
+				req := httptest.NewRequest("POST", "/test", bytes.NewBufferString(batchJSON))
+				req.Header.Set("Content-Type", "application/json")
+
+				result = newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+					Config:  mockCfg,
+					APIKey:  "api-key",
+					Env:     "env",
+					Dataset: "dataset",
+				})
+				err := unmarshal(req, readAll(t, req.Body), result)
+				if tt.expectError {
+					require.Error(t, err)
+					return
+				}
+				require.NoError(t, err)
+				require.Len(t, result.events, 1)
+
+				assert.Equal(t, now.UTC(), result.events[0].getEventTime())
+				assert.Equal(t, uint(2), result.events[0].getSampleRate())
+
+				actualData := maps.Collect(result.events[0].Data.All())
+
+				for key, expectedVal := range tt.expectedData {
+					actualVal, exists := actualData[key]
+					require.True(t, exists, "key %s should exist in actual data", key)
+					assert.Equal(t, expectedVal, actualVal, "values should match for key %s", key)
+				}
+
+				// Remove meta fields added by Refinery before comparison
+				delete(actualData, "meta.refinery.root")
+				assert.Equal(t, len(tt.expectedData), len(actualData), "should have same number of keys")
+			})
+		})
+	}
 }
 
 func TestGetAPIKeyAndDatasetFromMetadataCaseInsensitive(t *testing.T) {
@@ -969,7 +1154,7 @@ func TestProcessEventMetrics(t *testing.T) {
 			}
 			event.Data.ExtractMetadata()
 			span := &types.Span{
-				Event:   *event,
+				Event:   event,
 				TraceID: "trace-123",
 				IsRoot:  true,
 			}
@@ -1035,7 +1220,12 @@ func newBatchRouter(t testing.TB) *Router {
 
 func createBatchEvents(mockCfg config.Config) *batchedEvents {
 	now := time.Now().UTC()
-	batch := newBatchedEvents(mockCfg, "api-key", "env", "dataset")
+	batch := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+		Config:  mockCfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
 	batch.events = []batchedEvent{
 		{
 			Timestamp:  now.Format(time.RFC3339Nano),
@@ -1170,7 +1360,12 @@ func createBatchEventsWithLargeAttributes(numEvents int, cfg config.Config) *bat
 	mediumText := strings.Repeat("y", 500)
 	smallText := strings.Repeat("z", 100)
 
-	batchEvents := newBatchedEvents(cfg, "api-key", "env", "dataset")
+	batchEvents := newBatchedEvents(types.CoreFieldsUnmarshalerOptions{
+		Config:  cfg,
+		APIKey:  "api-key",
+		Env:     "env",
+		Dataset: "dataset",
+	})
 	batchEvents.events = make([]batchedEvent, numEvents)
 
 	for i := 0; i < numEvents; i++ {

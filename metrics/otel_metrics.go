@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	rtmetrics "runtime/metrics"
 	"sync"
 	"time"
 
@@ -27,6 +28,9 @@ var _ MetricsBackend = (*OTelMetrics)(nil)
 // aggregates (e.g. avg, p50, p95, etc.). OTel, on the other hand, sends the raw
 // histogram values and lets Honeycomb do the aggregation on ingest. The columns
 // in the resulting datasets will not be the same.
+//
+// To minimize lock contention, this implementation uses sync.Map to reduce lock
+// contention for concurrent access to metric instruments.
 type OTelMetrics struct {
 	Config  config.Config `inject:""`
 	Logger  logger.Logger `inject:""`
@@ -36,26 +40,18 @@ type OTelMetrics struct {
 	shutdownFunc func(ctx context.Context) error
 	testReader   sdkmetric.Reader
 
-	lock             sync.RWMutex
-	counters         map[string]metric.Int64Counter
-	gauges           map[string]metric.Float64Gauge
-	histograms       map[string]metric.Float64Histogram
-	updowns          map[string]metric.Int64UpDownCounter
-	observableGauges map[string]metric.Float64ObservableGauge
+	counters         sync.Map // map[string]metric.Int64Counter
+	gauges           sync.Map // map[string]metric.Float64Gauge
+	histograms       sync.Map // map[string]metric.Float64Histogram
+	updowns          sync.Map // map[string]metric.Int64UpDownCounter
+	observableGauges sync.Map // map[string]metric.Float64ObservableGauge
 }
 
 // Start initializes all metrics or resets all metrics to zero
 func (o *OTelMetrics) Start() error {
 	cfg := o.Config.GetOTelMetricsConfig()
 
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
-	o.counters = make(map[string]metric.Int64Counter)
-	o.gauges = make(map[string]metric.Float64Gauge)
-	o.histograms = make(map[string]metric.Float64Histogram)
-	o.updowns = make(map[string]metric.Int64UpDownCounter)
-	o.observableGauges = make(map[string]metric.Float64ObservableGauge)
+	// sync.Map doesn't require initialization
 
 	ctx := context.Background()
 
@@ -157,21 +153,24 @@ func (o *OTelMetrics) Start() error {
 		return err
 	}
 
-	o.observableGauges[name] = g
+	o.observableGauges.Store(name, g)
 
 	name = "memory_inuse"
 	// This is just reporting the gauge we already track under a different name.
 	var fmem metric.Float64Callback = func(_ context.Context, result metric.Float64Observer) error {
-		stats := &runtime.MemStats{}
-		runtime.ReadMemStats(stats)
-		result.Observe(float64(stats.HeapAlloc))
+		memMetricSample := make([]rtmetrics.Sample, 1)
+		memMetricSample[0].Name = RtMetricNameMemory
+		rtmetrics.Read(memMetricSample)
+		currentAlloc := memMetricSample[0].Value.Uint64()
+
+		result.Observe(float64(currentAlloc))
 		return nil
 	}
 	g, err = o.meter.Float64ObservableGauge(name, metric.WithFloat64Callback(fmem))
 	if err != nil {
 		return err
 	}
-	o.observableGauges[name] = g
+	o.observableGauges.Store(name, g)
 
 	startTime := time.Now()
 	name = "process_uptime_seconds"
@@ -183,7 +182,7 @@ func (o *OTelMetrics) Start() error {
 	if err != nil {
 		return err
 	}
-	o.observableGauges[name] = g
+	o.observableGauges.Store(name, g)
 
 	return nil
 }
@@ -283,126 +282,100 @@ func (o *OTelMetrics) Down(name string) {
 }
 
 // getOrInitCounter returns a counter metric with the given metadata.
-// It manages the locks it needs; do not call inside a lock on o.lock.
-func (o *OTelMetrics) getOrInitCounter(metadata Metadata) (ctr metric.Int64Counter, err error) {
-	o.lock.RLock()
-	ctr, ok := o.counters[metadata.Name]
-	o.lock.RUnlock()
-
-	if ok { // yey, the counter exists; return it
-		return ctr, nil
+// Uses sync.Map for lock-free concurrent access.
+func (o *OTelMetrics) getOrInitCounter(metadata Metadata) (metric.Int64Counter, error) {
+	// Fast path: try to load existing counter
+	if val, ok := o.counters.Load(metadata.Name); ok {
+		return val.(metric.Int64Counter), nil
 	}
 
-	// oh, so sad; gotta make the counter
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
-	ctr, ok = o.counters[metadata.Name] // confirm it wasn't created since we checked earlier
-	if !ok {
-		ctr, err = o.meter.Int64Counter(metadata.Name,
-			metric.WithUnit(string(metadata.Unit)),
-			metric.WithDescription(metadata.Description),
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		// Give the counter an initial value of 0 so that OTel will send it
-		ctr.Add(context.Background(), 0)
-		o.counters[metadata.Name] = ctr
+	// Slow path: create new counter
+	ctr, err := o.meter.Int64Counter(metadata.Name,
+		metric.WithUnit(string(metadata.Unit)),
+		metric.WithDescription(metadata.Description),
+	)
+	if err != nil {
+		return nil, err
 	}
-	return ctr, nil
+
+	// Give the counter an initial value of 0 so that OTel will send it
+	ctr.Add(context.Background(), 0)
+
+	// LoadOrStore ensures only one counter is stored even if multiple goroutines
+	// try to create the same counter concurrently
+	actual, _ := o.counters.LoadOrStore(metadata.Name, ctr)
+	return actual.(metric.Int64Counter), nil
 }
 
 // getOrInitGauge returns a gauge metric with the given metadata.
-// It manages the locks it needs; do not call inside a lock on o.lock.
-func (o *OTelMetrics) getOrInitGauge(metadata Metadata) (g metric.Float64Gauge, err error) {
-	o.lock.RLock()
-	g, ok := o.gauges[metadata.Name]
-	o.lock.RUnlock()
-
-	if ok { // yey, the guage exists; return it
-		return g, nil
+// Uses sync.Map for lock-free concurrent access.
+func (o *OTelMetrics) getOrInitGauge(metadata Metadata) (metric.Float64Gauge, error) {
+	// Fast path: try to load existing gauge
+	if val, ok := o.gauges.Load(metadata.Name); ok {
+		return val.(metric.Float64Gauge), nil
 	}
 
-	// oh, so sad; gotta make the gauge
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
-	g, ok = o.gauges[metadata.Name] // confirm it wasn't created since we checked earlier
-	if !ok {
-		g, err = o.meter.Float64Gauge(metadata.Name,
-			metric.WithUnit(string(metadata.Unit)),
-			metric.WithDescription(metadata.Description),
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		o.gauges[metadata.Name] = g
+	// Slow path: create new gauge
+	g, err := o.meter.Float64Gauge(metadata.Name,
+		metric.WithUnit(string(metadata.Unit)),
+		metric.WithDescription(metadata.Description),
+	)
+	if err != nil {
+		return nil, err
 	}
-	return g, nil
+
+	// LoadOrStore ensures only one gauge is stored even if multiple goroutines
+	// try to create the same gauge concurrently
+	actual, _ := o.gauges.LoadOrStore(metadata.Name, g)
+	return actual.(metric.Float64Gauge), nil
 }
 
-// getOrInitHistogram initializes a new histogram metric with the given metadata
-// It manages the locks it needs; do not call inside a lock on o.lock.
-func (o *OTelMetrics) getOrInitHistogram(metadata Metadata) (h metric.Float64Histogram, err error) {
-	o.lock.RLock()
-	h, ok := o.histograms[metadata.Name]
-	o.lock.RUnlock()
-
-	if ok { // yey, the histogram exists; return it
-		return h, nil
+// getOrInitHistogram initializes a new histogram metric with the given metadata.
+// Uses sync.Map for lock-free concurrent access.
+func (o *OTelMetrics) getOrInitHistogram(metadata Metadata) (metric.Float64Histogram, error) {
+	// Fast path: try to load existing histogram
+	if val, ok := o.histograms.Load(metadata.Name); ok {
+		return val.(metric.Float64Histogram), nil
 	}
 
-	// oh, so sad; gotta make the histogram
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
-	h, ok = o.histograms[metadata.Name] // confirm it wasn't created since we checked earlier
-	if !ok {
-		unit := string(metadata.Unit)
-		h, err = o.meter.Float64Histogram(metadata.Name,
-			metric.WithUnit(unit),
-			metric.WithDescription(metadata.Description),
-		)
-		if err != nil {
-			return nil, err
-		}
-		h.Record(context.Background(), 0)
-		o.histograms[metadata.Name] = h
+	// Slow path: create new histogram
+	h, err := o.meter.Float64Histogram(metadata.Name,
+		metric.WithUnit(string(metadata.Unit)),
+		metric.WithDescription(metadata.Description),
+	)
+	if err != nil {
+		return nil, err
 	}
-	return h, nil
 
+	h.Record(context.Background(), 0)
+
+	// LoadOrStore ensures only one histogram is stored even if multiple goroutines
+	// try to create the same histogram concurrently
+	actual, _ := o.histograms.LoadOrStore(metadata.Name, h)
+	return actual.(metric.Float64Histogram), nil
 }
 
-// getOrInitUpDown initializes a new updown counter metric with the given metadata
-// It manages the locks it needs; do not call inside a lock on o.lock.
-func (o *OTelMetrics) getOrInitUpDown(metadata Metadata) (ud metric.Int64UpDownCounter, err error) {
-	o.lock.RLock()
-	ud, ok := o.updowns[metadata.Name]
-	o.lock.RUnlock()
-
-	if ok { // yey, the updown counter exists; return it
-		return ud, nil
+// getOrInitUpDown initializes a new updown counter metric with the given metadata.
+// Uses sync.Map for lock-free concurrent access.
+func (o *OTelMetrics) getOrInitUpDown(metadata Metadata) (metric.Int64UpDownCounter, error) {
+	// Fast path: try to load existing updown counter
+	if val, ok := o.updowns.Load(metadata.Name); ok {
+		return val.(metric.Int64UpDownCounter), nil
 	}
 
-	// oh, so sad; gotta make the updown counter
-	o.lock.Lock()
-	defer o.lock.Unlock()
-
-	ud, ok = o.updowns[metadata.Name] // confirm it wasn't created since we checked earlier
-	if !ok {
-		unit := string(metadata.Unit)
-		ud, err = o.meter.Int64UpDownCounter(metadata.Name,
-			metric.WithUnit(unit),
-			metric.WithDescription(metadata.Description),
-		)
-		if err != nil {
-			return nil, err
-		}
-		ud.Add(context.Background(), 0)
-		o.updowns[metadata.Name] = ud
+	// Slow path: create new updown counter
+	ud, err := o.meter.Int64UpDownCounter(metadata.Name,
+		metric.WithUnit(string(metadata.Unit)),
+		metric.WithDescription(metadata.Description),
+	)
+	if err != nil {
+		return nil, err
 	}
-	return ud, nil
+
+	ud.Add(context.Background(), 0)
+
+	// LoadOrStore ensures only one updown counter is stored even if multiple goroutines
+	// try to create the same updown counter concurrently
+	actual, _ := o.updowns.LoadOrStore(metadata.Name, ud)
+	return actual.(metric.Int64UpDownCounter), nil
 }

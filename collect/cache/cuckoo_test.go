@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/dgryski/go-wyhash"
-	"github.com/honeycombio/refinery/metrics"
 	"github.com/sourcegraph/conc/pool"
+
+	"github.com/honeycombio/refinery/metrics"
 )
 
 // genID returns a random hex string of length numChars
