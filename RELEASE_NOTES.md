@@ -4,6 +4,57 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 3.1.0
 
+This release introduces concurrent trace processing, enabling Refinery to make effective use of multi-core systems.
+
+### Performance Improvements
+
+Refinery now processes traces using multiple concurrent workers instead of a single worker loop. The number of workers defaults to the number of logical CPUs available (GOMAXPROCS), allowing Refinery to spread work  across available CPU resources.
+
+This improved parallelism enables **vertical scaling** - you can now run larger nodes more efficiently instead of more instances. After upgrading to 3.1 and confirming stability, consider reducing the number of replicas while increasing CPU and memory per replica. This can reduce peer-to-peer communication overhead while maintaining the same total capacity.
+
+Additional performance optimizations in this release include:
+- Per-worker trace decision caches to reduce lock contention
+- Optimized memory allocations in field memoization and span processing
+- Reduced lock contention in metrics systems
+- More efficient memory usage reporting using runtime/metrics
+
+### Configuration Changes
+
+* **Added**: `WorkerCount` - controls the number of parallel workers for trace processing
+  * Defaults to `0`, which automatically sets the count to the number of logical CPUs
+  * Not eligible for live reload
+* **Added**: `ClusterName` under `RedisPeerManagement` - enables multiple Refinery clusters to share the same Redis instance by namespacing pubsub channels
+* **Added**: `SpanLimit` now has a default value of `32000` to provide better out-of-the-box protection against oversized traces
+
+### Metrics Changes
+
+**New Metrics:**
+* `collector_num_workers` - gauge tracking the number of concurrent workers running in a Refinery instance
+* `worker_cache_entries` - histogram tracking the number of traces stored in each worker's trace cache
+
+**Per-Worker Metrics:**
+
+The following metrics were previously reported as global totals and are now emitted per worker, providing better visibility into load distribution:
+* `cache_recent_dropped_traces`
+* `cuckoo_current_load_factor`
+* `cuckoo_future_load_factor`
+* `cuckoo_current_capacity`
+* `cuckoo_addqueue_full`
+* `cuckoo_addqueue_locktime_uS`
+
+### Additional Features
+
+* **Final Sample Rate Attribute**: Refinery now adds `meta.refinery.final_sample_rate` to processed traces, making it easier to understand the effective sample rate applied
+* **Improved Logging**: Sampling decision logs (keep/drop) are now emitted at DEBUG level instead of INFO, reducing log volume
+
+### Bug Fixes
+
+* Fixed race conditions in pubsub and sampler implementations
+* Corrected stress relief calculation denominators
+* Fixed OTLP sampling key field generation
+* Improved metrics tracking for trace send reasons and cache sizes
+* Fixed memoization to skip duplicate keys
+
 ## Version 3.0.1
 
 This is a bug fix release to fix a regression in recording original sample rate from OTLP resource attributes and rule matching with send key configured.
