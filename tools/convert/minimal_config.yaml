@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2025-10-02 at 19:03:20 UTC
+# automatically generated on 2026-02-04 at 18:27:40 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -27,7 +27,7 @@ Traces:
   SendDelay: 2s
   BatchTimeout: 500ms
   TraceTimeout: 60s
-  SpanLimit: 0
+  SpanLimit: 32_000
   MaxBatchSize: 500
   SendTicker: 100ms
   MaxExpiredTraces: 3_000
@@ -89,6 +89,7 @@ RedisPeerManagement:
   Username: ""
   Password: ""
   AuthCode: ""
+  ClusterName: production
   UseTLS: false
   UseTLSInsecure: false
   Timeout: 5s
@@ -100,6 +101,7 @@ Collection:
   MaxAlloc: 0
   ShutdownDelay: 15s
   HealthCheckTimeout: 15s
+  WorkerCount: 0
 Specialized:
   EnvironmentCacheTTL: 1h
   CompressPeerCommunication: true

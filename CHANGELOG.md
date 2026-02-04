@@ -1,5 +1,58 @@
 # Refinery Changelog
 
+## 3.1.0 2026-02-04
+
+### 💡 Enhancements
+
+- feat: add meta.refinery.final_sample_rate attribute by @TylerHelmuth in https://github.com/honeycombio/refinery/pull/1775
+- feat: set default value for SpanLimit to 32k by @VinozzZ in https://github.com/honeycombio/refinery/pull/1768
+- feat: support multi-deployment using the same redis instance in Pubsub by @VinozzZ in https://github.com/honeycombio/refinery/pull/1761
+- feat: set default number of workers to GOMAXPROCS by @robbkidd in https://github.com/honeycombio/refinery/pull/1719
+- feat: initial concurrent collect loops by @ianwilkes in https://github.com/honeycombio/refinery/pull/1670
+
+### 🚀 Performance
+
+- perf: separate trace decision cache per worker by @VinozzZ in https://github.com/honeycombio/refinery/pull/1745
+- perf: use []string for missingFields instead of a map by @VinozzZ in https://github.com/honeycombio/refinery/pull/1750
+- perf: don't make another copy of Event in Span struct by @VinozzZ in https://github.com/honeycombio/refinery/pull/1747
+- perf: do not extract sampling fields for OTLP endpoint by @VinozzZ in https://github.com/honeycombio/refinery/pull/1748
+- perf: remove unecessary locks by @VinozzZ in https://github.com/honeycombio/refinery/pull/1743
+- perf: reduce lock contention for health check system by @VinozzZ in https://github.com/honeycombio/refinery/pull/1727
+- perf: reduce allocation in MemoizeFields for common cases by @VinozzZ in https://github.com/honeycombio/refinery/pull/1726
+- perf: replace runtime.ReadMemStats with runtime/metrics by @VinozzZ in https://github.com/honeycombio/refinery/pull/1724
+- perf: reduce otel metrics lock contention using sync.map by @VinozzZ in https://github.com/honeycombio/refinery/pull/1723
+- perf: reduce MultiMetrics lock contention using sync.map by @VinozzZ in https://github.com/honeycombio/refinery/pull/1712
+- perf: use thread-local metrics counter for processSpan by @VinozzZ in https://github.com/honeycombio/refinery/pull/1675
+- perf: CollectLoop-local samplers, with shared dynsamplers by @ianwilkes in https://github.com/honeycombio/refinery/pull/1673
+
+### 🐛 Fixes
+
+- fix: logs for keep/drop sampling outcomes are now emitted at DEBUG instead of INFO level by @robbkidd in https://github.com/honeycombio/refinery/pull/1780
+- fix: track trace send reason metrics by @VinozzZ in https://github.com/honeycombio/refinery/pull/1765
+- fix: skip duplicated keys during memoization by @VinozzZ in https://github.com/honeycombio/refinery/pull/1764
+- fix: validation type for ClusterName by @VinozzZ in https://github.com/honeycombio/refinery/pull/1763
+- fix: missing denominators for stress relief calculation by @VinozzZ in https://github.com/honeycombio/refinery/pull/1762
+- fix: race condition in pubsub_local by @VinozzZ in https://github.com/honeycombio/refinery/pull/1751
+- fix: generate sampling key fields for OTLP by @VinozzZ in https://github.com/honeycombio/refinery/pull/1746
+- fix: more Collect Loop -> Worker renaming by @robbkidd in https://github.com/honeycombio/refinery/pull/1741
+- fix: collect_cache_entries tracks total cache size, new worker_cache_entries for tracking worker cache sizes by @VinozzZ in https://github.com/honeycombio/refinery/pull/1721
+- fix: quick and dirty concurrency safety for samplers by @ianwilkes in https://github.com/honeycombio/refinery/pull/1669
+
+### 🛠 Maintenance
+
+- maint: merge concurrent-collect-loop-work-branch into main by @VinozzZ in https://github.com/honeycombio/refinery/pull/1782
+- maint(doc): add warning for has-root-span usage with rules' scope by @VinozzZ in https://github.com/honeycombio/refinery/pull/1781
+- maint: update dynsampler-go to v0.6.4 by @VinozzZ in https://github.com/honeycombio/refinery/pull/1779
+- maint: remove unused internal metrics by @VinozzZ in https://github.com/honeycombio/refinery/pull/1767
+- maint: use runtime/metrics for reporting memory_inuse by @VinozzZ in https://github.com/honeycombio/refinery/pull/1728
+- maint: rename CollectLoop related code to improve readability by @VinozzZ in https://github.com/honeycombio/refinery/pull/1722
+- maint: assert RulesBasedSampler shares the same underlying dysamplers by @VinozzZ in https://github.com/honeycombio/refinery/pull/1718
+- maint: consolidate Peer mocks into one mock implementation by @VinozzZ in https://github.com/honeycombio/refinery/pull/1717
+- docs: update 3.0.0 RELNOTES with parent ID rule breaking change by @robbkidd in https://github.com/honeycombio/refinery/pull/1760
+- docs: add SpanLimit guidance to drop large traces rule example by @robbkidd in https://github.com/honeycombio/refinery/pull/1744
+- ci: latest/major/minor tags in public image registries will only move on stable releases by @robbkidd in https://github.com/honeycombio/refinery/pull/1774
+- ci: update dependencies license compliance check process by @robbkidd in https://github.com/honeycombio/refinery/pull/1755
+
 ## 3.0.1 2025-11-10
 
 ### 🐛 Fixes

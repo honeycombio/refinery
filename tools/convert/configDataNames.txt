@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2025-10-02 at 19:03:20 UTC.
+# Automatically generated on 2026-02-04 at 18:27:39 UTC.
 
 General:
   - ConfigurationVersion
@@ -172,6 +172,8 @@ RedisPeerManagement:
 
   - AuthCode (originally PeerManagement.AuthCode)
 
+  - ClusterName
+
   - Prefix (originally PeerManagement.Prefix)
 
   - Database (originally PeerManagement.Database)
@@ -215,6 +217,8 @@ Collection:
   - MaxKeptDecisionBatchSize
 
   - KeptDecisionSendInterval
+
+  - WorkerCount
 
 
 BufferSizes:

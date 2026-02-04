@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2025-10-02 at 19:03:23 UTC.
+It was automatically generated on 2026-02-04 at 18:27:42 UTC.
 
 ## The Config file
 
@@ -321,6 +321,7 @@ It's most helpful in a situation where a sudden burst of many spans in a large t
 
 - Eligible for live reload.
 - Type: `int`
+- Default: `32000`
 
 ### `MaxBatchSize`
 
@@ -833,6 +834,19 @@ Many Redis installations do not use this field.
 - Type: `string`
 - Environment variable: `REFINERY_REDIS_AUTH_CODE`
 
+### `ClusterName`
+
+ClusterName is a cluster identifier used as a prefix for Redis pubsub channel names.
+
+ClusterName is used to namespace Redis pubsub channels when multiple Refinery clusters share the same Redis instance.
+If set, all pubsub channel names will be prefixed with this value (e.g., "production:peers").
+This allows multiple clusters to coexist without interfering with each other.
+Must be alphanumeric if specified.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `production`
+
 ### `UseTLS`
 
 UseTLS enables TLS when connecting to Redis for peer cluster membership management.
@@ -964,6 +978,18 @@ Refinery will adjust the timeout based on the configured `MaxExpiredTraces`, so 
 - Not eligible for live reload.
 - Type: `duration`
 - Default: `15s`
+
+### `WorkerCount`
+
+WorkerCount is the number of parallel collection workers to run for trace processing.
+
+Controls the number of parallel collection workers used for processing traces.
+Each worker processes a subset of traces independently using consistent hashing.
+Values greater than 1 enable parallel processing which can improve throughput on multi-core systems.
+The default of 0 means Refinery will automatically set this value to the number of logical CPUs available at startup.
+
+- Not eligible for live reload.
+- Type: `int`
 
 ## Specialized Configuration
 

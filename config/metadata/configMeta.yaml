@@ -1151,7 +1151,7 @@ groups:
 
       - name: ClusterName
         type: string
-        valuetype: string
+        valuetype: nonemptystring
         example: "production"
         reload: false
         validations:
