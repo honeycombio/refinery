@@ -13,7 +13,6 @@ Refinery now processes traces using multiple concurrent workers instead of a sin
 This improved parallelism enables **vertical scaling** - you can now run larger nodes more efficiently instead of more instances. After upgrading to 3.1 and confirming stability, consider reducing the number of replicas while increasing CPU and memory per replica. This can reduce peer-to-peer communication overhead while maintaining the same total capacity.
 
 Additional performance optimizations in this release include:
-- Per-worker trace decision caches to reduce lock contention
 - Optimized memory allocations in field memoization and span processing
 - Reduced lock contention in metrics systems
 - More efficient memory usage reporting using runtime/metrics
@@ -46,14 +45,6 @@ The following metrics were previously reported as global totals and are now emit
 
 * **Final Sample Rate Attribute**: Refinery now adds `meta.refinery.final_sample_rate` to processed traces, making it easier to understand the effective sample rate applied
 * **Improved Logging**: Sampling decision logs (keep/drop) are now emitted at DEBUG level instead of INFO, reducing log volume
-
-### Bug Fixes
-
-* Fixed race conditions in pubsub and sampler implementations
-* Corrected stress relief calculation denominators
-* Fixed OTLP sampling key field generation
-* Improved metrics tracking for trace send reasons and cache sizes
-* Fixed memoization to skip duplicate keys
 
 ## Version 3.0.1
 

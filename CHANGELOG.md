@@ -2,6 +2,9 @@
 
 ## 3.1.0 2026-02-04
 
+his release introduces concurrent collect loops (workers) for improved parallelism and throughput.
+It also includes enhanced multi-deployment support for Redis-based clustering and various stability improvements.
+
 ### 💡 Enhancements
 
 - feat: add meta.refinery.final_sample_rate attribute by @TylerHelmuth in https://github.com/honeycombio/refinery/pull/1775
