@@ -13,15 +13,14 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-
 type RulesBasedSampler struct {
-	Config        *config.RulesBasedSamplerConfig
-	Logger        logger.Logger
-	Metrics       metrics.Metrics
+	Config         *config.RulesBasedSamplerConfig
+	Logger         logger.Logger
+	Metrics        metrics.Metrics
 	SamplerFactory *SamplerFactory
-	samplers      map[string]Sampler
-	keyFields     []string
-	nonRootFields []string
+	samplers       map[string]Sampler
+	keyFields      []string
+	nonRootFields  []string
 
 	metricNames samplerMetricNames
 }
@@ -67,7 +66,6 @@ func (s *RulesBasedSampler) Start() error {
 	}
 	return nil
 }
-
 
 func (s *RulesBasedSampler) GetSampleRate(trace *types.Trace) (rate uint, keep bool, reason string, key string) {
 	logger := s.Logger.Debug().WithFields(map[string]interface{}{
