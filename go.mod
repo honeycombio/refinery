@@ -118,4 +118,4 @@ require (
 
 tool github.com/google/go-licenses/v2
 
-replace go.opentelemetry.io/proto/otlp => github.com/honeycombio/opentelemetry-proto-go/otlp v1.3.1-compat
+replace go.opentelemetry.io/proto/otlp => github.com/honeycombio/opentelemetry-proto-go/otlp v1.9.0-compat
