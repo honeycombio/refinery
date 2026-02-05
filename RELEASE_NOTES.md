@@ -8,9 +8,10 @@ This release introduces concurrent trace processing, enabling Refinery to make e
 
 ### Performance Improvements
 
-Refinery now processes traces using multiple concurrent workers instead of a single worker loop. The number of workers defaults to the number of logical CPUs available (GOMAXPROCS), allowing Refinery to spread work  across available CPU resources.
-
-This improved parallelism enables **vertical scaling** - you can now run larger nodes more efficiently instead of more instances. After upgrading to 3.1 and confirming stability, consider reducing the number of replicas while increasing CPU and memory per replica. This can reduce peer-to-peer communication overhead while maintaining the same total capacity.
+**Vertical Scaling** - Refinery now processes traces using multiple concurrent workers instead of a single worker loop, allowing you to run a smaller cluster of larger hosts.
+The number of workers defaults to the number of logical CPUs available (GOMAXPROCS) on a host.
+After upgrading to 3.1 and confirming stability, consider reducing the number of Refinery hosts while increasing CPU and memory per host.
+This tuning can reduce peer-to-peer communication overhead while maintaining the same total throughput.
 
 Additional performance optimizations in this release include:
 - Optimized memory allocations in field memoization and span processing
