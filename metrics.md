@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2025-10-01 at 18:54:38 UTC.
+It was automatically generated on 2026-02-04 at 18:27:42 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -14,7 +14,7 @@ This table includes metrics with fully defined names.
 |------|------|------|-------------|
 | is_ready | Gauge | Dimensionless | Whether the system is ready to receive traffic |
 | is_alive | Gauge | Dimensionless | Whether the system is alive and reporting in |
-| collect_cache_entries | Histogram | Dimensionless | The number of traces currently stored in the cache |
+| worker_cache_entries | Histogram | Dimensionless | The number of traces currently stored in the trace cache per worker |
 | cuckoo_current_capacity | Gauge | Dimensionless | current capacity of the cuckoo filter |
 | cuckoo_future_load_factor | Gauge | Percent | the fraction of slots occupied in the future cuckoo filter |
 | cuckoo_current_load_factor | Gauge | Percent | the fraction of slots occupied in the current cuckoo filter |
@@ -37,6 +37,7 @@ This table includes metrics with fully defined names.
 | collector_incoming_queue_length | Gauge | Dimensionless | number of spans in the incoming queue |
 | collector_peer_queue | Histogram | Dimensionless | number of spans currently in the peer queue |
 | collector_cache_size | Gauge | Dimensionless | number of traces currently stored in the trace cache |
+| collect_cache_entries | Histogram | Dimensionless | Total number of traces currently stored in the cache from all workers |
 | memory_heap_allocation | Gauge | Bytes | current heap allocation |
 | span_received | Counter | Dimensionless | number of spans received by the collector |
 | span_processed | Counter | Dimensionless | number of spans processed by the collector |
@@ -47,10 +48,6 @@ This table includes metrics with fully defined names.
 | trace_send_dropped | Counter | Dimensionless | number of traces that has been dropped |
 | trace_send_has_root | Counter | Dimensionless | number of kept traces that have a root span |
 | trace_send_no_root | Counter | Dimensionless | number of kept traces that do not have a root span |
-| trace_forwarded_on_peer_change | Gauge | Dimensionless | number of traces forwarded due to peer membership change |
-| trace_redistribution_count | Gauge | Dimensionless | number of traces redistributed due to peer membership change |
-| trace_send_on_shutdown | Counter | Dimensionless | number of traces sent during shutdown |
-| trace_forwarded_on_shutdown | Counter | Dimensionless | number of traces forwarded during shutdown |
 | trace_send_got_root | Counter | Dimensionless | number of traces that are ready for decision due to root span arrival |
 | trace_send_expired | Counter | Dimensionless | number of traces that are ready for decision due to TraceTimeout or SendDelay |
 | trace_send_span_limit | Counter | Dimensionless | number of traces that are ready for decision due to span limit |
@@ -61,20 +58,11 @@ This table includes metrics with fully defined names.
 | kept_from_stress | Counter | Dimensionless | number of spans kept due to stress relief |
 | trace_kept_sample_rate | Histogram | Dimensionless | sample rate of kept traces |
 | trace_aggregate_sample_rate | Histogram | Dimensionless | aggregate sample rate of both kept and dropped traces |
-| collector_redistribute_traces_duration_ms | Histogram | Milliseconds | duration of redistributing traces to peers |
 | collector_collect_loop_duration_ms | Histogram | Milliseconds | duration of the collect loop, the primary event processing goroutine |
 | collector_send_expired_traces_in_cache_dur_ms | Histogram | Milliseconds | duration of sending expired traces in cache |
 | collector_outgoing_queue | Histogram | Dimensionless | number of traces waiting to be send to upstream |
-| collector_drop_decision_batch_count | Histogram | Dimensionless | number of drop decisions sent in a batch |
-| collector_expired_traces_missing_decisions | Gauge | Dimensionless | number of decision spans forwarded for expired traces missing trace decision |
-| collector_expired_traces_orphans | Gauge | Dimensionless | number of expired traces missing trace decision when they are sent |
-| drop_decision_batches_received | Counter | Dimensionless | number of drop decision batches received |
-| kept_decision_batches_received | Counter | Dimensionless | number of kept decision batches received |
-| drop_decisions_received | Counter | Dimensionless | total number of drop decisions received |
-| kept_decisions_received | Counter | Dimensionless | total number of kept decisions received |
-| collector_kept_decisions_queue_full | Counter | Dimensionless | number of times kept trace decision queue is full |
-| collector_drop_decisions_queue_full | Counter | Dimensionless | number of times drop trace decision queue is full |
 | collector_cache_eviction | Counter | Dimensionless | number of times cache eviction has occurred |
+| collector_num_workers | Gauge | Dimensionless | number of collector workers |
 | cluster_stress_level | Gauge | Dimensionless | The overall stress level of the cluster |
 | individual_stress_level | Gauge | Dimensionless | The stress level of the individual node |
 | stress_level | Gauge | Dimensionless | The stress level that's being used to determine whether to activate stress relief |

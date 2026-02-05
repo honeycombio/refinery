@@ -519,6 +519,11 @@ A no-condition rule is typically used for the last rule to provide a default beh
 Controls the scope of the rule evaluation.
 If set to `trace` (the default), then each condition can apply to any span in the trace independently.
 If set to `span`, then all of the conditions in the rule will be evaluated against each span in the trace and the rule only succeeds if all of the conditions match on a single span together.
+WARNING: The `has-root-span` operator cannot be used with `Scope: span`.
+The `has-root-span` operator is a trace-level condition that checks whether the trace has a root span.
+When using `Scope: span`, all conditions must match on a single span, which is incompatible with trace-level operators like `has-root-span`.
+Combining them will cause the rule to fail evaluation and be skipped.
+Traces that should match the rule will not be sampled as expected.
 
 - Type: `string`
 
