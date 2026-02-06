@@ -90,27 +90,6 @@ type NetworkConfig struct {
 	AdditionalHeaders map[string]string `yaml:"AdditionalHeaders" default:"{}"`
 }
 
-// reservedHeaders contains HTTP headers that cannot be overridden via AdditionalHeaders
-// because they are set by Refinery for proper Honeycomb API communication.
-var reservedHeaders = map[string]bool{
-	"x-honeycomb-team":       true,
-	"x-hny-team":             true,
-	"x-honeycomb-dataset":    true,
-	"x-honeycomb-samplerate": true,
-	"x-honeycomb-event-time": true,
-}
-
-// validateAdditionalHeaders checks that no reserved Honeycomb headers are specified
-// in the AdditionalHeaders configuration.
-func validateAdditionalHeaders(headers map[string]string) error {
-	for key := range headers {
-		if reservedHeaders[strings.ToLower(key)] {
-			return fmt.Errorf("cannot override reserved Honeycomb header %q in Network.AdditionalHeaders", key)
-		}
-	}
-	return nil
-}
-
 type AccessKeyConfig struct {
 	ReceiveKeys          []string `yaml:"ReceiveKeys" default:"[]"`
 	SendKey              string   `yaml:"SendKey" cmdenv:"SendKey"`

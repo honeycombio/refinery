@@ -1454,10 +1454,10 @@ func TestAdditionalHeadersReservedHeadersRejected(t *testing.T) {
 					tc.header: "should-fail",
 				},
 			)
-			// Use --no-validate to skip YAML schema validation and test our header validation
 			rm := makeYAML("RulesVersion", 2)
 			config, rules := createTempConfigs(t, cm, rm)
-			_, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+			// Reserved headers validation now happens during schema validation
+			_, err := getConfig([]string{"--config", config, "--rules_config", rules})
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "reserved")
 		})
