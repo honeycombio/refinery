@@ -566,11 +566,6 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 	// Set workerCount on SampleCache once during initialization
 	mainconf.SampleCache.WorkerCount = uint(mainconf.Collection.GetWorkerCount())
 
-	// Validate AdditionalHeaders doesn't contain reserved Honeycomb headers
-	if err := validateAdditionalHeaders(mainconf.Network.AdditionalHeaders); err != nil {
-		return nil, err
-	}
-
 	cfg := &fileConfig{
 		mainConfig:  mainconf,
 		mainHash:    mainhash,
