@@ -45,6 +45,7 @@ func helpers() template.FuncMap {
 		"secondsToDuration": secondsToDuration,
 		"stringArray":       stringArray,
 		"split":             split,
+		"splitN":            splitN,
 		"wci":               wci,
 		"wordwrap":          wordwrap,
 		"wrapForDocs":       wrapForDocs,
@@ -270,7 +271,7 @@ func renderMap(data map[string]any, key, oldkey string, example string) string {
 		values := strings.Split(example, ",")
 		mapValues = make(map[string]string)
 		for _, v := range values {
-			kv := strings.Split(v, ":")
+			kv := strings.SplitN(v, ":", 2) // split on the first colon only
 			mapValues[kv[0]] = kv[1]
 			comment = "# "
 		}
@@ -349,6 +350,10 @@ func secondsToDuration(data map[string]any, key, oldkey string, example string) 
 
 func split(s, sep string) []string {
 	return strings.Split(s, sep)
+}
+
+func splitN(s, sep string, n int) []string {
+	return strings.SplitN(s, sep, n)
 }
 
 // Prints a nicely-formatted string array; if the incoming string array doesn't exist, or

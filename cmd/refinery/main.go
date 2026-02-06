@@ -176,6 +176,7 @@ func main() {
 		time.Duration(c.GetTracesConfig().GetBatchTimeout()),
 		30*time.Second,
 		true,
+		c.GetAdditionalHeaders(), // Custom headers for upstream Honeycomb API
 	)
 	peerTransmission := transmit.NewDirectTransmission(
 		types.TransmitTypePeer,
@@ -184,6 +185,7 @@ func main() {
 		time.Duration(c.GetTracesConfig().GetBatchTimeout()),
 		10*time.Second,
 		c.GetCompressPeerCommunication(),
+		nil, // No custom headers for peer-to-peer traffic
 	)
 
 	// we need to include all the metrics types so we can inject them in case they're needed
@@ -206,7 +208,7 @@ func main() {
 
 	if c.GetOTelTracingConfig().Enabled {
 		// let's set up some OTel tracing
-		tracer, shutdown = otelutil.SetupTracing(c.GetOTelTracingConfig(), resourceLib, resourceVer)
+		tracer, shutdown = otelutil.SetupTracing(c.GetOTelTracingConfig(), resourceLib, resourceVer, c.GetAdditionalHeaders())
 
 		// add telemetry callback so husky can enrich spans with attributes
 		husky.AddTelemetryAttributeFunc = func(ctx context.Context, key string, value any) {

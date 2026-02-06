@@ -12,6 +12,21 @@ import (
 	"github.com/honeycombio/refinery/config"
 )
 
+// headerInjectingTransport wraps an http.RoundTripper and adds custom headers
+// to all outgoing requests.
+type headerInjectingTransport struct {
+	base    http.RoundTripper
+	headers map[string]string
+}
+
+func (t *headerInjectingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Add custom headers before making the request
+	for k, v := range t.headers {
+		req.Header.Set(k, v)
+	}
+	return t.base.RoundTrip(req)
+}
+
 // HoneycombLogger is a Logger implementation that sends all logs to a Honeycomb
 // dataset.
 type HoneycombLogger struct {
@@ -45,12 +60,20 @@ func (h *HoneycombLogger) Start() error {
 	if h.loggerConfig.APIKey == "" {
 		loggerTx = &transmission.DiscardSender{}
 	} else {
+		// Wrap transport with header injector if there are additional headers
+		var transport http.RoundTripper = h.UpstreamTransport
+		if additionalHeaders := h.Config.GetAdditionalHeaders(); len(additionalHeaders) > 0 {
+			transport = &headerInjectingTransport{
+				base:    h.UpstreamTransport,
+				headers: additionalHeaders,
+			}
+		}
 		loggerTx = &transmission.Honeycomb{
 			// logs are often sent in flurries; flush every half second
 			MaxBatchSize:          100,
 			BatchTimeout:          500 * time.Millisecond,
 			UserAgentAddition:     "refinery/" + h.Version + " (metrics)",
-			Transport:             h.UpstreamTransport,
+			Transport:             transport,
 			PendingWorkCapacity:   libhoney.DefaultPendingWorkCapacity,
 			EnableMsgpackEncoding: true,
 		}

@@ -139,6 +139,9 @@ type DirectTransmission struct {
 	batchTimeout     time.Duration
 	batchSendTimeout time.Duration
 
+	// additionalHeaders are custom HTTP headers to add to all requests
+	additionalHeaders map[string]string
+
 	eventBatches map[transmitKey]*eventBatch
 	batchMutex   sync.RWMutex
 	dispatchPool *pool.Pool
@@ -157,6 +160,7 @@ func NewDirectTransmission(
 	batchTimeout time.Duration,
 	batchSendTimeout time.Duration,
 	enableCompression bool,
+	additionalHeaders map[string]string,
 ) *DirectTransmission {
 	return &DirectTransmission{
 		Transport:         transport,
@@ -166,6 +170,7 @@ func NewDirectTransmission(
 		maxBatchSize:      maxBatchSize,
 		batchTimeout:      batchTimeout,
 		batchSendTimeout:  batchSendTimeout,
+		additionalHeaders: additionalHeaders,
 		eventBatches:      make(map[transmitKey]*eventBatch),
 		stop:              make(chan struct{}),
 	}
@@ -471,6 +476,11 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 				break
 			}
 
+			// Add custom headers first (they will be overridden by standard headers if there's a conflict)
+			for key, value := range d.additionalHeaders {
+				req.Header.Set(key, value)
+			}
+			// Standard Honeycomb headers (set after custom to ensure they take precedence)
 			req.Header.Set("Content-Type", "application/msgpack")
 			req.Header.Set("X-Honeycomb-Team", apiKey)
 			req.Header.Set("User-Agent", d.userAgent)

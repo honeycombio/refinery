@@ -30,7 +30,7 @@
         {{- else if eq $field.ValueType "map" -}}
             {{- println -}}
             {{- range (split $value ",") -}}
-                {{- $kv := split . ":" -}}
+                {{- $kv := splitN . ":" 2 -}}
                 {{- print (yamlf (index $kv 0)) ": " (yamlf (index $kv 1)) | indent 4 | println -}}
             {{- end -}}
         {{- else -}}
