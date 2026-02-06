@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2026-02-06 at 14:53:41 UTC from ../../config.yaml using a template generated on 2026-02-06 at 14:53:35 UTC
+# created on 2026-02-06 at 15:01:40 UTC from ../../config.yaml using a template generated on 2026-02-06 at 15:01:38 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -558,8 +558,8 @@ HoneycombLogger:
     ##
     ## Not eligible for live reload.
     # AdditionalAttributes:
-      #  rollout.id: '67890'
       #  pipeline.id: '12345'
+      #  rollout.id: '67890'
 
 ###################
 ## Stdout Logger ##
