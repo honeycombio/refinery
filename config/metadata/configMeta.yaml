@@ -151,6 +151,7 @@ groups:
         validations:
           - type: elementType
             arg: string
+          - type: noReservedHeaders
         summary: is a map of additional HTTP headers to add to all upstream Honeycomb API requests.
         description: >
           These headers will be added to all HTTP requests made to the upstream

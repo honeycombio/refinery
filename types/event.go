@@ -3,16 +3,18 @@ package types
 import (
 	"context"
 	"time"
+
+	"github.com/honeycombio/refinery/internal/headers"
 )
 
+// Re-export header constants from internal/headers for backwards compatibility
 const (
-	APIKeyHeader = "X-Honeycomb-Team"
-	// libhoney-js uses this
-	APIKeyHeaderShort = "X-Hny-Team"
-	DatasetHeader     = "X-Honeycomb-Dataset"
-	SampleRateHeader  = "X-Honeycomb-Samplerate"
-	TimestampHeader   = "X-Honeycomb-Event-Time"
-	QueryTokenHeader  = "X-Honeycomb-Refinery-Query"
+	APIKeyHeader      = headers.APIKeyHeader
+	APIKeyHeaderShort = headers.APIKeyHeaderShort
+	DatasetHeader     = headers.DatasetHeader
+	SampleRateHeader  = headers.SampleRateHeader
+	TimestampHeader   = headers.TimestampHeader
+	QueryTokenHeader  = headers.QueryTokenHeader
 )
 
 // used to put a request ID into the request context for logging
