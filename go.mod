@@ -15,7 +15,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/honeycombio/dynsampler-go v0.6.4
 	github.com/honeycombio/hpsf v0.14.0
-	github.com/honeycombio/husky v0.40.0
+	github.com/honeycombio/husky v0.40.1-0.20260212145512-2cfbd4d0c562
 	github.com/honeycombio/libhoney-go v1.26.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jonboulle/clockwork v0.5.0
