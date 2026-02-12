@@ -14,13 +14,14 @@ import (
 )
 
 type RulesBasedSampler struct {
-	Config         *config.RulesBasedSamplerConfig
-	Logger         logger.Logger
-	Metrics        metrics.Metrics
-	SamplerFactory *SamplerFactory
-	samplers       map[string]Sampler
-	keyFields      []string
-	nonRootFields  []string
+	Config          *config.RulesBasedSamplerConfig
+	Logger          logger.Logger
+	Metrics         metrics.Metrics
+	SamplerFactory  *SamplerFactory
+	environmentName string
+	samplers        map[string]Sampler
+	keyFields       []string
+	nonRootFields   []string
 
 	metricNames samplerMetricNames
 }
@@ -54,7 +55,7 @@ func (s *RulesBasedSampler) Start() error {
 			}
 
 			// Use SamplerFactory to create downstream sampler with shared dynsamplers
-			sampler := s.SamplerFactory.GetDownstreamSampler("rules-based", rule.Sampler)
+			sampler := s.SamplerFactory.GetDownstreamSampler(s.environmentName, rule.Sampler)
 			if sampler == nil {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,
