@@ -122,8 +122,6 @@ github.com/honeycombio/dynsampler-go v0.6.4 h1:EM3FXN2Lfmso41MRMmSvRynMrz+AHiRff
 github.com/honeycombio/dynsampler-go v0.6.4/go.mod h1:M5YYNOfxRrBlEWDatTlHMYo5F7GjwVnptx5z+uXIVMo=
 github.com/honeycombio/hpsf v0.14.0 h1:LeQbDuT+aVmiJnWp9Kqb9Qqz5OZcjDk85RMzzwKtCKI=
 github.com/honeycombio/hpsf v0.14.0/go.mod h1:VyPjyn1GViOiCrpBbPZCkEJnuDuSTUpU8LV5CWVTQm4=
-github.com/honeycombio/husky v0.40.0 h1:gcQzqYR/WV6i8/58Jjm6rlCQQNcdHZUO7fZy+nMzU+M=
-github.com/honeycombio/husky v0.40.0/go.mod h1:RWLCjIdxslDczOqkWQIZpRaKxnRcbrE3m1yLbXA+P6M=
 github.com/honeycombio/husky v0.40.1-0.20260212145512-2cfbd4d0c562 h1:54HTetcuBwz49iibzWb/5NuFws8qPvLJTnGN35WEgq4=
 github.com/honeycombio/husky v0.40.1-0.20260212145512-2cfbd4d0c562/go.mod h1:kgwFQfPCC82f5BxuBb8BAuuC1Q7e5NK7EVsjcjztuXo=
 github.com/honeycombio/libhoney-go v1.26.0 h1:fdwS7c/5h6ifJqQZ178nm4UEZha04GTbwJMZ7xkShhk=
@@ -271,6 +269,10 @@ go.opentelemetry.io/otel/sdk/metric v1.40.0 h1:mtmdVqgQkeRxHgRv4qhyJduP3fYJRMX4A
 go.opentelemetry.io/otel/sdk/metric v1.40.0/go.mod h1:4Z2bGMf0KSK3uRjlczMOeMhKU2rhUqdWNoKcYrtcBPg=
 go.opentelemetry.io/otel/trace v1.40.0 h1:WA4etStDttCSYuhwvEa8OP8I5EWu24lkOzp+ZYblVjw=
 go.opentelemetry.io/otel/trace v1.40.0/go.mod h1:zeAhriXecNGP/s2SEG3+Y8X9ujcJOTqQ5RgdEJcawiA=
+go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.2.0 h1:40vBjolEOioNBl8zPj1wxqlA7kJ82RxR4HnUv7W8zRI=
+go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.2.0/go.mod h1:4wAsc1dEVb4D1ZykBNC9AriTU9uLYtmziLrB+7G4lb4=
+go.opentelemetry.io/proto/otlp/profiles/v1development v0.2.0 h1:yXinc284C6bmzA1r9jk7MxAhrBIIOH3qwmqwBmylZrA=
+go.opentelemetry.io/proto/otlp/profiles/v1development v0.2.0/go.mod h1:ygxocDWPB6Y6bySAjxmHyTebjAJ8jcEUAZc03gu1pxk=
 go.opentelemetry.io/proto/slim/otlp v1.9.0 h1:fPVMv8tP3TrsqlkH1HWYUpbCY9cAIemx184VGkS6vlE=
 go.opentelemetry.io/proto/slim/otlp v1.9.0/go.mod h1:xXdeJJ90Gqyll+orzUkY4bOd2HECo5JofeoLpymVqdI=
 go.opentelemetry.io/proto/slim/otlp/collector/profiles/v1development v0.2.0 h1:o13nadWDNkH/quoDomDUClnQBpdQQ2Qqv0lQBjIXjE8=

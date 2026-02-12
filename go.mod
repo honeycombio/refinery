@@ -73,6 +73,8 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/featuregate v1.51.0 // indirect
+	go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.2.0 // indirect
+	go.opentelemetry.io/proto/otlp/profiles/v1development v0.2.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0 // indirect
