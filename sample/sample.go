@@ -94,7 +94,12 @@ func getSharedDynsampler[ST any, CT any](
 	return dynsamplerInstance
 }
 
-// createSampler creates a sampler with shared dynsamplers based on the config type
+// createSampler creates a sampler with shared dynsamplers based on the config type.
+// A unique dynsampler is created based on a composite key that includes the keyPrefix
+// (dataset/environment), sampler type, and configuration parameters (e.g., sample rate
+// and field list). This ensures that samplers with identical configurations share the
+// same underlying dynsampler instance, guaranteeing consistent sampling decisions across
+// parallel collector workers within a single Refinery instance.
 func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	var sampler Sampler
 
@@ -114,7 +119,7 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	case *config.TotalThroughputSamplerConfig:
 		dynsamplerKey := fmt.Sprintf("%s:totalthroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForTotalThroughputSampler)
-		// Store goal throughput config under mutex protection
+		// only track goal throughput config if we need to recalculate it later based on cluster size
 		if c.UseClusterSize {
 			s.mutex.Lock()
 			s.goalThroughputConfigs[dynsamplerKey] = c.GoalThroughputPerSec
@@ -124,6 +129,7 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	case *config.EMAThroughputSamplerConfig:
 		dynsamplerKey := fmt.Sprintf("%s:emathroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForEMAThroughputSampler)
+		// only track goal throughput config if we need to recalculate it later based on cluster size
 		if c.UseClusterSize {
 			s.mutex.Lock()
 			s.goalThroughputConfigs[dynsamplerKey] = c.GoalThroughputPerSec
@@ -133,6 +139,7 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	case *config.WindowedThroughputSamplerConfig:
 		dynsamplerKey := fmt.Sprintf("%s:windowedthroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForWindowedThroughputSampler)
+		// only track goal throughput config if we need to recalculate it later based on cluster size
 		if c.UseClusterSize {
 			s.mutex.Lock()
 			s.goalThroughputConfigs[dynsamplerKey] = c.GoalThroughputPerSec
