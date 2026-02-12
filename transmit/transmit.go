@@ -118,7 +118,7 @@ func (d *DefaultTransmission) EnqueueEvent(ev *types.Event) {
 
 func (d *DefaultTransmission) EnqueueSpan(sp *types.Span) {
 	// we don't need the trace ID anymore, but it's convenient to accept spans.
-	d.EnqueueEvent(&sp.Event)
+	d.EnqueueEvent(sp.Event)
 }
 
 // RegisterMetrics registers the metrics used by the DefaultTransmission.

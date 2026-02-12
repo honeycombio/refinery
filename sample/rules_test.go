@@ -46,7 +46,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
 						}),
@@ -76,7 +76,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(2),
 						}),
@@ -106,7 +106,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
 						}),
@@ -136,7 +136,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
 						}),
@@ -170,7 +170,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
 						}),
@@ -211,7 +211,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":     2.2,
 							"test_two": false,
@@ -219,7 +219,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test_two": true,
 						}),
@@ -249,7 +249,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": float64(3),
 						}),
@@ -272,7 +272,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
 						}),
@@ -307,14 +307,14 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": int64(1),
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": int64(1),
 						}),
@@ -346,7 +346,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": int64(9),
 						}),
@@ -375,7 +375,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": int64(9),
 						}),
@@ -404,7 +404,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"second": int64(9),
 						}),
@@ -434,7 +434,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": "honeycomb",
 						}),
@@ -464,7 +464,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": "honeycomb",
 						}),
@@ -494,7 +494,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"first": "honeycomb",
 						}),
@@ -524,7 +524,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(2),
 						}),
@@ -554,7 +554,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "654321",
@@ -564,7 +564,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
@@ -597,7 +597,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "54321",
@@ -607,7 +607,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "654321",
@@ -617,7 +617,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
@@ -651,7 +651,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test2": int64(17),
 						}),
@@ -681,7 +681,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test2": int64(16),
 						}),
@@ -712,7 +712,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":  int64(2),
 							"test2": int64(17),
@@ -746,7 +746,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "54322",
@@ -756,7 +756,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "654321",
@@ -765,7 +765,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
@@ -774,7 +774,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
@@ -807,7 +807,7 @@ func TestRules(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "54322",
@@ -817,7 +817,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "654321",
@@ -826,7 +826,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
@@ -835,7 +835,7 @@ func TestRules(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"trace.trace_id":  "12345",
 							"trace.span_id":   "754321",
@@ -852,6 +852,9 @@ func TestRules(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, d := range data {
 		for _, rule := range d.Rules.Rules {
 			for _, cond := range rule.Conditions {
@@ -862,7 +865,7 @@ func TestRules(t *testing.T) {
 		sampler := &RulesBasedSampler{
 			Config:  d.Rules,
 			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
+			Metrics: testMetrics,
 		}
 
 		trace := &types.Trace{}
@@ -923,7 +926,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": map[string]interface{}{
 								"test1": "a",
@@ -955,7 +958,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test.test1": "a",
 						}),
@@ -984,7 +987,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": map[string]interface{}{
 								"test2": "b",
@@ -1015,7 +1018,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": map[string]interface{}{
 								"test1": "a",
@@ -1048,7 +1051,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": map[string]interface{}{
 								"test2": "a",
@@ -1063,6 +1066,9 @@ func TestRulesWithNestedFields(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, d := range data {
 		t.Run(d.Rules.Rules[0].Name, func(t *testing.T) {
 			for _, rule := range d.Rules.Rules {
@@ -1074,7 +1080,7 @@ func TestRulesWithNestedFields(t *testing.T) {
 			sampler := &RulesBasedSampler{
 				Config:  d.Rules,
 				Logger:  &logger.NullLogger{},
-				Metrics: &metrics.NullMetrics{},
+				Metrics: testMetrics,
 			}
 
 			trace := &types.Trace{}
@@ -1132,7 +1138,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
@@ -1140,7 +1146,7 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
@@ -1161,10 +1167,23 @@ func TestRulesWithDynamicSampler(t *testing.T) {
 				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
-		sampler := &RulesBasedSampler{
-			Config:  d.Rules,
+
+		// Create SamplerFactory for downstream samplers
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		samplerFactory := &SamplerFactory{
 			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
+			Metrics: mockMetrics,
+		}
+		err := samplerFactory.Start()
+		require.NoError(t, err)
+		defer samplerFactory.Stop()
+
+		sampler := &RulesBasedSampler{
+			Config:         d.Rules,
+			Logger:         &logger.NullLogger{},
+			Metrics:        mockMetrics,
+			SamplerFactory: samplerFactory,
 		}
 
 		trace := &types.Trace{}
@@ -1225,7 +1244,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
@@ -1233,7 +1252,7 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
@@ -1254,10 +1273,23 @@ func TestRulesWithEMADynamicSampler(t *testing.T) {
 				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
-		sampler := &RulesBasedSampler{
-			Config:  d.Rules,
+
+		// Create SamplerFactory for downstream samplers
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		samplerFactory := &SamplerFactory{
 			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
+			Metrics: mockMetrics,
+		}
+		err := samplerFactory.Start()
+		require.NoError(t, err)
+		defer samplerFactory.Stop()
+
+		sampler := &RulesBasedSampler{
+			Config:         d.Rules,
+			Logger:         &logger.NullLogger{},
+			Metrics:        mockMetrics,
+			SamplerFactory: samplerFactory,
 		}
 
 		trace := &types.Trace{}
@@ -1305,7 +1337,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 			keepTraceScope: true,
 			spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
@@ -1313,7 +1345,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(5),
 							"http.status_code": "500",
@@ -1328,7 +1360,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 			keepTraceScope: true,
 			spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "500",
@@ -1336,7 +1368,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(5),
 							"http.status_code": "200",
@@ -1346,6 +1378,9 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 			},
 		},
 	}
+
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1378,7 +1413,7 @@ func TestRuleMatchesSpanMatchingSpan(t *testing.T) {
 						},
 					},
 					Logger:  &logger.NullLogger{},
-					Metrics: &metrics.NullMetrics{},
+					Metrics: testMetrics,
 				}
 				for _, s := range sampler.samplers {
 					for _, rule := range s.(*RulesBasedSampler).Config.Rules {
@@ -1431,7 +1466,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(1),
 						}),
@@ -1460,7 +1495,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": float64(1.01),
 						}),
@@ -1489,7 +1524,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "foo",
 						}),
@@ -1518,7 +1553,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": true,
 						}),
@@ -1547,7 +1582,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": true,
 						}),
@@ -1576,7 +1611,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": true,
 						}),
@@ -1605,7 +1640,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 10.,
 						}),
@@ -1634,7 +1669,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 100,
 						}),
@@ -1663,7 +1698,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "500",
 						}),
@@ -1692,7 +1727,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "500",
 						}),
@@ -1721,7 +1756,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 2,
 						}),
@@ -1750,7 +1785,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 9.3, // "9.3" is greater than "10.3" when compared as a string
 						}),
@@ -1779,7 +1814,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "4.13",
 						}),
@@ -1808,7 +1843,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "fourPointOneThree",
 						}),
@@ -1837,7 +1872,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "rightValue",
 						}),
@@ -1866,7 +1901,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": 777,
 						}),
@@ -1895,7 +1930,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(11),
 						}),
@@ -1923,7 +1958,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": int64(123),
 						}),
@@ -1951,7 +1986,7 @@ func TestRulesDatatypes(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "abc",
 						}),
@@ -1963,12 +1998,15 @@ func TestRulesDatatypes(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, d := range data {
 		t.Run(d.Rules.Rules[0].Name, func(t *testing.T) {
 			sampler := &RulesBasedSampler{
 				Config:  d.Rules,
 				Logger:  &logger.NullLogger{},
-				Metrics: &metrics.NullMetrics{},
+				Metrics: testMetrics,
 			}
 
 			sampler.Start()
@@ -2008,6 +2046,9 @@ func TestRegexpRules(t *testing.T) {
 		{`[a-z+`, "/foo/bar/123", 1, true},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for i, d := range testdata {
 		name := fmt.Sprintf("regexp-%d", i)
 		t.Run(name, func(t *testing.T) {
@@ -2036,7 +2077,7 @@ func TestRegexpRules(t *testing.T) {
 			sampler := &RulesBasedSampler{
 				Config:  rules,
 				Logger:  &logger.NullLogger{},
-				Metrics: &metrics.NullMetrics{},
+				Metrics: testMetrics,
 			}
 
 			sampler.Start()
@@ -2045,7 +2086,7 @@ func TestRegexpRules(t *testing.T) {
 
 			spans := []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": d.value,
 						}),
@@ -2088,7 +2129,7 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
@@ -2096,7 +2137,7 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"rule_test":        int64(1),
 							"http.status_code": "200",
@@ -2116,10 +2157,23 @@ func TestRulesWithDeterministicSampler(t *testing.T) {
 				assert.NoError(t, err, "error in "+rule.Name)
 			}
 		}
-		sampler := &RulesBasedSampler{
-			Config:  d.Rules,
+
+		// Create SamplerFactory for downstream samplers
+		mockMetrics := &metrics.MockMetrics{}
+		mockMetrics.Start()
+		samplerFactory := &SamplerFactory{
 			Logger:  &logger.NullLogger{},
-			Metrics: &metrics.NullMetrics{},
+			Metrics: mockMetrics,
+		}
+		err := samplerFactory.Start()
+		require.NoError(t, err)
+		defer samplerFactory.Stop()
+
+		sampler := &RulesBasedSampler{
+			Config:         d.Rules,
+			Logger:         &logger.NullLogger{},
+			Metrics:        mockMetrics,
+			SamplerFactory: samplerFactory,
 		}
 
 		trace := &types.Trace{}
@@ -2170,21 +2224,21 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "123testABC", // I am root.
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "foo",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
@@ -2221,21 +2275,21 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "123testABC", // I am root.
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "foo",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
@@ -2271,7 +2325,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "123testABC", // I am root.
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":         "foo",
 							"anotherField": 3.5,
@@ -2279,7 +2333,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 							"anotherField":     1.1,
@@ -2287,7 +2341,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
@@ -2327,7 +2381,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "123testABC", // I am root.
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":         "foo",
 							"anotherField": 50,
@@ -2335,7 +2389,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 							"anotherField":     10,
@@ -2343,7 +2397,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
@@ -2383,7 +2437,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "123testABC", // I am root.
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":         "foo",
 							"anotherField": 50,
@@ -2391,7 +2445,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 							"anotherField":     10,
@@ -2399,7 +2453,7 @@ func TestRulesRootSpanContext(t *testing.T) {
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test1": 1,
 							"test2": 2.2,
@@ -2432,21 +2486,21 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "123testABC", // I am root.
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "nope", // I am the root span that does not match.
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":  "foo", // I am the span that almost matches, but I'm not root.
 							"test1": 1,
@@ -2479,21 +2533,21 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "123testABC", // I am root.
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "nope",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test":  "nope",
 							"test1": 1,
@@ -2525,21 +2579,21 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "123testABC", // I am root.
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "nope",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "500",
 						}),
@@ -2569,21 +2623,21 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "123testABC", // I am root.
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"test": "nope",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "500",
 						}),
@@ -2612,14 +2666,14 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "200",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"http.status_code": "500",
 						}),
@@ -2648,14 +2702,14 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": 100.01,
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": 99.1,
 							"bar": 100.10,
@@ -2685,14 +2739,14 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
 						}),
@@ -2725,14 +2779,14 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "abc123",
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"name.of.service": "is not service.name!",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
 						}),
@@ -2765,14 +2819,14 @@ func TestRulesRootSpanContext(t *testing.T) {
 			Spans: []*types.Span{
 				{
 					TraceID: "abc123",
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"service.name": "totally present",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
 						}),
@@ -2801,14 +2855,14 @@ func TestRulesRootSpanContext(t *testing.T) {
 			},
 			Spans: []*types.Span{
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"service.name": "no trace id on this test span, so it's not root",
 						}),
 					},
 				},
 				{
-					Event: types.Event{
+					Event: &types.Event{
 						Data: types.NewPayload(mockCfg, map[string]interface{}{
 							"foo": true,
 						}),
@@ -2821,12 +2875,15 @@ func TestRulesRootSpanContext(t *testing.T) {
 		},
 	}
 
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
 	for _, d := range data {
 		t.Run(d.Rules.Rules[0].Name, func(t *testing.T) {
 			sampler := &RulesBasedSampler{
 				Config:  d.Rules,
 				Logger:  &logger.NullLogger{},
-				Metrics: &metrics.NullMetrics{},
+				Metrics: testMetrics,
 			}
 
 			sampler.Start()
@@ -2855,4 +2912,127 @@ func TestRulesRootSpanContext(t *testing.T) {
 			assert.Contains(t, reason, name)
 		})
 	}
+}
+
+// TestRulesBasedSamplerWithSharedDynsamplers tests that RulesBasedSampler properly
+// shares dynsamplers when using a SamplerFactory
+func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
+	mockCfg := &config.MockConfig{}
+
+	// Create a SamplerFactory for shared dynsampler management
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+	samplerFactory := &SamplerFactory{
+		Logger:  &logger.NullLogger{},
+		Metrics: mockMetrics,
+	}
+	err := samplerFactory.Start()
+	require.NoError(t, err)
+	defer samplerFactory.Stop()
+
+	sampleRate := int64(10)
+	// Create two identical downstream sampler configs
+	downstreamConfig := &config.RulesBasedDownstreamSampler{
+		DynamicSampler: &config.DynamicSamplerConfig{
+			SampleRate: sampleRate,
+			FieldList:  []string{"service.name"},
+		},
+	}
+
+	// Test that RulesBasedSampler uses shared dynsamplers
+	rulesConfig := &config.RulesBasedSamplerConfig{
+		Rules: []*config.RulesBasedSamplerRule{
+			{
+				Name: "test-rule-1",
+				Conditions: []*config.RulesBasedSamplerCondition{
+					{
+						Field:    "rule_test",
+						Operator: config.EQ,
+						Value:    int64(1),
+					},
+				},
+				Sampler: downstreamConfig,
+			},
+			{
+				Name: "test-rule-2",
+				Conditions: []*config.RulesBasedSamplerCondition{
+					{
+						Field:    "rule_test",
+						Operator: config.EQ,
+						Value:    int64(2),
+					},
+				},
+				Sampler: downstreamConfig, // Same config as rule-1
+			},
+		},
+	}
+
+	// Create RulesBasedSampler with SamplerFactory
+	rulesSampler := &RulesBasedSampler{
+		Config:         rulesConfig,
+		Logger:         &logger.NullLogger{},
+		Metrics:        mockMetrics,
+		SamplerFactory: samplerFactory,
+	}
+
+	// Initialize conditions
+	for _, rule := range rulesConfig.Rules {
+		for _, cond := range rule.Conditions {
+			err := cond.Init()
+			require.NoError(t, err)
+		}
+	}
+
+	err = rulesSampler.Start()
+	require.NoError(t, err)
+
+	// Create test trace that will match rule-1
+	trace1 := &types.Trace{}
+	span1 := &types.Span{
+		Event: &types.Event{
+			Data: types.NewPayload(mockCfg, map[string]interface{}{
+				"rule_test":    int64(1),
+				"service.name": "test-service",
+			}),
+		},
+	}
+	trace1.AddSpan(span1)
+
+	// Create test trace that will match rule-2
+	trace2 := &types.Trace{}
+	span2 := &types.Span{
+		Event: &types.Event{
+			Data: types.NewPayload(mockCfg, map[string]interface{}{
+				"rule_test":    int64(2),
+				"service.name": "test-service",
+			}),
+		},
+	}
+	trace2.AddSpan(span2)
+
+	// Both rules should work and return sample rates
+	rate1, _, reason1, key1 := rulesSampler.GetSampleRate(trace1)
+	assert.Equal(t, rate1, uint(sampleRate))
+	assert.Contains(t, reason1, "test-rule-1")
+	assert.Equal(t, "test-service•,", key1)
+
+	rate2, _, reason2, key2 := rulesSampler.GetSampleRate(trace2)
+	assert.Equal(t, rate2, uint(sampleRate))
+	assert.Contains(t, reason2, "test-rule-2")
+	assert.Equal(t, "test-service•,", key2)
+
+	// Verify that both rules actually share the same dynsampler by checking
+	// that they reference the same underlying dynsampler instance
+	rule1Key := rulesConfig.Rules[0].String()
+	rule2Key := rulesConfig.Rules[1].String()
+
+	rule1Sampler, ok := rulesSampler.samplers[rule1Key].(*DynamicSampler)
+	require.True(t, ok, "rule 1 sampler should be a DynamicSampler")
+
+	rule2Sampler, ok := rulesSampler.samplers[rule2Key].(*DynamicSampler)
+	require.True(t, ok, "rule 2 sampler should be a DynamicSampler")
+
+	// This is the critical assertion: both rules must share the exact same dynsampler instance
+	assert.Same(t, rule1Sampler.dynsampler, rule2Sampler.dynsampler,
+		"Both rules should share the same underlying dynsampler instance")
 }

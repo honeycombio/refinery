@@ -6,15 +6,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jonboulle/clockwork"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
-	"github.com/jonboulle/clockwork"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TestStressRelief_Monitor tests that the Stressed method returns the correct value
@@ -26,11 +27,11 @@ func TestStressRelief_Monitor(t *testing.T) {
 	require.NoError(t, sr.Start())
 
 	sr.RefineryMetrics.Register(metrics.Metadata{
-		Name: "collector_incoming_queue_length",
+		Name: NUMERATOR_INCOMING_QUEUE,
 		Type: metrics.Gauge,
 	})
 
-	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
+	sr.RefineryMetrics.Store(DENOMINATOR_INCOMING_CAP, 1200)
 	sr.Config = &config.MockConfig{
 		StressRelief: config.StressReliefConfig{
 			Mode:                      "monitor",
@@ -46,7 +47,7 @@ func TestStressRelief_Monitor(t *testing.T) {
 	require.False(t, sr.Stressed())
 
 	// Test 1
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 100)
+	sr.RefineryMetrics.Gauge(NUMERATOR_INCOMING_QUEUE, 100)
 	require.Eventually(t, func() bool {
 		clock.Advance(time.Second * 6)
 		return !sr.Stressed()
@@ -55,13 +56,13 @@ func TestStressRelief_Monitor(t *testing.T) {
 	// Test 2
 	// Set activation level to 80 and the current stress level to be more than
 	// 80. Check that the Stressed method returns true
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 1000)
+	sr.RefineryMetrics.Gauge(NUMERATOR_INCOMING_QUEUE, 1000)
 	require.Eventually(t, func() bool {
 		clock.Advance(time.Second * 6)
 		return sr.Stressed()
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be true")
 
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 100)
+	sr.RefineryMetrics.Gauge(NUMERATOR_INCOMING_QUEUE, 100)
 	require.Eventually(t, func() bool {
 		clock.Advance(time.Second * 6)
 		return !sr.Stressed()
@@ -84,11 +85,11 @@ func TestStressRelief_Peer(t *testing.T) {
 	require.NoError(t, sr.Start())
 
 	sr.RefineryMetrics.Register(metrics.Metadata{
-		Name: "collector_incoming_queue_length",
+		Name: NUMERATOR_INCOMING_QUEUE,
 		Type: metrics.Gauge,
 	})
 
-	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
+	sr.RefineryMetrics.Store(DENOMINATOR_INCOMING_CAP, 1200)
 	sr.Config = &config.MockConfig{
 		StressRelief: config.StressReliefConfig{
 			Mode:                      "monitor",
@@ -103,7 +104,7 @@ func TestStressRelief_Peer(t *testing.T) {
 	require.False(t, sr.Stressed())
 
 	// activate stress relief in one refinery
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 965)
+	sr.RefineryMetrics.Gauge(NUMERATOR_INCOMING_QUEUE, 965)
 	require.Eventually(t, func() bool {
 		clock.Advance(time.Second * 1)
 		return sr.Stressed()
@@ -122,7 +123,7 @@ func TestStressRelief_Peer(t *testing.T) {
 
 	// now the peer has reported valid stress level
 	// it should be taken into account for the overall stress level
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 5)
+	sr.RefineryMetrics.Gauge(NUMERATOR_INCOMING_QUEUE, 5)
 	require.Eventually(t, func() bool {
 		msg := stressReliefMessage{
 			level:  10,
@@ -135,7 +136,8 @@ func TestStressRelief_Peer(t *testing.T) {
 	}, 2*time.Second, 100*time.Millisecond, "stress relief should be false")
 }
 
-func TestStressRelief_OverallStressLevel_DisableTraceLocality(t *testing.T) {
+// TestStressRelief_OverallStressLevel tests overall stress level calculation across multiple peers
+func TestStressRelief_OverallStressLevel(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	sr, stop := newStressRelief(t, clock, nil)
 	defer stop()
@@ -145,95 +147,11 @@ func TestStressRelief_OverallStressLevel_DisableTraceLocality(t *testing.T) {
 	sr.Start()
 
 	sr.RefineryMetrics.Register(metrics.Metadata{
-		Name: "collector_incoming_queue_length",
+		Name: NUMERATOR_INCOMING_QUEUE,
 		Type: metrics.Gauge,
 	})
 
-	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
-	sr.Config = &config.MockConfig{
-		StressRelief: config.StressReliefConfig{
-			Mode:                      "monitor",
-			ActivationLevel:           80,
-			DeactivationLevel:         65,
-			MinimumActivationDuration: config.Duration(5 * time.Second),
-		},
-		GetCollectionConfigVal: config.CollectionConfig{
-			TraceLocalityMode: "distributed",
-		},
-	}
-	// On startup, the stress relief should not be active
-	sr.UpdateFromConfig()
-	require.False(t, sr.Stressed())
-
-	// Test 1
-	// when a single peer's individual stress level is above the activation level
-	// the overall stress level should be based on the cluster's stress level
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 965)
-	clock.Advance(time.Second * 1)
-	sr.stressLevels = make(map[string]stressReport, 100)
-	for i := 0; i < 100; i++ {
-		key := fmt.Sprintf("peer%d", i)
-		sr.stressLevels[key] = stressReport{
-			key:       key,
-			level:     10,
-			timestamp: sr.Clock.Now(),
-		}
-	}
-
-	localLevel := sr.Recalc()
-	require.NotEqual(t, localLevel, sr.overallStressLevel)
-	require.False(t, sr.stressed)
-
-	// Test 2
-	// when a single peer's individual stress level is below the activation level
-	// and the rest of the cluster is above the activation level
-	// the single peer should remain in stress relief mode
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
-	for i := 0; i < 100; i++ {
-		key := fmt.Sprintf("peer%d", i)
-		sr.stressLevels[key] = stressReport{
-			key:       key,
-			level:     85,
-			timestamp: sr.Clock.Now(),
-		}
-	}
-	localLevel = sr.Recalc()
-	require.Greater(t, sr.overallStressLevel, localLevel)
-	require.True(t, sr.stressed)
-
-	// Test 3
-	// Only when both the single peer's individual stress level and the cluster stress
-	// level is below the activation level, the stress relief should be deactivated.
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
-	for i := 0; i < 100; i++ {
-		key := fmt.Sprintf("peer%d", i)
-		sr.stressLevels[key] = stressReport{
-			key:       key,
-			level:     1,
-			timestamp: sr.Clock.Now(),
-		}
-	}
-	clock.Advance(sr.minDuration * 2)
-	localLevel = sr.Recalc()
-	assert.NotEqual(t, sr.overallStressLevel, localLevel)
-	assert.False(t, sr.stressed)
-}
-
-func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
-	clock := clockwork.NewFakeClock()
-	sr, stop := newStressRelief(t, clock, nil)
-	defer stop()
-
-	// disable the automatic stress level recalculation
-	sr.disableStressLevelReport = true
-	sr.Start()
-
-	sr.RefineryMetrics.Register(metrics.Metadata{
-		Name: "collector_incoming_queue_length",
-		Type: metrics.Gauge,
-	})
-
-	sr.RefineryMetrics.Store("INCOMING_CAP", 1200)
+	sr.RefineryMetrics.Store(DENOMINATOR_INCOMING_CAP, 1200)
 
 	sr.Config = &config.MockConfig{
 		StressRelief: config.StressReliefConfig{
@@ -251,7 +169,7 @@ func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
 	// when a single peer's individual stress level is above the activation level
 	// the overall stress level should be above the activation level
 	// and the stress relief should be active
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 965)
+	sr.RefineryMetrics.Gauge(NUMERATOR_INCOMING_QUEUE, 965)
 	clock.Advance(time.Second * 1)
 	sr.stressLevels = make(map[string]stressReport, 100)
 	for i := 0; i < 100; i++ {
@@ -271,7 +189,7 @@ func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
 	// when a single peer's individual stress level is below the activation level
 	// and the rest of the cluster is above the activation level
 	// the single peer should remain in stress relief mode
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
+	sr.RefineryMetrics.Gauge(NUMERATOR_INCOMING_QUEUE, 10)
 	for i := 0; i < 100; i++ {
 		key := fmt.Sprintf("peer%d", i)
 		sr.stressLevels[key] = stressReport{
@@ -287,7 +205,7 @@ func TestStressRelief_OverallStressLevel_EnableTraceLocality(t *testing.T) {
 	// Test 3
 	// Only when both the single peer's individual stress level and the cluster stress
 	// level is below the activation level, the stress relief should be deactivated.
-	sr.RefineryMetrics.Gauge("collector_incoming_queue_length", 10)
+	sr.RefineryMetrics.Gauge(NUMERATOR_INCOMING_QUEUE, 10)
 	for i := 0; i < 100; i++ {
 		key := fmt.Sprintf("peer%d", i)
 		sr.stressLevels[key] = stressReport{
@@ -308,7 +226,7 @@ func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub)
 	metric.Start()
 
 	if clock == nil {
-		clock = clockwork.NewRealClock()
+		clock = clockwork.NewFakeClock()
 	}
 
 	if channel == nil {

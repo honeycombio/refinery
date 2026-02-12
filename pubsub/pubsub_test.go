@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -29,6 +30,11 @@ func newPubSub(typ string) pubsub.PubSub {
 	switch typ {
 	case "goredis":
 		ps = &pubsub.GoRedisPubSub{
+			Config: &config.MockConfig{
+				GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
+					ClusterName: "test",
+				},
+			},
 			Metrics: m,
 			Tracer:  tracer,
 			Logger:  &logger.NullLogger{},
@@ -68,14 +74,20 @@ func TestPubSubBasics(t *testing.T) {
 			ps := newPubSub(typ)
 
 			l1 := &pubsubListener{}
-			ps.Subscribe(ctx, "topic", l1.Listen)
+
+			topic := ps.FormatTopic("topic")
+			ps.Subscribe(ctx, topic, l1.Listen)
+
+			if typ == "goredis" {
+				assert.Contains(t, topic, "test")
+			}
 
 			wg := sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
 				time.Sleep(100 * time.Millisecond)
 				for i := 0; i < 10; i++ {
-					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
+					err := ps.Publish(ctx, topic, fmt.Sprintf("message %d", i))
 					assert.NoError(t, err)
 				}
 				time.Sleep(100 * time.Millisecond)
@@ -96,15 +108,16 @@ func TestPubSubMultiSubscriber(t *testing.T) {
 			ps := newPubSub(typ)
 			l1 := &pubsubListener{}
 			l2 := &pubsubListener{}
-			ps.Subscribe(ctx, "topic", l1.Listen)
-			ps.Subscribe(ctx, "topic", l2.Listen)
+			topic := ps.FormatTopic("topic")
+			ps.Subscribe(ctx, topic, l1.Listen)
+			ps.Subscribe(ctx, topic, l2.Listen)
 
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
 				time.Sleep(100 * time.Millisecond)
 				for i := 0; i < messageCount; i++ {
-					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
+					err := ps.Publish(ctx, topic, fmt.Sprintf("message %d", i))
 					require.NoError(t, err)
 				}
 				time.Sleep(100 * time.Millisecond)
@@ -130,7 +143,8 @@ func TestPubSubMultiTopic(t *testing.T) {
 			topics := make([]string, topicCount)
 			listeners := make([]*pubsubListener, topicCount)
 			for i := 0; i < topicCount; i++ {
-				topics[i] = fmt.Sprintf("topic%d", i)
+				topic := ps.FormatTopic(fmt.Sprintf("topic%d", i))
+				topics[i] = topic
 				listeners[i] = &pubsubListener{}
 			}
 			totals := make([]int, topicCount)
@@ -182,10 +196,11 @@ func TestPubSubLatency(t *testing.T) {
 
 			wg := sync.WaitGroup{}
 			wg.Add(2)
+			topic := ps.FormatTopic("topic")
 			go func() {
 				time.Sleep(300 * time.Millisecond)
 				for i := 0; i < messageCount; i++ {
-					err := ps.Publish(ctx, "topic", fmt.Sprintf("%d", time.Now().UnixNano()))
+					err := ps.Publish(ctx, topic, fmt.Sprintf("%d", time.Now().UnixNano()))
 					require.NoError(t, err)
 				}
 
@@ -201,7 +216,7 @@ func TestPubSubLatency(t *testing.T) {
 				wg.Done()
 			}()
 
-			ps.Subscribe(ctx, "topic", func(ctx context.Context, msg string) {
+			ps.Subscribe(ctx, topic, func(ctx context.Context, msg string) {
 				sent, err := strconv.Atoi(msg)
 				require.NoError(t, err)
 				rcvd := time.Now().UnixNano()
@@ -241,7 +256,8 @@ func BenchmarkPubSub(b *testing.B) {
 			time.Sleep(100 * time.Millisecond)
 
 			li := &pubsubListener{}
-			ps.Subscribe(ctx, "topic", li.Listen)
+			topic := ps.FormatTopic("topic")
+			ps.Subscribe(ctx, topic, li.Listen)
 
 			wg := sync.WaitGroup{}
 			wg.Add(1)
@@ -249,7 +265,7 @@ func BenchmarkPubSub(b *testing.B) {
 			go func() {
 				time.Sleep(100 * time.Millisecond)
 				for i := 0; i < b.N; i++ {
-					err := ps.Publish(ctx, "topic", fmt.Sprintf("message %d", i))
+					err := ps.Publish(ctx, topic, fmt.Sprintf("message %d", i))
 					require.NoError(b, err)
 				}
 				require.EventuallyWithT(b, func(collect *assert.CollectT) {

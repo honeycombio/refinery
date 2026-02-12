@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2025-10-02 at 19:03:22 UTC from ../../config.yaml using a template generated on 2025-10-02 at 19:03:19 UTC
+# created on 2026-02-04 at 18:27:42 UTC from ../../config.yaml using a template generated on 2026-02-04 at 18:27:39 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -331,8 +331,9 @@ Traces:
     ## a large trace hits Refinery all at once, causing memory usage to spike
     ## and possibly crashing Refinery.
     ##
+    ## default: 32000
     ## Eligible for live reload.
-    # SpanLimit: 0
+    # SpanLimit: 32_000
 
     ## MaxBatchSize is the maximum number of events to be included in each
     ## batch for sending.
@@ -881,6 +882,18 @@ RedisPeerManagement:
     ## Not eligible for live reload.
     # AuthCode: ""
 
+    ## ClusterName is a cluster identifier used as a prefix for Redis pubsub
+    ## channel names.
+    ##
+    ## ClusterName is used to namespace Redis pubsub channels when multiple
+    ## Refinery clusters share the same Redis instance. If set, all pubsub
+    ## channel names will be prefixed with this value (e.g.,
+    ## "production:peers"). This allows multiple clusters to coexist without
+    ## interfering with each other. Must be alphanumeric if specified.
+    ##
+    ## Not eligible for live reload.
+    # ClusterName: production
+
     ## UseTLS enables TLS when connecting to Redis for peer cluster
     ## membership management.
     ##
@@ -1027,6 +1040,19 @@ Collection:
     ## default: 15s
     ## Not eligible for live reload.
     # HealthCheckTimeout: 15s
+
+    ## WorkerCount is the number of parallel collection workers to run for
+    ## trace processing.
+    ##
+    ## Controls the number of parallel collection workers used for processing
+    ## traces. Each worker processes a subset of traces independently using
+    ## consistent hashing. Values greater than 1 enable parallel processing
+    ## which can improve throughput on multi-core systems. The default of 0
+    ## means Refinery will automatically set this value to the number of
+    ## logical CPUs available at startup.
+    ##
+    ## Not eligible for live reload.
+    # WorkerCount: 0
 
 ###############################
 ## Specialized Configuration ##

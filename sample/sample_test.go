@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/facebookgo/inject"
 	dynsampler "github.com/honeycombio/dynsampler-go"
@@ -15,6 +16,7 @@ import (
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 )
 
@@ -81,7 +83,7 @@ func TestDependencyInjection(t *testing.T) {
 		&inject.Object{Value: &config.MockConfig{}},
 		&inject.Object{Value: &logger.NullLogger{}},
 		&inject.Object{Value: &metrics.NullMetrics{}, Name: "metrics"},
-		&inject.Object{Value: &peer.MockPeers{Peers: []string{"foo", "bar"}}},
+		&inject.Object{Value: peer.NewMockPeers([]string{"foo", "bar"}, "")},
 	)
 	if err != nil {
 		t.Error(err)
@@ -109,7 +111,7 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
+		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production")
@@ -138,7 +140,7 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
+		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production")
@@ -167,7 +169,7 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 		Config:  c,
 		Logger:  &logger.NullLogger{},
 		Metrics: &metrics.NullMetrics{},
-		Peers:   &peer.MockPeers{Peers: []string{"foo", "bar"}},
+		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
 	sampler := factory.GetSamplerImplementationForKey("production")
@@ -417,6 +419,171 @@ func (m *MockSampler) SaveState() ([]byte, error) {
 	return nil, nil
 }
 
+func TestDifferentDatasetsShouldNotShareDynsampler(t *testing.T) {
+	// This test demonstrates the bug where different datasets with identical
+	// sampler configs incorrectly share the same dynsampler instance
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/production/TotalThroughputSampler/GoalThroughputPerSec", 10,
+		"Samplers/production/TotalThroughputSampler/UseClusterSize", true,
+		"Samplers/production/TotalThroughputSampler/FieldList", []string{"service.name"},
+		"Samplers/dogfood/TotalThroughputSampler/GoalThroughputPerSec", 10,
+		"Samplers/dogfood/TotalThroughputSampler/UseClusterSize", true,
+		"Samplers/dogfood/TotalThroughputSampler/FieldList", []string{"service.name"},
+	)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	require.NoError(t, err)
+
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
+	}
+	factory.Start()
+	defer factory.Stop()
+
+	// Get samplers for both datasets
+	prodSampler := factory.GetSamplerImplementationForKey("production")
+	dogfoodSampler := factory.GetSamplerImplementationForKey("dogfood")
+
+	assert.NotNil(t, prodSampler)
+	assert.NotNil(t, dogfoodSampler)
+
+	prodImpl := prodSampler.(*TotalThroughputSampler)
+	dogfoodImpl := dogfoodSampler.(*TotalThroughputSampler)
+
+	assert.NotEqual(t, prodImpl.dynsampler, dogfoodImpl.dynsampler)
+	assert.Equal(t, prodImpl.dynsampler.GoalThroughputPerSec, dogfoodImpl.dynsampler.GoalThroughputPerSec)
+}
+
+// TestClusterSizeUpdatesSamplers verifies that the SamplerFactory properly handles dynamic peer updates
+// and their impact on throughput-based sampling behavior.
+func TestClusterSizeUpdatesSamplers(t *testing.T) {
+	// Create a test peer manager that we can control
+	testPeers := peer.NewMockPeers([]string{"peer1"}, "")
+
+	// Create a SamplerFactory directly for testing the cluster size behavior
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/production/TotalThroughputSampler/GoalThroughputPerSec", 100,
+		"Samplers/production/TotalThroughputSampler/UseClusterSize", true,
+		"Samplers/production/TotalThroughputSampler/FieldList", []string{"service.name"},
+	)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	// Create and start the SamplerFactory
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   testPeers,
+	}
+
+	err = factory.Start()
+	require.NoError(t, err)
+
+	// Create a sampler to verify initial throughput
+	sampler := factory.GetSamplerImplementationForKey("production")
+	require.NotNil(t, sampler)
+
+	// It should be a TotalThroughputSampler
+	throughputSampler, ok := sampler.(*TotalThroughputSampler)
+	require.True(t, ok, "Expected TotalThroughputSampler")
+
+	// With 1 peer, throughput should be 100 (full original value)
+	assert.Equal(t, 100, throughputSampler.dynsampler.GoalThroughputPerSec)
+
+	// Add a second peer
+	testPeers.UpdatePeers([]string{"peer1", "peer2"})
+
+	// Throughput should now be 100/2 = 50
+	assert.Eventually(t, func() bool {
+		return throughputSampler.dynsampler.GoalThroughputPerSec == 50
+	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated to 50 with 2 peers")
+
+	// Add a third peer
+	testPeers.UpdatePeers([]string{"peer1", "peer2", "peer3"})
+
+	// Throughput should now be 100/3 = 33 (rounded down to at least 1)
+	assert.Eventually(t, func() bool {
+		return throughputSampler.dynsampler.GoalThroughputPerSec == 33
+	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated to 33 with 3 peers")
+
+	// Remove a peer (back to 2)
+	testPeers.UpdatePeers([]string{"peer1", "peer2"})
+
+	// Throughput should be back to 100/2 = 50
+	assert.Eventually(t, func() bool {
+		return throughputSampler.dynsampler.GoalThroughputPerSec == 50
+	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated back to 50 with 2 peers")
+
+	// Create another sampler instance with the same key to verify cluster size behavior is consistent
+	sampler2 := factory.GetSamplerImplementationForKey("production")
+	require.NotNil(t, sampler2)
+
+	throughputSampler2, ok := sampler2.(*TotalThroughputSampler)
+	require.True(t, ok, "Expected TotalThroughputSampler")
+
+	// Should have the same dynsampler instance due to shared dynsampler architecture
+	assert.Same(t, throughputSampler.dynsampler, throughputSampler2.dynsampler, "Should share the same dynsampler instance for the same key")
+
+	// Verify that creating a new sampler for a different dataset also gets the updated throughput
+	// But first add a rule for it
+	cm2 := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm2 := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/production/TotalThroughputSampler/GoalThroughputPerSec", 100,
+		"Samplers/production/TotalThroughputSampler/UseClusterSize", true,
+		"Samplers/production/TotalThroughputSampler/FieldList", []string{"service.name"},
+		"Samplers/test2/TotalThroughputSampler/GoalThroughputPerSec", 200,
+		"Samplers/test2/TotalThroughputSampler/UseClusterSize", true,
+		"Samplers/test2/TotalThroughputSampler/FieldList", []string{"service.name"},
+	)
+	cfg2, rules2 := createTempConfigs(t, cm2, rm2)
+	c2, err := getConfig([]string{"--no-validate", "--config", cfg2, "--rules_config", rules2})
+	assert.NoError(t, err)
+
+	// Create another factory with different config to test different throughput values
+	factory2 := SamplerFactory{
+		Config:  c2,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   testPeers, // Same peers with 2 peers
+	}
+	err = factory2.Start()
+	require.NoError(t, err)
+
+	sampler3 := factory2.GetSamplerImplementationForKey("test2")
+	require.NotNil(t, sampler3)
+
+	throughputSampler3, ok := sampler3.(*TotalThroughputSampler)
+	require.True(t, ok, "Expected TotalThroughputSampler")
+
+	// This sampler should have different base throughput (200) but same cluster division (200/2=100)
+	assert.Eventually(t, func() bool {
+		return throughputSampler3.dynsampler.GoalThroughputPerSec == 100
+	}, 2*time.Second, 50*time.Millisecond, "New sampler with 200 throughput should have 100 with 2 peers")
+
+	// Cleanup dynsampler instances to prevent goroutine leaks
+	throughputSampler.dynsampler.Stop()
+	throughputSampler3.dynsampler.Stop()
+}
+
 func BenchmarkGetSamplerImplementation(b *testing.B) {
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
@@ -433,7 +600,7 @@ func BenchmarkGetSamplerImplementation(b *testing.B) {
 	cfg, rules := createTempConfigs(b, cm, rm)
 	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
 	assert.NoError(b, err)
-	mockPeers := &peer.MockPeers{Peers: []string{"foo", "bar"}}
+	mockPeers := peer.NewMockPeers([]string{"foo", "bar"}, "")
 	mockPeers.Start()
 
 	factory := SamplerFactory{

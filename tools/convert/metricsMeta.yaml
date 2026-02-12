@@ -7,10 +7,10 @@ complete:
       type: Gauge
       unit: Dimensionless
       description: Whether the system is alive and reporting in
-    - name: collect_cache_entries
+    - name: worker_cache_entries
       type: Histogram
       unit: Dimensionless
-      description: The number of traces currently stored in the cache
+      description: The number of traces currently stored in the trace cache per worker
     - name: cuckoo_current_capacity
       type: Gauge
       unit: Dimensionless
@@ -99,6 +99,10 @@ complete:
       type: Gauge
       unit: Dimensionless
       description: number of traces currently stored in the trace cache
+    - name: collect_cache_entries
+      type: Histogram
+      unit: Dimensionless
+      description: Total number of traces currently stored in the cache from all workers
     - name: memory_heap_allocation
       type: Gauge
       unit: Bytes
@@ -139,22 +143,6 @@ complete:
       type: Counter
       unit: Dimensionless
       description: number of kept traces that do not have a root span
-    - name: trace_forwarded_on_peer_change
-      type: Gauge
-      unit: Dimensionless
-      description: number of traces forwarded due to peer membership change
-    - name: trace_redistribution_count
-      type: Gauge
-      unit: Dimensionless
-      description: number of traces redistributed due to peer membership change
-    - name: trace_send_on_shutdown
-      type: Counter
-      unit: Dimensionless
-      description: number of traces sent during shutdown
-    - name: trace_forwarded_on_shutdown
-      type: Counter
-      unit: Dimensionless
-      description: number of traces forwarded during shutdown
     - name: trace_send_got_root
       type: Counter
       unit: Dimensionless
@@ -195,10 +183,6 @@ complete:
       type: Histogram
       unit: Dimensionless
       description: aggregate sample rate of both kept and dropped traces
-    - name: collector_redistribute_traces_duration_ms
-      type: Histogram
-      unit: Milliseconds
-      description: duration of redistributing traces to peers
     - name: collector_collect_loop_duration_ms
       type: Histogram
       unit: Milliseconds
@@ -211,46 +195,14 @@ complete:
       type: Histogram
       unit: Dimensionless
       description: number of traces waiting to be send to upstream
-    - name: collector_drop_decision_batch_count
-      type: Histogram
-      unit: Dimensionless
-      description: number of drop decisions sent in a batch
-    - name: collector_expired_traces_missing_decisions
-      type: Gauge
-      unit: Dimensionless
-      description: number of decision spans forwarded for expired traces missing trace decision
-    - name: collector_expired_traces_orphans
-      type: Gauge
-      unit: Dimensionless
-      description: number of expired traces missing trace decision when they are sent
-    - name: drop_decision_batches_received
-      type: Counter
-      unit: Dimensionless
-      description: number of drop decision batches received
-    - name: kept_decision_batches_received
-      type: Counter
-      unit: Dimensionless
-      description: number of kept decision batches received
-    - name: drop_decisions_received
-      type: Counter
-      unit: Dimensionless
-      description: total number of drop decisions received
-    - name: kept_decisions_received
-      type: Counter
-      unit: Dimensionless
-      description: total number of kept decisions received
-    - name: collector_kept_decisions_queue_full
-      type: Counter
-      unit: Dimensionless
-      description: number of times kept trace decision queue is full
-    - name: collector_drop_decisions_queue_full
-      type: Counter
-      unit: Dimensionless
-      description: number of times drop trace decision queue is full
     - name: collector_cache_eviction
       type: Counter
       unit: Dimensionless
       description: number of times cache eviction has occurred
+    - name: collector_num_workers
+      type: Gauge
+      unit: Dimensionless
+      description: number of collector workers
     - name: cluster_stress_level
       type: Gauge
       unit: Dimensionless
