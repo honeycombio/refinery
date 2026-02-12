@@ -15,7 +15,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/honeycombio/dynsampler-go v0.6.4
 	github.com/honeycombio/hpsf v0.14.0
-	github.com/honeycombio/husky v0.40.0
+	github.com/honeycombio/husky v0.40.1-0.20260212145512-2cfbd4d0c562
 	github.com/honeycombio/libhoney-go v1.26.0
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jonboulle/clockwork v0.5.0
@@ -73,6 +73,8 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/featuregate v1.51.0 // indirect
+	go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.2.0 // indirect
+	go.opentelemetry.io/proto/otlp/profiles/v1development v0.2.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	gopkg.in/alexcesaro/statsd.v2 v2.0.0 // indirect
