@@ -1444,6 +1444,8 @@ func TestAdditionalHeadersReservedHeadersRejected(t *testing.T) {
 		{"x-honeycomb-samplerate", "X-Honeycomb-Samplerate"},
 		{"x-honeycomb-event-time", "X-Honeycomb-Event-Time"},
 		{"lowercase honeycomb team", "x-honeycomb-team"},
+		{"arbitrary x-honeycomb prefix", "X-Honeycomb-Custom"},
+		{"arbitrary x-hny prefix", "X-Hny-Custom"},
 	}
 
 	for _, tc := range testCases {

@@ -147,7 +147,7 @@ groups:
         type: map
         valuetype: map
         example: "FORWARD_TO_URL:https://api.honeycomb.io"
-        reload: true
+        reload: false
         validations:
           - type: elementType
             arg: string

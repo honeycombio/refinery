@@ -494,7 +494,7 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) Valid
 					for kk := range mapVal {
 						if headers.IsReserved(kk) {
 							results = append(results, ValidationResult{
-								Message:  fmt.Sprintf("field %s contains reserved Honeycomb header %q which cannot be overridden", k, kk),
+								Message:  fmt.Sprintf("field %s contains reserved Honeycomb header %q which cannot be overridden; headers starting with X-Honeycomb-* or X-Hny-* are reserved", k, kk),
 								Severity: Error,
 							})
 						}

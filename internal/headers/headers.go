@@ -13,18 +13,22 @@ const (
 	QueryTokenHeader  = "X-Honeycomb-Refinery-Query"
 )
 
-// reservedHeaders contains HTTP headers that cannot be overridden via AdditionalHeaders
-// because they are set by Refinery for proper Honeycomb API communication.
-var reservedHeaders = map[string]bool{
-	strings.ToLower(APIKeyHeader):      true,
-	strings.ToLower(APIKeyHeaderShort): true,
-	strings.ToLower(DatasetHeader):     true,
-	strings.ToLower(SampleRateHeader):  true,
-	strings.ToLower(TimestampHeader):   true,
+// reservedPrefixes contains HTTP header prefixes that cannot be overridden
+// via AdditionalHeaders because they are reserved for Honeycomb API communication.
+var reservedPrefixes = []string{
+	"x-honeycomb-",
+	"x-hny-",
 }
 
 // IsReserved checks if a header name is a reserved Honeycomb header.
+// Any header starting with "X-Honeycomb-" or "X-Hny-" is reserved.
 // The check is case-insensitive.
 func IsReserved(name string) bool {
-	return reservedHeaders[strings.ToLower(name)]
+	lower := strings.ToLower(name)
+	for _, prefix := range reservedPrefixes {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	return false
 }
