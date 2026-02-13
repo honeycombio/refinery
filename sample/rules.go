@@ -18,6 +18,7 @@ type RulesBasedSampler struct {
 	Logger         logger.Logger
 	Metrics        metrics.Metrics
 	SamplerFactory *SamplerFactory
+	samplerPrefix  string
 	samplers       map[string]Sampler
 	keyFields      []string
 	nonRootFields  []string
@@ -54,7 +55,7 @@ func (s *RulesBasedSampler) Start() error {
 			}
 
 			// Use SamplerFactory to create downstream sampler with shared dynsamplers
-			sampler := s.SamplerFactory.GetDownstreamSampler("rules-based", rule.Sampler)
+			sampler := s.SamplerFactory.GetDownstreamSampler(s.samplerPrefix, rule.Sampler)
 			if sampler == nil {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,

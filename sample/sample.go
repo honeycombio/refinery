@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	dynsampler "github.com/honeycombio/dynsampler-go"
+	"github.com/honeycombio/dynsampler-go"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/peer"
 	"github.com/honeycombio/refinery/logger"
@@ -115,7 +115,7 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForEMADynamicSampler)
 		sampler = &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.RulesBasedSamplerConfig:
-		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, SamplerFactory: s}
+		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, SamplerFactory: s, samplerPrefix: keyPrefix}
 	case *config.TotalThroughputSamplerConfig:
 		dynsamplerKey := fmt.Sprintf("%s:totalthroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForTotalThroughputSampler)
@@ -211,8 +211,8 @@ func (s *SamplerFactory) ClearDynsamplers() {
 	defer s.mutex.Unlock()
 
 	// Stop all shared dynsamplers
-	for _, dynsampler := range s.sharedDynsamplers {
-		if stopper, ok := dynsampler.(interface{ Stop() }); ok {
+	for _, dynSampler := range s.sharedDynsamplers {
+		if stopper, ok := dynSampler.(interface{ Stop() }); ok {
 			stopper.Stop()
 		}
 	}

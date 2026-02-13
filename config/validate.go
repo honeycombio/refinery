@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/honeycombio/refinery/internal/headers"
 	"golang.org/x/exp/slices"
 )
 
@@ -483,6 +484,17 @@ func (m *Metadata) Validate(data map[string]any, currentVersion ...string) Valid
 						if !slices.Contains(validation.GetArgAsStringSlice(), kk) {
 							results = append(results, ValidationResult{
 								Message:  fmt.Sprintf("field %s contains unknown key %s", k, kk),
+								Severity: Error,
+							})
+						}
+					}
+				}
+			case "noReservedHeaders":
+				if mapVal, ok := v.(map[string]any); ok {
+					for kk := range mapVal {
+						if headers.IsReserved(kk) {
+							results = append(results, ValidationResult{
+								Message:  fmt.Sprintf("field %s contains reserved Honeycomb header %q which cannot be overridden; headers starting with X-Honeycomb-* or X-Hny-* are reserved", k, kk),
 								Severity: Error,
 							})
 						}
