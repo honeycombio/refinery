@@ -584,6 +584,111 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	throughputSampler3.dynsampler.Stop()
 }
 
+func TestRulesBasedSamplerDoesNotShareDynsamplersBetweenEnvironments(t *testing.T) {
+	// Test that rules-based samplers with identical downstream samplers
+	// don't share the same dynsampler instances across environments
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		// Production rules-based sampler with downstream dynamic sampler
+		"Samplers/production/RulesBasedSampler/Rules", []map[string]interface{}{
+			{
+				"Name":       "high-value",
+				"SampleRate": 1,
+				"Conditions": []map[string]interface{}{
+					{
+						"Field":    "customer.tier",
+						"Operator": "=",
+						"Value":    "premium",
+					},
+				},
+				"Sampler": map[string]interface{}{
+					"DynamicSampler": map[string]interface{}{
+						"SampleRate": 100,
+						"FieldList":  []string{"service.name", "endpoint.name"},
+					},
+				},
+			},
+			{
+				"Name": "normal-traffic",
+				"Conditions": []map[string]interface{}{
+					{
+						"Field":    "customer.tier",
+						"Operator": "!=",
+						"Value":    "premium",
+					},
+				},
+				"Sampler": map[string]interface{}{
+					"TotalThroughputSampler": map[string]interface{}{
+						"GoalThroughputPerSec": 50,
+						"FieldList":            []string{"service.name"},
+					},
+				},
+			},
+		},
+		// Staging with identical rules and downstream samplers
+		"Samplers/staging/RulesBasedSampler/Rules", []map[string]interface{}{
+			{
+				"Name":       "high-value",
+				"SampleRate": 1,
+				"Conditions": []map[string]interface{}{
+					{
+						"Field":    "customer.tier",
+						"Operator": "=",
+						"Value":    "premium",
+					},
+				},
+				"Sampler": map[string]interface{}{
+					"DynamicSampler": map[string]interface{}{
+						"SampleRate": 100,
+						"FieldList":  []string{"service.name", "endpoint.name"},
+					},
+				},
+			},
+			{
+				"Name": "normal-traffic",
+				"Conditions": []map[string]interface{}{
+					{
+						"Field":    "customer.tier",
+						"Operator": "!=",
+						"Value":    "premium",
+					},
+				},
+				"Sampler": map[string]interface{}{
+					"TotalThroughputSampler": map[string]interface{}{
+						"GoalThroughputPerSec": 50,
+						"FieldList":            []string{"service.name"},
+					},
+				},
+			},
+		},
+	)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	require.NoError(t, err)
+
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
+	}
+	factory.Start()
+	defer factory.Stop()
+
+	// Get samplers for both environments
+	prodSampler := factory.GetSamplerImplementationForKey("production")
+	stagingSampler := factory.GetSamplerImplementationForKey("staging")
+
+	assert.NotNil(t, prodSampler)
+	assert.NotNil(t, stagingSampler)
+
+	assert.Len(t, factory.sharedDynsamplers, 4)
+}
+
 func BenchmarkGetSamplerImplementation(b *testing.B) {
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
