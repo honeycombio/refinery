@@ -135,9 +135,9 @@ This setting is the destination to which Refinery sends all events that it decid
 These headers will be added to all HTTP requests made to the upstream Honeycomb API endpoint, including trace data, OTel metrics, OTel traces, and logs.
 This is useful for scenarios where requests need to pass through an mTLS proxy that requires additional headers like FORWARD_TO_URL.
 Both keys and values must be strings.
-Reserved Honeycomb headers cannot be overridden.
+Reserved Honeycomb header prefixes ("x-honeycomb-" and "x-hny-") cannot be set.
 
-- Eligible for live reload.
+- Not eligible for live reload.
 - Type: `map`
 - Example: `FORWARD_TO_URL:https://api.honeycomb.io`
 
