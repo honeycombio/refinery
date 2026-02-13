@@ -83,10 +83,11 @@ type OpAMPConfig struct {
 }
 
 type NetworkConfig struct {
-	ListenAddr      string   `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
-	PeerListenAddr  string   `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
-	HoneycombAPI    string   `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
-	HTTPIdleTimeout Duration `yaml:"HTTPIdleTimeout"`
+	ListenAddr        string            `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
+	PeerListenAddr    string            `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
+	HoneycombAPI      string            `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
+	HTTPIdleTimeout   Duration          `yaml:"HTTPIdleTimeout"`
+	AdditionalHeaders map[string]string `yaml:"AdditionalHeaders" default:"{}"`
 }
 
 type AccessKeyConfig struct {
@@ -875,6 +876,13 @@ func (f *fileConfig) GetHoneycombAPI() string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Network.HoneycombAPI
+}
+
+func (f *fileConfig) GetAdditionalHeaders() map[string]string {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.Network.AdditionalHeaders
 }
 
 func (f *fileConfig) GetLoggerLevel() Level {

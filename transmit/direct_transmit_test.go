@@ -143,7 +143,7 @@ func setupDirectTransmissionTestWithBatchSize(t *testing.T, batchSize int, batch
 
 	mockLogger := &logger.MockLogger{}
 
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 10, 100*time.Millisecond, 10*time.Second, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 10, 100*time.Millisecond, 10*time.Second, true, nil)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 	dt.Metrics = mockMetrics
@@ -499,7 +499,7 @@ func TestDirectTransmission(t *testing.T) {
 
 	// Use max batch size of 3 for testing
 	testServer := newTestDirectAPIServer(t, 3)
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 3, 50*time.Millisecond, 10*time.Second, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 3, 50*time.Millisecond, 10*time.Second, true, nil)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 	dt.Metrics = mockMetrics
@@ -750,7 +750,7 @@ func TestDirectTransmissionBatchSizeLimit(t *testing.T) {
 	mockLogger := &logger.MockLogger{}
 
 	testServer := newTestDirectAPIServer(t, 50)
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 50, 50*time.Millisecond, 10*time.Second, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 50, 50*time.Millisecond, 10*time.Second, true, nil)
 	dt.Logger = mockLogger
 	dt.Version = "test-version"
 	dt.Metrics = mockMetrics
@@ -831,7 +831,7 @@ func TestDirectTransmissionBatchTiming(t *testing.T) {
 	fakeClock := clockwork.NewFakeClock()
 
 	// Use a 400ms batch timeout for testing
-	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 100, 400*time.Millisecond, 10*time.Second, true)
+	dt := NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 100, 400*time.Millisecond, 10*time.Second, true, nil)
 	dt.Config = &config.MockConfig{}
 	dt.Logger = &logger.NullLogger{}
 	dt.Version = "test-version"
@@ -958,6 +958,7 @@ func TestDirectTransmissionQueueLengthGauge(t *testing.T) {
 		batchTimeout,
 		10*time.Second,
 		true,
+		nil,
 	)
 	dt.Config = &config.MockConfig{}
 	dt.Logger = &logger.NullLogger{}
@@ -1358,6 +1359,7 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 					libhoney.DefaultBatchTimeout,
 					60*time.Second, // this is the default batch send timeout in libhoney
 					false,
+					nil,
 				)
 				dt.Logger = &logger.NullLogger{}
 				dt.Version = "benchmark"
@@ -1492,6 +1494,108 @@ func TestBuildRequestURL(t *testing.T) {
 			result, err := buildRequestURL(apiHost, tc.input)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+// TestDirectTransmission_AdditionalHeaders validates that additional headers configured
+// in Network.AdditionalHeaders are properly sent with HTTP requests.
+// Config-level validation (reserved headers, etc.) is tested in config/config_test.go
+func TestDirectTransmission_AdditionalHeaders(t *testing.T) {
+	testCases := []struct {
+		desc              string
+		additionalHeaders map[string]string
+	}{
+		{
+			desc: "with-additional-headers",
+			additionalHeaders: map[string]string{
+				"FORWARD_TO_URL":  "https://proxy.example.com",
+				"X-Custom-Header": "custom-value",
+			},
+		},
+		{
+			desc:              "with-empty-additional-headers",
+			additionalHeaders: map[string]string{},
+		},
+		{
+			desc:              "with-nil-additional-headers",
+			additionalHeaders: nil,
+		},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			t.Parallel()
+
+			mockMetrics := &metrics.MockMetrics{}
+			mockMetrics.Start()
+			t.Cleanup(mockMetrics.Stop)
+
+			dt := NewDirectTransmission(
+				types.TransmitTypeUpstream,
+				http.DefaultTransport.(*http.Transport),
+				10,
+				100*time.Millisecond,
+				10*time.Second,
+				false, // no compression to simplify test
+				tC.additionalHeaders,
+			)
+			dt.Logger = &logger.MockLogger{}
+			dt.Metrics = mockMetrics
+			dt.Version = tC.desc + "-test"
+
+			// Store http.Header(s) received for validation outside handler
+			var receivedHeaders atomic.Value
+
+			capturingHeadersServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				receivedHeaders.Store(r.Header.Clone())
+
+				// Read and discard body
+				_, _ = io.ReadAll(r.Body)
+				r.Body.Close()
+
+				// Send proper response
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`[{"status": 202}]`))
+			}))
+			t.Cleanup(capturingHeadersServer.Close)
+
+			// Start the test DirectTransmission
+			err := dt.Start()
+			require.NoError(t, err)
+			t.Cleanup(func() { dt.Stop() })
+
+			// Send a test event
+			eventData := types.NewPayload(&config.MockConfig{}, map[string]any{"test": "value"})
+			eventData.ExtractMetadata()
+
+			event := &types.Event{
+				Context:    context.Background(),
+				APIHost:    capturingHeadersServer.URL,
+				APIKey:     "test-additional-headers",
+				Dataset:    "test-dataset",
+				SampleRate: 1,
+				Timestamp:  time.Now().UTC(),
+				Data:       eventData,
+			}
+			dt.EnqueueEvent(event)
+
+			// Wait for the server to receive the request
+			require.Eventually(t, func() bool {
+				return receivedHeaders.Load() != nil
+			}, 5*time.Second, 50*time.Millisecond, "request with headers should have been received")
+
+			// Validate headers
+			headers := receivedHeaders.Load().(http.Header)
+			if len(tC.additionalHeaders) > 0 {
+				for customHeaderName, customHeaderValue := range tC.additionalHeaders {
+					assert.Equal(t, customHeaderValue, headers.Get(customHeaderName),
+						"Additional header '%s' has unexpected value", customHeaderName)
+				}
+			}
+			assert.Equal(t, "test-additional-headers", headers.Get("X-Honeycomb-Team"))
+			assert.Equal(t, "application/msgpack", headers.Get("Content-Type"))
+			assert.Contains(t, headers.Get("User-Agent"), tC.desc+"-test")
 		})
 	}
 }
