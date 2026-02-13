@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2026-02-04 at 18:27:42 UTC.
+It was automatically generated on 2026-02-13 at 14:32:49 UTC.
 
 ## The Config file
 
@@ -150,6 +150,19 @@ This setting is the destination to which Refinery sends all events that it decid
 - Default: `https://api.honeycomb.io`
 - Environment variable: `REFINERY_HONEYCOMB_API`
 - Command line switch: `--honeycomb-api`
+
+### `AdditionalHeaders`
+
+AdditionalHeaders is a map of additional HTTP headers to add to all upstream Honeycomb API requests.
+
+These headers will be added to all HTTP requests made to the upstream Honeycomb API endpoint, including trace data, OTel metrics, OTel traces, and logs.
+This is useful for scenarios where requests need to pass through an mTLS proxy that requires additional headers like FORWARD_TO_URL.
+Both keys and values must be strings.
+Reserved Honeycomb header prefixes ("x-honeycomb-" and "x-hny-") cannot be set.
+
+- Not eligible for live reload.
+- Type: `map`
+- Example: `FORWARD_TO_URL:https://api.honeycomb.io`
 
 ## OpAMP Configuration
 
