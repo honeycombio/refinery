@@ -5,7 +5,6 @@ import (
 	"time"
 )
 
-// Re-export header constants from internal/headers for backwards compatibility
 const (
 	APIKeyHeader = "X-Honeycomb-Team"
 	// libhoney-js uses this
