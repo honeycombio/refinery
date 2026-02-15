@@ -12,6 +12,8 @@ import (
 
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
+
+	"github.com/honeycombio/refinery/internal/system"
 )
 
 // In order to be able to unmarshal "15s" etc. into time.Duration, we need to
@@ -557,6 +559,13 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 		return nil, err
 	}
 
+	// If AvailableMemory is not set, AND MaxAlloc is not set, try to detect it from the system
+	if mainconf.Collection.AvailableMemory == 0 && mainconf.Collection.MaxAlloc == 0 {
+		if mem, err := system.GetTotalMemory(); err == nil && mem > 0 {
+			allowed := uint64(float64(mem) * float64(mainconf.Collection.MaxMemoryPercentage) / 100.0)
+			mainconf.Collection.MaxAlloc = MemorySize(allowed)
+		}
+	}
 	var rulesconf *V2SamplerConfig
 	ruleshash, err := applyConfigInto(&rulesconf, rulesData, nil)
 	if err != nil {
