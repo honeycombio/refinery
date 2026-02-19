@@ -125,6 +125,7 @@ func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 	type fields struct {
 		ReceiveKeys          []string
+		ReceiveKeyIDs        []string
 		SendKey              string
 		SendKeyMode          string
 		AcceptOnlyListedKeys bool
@@ -133,24 +134,33 @@ func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 		name   string
 		fields fields
 		key    string
+		keyID  string
 		want   error
 	}{
-		{"no keys", fields{}, "key1", nil},
-		{"known key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key1", nil},
-		{"unknown key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key2", errors.New("api key key2... not found in list of authorized keys")},
-		{"reject missing key with sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "", errors.New("api key ... not found in list of authorized keys")},
-		{"reject missing key without sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "", errors.New("api key ... not found in list of authorized keys")},
-		{"accept sendkey", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "key2", nil},
+		{"no keys", fields{}, "key1", "", nil},
+		{"known key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key1", "", nil},
+		{"unknown key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key2", "", errors.New("api key key2... not found in list of authorized keys")},
+		{"reject missing key with sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "", "", errors.New("api key ... not found in list of authorized keys")},
+		{"reject missing key without sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "", "", errors.New("api key ... not found in list of authorized keys")},
+		{"accept sendkey", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "key2", "", nil},
+		// ReceiveKeyIDs tests
+		{"known key id", fields{ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "anykey", "kid1", nil},
+		{"unknown key id", fields{ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "anykey", "kid2", errors.New("api key anykey... not found in list of authorized keys")},
+		{"key id with empty keyID param", fields{ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "anykey", "", errors.New("api key anykey... not found in list of authorized keys")},
+		{"accept by key id when full key not listed", fields{ReceiveKeys: []string{"key1"}, ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "key2", "kid1", nil},
+		{"accept by full key when key id not listed", fields{ReceiveKeys: []string{"key1"}, ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "key1", "kid2", nil},
+		{"reject when neither full key nor key id match", fields{ReceiveKeys: []string{"key1"}, ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "key2", "kid2", errors.New("api key key2... not found in list of authorized keys")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &AccessKeyConfig{
 				ReceiveKeys:          tt.fields.ReceiveKeys,
+				ReceiveKeyIDs:        tt.fields.ReceiveKeyIDs,
 				SendKey:              tt.fields.SendKey,
 				SendKeyMode:          tt.fields.SendKeyMode,
 				AcceptOnlyListedKeys: tt.fields.AcceptOnlyListedKeys,
 			}
-			err := a.IsAccepted(tt.key)
+			err := a.IsAccepted(tt.key, tt.keyID)
 			if tt.want == nil {
 				require.NoError(t, err)
 				return

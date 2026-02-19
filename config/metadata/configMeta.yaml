@@ -223,20 +223,36 @@ groups:
           will be proxied through to the upstream API directly without modifying
           keys.
 
+      - name: ReceiveKeyIDs
+        type: stringarray
+        valuetype: stringarray
+        example: "your-key-id-goes-here"
+        reload: false
+        validations:
+          - type: elementType
+            arg: string
+        summary: is a set of Honeycomb Ingest Key IDs that the proxy will treat specially.
+        description: >
+          When `AcceptOnlyListedKeys` is `true`, traffic using an API key whose
+          Honeycomb ingest key ID matches an entry in this list will be accepted.
+          The key ID is the `id` field returned by the Honeycomb `/1/auth`
+          endpoint; it is distinct from the full API key value.
+
+          This allows authorization based on key IDs rather than full key values,
+          which avoids storing secret key material in the configuration file.
+          Both `ReceiveKeys` and `ReceiveKeyIDs` may be used simultaneously.
+
       - name: AcceptOnlyListedKeys
         type: bool
         valuetype: conditional
         extra: nostar APIKeys
         default: false
         reload: true
-        validation:
-          - type: requiredWith
-            arg: ReceiveKeys
         summary: is a boolean flag that causes events arriving with API keys not in the `ReceiveKeys` list to be rejected.
         description: >
-          If `true`, then only traffic using the keys listed in `ReceiveKeys` is
-          accepted. Events arriving with API keys not in the `ReceiveKeys` list
-          will be rejected with an HTTP `401` error.
+          If `true`, then only traffic using the keys listed in `ReceiveKeys` or
+          whose key ID is listed in `ReceiveKeyIDs` is accepted. Events arriving
+          with API keys not in either list will be rejected with an HTTP `401` error.
 
           If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
 
