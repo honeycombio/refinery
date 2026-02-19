@@ -18,7 +18,11 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 	apicfg := r.Config.GetAccessKeyConfig()
-	if err := apicfg.IsAccepted(ri.ApiKey); err != nil {
+	keyID := ""
+	if apicfg.HasKeyIDs() {
+		keyID = r.getKeyID(ri.ApiKey)
+	}
+	if err := apicfg.IsAccepted(ri.ApiKey, keyID); err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 		return
 	}
@@ -79,7 +83,11 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 	l.router.Metrics.Increment(l.router.metricsNames.routerOtlpLogGrpc)
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
 	apicfg := l.router.Config.GetAccessKeyConfig()
-	if err := apicfg.IsAccepted(ri.ApiKey); err != nil {
+	keyID := ""
+	if apicfg.HasKeyIDs() {
+		keyID = l.router.getKeyID(ri.ApiKey)
+	}
+	if err := apicfg.IsAccepted(ri.ApiKey, keyID); err != nil {
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey)

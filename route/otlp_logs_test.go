@@ -603,8 +603,8 @@ func TestLogsOTLPHandler(t *testing.T) {
 			},
 		} {
 			t.Run(fmt.Sprintf("ApiKey %s SendKeyMode %s SendKey %s", tt.apiKey, tt.mode, tt.sendKey), func(t *testing.T) {
-				router.environmentCache.addItem(tt.apiKey, "local", time.Minute)
-				router.environmentCache.addItem(tt.sendKey, "local", time.Minute)
+				router.environmentCache.addItem(tt.apiKey, authData{environment: "local"}, time.Minute)
+				router.environmentCache.addItem(tt.sendKey, authData{environment: "local"}, time.Minute)
 
 				// HTTP
 				request, _ := http.NewRequest("POST", "/v1/logs", bytes.NewReader(body))
