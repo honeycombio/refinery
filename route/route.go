@@ -994,18 +994,32 @@ func getFirstValueFromMetadata(key string, md metadata.MD) string {
 	return ""
 }
 
+// authData holds the information retrieved from the Honeycomb /1/auth endpoint
+// and stored in the environment cache.
+type authData struct {
+	environment string
+	keyID       string
+}
+
 type environmentCache struct {
 	mutex sync.RWMutex
 	items map[string]*cacheItem
 	ttl   time.Duration
-	getFn func(string) (string, error)
+	getFn func(string) (authData, error)
 }
 
+// SetEnvironmentCache replaces the environment cache with a new one using the
+// provided TTL and lookup function. The lookup function returns only the
+// environment name, and the key ID will be empty in the cached authData.
+// This method exists for backward compatibility with tests.
 func (r *Router) SetEnvironmentCache(ttl time.Duration, getFn func(string) (string, error)) {
-	r.environmentCache = newEnvironmentCache(ttl, getFn)
+	r.environmentCache = newEnvironmentCache(ttl, func(key string) (authData, error) {
+		env, err := getFn(key)
+		return authData{environment: env}, err
+	})
 }
 
-func newEnvironmentCache(ttl time.Duration, getFn func(string) (string, error)) *environmentCache {
+func newEnvironmentCache(ttl time.Duration, getFn func(string) (authData, error)) *environmentCache {
 	return &environmentCache{
 		items: make(map[string]*cacheItem),
 		ttl:   ttl,
@@ -1015,13 +1029,13 @@ func newEnvironmentCache(ttl time.Duration, getFn func(string) (string, error)) 
 
 type cacheItem struct {
 	expiresAt time.Time
-	value     string
+	value     authData
 }
 
 // get queries the cached items, returning cache hits that have not expired.
 // Cache missed use the configured getFn to populate the cache.
-func (c *environmentCache) get(key string) (string, error) {
-	var val string
+func (c *environmentCache) get(key string) (authData, error) {
+	var val authData
 	// get read lock so that we don't attempt to read from the map
 	// while another routine has a write lock and is actively writing
 	// to the map.
@@ -1032,7 +1046,7 @@ func (c *environmentCache) get(key string) (string, error) {
 		}
 	}
 	c.mutex.RUnlock()
-	if val != "" {
+	if val.environment != "" {
 		return val, nil
 	}
 
@@ -1051,7 +1065,7 @@ func (c *environmentCache) get(key string) (string, error) {
 
 	val, err := c.getFn(key)
 	if err != nil {
-		return "", err
+		return authData{}, err
 	}
 
 	c.addItem(key, val, c.ttl)
@@ -1060,7 +1074,7 @@ func (c *environmentCache) get(key string) (string, error) {
 
 // addItem create a new cache entry in the environment cache.
 // This is not thread-safe, and should only be used in tests
-func (c *environmentCache) addItem(key string, value string, ttl time.Duration) {
+func (c *environmentCache) addItem(key string, value authData, ttl time.Duration) {
 	c.items[key] = &cacheItem{
 		expiresAt: time.Now().Add(ttl),
 		value:     value,
@@ -1080,6 +1094,7 @@ type AuthInfo struct {
 	APIKeyAccess map[string]bool `json:"api_key_access"`
 	Team         TeamInfo        `json:"team"`
 	Environment  EnvironmentInfo `json:"environment"`
+	ID           string          `json:"id"`
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
@@ -1087,24 +1102,36 @@ func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 		return "", nil
 	}
 
-	env, err := r.environmentCache.get(apiKey)
+	data, err := r.environmentCache.get(apiKey)
 	if err != nil {
 		return "", err
 	}
-	return env, nil
+	return data.environment, nil
 }
 
-func (r *Router) lookupEnvironment(apiKey string) (string, error) {
+// getKeyID returns the Honeycomb ingest key ID associated with the given API
+// key. It uses the environment cache, so no additional API call is made if the
+// key has already been looked up. Returns an empty string for legacy keys,
+// blank keys, or if the lookup fails.
+func (r *Router) getKeyID(apiKey string) string {
+	if apiKey == "" || config.IsLegacyAPIKey(apiKey) {
+		return ""
+	}
+	data, _ := r.environmentCache.get(apiKey)
+	return data.keyID
+}
+
+func (r *Router) lookupEnvironment(apiKey string) (authData, error) {
 	apiEndpoint := r.Config.GetHoneycombAPI()
 	authURL, err := url.Parse(apiEndpoint)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse Honeycomb API URL config value. %w", err)
+		return authData{}, fmt.Errorf("failed to parse Honeycomb API URL config value. %w", err)
 	}
 
 	authURL.Path = "/1/auth"
 	req, err := http.NewRequest("GET", authURL.String(), nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create AuthInfo request. %w", err)
+		return authData{}, fmt.Errorf("failed to create AuthInfo request. %w", err)
 	}
 
 	req.Header.Set("x-Honeycomb-team", apiKey)
@@ -1112,23 +1139,26 @@ func (r *Router) lookupEnvironment(apiKey string) (string, error) {
 	r.Logger.Debug().WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
 	resp, err := r.proxyClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)
+		return authData{}, fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)
 	}
 	defer resp.Body.Close()
 
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized:
-		return "", fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+		return authData{}, fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
 	case resp.StatusCode > 299:
-		return "", fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
+		return authData{}, fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
 	}
 
 	authinfo := AuthInfo{}
 	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
-		return "", fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
+		return authData{}, fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
 	}
 	r.Logger.Debug().WithString("environment", authinfo.Environment.Name).Logf("Got environment")
-	return authinfo.Environment.Name, nil
+	return authData{
+		environment: authinfo.Environment.Name,
+		keyID:       authinfo.ID,
+	}, nil
 }
 
 func (r *Router) Check(ctx context.Context, req *grpc_health_v1.HealthCheckRequest) (*grpc_health_v1.HealthCheckResponse, error) {
