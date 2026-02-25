@@ -1,5 +1,22 @@
 # Refinery Changelog
 
+## 3.1.1 2026-02-25
+
+### Features
+
+- feat: Allow configuration of additional headers by @mterhar in https://github.com/honeycombio/refinery/pull/1771
+
+### Fixes
+
+- fix: Create rules-based samplers per environment by @TylerHelmuth in https://github.com/honeycombio/refinery/pull/1787
+- fix: apply UseClusterSize cfg by @VinozzZ in https://github.com/honeycombio/refinery/pull/1786
+- fix: Find IPv6 addresses properly by @mterhar in https://github.com/honeycombio/refinery/pull/1772
+- fix: bump husky to latest main by @TylerHelmuth in https://github.com/honeycombio/refinery/pull/1785
+
+### Maintenance
+
+- maint: bump husky to v0.41.0 by @TylerHelmuth in https://github.com/honeycombio/refinery/pull/1790
+
 ## 3.1.0 2026-02-04
 
 This release introduces concurrent collect loops (workers) for improved parallelism and throughput.
