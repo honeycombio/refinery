@@ -695,6 +695,20 @@ OTelMetrics:
     ## Options: none gzip
     # Compression: gzip
 
+    ## AdditionalAttributes adds the provided attributes as resource
+    ## attributes on all OpenTelemetry metrics emitted by Refinery.
+    ##
+    ## This is useful for injecting deployment-specific metadata (such as
+    ## a cluster ID or environment name) into metrics so they can be
+    ## filtered or grouped in the metrics backend.
+    ##
+    ## Both keys and values must be strings.
+    ##
+    ## Not eligible for live reload.
+    # AdditionalAttributes:
+    #   ClusterName: MyCluster
+    #   environment: production
+
 ###########################
 ## OpenTelemetry Tracing ##
 ###########################

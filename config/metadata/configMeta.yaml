@@ -932,6 +932,19 @@ groups:
           compression costs may outweigh the benefits, in which case `none`
           may be used.
 
+      - name: AdditionalAttributes
+        type: map
+        valuetype: nondefault
+        default: "{}"
+        reload: false
+        firstversion: v2.10
+        summary: adds the provided attributes as resource attributes on all OpenTelemetry metrics emitted by Refinery.
+        description: >
+          This is useful for injecting deployment-specific metadata (such as
+          a cluster ID or environment name) into metrics so they can be
+          filtered or grouped in the metrics backend.
+          Both keys and values must be strings.
+
   - name: OTelTracing
     title: "OpenTelemetry Tracing"
     description: contains configuration for Refinery's own tracing.

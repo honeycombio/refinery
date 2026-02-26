@@ -1,5 +1,11 @@
 # Refinery Changelog
 
+## Unreleased
+
+### 💡 Enhancements
+
+- feat: add `OTelMetrics.AdditionalAttributes` config option to inject custom resource attributes into OTLP metrics
+
 ## 3.1.1 2026-02-25
 
 ### Features

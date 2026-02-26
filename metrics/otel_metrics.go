@@ -118,13 +118,19 @@ func (o *OTelMetrics) Start() error {
 		hostname = hn
 	}
 
-	res, err := resource.New(ctx,
+	// Build resource attributes: start with defaults, then add user-defined additional attributes
+	resourceOpts := []resource.Option{
 		resource.WithAttributes(resource.Default().Attributes()...),
 		resource.WithAttributes(attribute.KeyValue{Key: "service.name", Value: attribute.StringValue("refinery")}),
 		resource.WithAttributes(attribute.KeyValue{Key: "service.version", Value: attribute.StringValue(o.Version)}),
 		resource.WithAttributes(attribute.KeyValue{Key: "host.name", Value: attribute.StringValue(hostname)}),
 		resource.WithAttributes(attribute.KeyValue{Key: "hostname", Value: attribute.StringValue(hostname)}),
-	)
+	}
+	for k, v := range cfg.AdditionalAttributes {
+		resourceOpts = append(resourceOpts, resource.WithAttributes(attribute.KeyValue{Key: attribute.Key(k), Value: attribute.StringValue(v)}))
+	}
+
+	res, err := resource.New(ctx, resourceOpts...)
 
 	if err != nil {
 		return err

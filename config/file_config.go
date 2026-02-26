@@ -278,12 +278,13 @@ type PrometheusMetricsConfig struct {
 }
 
 type OTelMetricsConfig struct {
-	Enabled           bool     `yaml:"Enabled" default:"false"`
-	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
-	APIKey            string   `yaml:"APIKey" cmdenv:"OTelMetricsAPIKey,HoneycombAPIKey"`
-	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
-	Compression       string   `yaml:"Compression" default:"gzip"`
-	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s"`
+	Enabled              bool              `yaml:"Enabled" default:"false"`
+	APIHost              string            `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
+	APIKey               string            `yaml:"APIKey" cmdenv:"OTelMetricsAPIKey,HoneycombAPIKey"`
+	Dataset              string            `yaml:"Dataset" default:"Refinery Metrics"`
+	Compression          string            `yaml:"Compression" default:"gzip"`
+	ReportingInterval    Duration          `yaml:"ReportingInterval" default:"30s"`
+	AdditionalAttributes map[string]string `yaml:"AdditionalAttributes" default:"{}"`
 }
 
 type OTelTracingConfig struct {
