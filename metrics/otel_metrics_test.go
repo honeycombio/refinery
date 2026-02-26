@@ -124,6 +124,46 @@ func Test_OTelMetrics_Raciness(t *testing.T) {
 	metricdatatest.AssertEqual(t, want, got, metricdatatest.IgnoreTimestamp())
 }
 
+func Test_OTelMetrics_AdditionalAttributes(t *testing.T) {
+	rdr := sdkmetric.NewManualReader()
+
+	o := &OTelMetrics{
+		Logger: &logger.MockLogger{},
+		Config: &config.MockConfig{
+			GetOTelMetricsConfigVal: config.OTelMetricsConfig{
+				AdditionalAttributes: map[string]string{
+					"cluster.id":  "test-cluster-123",
+					"environment": "staging",
+				},
+			},
+		},
+		testReader: rdr,
+	}
+
+	err := o.Start()
+	defer o.Stop()
+	require.NoError(t, err)
+
+	// Emit a metric so we can collect resource data
+	o.Register(Metadata{Name: "test_attr", Type: Counter})
+	o.Increment("test_attr")
+
+	rm := metricdata.ResourceMetrics{}
+	err = rdr.Collect(t.Context(), &rm)
+	require.NoError(t, err)
+
+	// Check that the additional attributes are present as resource attributes
+	attrs := rm.Resource.Attributes()
+	attrMap := make(map[string]string)
+	for _, attr := range attrs {
+		attrMap[string(attr.Key)] = attr.Value.AsString()
+	}
+
+	assert.Equal(t, "test-cluster-123", attrMap["cluster.id"], "cluster.id resource attribute should be set")
+	assert.Equal(t, "staging", attrMap["environment"], "environment resource attribute should be set")
+	assert.Equal(t, "refinery", attrMap["service.name"], "service.name should still be present")
+}
+
 func Benchmark_OTelMetrics_ConcurrentAccess(b *testing.B) {
 	o := &OTelMetrics{
 		Logger: &logger.NullLogger{},

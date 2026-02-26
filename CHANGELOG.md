@@ -1,5 +1,11 @@
 # Refinery Changelog
 
+## Unreleased
+
+### Features
+
+- feat: add `OTelMetrics.AdditionalAttributes` config option to inject custom resource attributes into OTLP metrics
+
 ## 3.1.2 2026-03-25
 
 This release addresses security vulnerabilities CVE-2026-27139, CVE-2026-27142, and CVE-2026-25679.
