@@ -909,6 +909,23 @@ func TestAdditionalAttributes(t *testing.T) {
 	assert.Equal(t, map[string]string{"name": "foo", "other": "bar", "another": "OneHundred"}, c.GetAdditionalAttributes())
 }
 
+func TestOTelMetricsAdditionalAttributes(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"OTelMetrics.AdditionalAttributes", map[string]string{
+			"cluster.id":  "my-cluster",
+			"environment": "production",
+		},
+	)
+	rm := makeYAML("ConfigVersion", 2)
+	config, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	otelCfg := c.GetOTelMetricsConfig()
+	assert.Equal(t, map[string]string{"cluster.id": "my-cluster", "environment": "production"}, otelCfg.AdditionalAttributes)
+}
+
 func TestHoneycombIdFieldsConfig(t *testing.T) {
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,

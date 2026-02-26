@@ -68,6 +68,7 @@ OTelMetrics:
   Dataset: "Refinery Metrics"
   ReportingInterval: 30s
   Compression: gzip
+  AdditionalAttributes:
 OTelTracing:
   Enabled: false
   APIHost: "https://api.honeycomb.io"

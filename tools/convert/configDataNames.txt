@@ -136,6 +136,8 @@ OTelMetrics:
 
   - Compression
 
+  - AdditionalAttributes
+
 
 OTelTracing:
   - Enabled

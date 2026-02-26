@@ -644,6 +644,18 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 - Default: `gzip`
 - Options: `none`, `gzip`
 
+### `AdditionalAttributes`
+
+`AdditionalAttributes` adds the provided attributes as resource attributes on all OpenTelemetry metrics emitted by Refinery.
+
+This is useful for injecting deployment-specific metadata (such as a cluster ID or environment name) into metrics so they can be filtered or grouped in the metrics backend.
+
+Both keys and values must be strings.
+
+- Not eligible for live reload.
+- Type: `map[string]string`
+- Default: `{}`
+
 ## OpenTelemetry Tracing
 
 `OTelTracing` contains configuration for Refinery's own tracing.
