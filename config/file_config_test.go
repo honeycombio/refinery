@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"testing"
 
@@ -166,6 +167,104 @@ func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 				return
 			}
 			assert.Equal(t, tt.want.Error(), err.Error())
+		})
+	}
+}
+
+func BenchmarkAccessKeyConfig_IsAccepted(b *testing.B) {
+	// Generate realistic key lists
+	makeKeys := func(n int) []string {
+		keys := make([]string, n)
+		for i := range keys {
+			keys[i] = fmt.Sprintf("key-%06d", i)
+		}
+		return keys
+	}
+
+	benchmarks := []struct {
+		name   string
+		config AccessKeyConfig
+		key    string
+		keyID  string
+	}{
+		{
+			name:   "no_filtering",
+			config: AccessKeyConfig{AcceptOnlyListedKeys: false},
+			key:    "anykey",
+			keyID:  "",
+		},
+		{
+			name: "ReceiveKeys_10_match_last",
+			config: AccessKeyConfig{
+				ReceiveKeys:          makeKeys(10),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "key-000009",
+			keyID: "",
+		},
+		{
+			name: "ReceiveKeys_100_match_last",
+			config: AccessKeyConfig{
+				ReceiveKeys:          makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "key-000099",
+			keyID: "",
+		},
+		{
+			name: "ReceiveKeys_100_no_match",
+			config: AccessKeyConfig{
+				ReceiveKeys:          makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "unknown-key",
+			keyID: "",
+		},
+		{
+			name: "ReceiveKeyIDs_10_match_last",
+			config: AccessKeyConfig{
+				ReceiveKeyIDs:        makeKeys(10),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "anykey",
+			keyID: "key-000009",
+		},
+		{
+			name: "ReceiveKeyIDs_100_match_last",
+			config: AccessKeyConfig{
+				ReceiveKeyIDs:        makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "anykey",
+			keyID: "key-000099",
+		},
+		{
+			name: "ReceiveKeyIDs_100_no_match",
+			config: AccessKeyConfig{
+				ReceiveKeyIDs:        makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "anykey",
+			keyID: "unknown-kid",
+		},
+		{
+			name: "both_100_match_by_keyID",
+			config: AccessKeyConfig{
+				ReceiveKeys:          makeKeys(100),
+				ReceiveKeyIDs:        makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "unknown-key",
+			keyID: "key-000050",
+		},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = bm.config.IsAccepted(bm.key, bm.keyID)
+			}
 		})
 	}
 }
