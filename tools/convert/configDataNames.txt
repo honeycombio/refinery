@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2026-02-06 at 15:01:38 UTC.
+# Automatically generated on 2026-02-25 at 20:49:25 UTC.
 
 General:
   - ConfigurationVersion

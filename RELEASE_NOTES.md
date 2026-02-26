@@ -2,6 +2,20 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.1.1
+
+This patch release includes bug fixes and a new feature for configuring additional HTTP headers.
+
+### Features
+
+* **Additional Headers**: Refinery now supports configuration of additional HTTP headers, providing more flexibility for deployments that require custom headers for upstream communication.
+
+### Fixes
+
+* Fixed rules-based samplers not being created per environment, which could cause incorrect sampling behavior in multi-environment deployments.
+* Fixed `UseClusterSize` configuration not being applied correctly.
+* Fixed IPv6 address detection to properly identify and handle IPv6 addresses.
+
 ## Version 3.1.0
 
 This release introduces concurrent trace processing, enabling Refinery to make effective use of multi-core systems.
