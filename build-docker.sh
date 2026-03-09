@@ -72,7 +72,7 @@ echo "Building image locally with ko for multi-registry push..."
 IMAGE_REF=$(./ko publish \
   --tags "${TAGS}" \
   --base-import-paths \
-  --platform "linux/amd64,linux/arm64" \
+  --platform "linux/arm64,linux/amd64" \
   --image-label org.opencontainers.image.source=https://github.com/honeycombio/refinery \
   --image-label org.opencontainers.image.licenses=Apache-2.0 \
   --image-label org.opencontainers.image.revision=${GIT_COMMIT} \
