@@ -46,8 +46,8 @@ wait_for_redis: dockerize
 # You can override this version from an environment variable.
 HOST_OS := $(shell uname -s | tr A-Z a-z)
 # You can override this version from an environment variable.
-KO_VERSION ?= 0.11.2
-KO_RELEASE_ASSET := ko_${KO_VERSION}_${HOST_OS}_x86_64.tar.gz
+KO_VERSION ?= 0.18.0
+KO_RELEASE_ASSET := ko_${KO_VERSION}_${HOST_OS}_arm64.tar.gz
 # ensure the ko command is available
 ko: ko_${KO_VERSION}.tar.gz
 	tar xzvmf $< ko
@@ -189,7 +189,3 @@ unsmoke:
 	@echo "+++ Spinning down the smokers."
 	@echo ""
 	cd smoke-test && docker-compose down --volumes
-
-
-
-
