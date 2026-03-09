@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2026-02-25 at 20:49:27 UTC from ../../config.yaml using a template generated on 2026-02-25 at 20:49:24 UTC
+# created on 2026-03-09 at 14:11:11 UTC from ../../config.yaml using a template generated on 2026-03-09 at 14:11:08 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -166,16 +166,33 @@ AccessKeys:
     ## will be proxied through to the upstream API directly without modifying
     ## keys.
     ##
-    ## Not eligible for live reload.
+    ## Eligible for live reload.
     # ReceiveKeys:
       # - your-key-goes-here
+
+    ## ReceiveKeyIDs is a set of Honeycomb Ingest Key IDs that the proxy will
+    ## treat specially.
+    ##
+    ## When `AcceptOnlyListedKeys` is `true`, traffic using an API key whose
+    ## Honeycomb ingest key ID matches an entry in this list will be
+    ## accepted. The key ID is the `id` field returned by the Honeycomb
+    ## `/1/auth` endpoint; it is distinct from the full API key value.
+    ## This allows authorization based on key IDs rather than full key
+    ## values, which avoids storing secret key material in the configuration
+    ## file. Both `ReceiveKeys` and `ReceiveKeyIDs` may be used
+    ## simultaneously.
+    ##
+    ## Eligible for live reload.
+    # ReceiveKeyIDs:
+      # - your-key-id-goes-here
 
     ## AcceptOnlyListedKeys is a boolean flag that causes events arriving
     ## with API keys not in the `ReceiveKeys` list to be rejected.
     ##
-    ## If `true`, then only traffic using the keys listed in `ReceiveKeys` is
-    ## accepted. Events arriving with API keys not in the `ReceiveKeys` list
-    ## will be rejected with an HTTP `401` error.
+    ## If `true`, then only traffic using the keys listed in `ReceiveKeys` or
+    ## whose key ID is listed in `ReceiveKeyIDs` is accepted. Events arriving
+    ## with API keys not in either list will be rejected with an HTTP `401`
+    ## error.
     ## If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
     ## This setting is applied **before** the `SendKey` and `SendKeyMode`
     ## settings.
@@ -558,8 +575,8 @@ HoneycombLogger:
     ##
     ## Not eligible for live reload.
     # AdditionalAttributes:
-      #  pipeline.id: '12345'
-      #  rollout.id: '67890'
+      #  pipeline.id: 12345
+      #  rollout.id: 67890
 
 ###################
 ## Stdout Logger ##
@@ -698,16 +715,15 @@ OTelMetrics:
     ## AdditionalAttributes adds the provided attributes as resource
     ## attributes on all OpenTelemetry metrics emitted by Refinery.
     ##
-    ## This is useful for injecting deployment-specific metadata (such as
-    ## a cluster ID or environment name) into metrics so they can be
-    ## filtered or grouped in the metrics backend.
-    ##
-    ## Both keys and values must be strings.
+    ## This is useful for injecting deployment-specific metadata (such as a
+    ## cluster ID or environment name) into metrics so they can be filtered
+    ## or grouped in the metrics backend. Both keys and values must be
+    ## strings.
     ##
     ## Not eligible for live reload.
     # AdditionalAttributes:
-    #   ClusterName: MyCluster
-    #   environment: production
+      #  pipeline.id: '12345'
+      #  rollout.id: '67890'
 
 ###########################
 ## OpenTelemetry Tracing ##
