@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2026-02-25 at 20:49:25 UTC
+# automatically generated on 2026-03-09 at 14:11:10 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -17,6 +17,9 @@ OpAMP:
 AccessKeys:
   ReceiveKeys: 
     - "your-key-goes-here"
+
+  ReceiveKeyIDs: 
+    - "your-key-id-goes-here"
 
   AcceptOnlyListedKeys: false
   SendKey: SetThisToAHoneycombKey
@@ -51,8 +54,8 @@ HoneycombLogger:
   SamplerEnabled: true
   SamplerThroughput: 10
   AdditionalAttributes: 
-    "pipeline.id": "'12345'"
-    "rollout.id": "'67890'"
+    "pipeline.id": 12345
+    "rollout.id": 67890
 
 StdoutLogger:
   Structured: false
@@ -68,7 +71,10 @@ OTelMetrics:
   Dataset: "Refinery Metrics"
   ReportingInterval: 30s
   Compression: gzip
-  AdditionalAttributes:
+  AdditionalAttributes: 
+    "pipeline.id": "'12345'"
+    "rollout.id": "'67890'"
+
 OTelTracing:
   Enabled: false
   APIHost: "https://api.honeycomb.io"
