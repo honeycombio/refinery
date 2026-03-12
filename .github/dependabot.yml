@@ -11,8 +11,6 @@ updates:
       interval: "monthly"
     labels:
       - "type: dependencies"
-    reviewers:
-      - "honeycombio/pipeline-team"
     groups:
       minor-patch:
         update-types:
