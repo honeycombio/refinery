@@ -911,7 +911,8 @@ Its minimum value should be at least three times the `CacheCapacity`.
 `AvailableMemory` is the amount of system memory available to the Refinery process.
 
 This value will typically be set through an environment variable controlled by the container or deploy script.
-If this value is zero or not set, then `MaxMemoryPercentage` cannot be used to calculate the maximum allocation and `MaxAlloc` will be used instead.
+If this value is zero or not set, Refinery will attempt to detect the total available memory from the system (cgroups or /proc/meminfo).
+If detection fails, `MaxAlloc` will be used.
 If set, then this must be a memory size.
 Sizes with standard unit suffixes (such as `MB` and `GiB`) and Kubernetes units (such as `M` and `Gi`) are supported.
 Fractional values with a suffix are supported.
