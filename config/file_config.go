@@ -92,22 +92,32 @@ type NetworkConfig struct {
 
 type AccessKeyConfig struct {
 	ReceiveKeys          []string `yaml:"ReceiveKeys" default:"[]"`
+	ReceiveKeyIDs        []string `yaml:"ReceiveKeyIDs" default:"[]"`
 	SendKey              string   `yaml:"SendKey" cmdenv:"SendKey"`
 	SendKeyMode          string   `yaml:"SendKeyMode" default:"none"`
 	AcceptOnlyListedKeys bool     `yaml:"AcceptOnlyListedKeys"`
 }
 
-// IsAccepted checks if the given key is in the list of received keys or a configured SendKey.
-// if not, it returns an error with the key truncated to 8 characters for logging.
-func (a *AccessKeyConfig) IsAccepted(key string) error {
+// IsAccepted checks if the given key (or its associated key ID) is authorized.
+// keyID is the Honeycomb ingest key ID returned by the /1/auth endpoint; it may
+// be empty if the lookup has not yet occurred or if the key is a legacy key.
+// If not accepted, it returns an error with the key truncated to 8 characters for logging.
+func (a *AccessKeyConfig) IsAccepted(key, keyID string) error {
 	if a.AcceptOnlyListedKeys {
-		if (len(a.SendKey) > 0 && key == a.SendKey) || slices.Contains(a.ReceiveKeys, key) {
+		if (len(a.SendKey) > 0 && key == a.SendKey) ||
+			slices.Contains(a.ReceiveKeys, key) ||
+			(keyID != "" && slices.Contains(a.ReceiveKeyIDs, keyID)) {
 			return nil
 		}
 
 		return fmt.Errorf("api key %.8s... not found in list of authorized keys", key)
 	}
 	return nil
+}
+
+// HasKeyIDs returns true if ReceiveKeyIDs has been configured.
+func (a *AccessKeyConfig) HasKeyIDs() bool {
+	return len(a.ReceiveKeyIDs) > 0
 }
 
 // GetReplaceKey checks the given API key against the configuration
@@ -268,12 +278,13 @@ type PrometheusMetricsConfig struct {
 }
 
 type OTelMetricsConfig struct {
-	Enabled           bool     `yaml:"Enabled" default:"false"`
-	APIHost           string   `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
-	APIKey            string   `yaml:"APIKey" cmdenv:"OTelMetricsAPIKey,HoneycombAPIKey"`
-	Dataset           string   `yaml:"Dataset" default:"Refinery Metrics"`
-	Compression       string   `yaml:"Compression" default:"gzip"`
-	ReportingInterval Duration `yaml:"ReportingInterval" default:"30s"`
+	Enabled              bool              `yaml:"Enabled" default:"false"`
+	APIHost              string            `yaml:"APIHost" default:"https://api.honeycomb.io" cmdenv:"TelemetryEndpoint"`
+	APIKey               string            `yaml:"APIKey" cmdenv:"OTelMetricsAPIKey,HoneycombAPIKey"`
+	Dataset              string            `yaml:"Dataset" default:"Refinery Metrics"`
+	Compression          string            `yaml:"Compression" default:"gzip"`
+	ReportingInterval    Duration          `yaml:"ReportingInterval" default:"30s"`
+	AdditionalAttributes map[string]string `yaml:"AdditionalAttributes" default:"{}"`
 }
 
 type OTelTracingConfig struct {

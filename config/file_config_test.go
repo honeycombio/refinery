@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"testing"
 
@@ -125,6 +126,7 @@ func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 	type fields struct {
 		ReceiveKeys          []string
+		ReceiveKeyIDs        []string
 		SendKey              string
 		SendKeyMode          string
 		AcceptOnlyListedKeys bool
@@ -133,29 +135,136 @@ func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 		name   string
 		fields fields
 		key    string
+		keyID  string
 		want   error
 	}{
-		{"no keys", fields{}, "key1", nil},
-		{"known key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key1", nil},
-		{"unknown key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key2", errors.New("api key key2... not found in list of authorized keys")},
-		{"reject missing key with sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "", errors.New("api key ... not found in list of authorized keys")},
-		{"reject missing key without sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "", errors.New("api key ... not found in list of authorized keys")},
-		{"accept sendkey", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "key2", nil},
+		{"no keys", fields{}, "key1", "", nil},
+		{"known key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key1", "", nil},
+		{"unknown key", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "key2", "", errors.New("api key key2... not found in list of authorized keys")},
+		{"reject missing key with sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "", "", errors.New("api key ... not found in list of authorized keys")},
+		{"reject missing key without sendkey configured", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true}, "", "", errors.New("api key ... not found in list of authorized keys")},
+		{"accept sendkey", fields{ReceiveKeys: []string{"key1"}, AcceptOnlyListedKeys: true, SendKey: "key2"}, "key2", "", nil},
+		// ReceiveKeyIDs tests
+		{"known key id", fields{ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "anykey", "kid1", nil},
+		{"unknown key id", fields{ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "anykey", "kid2", errors.New("api key anykey... not found in list of authorized keys")},
+		{"key id with empty keyID param", fields{ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "anykey", "", errors.New("api key anykey... not found in list of authorized keys")},
+		{"accept by key id when full key not listed", fields{ReceiveKeys: []string{"key1"}, ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "key2", "kid1", nil},
+		{"accept by full key when key id not listed", fields{ReceiveKeys: []string{"key1"}, ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "key1", "kid2", nil},
+		{"reject when neither full key nor key id match", fields{ReceiveKeys: []string{"key1"}, ReceiveKeyIDs: []string{"kid1"}, AcceptOnlyListedKeys: true}, "key2", "kid2", errors.New("api key key2... not found in list of authorized keys")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &AccessKeyConfig{
 				ReceiveKeys:          tt.fields.ReceiveKeys,
+				ReceiveKeyIDs:        tt.fields.ReceiveKeyIDs,
 				SendKey:              tt.fields.SendKey,
 				SendKeyMode:          tt.fields.SendKeyMode,
 				AcceptOnlyListedKeys: tt.fields.AcceptOnlyListedKeys,
 			}
-			err := a.IsAccepted(tt.key)
+			err := a.IsAccepted(tt.key, tt.keyID)
 			if tt.want == nil {
 				require.NoError(t, err)
 				return
 			}
 			assert.Equal(t, tt.want.Error(), err.Error())
+		})
+	}
+}
+
+func BenchmarkAccessKeyConfig_IsAccepted(b *testing.B) {
+	// Generate realistic key lists
+	makeKeys := func(n int) []string {
+		keys := make([]string, n)
+		for i := range keys {
+			keys[i] = fmt.Sprintf("key-%06d", i)
+		}
+		return keys
+	}
+
+	benchmarks := []struct {
+		name   string
+		config AccessKeyConfig
+		key    string
+		keyID  string
+	}{
+		{
+			name:   "no_filtering",
+			config: AccessKeyConfig{AcceptOnlyListedKeys: false},
+			key:    "anykey",
+			keyID:  "",
+		},
+		{
+			name: "ReceiveKeys_10_match_last",
+			config: AccessKeyConfig{
+				ReceiveKeys:          makeKeys(10),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "key-000009",
+			keyID: "",
+		},
+		{
+			name: "ReceiveKeys_100_match_last",
+			config: AccessKeyConfig{
+				ReceiveKeys:          makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "key-000099",
+			keyID: "",
+		},
+		{
+			name: "ReceiveKeys_100_no_match",
+			config: AccessKeyConfig{
+				ReceiveKeys:          makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "unknown-key",
+			keyID: "",
+		},
+		{
+			name: "ReceiveKeyIDs_10_match_last",
+			config: AccessKeyConfig{
+				ReceiveKeyIDs:        makeKeys(10),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "anykey",
+			keyID: "key-000009",
+		},
+		{
+			name: "ReceiveKeyIDs_100_match_last",
+			config: AccessKeyConfig{
+				ReceiveKeyIDs:        makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "anykey",
+			keyID: "key-000099",
+		},
+		{
+			name: "ReceiveKeyIDs_100_no_match",
+			config: AccessKeyConfig{
+				ReceiveKeyIDs:        makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "anykey",
+			keyID: "unknown-kid",
+		},
+		{
+			name: "both_100_match_by_keyID",
+			config: AccessKeyConfig{
+				ReceiveKeys:          makeKeys(100),
+				ReceiveKeyIDs:        makeKeys(100),
+				AcceptOnlyListedKeys: true,
+			},
+			key:   "unknown-key",
+			keyID: "key-000050",
+		},
+	}
+
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				_ = bm.config.IsAccepted(bm.key, bm.keyID)
+			}
 		})
 	}
 }
