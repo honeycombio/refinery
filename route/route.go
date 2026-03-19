@@ -146,6 +146,8 @@ var routerMetrics = []metrics.Metadata{
 	{Name: "_router_otlp_trace_grpc", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of otlp trace grpc requests received"},
 	{Name: "bytes_received_traces", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in trace events"},
 	{Name: "bytes_received_logs", Type: metrics.Counter, Unit: metrics.Bytes, Description: "the number of bytes received in log events"},
+	{Name: "events_received_traces", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of trace events received"},
+	{Name: "events_received_logs", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of log events received"},
 }
 
 func (r *Router) registerMetricNames() {
@@ -748,8 +750,10 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	if r.routerType.IsIncoming() && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
 		if span.Data.MetaSignalType == "log" {
 			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
+			r.Metrics.Increment("events_received_logs")
 		} else {
 			r.Metrics.Count("bytes_received_traces", int64(span.GetDataSize()))
+			r.Metrics.Increment("events_received_traces")
 		}
 	}
 

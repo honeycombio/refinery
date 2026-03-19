@@ -152,6 +152,8 @@ var inMemCollectorMetrics = []metrics.Metadata{
 
 	{Name: "dropped_from_stress", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans dropped due to stress relief"},
 	{Name: "kept_from_stress", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans kept due to stress relief"},
+	{Name: "events_dropped_traces", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of trace events dropped"},
+	{Name: "events_dropped_logs", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of log events dropped"},
 	{Name: "trace_kept_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "sample rate of kept traces"},
 	{Name: "trace_aggregate_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "aggregate sample rate of both kept and dropped traces"},
 	{Name: "collector_collect_loop_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of the collect loop, the primary event processing goroutine"},
@@ -460,6 +462,11 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 
 	if !keep {
 		i.Metrics.Increment("dropped_from_stress")
+		if sp.Data.MetaSignalType == "log" {
+			i.Metrics.Increment("events_dropped_logs")
+		} else {
+			i.Metrics.Increment("events_dropped_traces")
+		}
 		return true, false
 	}
 
@@ -600,6 +607,16 @@ func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !trace.KeepSample && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
+		dropCount := int64(trace.DescendantCount())
+		signalType := "traces"
+		if trace.RootSpan != nil && trace.RootSpan.Data.MetaSignalType == "log" {
+			signalType = "logs"
+		}
+		if signalType == "logs" {
+			i.Metrics.Count("events_dropped_logs", dropCount)
+		} else {
+			i.Metrics.Count("events_dropped_traces", dropCount)
+		}
 		i.Logger.Debug().WithFields(logFields).Logf("Dropping trace because of sampling decision")
 		return
 	}
