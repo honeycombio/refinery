@@ -89,6 +89,10 @@ func (ur *usageTracker) completeSend() {
 type usageSignal string
 
 var (
-	signal_traces usageSignal = "traces"
-	signal_logs   usageSignal = "logs"
+	signal_traces                 usageSignal = "traces"
+	signal_logs                   usageSignal = "logs"
+	signal_events_received_traces usageSignal = "events_received_traces"
+	signal_events_received_logs   usageSignal = "events_received_logs"
+	signal_events_dropped_traces  usageSignal = "events_dropped_traces"
+	signal_events_dropped_logs    usageSignal = "events_dropped_logs"
 )
