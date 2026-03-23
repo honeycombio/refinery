@@ -47,7 +47,7 @@ wait_for_redis: dockerize
 HOST_OS := $(shell uname -s | tr A-Z a-z)
 # You can override this version from an environment variable.
 KO_VERSION ?= 0.18.0
-KO_RELEASE_ASSET := ko_${KO_VERSION}_${HOST_OS}_arm64.tar.gz
+KO_RELEASE_ASSET := ko_${KO_VERSION}_${HOST_OS}_amd64.tar.gz
 # ensure the ko command is available
 ko: ko_${KO_VERSION}.tar.gz
 	tar xzvmf $< ko
