@@ -87,10 +87,18 @@ complete:
       type: Gauge
       unit: Dimensionless
       description: number of spans in the peer queue
+    - name: collector_peer_queue_capacity
+      type: Gauge
+      unit: Dimensionless
+      description: configured maximum number of spans in the peer queue
     - name: collector_incoming_queue_length
       type: Gauge
       unit: Dimensionless
       description: number of spans in the incoming queue
+    - name: collector_incoming_queue_capacity
+      type: Gauge
+      unit: Dimensionless
+      description: configured maximum number of spans in the incoming queue
     - name: collector_peer_queue
       type: Histogram
       unit: Dimensionless
@@ -107,6 +115,10 @@ complete:
       type: Gauge
       unit: Bytes
       description: current heap allocation
+    - name: memory_limit
+      type: Gauge
+      unit: Bytes
+      description: configured maximum memory allocation for the collector (derived from MaxAlloc or AvailableMemory * MaxMemoryPercentage)
     - name: span_received
       type: Counter
       unit: Dimensionless

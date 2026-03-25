@@ -34,11 +34,14 @@ This table includes metrics with fully defined names.
 | trace_span_count | Histogram | Dimensionless | number of spans in a trace |
 | collector_incoming_queue | Histogram | Dimensionless | number of spans currently in the incoming queue |
 | collector_peer_queue_length | Gauge | Dimensionless | number of spans in the peer queue |
+| collector_peer_queue_capacity | Gauge | Dimensionless | configured maximum number of spans in the peer queue |
 | collector_incoming_queue_length | Gauge | Dimensionless | number of spans in the incoming queue |
+| collector_incoming_queue_capacity | Gauge | Dimensionless | configured maximum number of spans in the incoming queue |
 | collector_peer_queue | Histogram | Dimensionless | number of spans currently in the peer queue |
 | collector_cache_size | Gauge | Dimensionless | number of traces currently stored in the trace cache |
 | collect_cache_entries | Histogram | Dimensionless | Total number of traces currently stored in the cache from all workers |
 | memory_heap_allocation | Gauge | Bytes | current heap allocation |
+| memory_limit | Gauge | Bytes | configured maximum memory allocation for the collector (derived from MaxAlloc or AvailableMemory * MaxMemoryPercentage) |
 | span_received | Counter | Dimensionless | number of spans received by the collector |
 | span_processed | Counter | Dimensionless | number of spans processed by the collector |
 | spans_waiting | UpDown | Dimensionless | number of spans waiting to be processed by the collector |
