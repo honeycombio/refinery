@@ -348,7 +348,8 @@ func (i *InMemCollector) monitor() {
 			monitorConfig := i.Config.GetCollectionConfig()
 			i.Metrics.Gauge("collector_incoming_queue_capacity", float64(monitorConfig.IncomingQueueSize))
 			i.Metrics.Gauge("collector_peer_queue_capacity", float64(monitorConfig.PeerQueueSize))
-			i.Metrics.Gauge("memory_limit", float64(monitorConfig.GetMaxAlloc()))
+			maxAlloc := monitorConfig.GetMaxAlloc()
+			i.Metrics.Gauge("memory_limit", float64(maxAlloc))
 
 			// Aggregate metrics
 			totalIncoming := 0
