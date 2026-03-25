@@ -1,5 +1,17 @@
 # Refinery Changelog
 
+## 3.1.2 2026-03-25
+
+This release addresses security vulnerabilities CVE-2026-27139, CVE-2026-27142, and CVE-2026-25679.
+
+### Features
+
+- feat: add capacity/limit companion metrics for queues and memory by @mterhar in https://github.com/honeycombio/refinery/pull/1799
+
+### Maintenance
+
+- maint(deps): bump the minor-patch group across 1 directory with 21 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1795
+
 ## 3.1.1 2026-02-25
 
 ### Features

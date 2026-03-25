@@ -2,6 +2,14 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.1.2
+
+This patch release primarily addresses security vulnerabilities in dependencies.
+
+### Maintenance
+
+- Updated dependencies to address security vulnerabilities CVE-2026-27139, CVE-2026-27142, and CVE-2026-25679.
+
 ## Version 3.1.1
 
 This patch release includes bug fixes and a new feature for configuring additional HTTP headers.
