@@ -128,11 +128,14 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "trace_span_count", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans in a trace"},
 	{Name: "collector_incoming_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans currently in the incoming queue"},
 	{Name: "collector_peer_queue_length", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of spans in the peer queue"},
+	{Name: "collector_peer_queue_capacity", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "configured maximum number of spans in the peer queue"},
 	{Name: "collector_incoming_queue_length", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of spans in the incoming queue"},
+	{Name: "collector_incoming_queue_capacity", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "configured maximum number of spans in the incoming queue"},
 	{Name: "collector_peer_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans currently in the peer queue"},
 	{Name: "collector_cache_size", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces currently stored in the trace cache"},
 	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Total number of traces currently stored in the cache from all workers"},
 	{Name: "memory_heap_allocation", Type: metrics.Gauge, Unit: metrics.Bytes, Description: "current heap allocation"},
+	{Name: "memory_limit", Type: metrics.Gauge, Unit: metrics.Bytes, Description: "configured maximum memory allocation for the collector (derived from MaxAlloc or AvailableMemory * MaxMemoryPercentage)"},
 	{Name: "span_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans received by the collector"},
 	{Name: "span_processed", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans processed by the collector"},
 	{Name: "spans_waiting", Type: metrics.UpDown, Unit: metrics.Dimensionless, Description: "number of spans waiting to be processed by the collector"},
@@ -340,6 +343,13 @@ func (i *InMemCollector) monitor() {
 		case <-ticker.Chan():
 			// Check worker health and report aggregated status
 			i.Health.Ready(collectorHealthKey, i.isReady())
+
+			// Emit queue capacity limits and memory limit so consumers can compute utilization
+			monitorConfig := i.Config.GetCollectionConfig()
+			i.Metrics.Gauge("collector_incoming_queue_capacity", float64(monitorConfig.IncomingQueueSize))
+			i.Metrics.Gauge("collector_peer_queue_capacity", float64(monitorConfig.PeerQueueSize))
+			maxAlloc := monitorConfig.GetMaxAlloc()
+			i.Metrics.Gauge("memory_limit", float64(maxAlloc))
 
 			// Aggregate metrics
 			totalIncoming := 0
