@@ -261,7 +261,6 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	inMemConfig := i.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
 	i.Metrics.Store(DENOMINATOR_MEMORY_MAX_ALLOC, float64(maxAlloc))
-	i.Metrics.Gauge("memory_limit", float64(maxAlloc))
 
 	rtmetrics.Read(i.memMetricSample)
 	currentAlloc := i.memMetricSample[0].Value.Uint64()
@@ -345,10 +344,11 @@ func (i *InMemCollector) monitor() {
 			// Check worker health and report aggregated status
 			i.Health.Ready(collectorHealthKey, i.isReady())
 
-			// Emit queue capacity limits so consumers can compute utilization
+			// Emit queue capacity limits and memory limit so consumers can compute utilization
 			monitorConfig := i.Config.GetCollectionConfig()
 			i.Metrics.Gauge("collector_incoming_queue_capacity", float64(monitorConfig.IncomingQueueSize))
 			i.Metrics.Gauge("collector_peer_queue_capacity", float64(monitorConfig.PeerQueueSize))
+			i.Metrics.Gauge("memory_limit", float64(monitorConfig.GetMaxAlloc()))
 
 			// Aggregate metrics
 			totalIncoming := 0
