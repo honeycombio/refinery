@@ -510,7 +510,7 @@ The key-value pairs must use ':' as the separator.
 
 - Not eligible for live reload.
 - Type: `map`
-- Example: `pipeline.id:'12345',rollout.id:'67890'`
+- Example: `pipeline.id:12345,rollout.id:67890`
 - Environment variable: `REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES`
 
 ## Stdout Logger
@@ -649,12 +649,11 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 `AdditionalAttributes` adds the provided attributes as resource attributes on all OpenTelemetry metrics emitted by Refinery.
 
 This is useful for injecting deployment-specific metadata (such as a cluster ID or environment name) into metrics so they can be filtered or grouped in the metrics backend.
-
 Both keys and values must be strings.
 
 - Not eligible for live reload.
-- Type: `map[string]string`
-- Default: `{}`
+- Type: `map`
+- Example: `pipeline.id:'12345',rollout.id:'67890'`
 
 ## OpenTelemetry Tracing
 

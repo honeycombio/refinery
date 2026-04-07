@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2026-02-25 at 20:49:24 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2026-04-07 at 20:03:17 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -554,7 +554,7 @@ HoneycombLogger:
     ## command line flag. The key-value pairs must use ':' as the separator.
     ##
     ## Not eligible for live reload.
-    {{ renderMap .Data "AdditionalAttributes" "AdditionalAttributes" "pipeline.id:'12345',rollout.id:'67890'" }}
+    {{ renderMap .Data "AdditionalAttributes" "AdditionalAttributes" "pipeline.id:12345,rollout.id:67890" }}
 
 ###################
 ## Stdout Logger ##
@@ -693,14 +693,13 @@ OTelMetrics:
     ## AdditionalAttributes adds the provided attributes as resource
     ## attributes on all OpenTelemetry metrics emitted by Refinery.
     ##
-    ## This is useful for injecting deployment-specific metadata (such as
-    ## a cluster ID or environment name) into metrics so they can be
-    ## filtered or grouped in the metrics backend.
-    ##
-    ## Both keys and values must be strings.
+    ## This is useful for injecting deployment-specific metadata (such as a
+    ## cluster ID or environment name) into metrics so they can be filtered
+    ## or grouped in the metrics backend. Both keys and values must be
+    ## strings.
     ##
     ## Not eligible for live reload.
-    {{ renderMap .Data "AdditionalAttributes" "AdditionalAttributes" "ClusterName:MyCluster,environment:production" }}
+    {{ renderMap .Data "AdditionalAttributes" "AdditionalAttributes" "pipeline.id:'12345',rollout.id:'67890'" }}
 
 ###########################
 ## OpenTelemetry Tracing ##
