@@ -239,6 +239,12 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		defer errorServer.Close()
 
 		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
+
+		// Configure AdditionalErrorFields
+		dt.Config = &config.MockConfig{
+			AdditionalErrorFields: []string{"event_id"},
+		}
+
 		// Send 4 events to ensure we get 2 successes and 2 errors
 		sendTestEvents(dt, errorServer.URL, 4, "test-api-key")
 		err := dt.Stop()
@@ -267,6 +273,9 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 			assert.Equal(t, "test-dataset", errorEvent.Fields["dataset"])
 			assert.Equal(t, "test", errorEvent.Fields["environment"])
 			assert.Contains(t, errorEvent.Fields, "roundtrip_usec")
+
+			// Verify AdditionalErrorFields
+			assert.Contains(t, errorEvent.Fields, "event_id")
 		}
 	})
 
@@ -280,6 +289,12 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		defer errorServer.Close()
 
 		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
+
+		// Configure AdditionalErrorFields
+		dt.Config = &config.MockConfig{
+			AdditionalErrorFields: []string{"event_id"},
+		}
+
 		sendTestEvents(dt, errorServer.URL, 2, "test-api-key")
 		err := dt.Stop()
 		require.NoError(t, err)
@@ -303,6 +318,9 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 			assert.Equal(t, "error when sending event", errorEvent.Fields["error"])
 			assert.Equal(t, http.StatusInternalServerError, errorEvent.Fields["status_code"])
 			assert.Contains(t, errorEvent.Fields, "response_body")
+
+			// Verify AdditionalErrorFields
+			assert.Contains(t, errorEvent.Fields, "event_id")
 		}
 	})
 
@@ -365,7 +383,13 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		}))
 		defer msgpackServer.Close()
 
-		dt, mockMetrics, _ := setupDirectTransmissionTest(t)
+		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
+
+		// Configure AdditionalErrorFields
+		dt.Config = &config.MockConfig{
+			AdditionalErrorFields: []string{"event_id"},
+		}
+
 		sendTestEvents(dt, msgpackServer.URL, 2, "test-api-key")
 		err := dt.Stop()
 		require.NoError(t, err)
@@ -380,6 +404,21 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		assert.Equal(t, float64(1), errors)
 		assert.Equal(t, float64(1), batchesSent) // Single batch containing 2 events
 		assert.Equal(t, float64(2), messagesSent)
+
+		// Verify error log has all expected fields
+		errorEvents := getErrorEvents(mockLogger)
+		require.Len(t, errorEvents, 1, "Expected one error log for rejected event")
+
+		errorEvent := errorEvents[0]
+		assert.Equal(t, "event rejected by server", errorEvent.Fields["error"])
+		assert.Equal(t, http.StatusBadRequest, errorEvent.Fields["status_code"])
+		assert.Equal(t, msgpackServer.URL, errorEvent.Fields["api_host"])
+		assert.Equal(t, "test-dataset", errorEvent.Fields["dataset"])
+		assert.Equal(t, "test", errorEvent.Fields["environment"])
+		assert.Contains(t, errorEvent.Fields, "roundtrip_usec")
+
+		// Verify AdditionalErrorFields
+		assert.Contains(t, errorEvent.Fields, "event_id")
 	})
 
 	t.Run("insufficient responses from server", func(t *testing.T) {
@@ -393,6 +432,12 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		defer insufficientServer.Close()
 
 		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
+
+		// Configure AdditionalErrorFields
+		dt.Config = &config.MockConfig{
+			AdditionalErrorFields: []string{"event_id"},
+		}
+
 		sendTestEvents(dt, insufficientServer.URL, 2, "test-api-key")
 		err := dt.Stop()
 		require.NoError(t, err)
@@ -408,14 +453,21 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		assert.Equal(t, float64(1), batchesSent) // Single batch containing 2 events
 		assert.Equal(t, float64(2), messagesSent)
 
-		// Verify error log message mentions insufficient responses
+		// Verify error log has all expected fields
 		errorEvents := getErrorEvents(mockLogger)
 		require.Len(t, errorEvents, 1, "Expected exactly one error log for the missing response")
 
 		errorEvent := errorEvents[0]
-		assert.Equal(t, "error when sending event", errorEvent.Fields["error"])
+		assert.Equal(t, "missing response from server", errorEvent.Fields["error"])
 		assert.Equal(t, http.StatusInternalServerError, errorEvent.Fields["status_code"])
+		assert.Equal(t, insufficientServer.URL, errorEvent.Fields["api_host"])
+		assert.Equal(t, "test-dataset", errorEvent.Fields["dataset"])
+		assert.Equal(t, "test", errorEvent.Fields["environment"])
 		assert.Contains(t, errorEvent.Fields, "roundtrip_usec")
+		assert.Equal(t, "insufficient responses from server", errorEvent.Fields["error"])
+
+		// Verify AdditionalErrorFields
+		assert.Contains(t, errorEvent.Fields, "event_id")
 	})
 
 	t.Run("response decode errors", func(t *testing.T) {
@@ -427,7 +479,13 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		}))
 		defer decodeErrorServer.Close()
 
-		dt, mockMetrics, _ := setupDirectTransmissionTest(t)
+		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
+
+		// Configure AdditionalErrorFields
+		dt.Config = &config.MockConfig{
+			AdditionalErrorFields: []string{"event_id"},
+		}
+
 		sendTestEvents(dt, decodeErrorServer.URL, 1, "test-api-key")
 		err := dt.Stop()
 		require.NoError(t, err)
@@ -440,6 +498,24 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		assert.Equal(t, float64(1), decodeErrors)
 		assert.Equal(t, float64(1), batchesSent)
 		assert.Equal(t, float64(1), messagesSent)
+
+		// Verify decode error log has context fields
+		var decodeErrorLog *logger.MockLoggerEvent
+		for _, event := range mockLogger.Events {
+			if msg, ok := event.Fields["error"].(string); ok && strings.Contains(msg, "failed to decode msgpack batch response") {
+				decodeErrorLog = event
+				break
+			}
+		}
+		require.NotNil(t, decodeErrorLog, "Expected decode error log")
+
+		assert.Equal(t, decodeErrorServer.URL, decodeErrorLog.Fields["api_host"])
+		assert.Equal(t, "test-dataset", decodeErrorLog.Fields["dataset"])
+		assert.Equal(t, "test", decodeErrorLog.Fields["environment"])
+		assert.Contains(t, decodeErrorLog.Fields, "roundtrip_usec")
+		assert.Contains(t, decodeErrorLog.Fields, "error")
+
+		// Note: Decode errors happen at batch level before per-event processing
 	})
 
 	t.Run("event over 1M size", func(t *testing.T) {
@@ -453,8 +529,14 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 
 		dt, mockMetrics, mockLogger := setupDirectTransmissionTest(t)
 
+		// Configure AdditionalErrorFields
+		mockCfg := &config.MockConfig{
+			AdditionalErrorFields: []string{"event_id"},
+		}
+		dt.Config = mockCfg
+
 		// Create an event with data over 1M
-		eventData := types.NewPayload(&config.MockConfig{}, map[string]any{
+		eventData := types.NewPayload(mockCfg, map[string]any{
 			"large_field": strings.Repeat("a", 1024*1024+1000),
 			"event_id":    1,
 		})
@@ -480,15 +562,22 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		assert.Equal(t, float64(0), success)
 		assert.Equal(t, float64(1), errors)
 
-		// Verify error log message about oversized event
-		var oversizedFound bool
+		// Verify error log has all expected fields
+		var oversizedLog *logger.MockLoggerEvent
 		for _, event := range mockLogger.Events {
-			if errorMsg, ok := event.Fields["err"].(string); ok && strings.Contains(errorMsg, "exceeds max event size") {
-				oversizedFound = true
+			if msg, ok := event.Fields["error"].(string); ok && strings.Contains(msg, "error marshaling event") {
+				oversizedLog = event
 				break
 			}
 		}
-		require.True(t, oversizedFound, "Expected error log for oversized event")
+		require.NotNil(t, oversizedLog, "Expected error log for oversized event")
+
+		assert.Equal(t, server.URL, oversizedLog.Fields["api_host"])
+		assert.Equal(t, "test-dataset", oversizedLog.Fields["dataset"])
+		assert.Equal(t, "test", oversizedLog.Fields["environment"])
+		assert.Contains(t, oversizedLog.Fields, "roundtrip_usec")
+		assert.Contains(t, oversizedLog.Fields, "error")
+		assert.Contains(t, oversizedLog.Fields["error"], "exceeds max event size")
 	})
 }
 
