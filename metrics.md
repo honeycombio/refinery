@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2026-02-25 at 20:49:27 UTC.
+It was automatically generated on 2026-04-07 at 20:07:22 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -59,6 +59,8 @@ This table includes metrics with fully defined names.
 | trace_send_late_span | Counter | Dimensionless | number of spans that are sent due to late span arrival |
 | dropped_from_stress | Counter | Dimensionless | number of spans dropped due to stress relief |
 | kept_from_stress | Counter | Dimensionless | number of spans kept due to stress relief |
+| events_dropped_traces | Counter | Dimensionless | number of trace events dropped |
+| events_dropped_logs | Counter | Dimensionless | number of log events dropped |
 | trace_kept_sample_rate | Histogram | Dimensionless | sample rate of kept traces |
 | trace_aggregate_sample_rate | Histogram | Dimensionless | aggregate sample rate of both kept and dropped traces |
 | collector_collect_loop_duration_ms | Histogram | Milliseconds | duration of the collect loop, the primary event processing goroutine |
@@ -115,3 +117,5 @@ Metrics in this table don't contain their expected prefixes. This is because the
 | _router_otlp_trace_grpc | Counter | Dimensionless | the number of otlp trace grpc requests received |
 | bytes_received_traces | Counter | Bytes | the number of bytes received in trace events |
 | bytes_received_logs | Counter | Bytes | the number of bytes received in log events |
+| events_received_traces | Counter | Dimensionless | the number of trace events received |
+| events_received_logs | Counter | Dimensionless | the number of log events received |

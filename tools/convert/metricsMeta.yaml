@@ -187,6 +187,14 @@ complete:
       type: Counter
       unit: Dimensionless
       description: number of spans kept due to stress relief
+    - name: events_dropped_traces
+      type: Counter
+      unit: Dimensionless
+      description: number of trace events dropped
+    - name: events_dropped_logs
+      type: Counter
+      unit: Dimensionless
+      description: number of log events dropped
     - name: trace_kept_sample_rate
       type: Histogram
       unit: Dimensionless
@@ -380,3 +388,11 @@ hasprefix:
       type: Counter
       unit: Bytes
       description: the number of bytes received in log events
+    - name: events_received_traces
+      type: Counter
+      unit: Dimensionless
+      description: the number of trace events received
+    - name: events_received_logs
+      type: Counter
+      unit: Dimensionless
+      description: the number of log events received
