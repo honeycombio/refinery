@@ -125,7 +125,7 @@ Network:
     ##
     ## default: https://api.honeycomb.io
     ## Eligible for live reload.
-    # HoneycombAPI: "https://api.honeycomb.io"
+    HoneycombAPI: "https://api-dogfood.honeycomb.io"
 
     ## AdditionalHeaders is a map of additional HTTP headers to add to all
     ## upstream Honeycomb API requests.
@@ -193,7 +193,7 @@ AccessKeys:
     ## of `SendKeyMode`.
     ##
     ## Eligible for live reload.
-    # SendKey: ""
+    SendKey: "hccik_01khrwmmk2wzb1hahknpjjhn68zadf3yyt3n5m37dany8axq6watf4qzvd"
 
     ## SendKeyMode controls how SendKey is used to replace or augment API
     ## keys used in incoming telemetry.
@@ -214,7 +214,7 @@ AccessKeys:
     ## default: none
     ## Eligible for live reload.
     ## Options: none all nonblank listedonly unlisted missingonly
-    # SendKeyMode: none
+    SendKeyMode: all
 
 ########################
 ## Refinery Telemetry ##
@@ -437,8 +437,9 @@ Debugging:
     ## error log.
     ##
     ## Eligible for live reload.
-    # AdditionalErrorFields:
-      # - trace.span_id
+    AdditionalErrorFields:
+      - trace.span_id
+      - service.name
 
     ## DryRun controls whether sampling is applied to incoming traces.
     ##
