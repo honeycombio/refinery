@@ -363,6 +363,9 @@ func (d *DirectTransmission) handleBatchFailure(batch []*types.Event, errorMsg s
 
 // handleEventError logs an error and updates metrics for a single event
 func (d *DirectTransmission) handleEventError(ev *types.Event, statusCode int, queueTime int64, errorMsg string, responseBody []byte, logMessage string) {
+	if logMessage == "" {
+		logMessage = "error when sending event"
+	}
 	d.handleError(ev, statusCode, queueTime, errorMsg, responseBody, logMessage)
 	d.Metrics.Increment(d.metricKeys.counterResponseErrors)
 	d.Metrics.Down(d.metricKeys.updownQueuedItems)
@@ -420,7 +423,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 			if err != nil {
 				// Skip this message and remove it from the list, so we don't
 				// try to account for it again.
-				d.handleEventError(wholeBatch[i], 0, time.Now().UnixMicro()-wholeBatch[i].EnqueuedUnixMicro, err.Error(), nil, "error marshaling event")
+				d.handleEventError(wholeBatch[i], 0, time.Now().UnixMicro()-wholeBatch[i].EnqueuedUnixMicro, err.Error(), nil, "failed to marshal event")
 				continue
 			}
 			if len(newPacked) > apiMaxBatchSize {
@@ -481,7 +484,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 
 			req, err = http.NewRequest("POST", apiURL, readerPtr)
 			if err != nil {
-				d.handleBatchFailure(subBatch, err.Error(), "failed to create HTTP request")
+				d.handleBatchFailure(subBatch, err.Error(), "failed to create request")
 				break
 			}
 
@@ -535,7 +538,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 			// Network/connection error - affects all events in batch
 			for _, ev := range subBatch {
 				queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
-				d.handleEventError(ev, 0, queueTime, err.Error(), nil, "http POST failed")
+				d.handleEventError(ev, 0, queueTime, err.Error(), nil, "")
 			}
 			continue
 		}
@@ -576,12 +579,12 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 				// Check if we have a response for this event
 				if i >= len(batchResponses) {
 					// Missing response - treat as server error
-					d.handleEventError(ev, http.StatusInternalServerError, queueTime, "insufficient responses from server", nil, "missing response from server")
+					d.handleEventError(ev, http.StatusInternalServerError, queueTime, "insufficient responses from server", nil, "insufficient responses from server")
 					continue
 				}
 
 				if batchResponses[i].Status != http.StatusAccepted {
-					d.handleEventError(ev, batchResponses[i].Status, queueTime, "", nil, "event rejected by server")
+					d.handleEventError(ev, batchResponses[i].Status, queueTime, "", nil, "")
 				} else {
 					// Success
 					d.Metrics.Increment(d.metricKeys.counterResponse20x)
@@ -617,7 +620,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 
 			for _, ev := range subBatch {
 				queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
-				d.handleEventError(ev, resp.StatusCode, queueTime, "", bodyBytes, "batch request failed")
+				d.handleEventError(ev, resp.StatusCode, queueTime, "", bodyBytes, "")
 			}
 		}
 	}
