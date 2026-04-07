@@ -554,15 +554,18 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 			if resp.Header.Get("Content-Type") == "application/msgpack" {
 				err = msgpack.NewDecoder(resp.Body).Decode(&batchResponses)
 				if err != nil {
+					// This is an error from processing response body, not an error from sending events. No need to include event information here
 					d.Logger.Error().WithField("err", err.Error()).Logf("failed to decode msgpack batch response")
 				}
 			} else {
 				bodyBytes, err := io.ReadAll(resp.Body)
 				if err != nil {
+					// This is an error from processing response body, not an error from sending events. No need to include event information here
 					d.Logger.Error().WithField("err", err.Error()).Logf("failed to read response body")
 				} else {
 					err = json.Unmarshal(bodyBytes, &batchResponses)
 					if err != nil {
+						// This is an error from processing response body, not an error from sending events. No need to include event information here
 						d.Logger.Error().WithField("err", err.Error()).Logf("failed to decode JSON batch response")
 					}
 				}
