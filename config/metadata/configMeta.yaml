@@ -213,7 +213,7 @@ groups:
         valuetype: stringarray
         v1name: APIKeys
         example: "your-key-goes-here"
-        reload: false
+        reload: true
         validations:
           - type: elementType
             arg: string
@@ -227,7 +227,7 @@ groups:
         type: stringarray
         valuetype: stringarray
         example: "your-key-id-goes-here"
-        reload: false
+        reload: true
         validations:
           - type: elementType
             arg: string
