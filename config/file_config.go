@@ -123,7 +123,7 @@ func (a *AccessKeyConfig) HasKeyIDs() bool {
 // GetReplaceKey checks the given API key against the configuration
 // and possibly replaces it with the configured SendKey, if the settings so indicate.
 // It returns the key to use, or an error if the key is invalid given the settings.
-func (a *AccessKeyConfig) GetReplaceKey(apiKey string) (string, error) {
+func (a *AccessKeyConfig) GetReplaceKey(apiKey, keyID string) (string, error) {
 	if a.SendKey != "" {
 		overwriteWith := ""
 		switch a.SendKeyMode {
@@ -139,10 +139,10 @@ func (a *AccessKeyConfig) GetReplaceKey(apiKey string) (string, error) {
 				overwriteWith = a.SendKey
 			}
 		case "listedonly":
-			// only replace keys that are listed in the `ReceiveKeys` list,
+			// only replace keys that are listed in the `ReceiveKeys` or `ReceiveKeyIDs` list,
 			// otherwise use original key
 			overwriteWith = apiKey
-			if slices.Contains(a.ReceiveKeys, apiKey) {
+			if slices.Contains(a.ReceiveKeys, apiKey) || (keyID != "" && slices.Contains(a.ReceiveKeyIDs, keyID)) {
 				overwriteWith = a.SendKey
 			}
 		case "missingonly":
@@ -153,11 +153,11 @@ func (a *AccessKeyConfig) GetReplaceKey(apiKey string) (string, error) {
 				overwriteWith = a.SendKey
 			}
 		case "unlisted":
-			// only replace nonblank keys that are NOT listed in the `ReceiveKeys` list
+			// only replace nonblank keys that are NOT listed in the `ReceiveKeys` or `ReceiveKeyIDs` list
 			// otherwise use original key
 			if apiKey != "" {
 				overwriteWith = apiKey
-				if !slices.Contains(a.ReceiveKeys, apiKey) {
+				if !slices.Contains(a.ReceiveKeys, apiKey) && !(keyID != "" && slices.Contains(a.ReceiveKeyIDs, keyID)) {
 					overwriteWith = a.SendKey
 				}
 			}

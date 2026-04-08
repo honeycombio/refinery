@@ -54,7 +54,7 @@ func (r *Router) apiKeyProcessor(next http.Handler) http.Handler {
 			return
 		}
 
-		replacement, err := keycfg.GetReplaceKey(apiKey)
+		replacement, err := keycfg.GetReplaceKey(apiKey, keyID)
 		if err != nil {
 			r.handlerReturnWithError(w, ErrAuthInvalid, err)
 			return

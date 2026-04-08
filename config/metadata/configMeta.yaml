@@ -242,12 +242,20 @@ groups:
           which avoids storing secret key material in the configuration file.
           Both `ReceiveKeys` and `ReceiveKeyIDs` may be used simultaneously.
 
+          Note: This feature does not support legacy API keys. Only Honeycomb
+          Ingest Keys (which have a key ID) are compatible with this setting.
+
       - name: AcceptOnlyListedKeys
         type: bool
         valuetype: conditional
         extra: nostar APIKeys
         default: false
         reload: true
+        validations:
+          - type: requiredWith
+            arg: ReceiveKeys
+          - type: requiredWith
+            arg: ReceiveKeyIDs
         summary: is a boolean flag that causes events arriving with API keys not in the `ReceiveKeys` list to be rejected.
         description: >
           If `true`, then only traffic using the keys listed in `ReceiveKeys` or

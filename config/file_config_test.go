@@ -57,6 +57,7 @@ func Test_GetQueueSizesPerWorker(t *testing.T) {
 func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 	type fields struct {
 		ReceiveKeys          []string
+		ReceiveKeyIDs        []string
 		SendKey              string
 		SendKeyMode          string
 		AcceptOnlyListedKeys bool
@@ -72,6 +73,12 @@ func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 		SendKey:     "sendkey",
 		SendKeyMode: "listedonly",
 	}
+	fListedWithKeyIDs := fields{
+		ReceiveKeys:   []string{"key1", "key2"},
+		ReceiveKeyIDs: []string{"kid1", "kid2"},
+		SendKey:       "sendkey",
+		SendKeyMode:   "listedonly",
+	}
 	fMissing := fields{
 		ReceiveKeys: []string{"key1", "key2"},
 		SendKey:     "sendkey",
@@ -82,36 +89,50 @@ func TestAccessKeyConfig_GetReplaceKey(t *testing.T) {
 		SendKey:     "sendkey",
 		SendKeyMode: "unlisted",
 	}
+	fUnlistedWithKeyIDs := fields{
+		ReceiveKeys:   []string{"key1", "key2"},
+		ReceiveKeyIDs: []string{"kid1", "kid2"},
+		SendKey:       "sendkey",
+		SendKeyMode:   "unlisted",
+	}
 
 	tests := []struct {
 		name    string
 		fields  fields
 		apiKey  string
+		keyID   string
 		want    string
 		wantErr bool
 	}{
-		{"send all known", fSendAll, "key1", "sendkey", false},
-		{"send all unknown", fSendAll, "userkey", "sendkey", false},
-		{"send all missing", fSendAll, "", "sendkey", false},
-		{"listed known", fListed, "key1", "sendkey", false},
-		{"listed unknown", fListed, "userkey", "userkey", false},
-		{"listed missing", fListed, "", "", true},
-		{"missing known", fMissing, "key1", "key1", false},
-		{"missing unknown", fMissing, "userkey", "userkey", false},
-		{"missing missing", fMissing, "", "sendkey", false},
-		{"unlisted known", fUnlisted, "key1", "key1", false},
-		{"unlisted unknown", fUnlisted, "userkey", "sendkey", false},
-		{"unlisted missing", fUnlisted, "", "", true},
+		{"send all known", fSendAll, "key1", "", "sendkey", false},
+		{"send all unknown", fSendAll, "userkey", "", "sendkey", false},
+		{"send all missing", fSendAll, "", "", "sendkey", false},
+		{"listed known", fListed, "key1", "", "sendkey", false},
+		{"listed unknown", fListed, "userkey", "", "userkey", false},
+		{"listed missing", fListed, "", "", "", true},
+		{"listed by keyID known", fListedWithKeyIDs, "unknownkey", "kid1", "sendkey", false},
+		{"listed by keyID unknown", fListedWithKeyIDs, "unknownkey", "unknownkid", "unknownkey", false},
+		{"listed by keyID empty", fListedWithKeyIDs, "unknownkey", "", "unknownkey", false},
+		{"missing known", fMissing, "key1", "", "key1", false},
+		{"missing unknown", fMissing, "userkey", "", "userkey", false},
+		{"missing missing", fMissing, "", "", "sendkey", false},
+		{"unlisted known", fUnlisted, "key1", "", "key1", false},
+		{"unlisted unknown", fUnlisted, "userkey", "", "sendkey", false},
+		{"unlisted missing", fUnlisted, "", "", "", true},
+		{"unlisted by keyID known", fUnlistedWithKeyIDs, "unknownkey", "kid1", "unknownkey", false},
+		{"unlisted by keyID unknown", fUnlistedWithKeyIDs, "unknownkey", "unknownkid", "sendkey", false},
+		{"unlisted by keyID empty", fUnlistedWithKeyIDs, "unknownkey", "", "sendkey", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := &AccessKeyConfig{
 				ReceiveKeys:          tt.fields.ReceiveKeys,
+				ReceiveKeyIDs:        tt.fields.ReceiveKeyIDs,
 				SendKey:              tt.fields.SendKey,
 				SendKeyMode:          tt.fields.SendKeyMode,
 				AcceptOnlyListedKeys: tt.fields.AcceptOnlyListedKeys,
 			}
-			got, err := a.GetReplaceKey(tt.apiKey)
+			got, err := a.GetReplaceKey(tt.apiKey, tt.keyID)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("AccessKeyConfig.GetReplaceKey() error = %v, wantErr %v", err, tt.wantErr)
 				return

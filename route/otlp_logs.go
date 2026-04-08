@@ -26,7 +26,7 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 		return
 	}
-	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey)
+	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 
 	if err := ri.ValidateLogsHeaders(); err != nil {
 		switch err {
@@ -90,7 +90,7 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 	if err := apicfg.IsAccepted(ri.ApiKey, keyID); err != nil {
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
-	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey)
+	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 
 	if err := ri.ValidateLogsHeaders(); err != nil && err != huskyotlp.ErrMissingAPIKeyHeader {
 		return nil, huskyotlp.AsGRPCError(err)

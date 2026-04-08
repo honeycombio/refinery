@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2026-04-07 at 20:01:26 UTC from ../../config.yaml using a template generated on 2026-04-07 at 20:01:09 UTC
+# created on 2026-04-08 at 18:28:49 UTC from ../../config.yaml using a template generated on 2026-04-08 at 18:28:45 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -181,6 +181,8 @@ AccessKeys:
     ## values, which avoids storing secret key material in the configuration
     ## file. Both `ReceiveKeys` and `ReceiveKeyIDs` may be used
     ## simultaneously.
+    ## Note: This feature does not support legacy API keys. Only Honeycomb
+    ## Ingest Keys (which have a key ID) are compatible with this setting.
     ##
     ## Eligible for live reload.
     # ReceiveKeyIDs:
@@ -575,8 +577,8 @@ HoneycombLogger:
     ##
     ## Not eligible for live reload.
     # AdditionalAttributes:
-      #  rollout.id: '67890'
       #  pipeline.id: '12345'
+      #  rollout.id: '67890'
 
 ###################
 ## Stdout Logger ##

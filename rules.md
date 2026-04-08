@@ -3,7 +3,7 @@
 # Honeycomb Refinery Rules Documentation
 
 This is the documentation for the rules configuration for Honeycomb's Refinery.
-It was automatically generated on 2026-04-07 at 20:01:27 UTC.
+It was automatically generated on 2026-04-08 at 18:28:50 UTC.
 
 ## The Rules file
 

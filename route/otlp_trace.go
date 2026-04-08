@@ -34,7 +34,7 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 		return
 	}
-	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey)
+	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 
 	if err := ri.ValidateTracesHeaders(); err != nil {
 		switch err {
@@ -213,7 +213,11 @@ func customTraceExportHandler(
 
 	// Handle SendKeyMode logic before validation, similar to HTTP handler
 	apicfg := traceServer.router.Config.GetAccessKeyConfig()
-	keyToUse, err := apicfg.GetReplaceKey(ri.ApiKey)
+	keyID := ""
+	if apicfg.HasKeyIDs() {
+		keyID = traceServer.router.getKeyID(ri.ApiKey)
+	}
+	keyToUse, err := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}

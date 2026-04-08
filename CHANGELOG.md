@@ -1,11 +1,5 @@
 # Refinery Changelog
 
-## Unreleased
-
-### Features
-
-- feat: add `ReceiveKeyIDs` config option for API key ID-based authorization
-
 ## 3.1.2 2026-03-25
 
 This release addresses security vulnerabilities CVE-2026-27139, CVE-2026-27142, and CVE-2026-25679.

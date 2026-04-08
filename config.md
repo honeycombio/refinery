@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2026-04-07 at 20:01:27 UTC.
+It was automatically generated on 2026-04-08 at 18:28:49 UTC.
 
 ## The Config file
 
@@ -193,6 +193,8 @@ When `AcceptOnlyListedKeys` is `true`, traffic using an API key whose Honeycomb 
 The key ID is the `id` field returned by the Honeycomb `/1/auth` endpoint; it is distinct from the full API key value.
 This allows authorization based on key IDs rather than full key values, which avoids storing secret key material in the configuration file.
 Both `ReceiveKeys` and `ReceiveKeyIDs` may be used simultaneously.
+Note: This feature does not support legacy API keys.
+Only Honeycomb Ingest Keys (which have a key ID) are compatible with this setting.
 
 - Eligible for live reload.
 - Type: `stringarray`
