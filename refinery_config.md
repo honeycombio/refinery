@@ -510,7 +510,7 @@ The key-value pairs must use ':' as the separator.
 
 - Not eligible for live reload.
 - Type: `map`
-- Example: `pipeline.id:12345,rollout.id:67890`
+- Example: `pipeline.id:'12345',rollout.id:'67890'`
 - Environment variable: `REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES`
 
 ## Stdout Logger
@@ -650,10 +650,15 @@ In rare circumstances, compression costs may outweigh the benefits, in which cas
 
 This is useful for injecting deployment-specific metadata (such as a cluster ID or environment name) into metrics so they can be filtered or grouped in the metrics backend.
 Both keys and values must be strings.
+When supplying via a environment variable, the value should be a string of comma-separated key-value pairs.
+When supplying via the command line, the value should be a key value pair.
+If multiple key-value pairs are needed, each should be supplied via its own command line flag.
+The key-value pairs must use ':' as the separator.
 
 - Not eligible for live reload.
 - Type: `map`
 - Example: `pipeline.id:'12345',rollout.id:'67890'`
+- Environment variable: `REFINERY_OTEL_METRICS_ADDITIONAL_ATTRIBUTES`
 
 ## OpenTelemetry Tracing
 

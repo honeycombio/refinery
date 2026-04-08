@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2026-04-07 at 20:03:19 UTC
+# automatically generated on 2026-04-08 at 22:10:38 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -51,8 +51,8 @@ HoneycombLogger:
   SamplerEnabled: true
   SamplerThroughput: 10
   AdditionalAttributes: 
-    "pipeline.id": 12345
-    "rollout.id": 67890
+    "pipeline.id": "'12345'"
+    "rollout.id": "'67890'"
 
 StdoutLogger:
   Structured: false

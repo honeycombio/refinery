@@ -274,7 +274,7 @@ type OTelMetricsConfig struct {
 	Dataset              string            `yaml:"Dataset" default:"Refinery Metrics"`
 	Compression          string            `yaml:"Compression" default:"gzip"`
 	ReportingInterval    Duration          `yaml:"ReportingInterval" default:"30s"`
-	AdditionalAttributes map[string]string `yaml:"AdditionalAttributes" default:"{}"`
+	AdditionalAttributes map[string]string `yaml:"AdditionalAttributes" default:"{}" cmdenv:"OTelMetricsAdditionalAttributes"`
 }
 
 type OTelTracingConfig struct {

@@ -671,7 +671,7 @@ groups:
       - name: AdditionalAttributes
         type: map
         valuetype: map
-        example: "pipeline.id:12345,rollout.id:67890"
+        example: "pipeline.id:'12345',rollout.id:'67890'"
         reload: false
         summary: adds the provided attributes to all logs written by the Honeycomb logger.
         envvar: REFINERY_HONEYCOMB_LOGGER_ADDITIONAL_ATTRIBUTES
@@ -918,16 +918,23 @@ groups:
         valuetype: map
         example: "pipeline.id:'12345',rollout.id:'67890'"
         reload: false
-        firstversion: v2.10
+        firstversion: v3.2
         validations:
           - type: elementType
             arg: string
         summary: adds the provided attributes as resource attributes on all OpenTelemetry metrics emitted by Refinery.
+        envvar: REFINERY_OTEL_METRICS_ADDITIONAL_ATTRIBUTES
+        commandline: otel-metrics-additional-attributes
         description: >
           This is useful for injecting deployment-specific metadata (such as
           a cluster ID or environment name) into metrics so they can be
           filtered or grouped in the metrics backend.
           Both keys and values must be strings.
+
+          When supplying via a environment variable, the value should be a string of comma-separated key-value pairs.
+          When supplying via the command line, the value should be a key value pair.
+          If multiple key-value pairs are needed, each should be supplied via its own command line flag.
+          The key-value pairs must use ':' as the separator.
 
   - name: OTelTracing
     title: "OpenTelemetry Tracing"
