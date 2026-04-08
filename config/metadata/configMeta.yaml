@@ -227,6 +227,7 @@ groups:
         type: stringarray
         valuetype: stringarray
         example: "your-key-id-goes-here"
+        firstversion: v3.2
         reload: true
         validations:
           - type: elementType
