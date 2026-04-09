@@ -556,6 +556,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		i.Transmission.EnqueueSpan(sp)
 		return
 	}
+	i.Metrics.Increment("events_dropped")
 	i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Dropping span because of previous decision to drop trace")
 }
 
