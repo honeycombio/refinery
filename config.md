@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2026-02-25 at 20:49:27 UTC.
+It was automatically generated on 2026-04-08 at 21:59:38 UTC.
 
 ## The Config file
 
@@ -181,16 +181,31 @@ ReceiveKeys is a set of Honeycomb API keys that the proxy will treat specially.
 
 This list only applies to span traffic - other Honeycomb API actions will be proxied through to the upstream API directly without modifying keys.
 
-- Not eligible for live reload.
+- Eligible for live reload.
 - Type: `stringarray`
 - Example: `your-key-goes-here`
+
+### `ReceiveKeyIDs`
+
+ReceiveKeyIDs is a set of Honeycomb Ingest Key IDs that the proxy will treat specially.
+
+When `AcceptOnlyListedKeys` is `true`, traffic using an API key whose Honeycomb ingest key ID matches an entry in this list will be accepted.
+The key ID is the `id` field returned by the Honeycomb `/1/auth` endpoint; it is distinct from the full API key value.
+This allows authorization based on key IDs rather than full key values, which avoids storing secret key material in the configuration file.
+Both `ReceiveKeys` and `ReceiveKeyIDs` may be used simultaneously.
+Note: This feature does not support legacy API keys.
+Only Honeycomb Ingest Keys (which have a key ID) are compatible with this setting.
+
+- Eligible for live reload.
+- Type: `stringarray`
+- Example: `your-key-id-goes-here`
 
 ### `AcceptOnlyListedKeys`
 
 AcceptOnlyListedKeys is a boolean flag that causes events arriving with API keys not in the `ReceiveKeys` list to be rejected.
 
-If `true`, then only traffic using the keys listed in `ReceiveKeys` is accepted.
-Events arriving with API keys not in the `ReceiveKeys` list will be rejected with an HTTP `401` error.
+If `true`, then only traffic using the keys listed in `ReceiveKeys` or whose key ID is listed in `ReceiveKeyIDs` is accepted.
+Events arriving with API keys not in either list will be rejected with an HTTP `401` error.
 If `false`, then all traffic is accepted and `ReceiveKeys` is ignored.
 This setting is applied **before** the `SendKey` and `SendKeyMode` settings.
 

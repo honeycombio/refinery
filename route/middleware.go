@@ -45,12 +45,16 @@ func (r *Router) apiKeyProcessor(next http.Handler) http.Handler {
 		}
 
 		keycfg := r.Config.GetAccessKeyConfig()
-		if err := keycfg.IsAccepted(apiKey); err != nil {
+		keyID := ""
+		if keycfg.HasKeyIDs() {
+			keyID = r.getKeyID(apiKey)
+		}
+		if err := keycfg.IsAccepted(apiKey, keyID); err != nil {
 			r.handlerReturnWithError(w, ErrAuthInvalid, err)
 			return
 		}
 
-		replacement, err := keycfg.GetReplaceKey(apiKey)
+		replacement, err := keycfg.GetReplaceKey(apiKey, keyID)
 		if err != nil {
 			r.handlerReturnWithError(w, ErrAuthInvalid, err)
 			return
