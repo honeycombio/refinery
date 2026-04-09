@@ -15,12 +15,10 @@ type metricMapping struct {
 }
 
 var signalToMetric = map[usageSignal]metricMapping{
-	signal_traces:                 {metricName: "bytes_received", signal: "traces"},
-	signal_logs:                   {metricName: "bytes_received", signal: "logs"},
-	signal_events_received_traces: {metricName: "events_received", signal: "traces"},
-	signal_events_received_logs:   {metricName: "events_received", signal: "logs"},
-	signal_events_dropped_traces:  {metricName: "events_dropped", signal: "traces"},
-	signal_events_dropped_logs:    {metricName: "events_dropped", signal: "logs"},
+	signal_traces:          {metricName: "bytes_received", signal: "traces"},
+	signal_logs:            {metricName: "bytes_received", signal: "logs"},
+	signal_events_received: {metricName: "events_received", signal: ""},
+	signal_events_dropped:  {metricName: "events_dropped", signal: ""},
 }
 
 type otlpMetrics struct {
@@ -70,7 +68,9 @@ func (om *otlpMetrics) addOTLPSum(timestamp time.Time, value float64, signal usa
 	d := sum.DataPoints().AppendEmpty()
 	d.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
 	d.SetIntValue(intVal)
-	d.Attributes().PutStr("signal", mapping.signal)
+	if mapping.signal != "" {
+		d.Attributes().PutStr("signal", mapping.signal)
+	}
 	return nil
 }
 
