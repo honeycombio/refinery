@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2026-04-09 at 14:17:17 UTC
+# automatically generated on 2026-04-09 at 16:54:58 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -17,6 +17,9 @@ OpAMP:
 AccessKeys:
   ReceiveKeys: 
     - "your-key-goes-here"
+
+  ReceiveKeyIDs: 
+    - "your-key-id-goes-here"
 
   AcceptOnlyListedKeys: false
   SendKey: SetThisToAHoneycombKey

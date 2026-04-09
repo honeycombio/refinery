@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2026-04-09 at 14:17:17 UTC.
+# Automatically generated on 2026-04-09 at 16:54:58 UTC.
 
 General:
   - ConfigurationVersion
@@ -33,6 +33,8 @@ OpAMP:
 
 AccessKeys:
   - ReceiveKeys (originally APIKeys)
+
+  - ReceiveKeyIDs
 
   - AcceptOnlyListedKeys
 
