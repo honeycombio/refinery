@@ -382,10 +382,19 @@ func newStartedApp(
 	assert.NoError(t, err)
 
 	err = startstop.Start(g.Objects(), nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
-	// Racy: wait just a moment for ListenAndServe to start up.
-	time.Sleep(15 * time.Millisecond)
+	// Wait for the HTTP server to be ready by polling the listen address.
+	listenAddr := c.GetListenAddr()
+	require.Eventually(t, func() bool {
+		conn, err := net.DialTimeout("tcp", listenAddr, 50*time.Millisecond)
+		if err != nil {
+			return false
+		}
+		conn.Close()
+		return true
+	}, 2*time.Second, 10*time.Millisecond, "server failed to start listening on %s", listenAddr)
+
 	return &a, g
 }
 
