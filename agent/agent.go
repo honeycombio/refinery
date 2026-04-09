@@ -229,13 +229,15 @@ func (agent *Agent) healthCheck() {
 				agent.usageTracker.Add(signal_traces, traceUsage)
 				agent.usageTracker.Add(signal_logs, logUsage)
 
-				incomingSpan, _ := agent.metrics.Get("incoming_router_span")
-				incomingNonspan, _ := agent.metrics.Get("incoming_router_nonspan_event")
-				incomingEvent, _ := agent.metrics.Get("incoming_router_event")
-				agent.usageTracker.Add(signal_events_received, incomingSpan+incomingNonspan+incomingEvent)
+				if incomingSpan, ok := agent.metrics.Get("incoming_router_span"); ok {
+					incomingNonspan, _ := agent.metrics.Get("incoming_router_nonspan_event")
+					incomingEvent, _ := agent.metrics.Get("incoming_router_event")
+					agent.usageTracker.Add(signal_events_received, incomingSpan+incomingNonspan+incomingEvent)
+				}
 
-				eventsDropped, _ := agent.metrics.Get("events_dropped")
-				agent.usageTracker.Add(signal_events_dropped, eventsDropped)
+				if eventsDropped, ok := agent.metrics.Get("events_dropped"); ok {
+					agent.usageTracker.Add(signal_events_dropped, eventsDropped)
+				}
 			}
 		}
 	}
