@@ -9,9 +9,22 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
+type metricMapping struct {
+	metricName string
+	signal     string
+}
+
+var signalToMetric = map[usageSignal]metricMapping{
+	signal_traces:          {metricName: "bytes_received", signal: "traces"},
+	signal_logs:            {metricName: "bytes_received", signal: "logs"},
+	signal_events_received: {metricName: "events_received", signal: ""},
+	signal_events_dropped:  {metricName: "events_dropped", signal: ""},
+}
+
 type otlpMetrics struct {
 	metrics pmetric.Metrics
-	ms      pmetric.Sum
+	sums    map[string]pmetric.Sum
+	sm      pmetric.ScopeMetrics
 }
 
 func newOTLPMetrics(serviceName, version, hostname string) *otlpMetrics {
@@ -22,25 +35,42 @@ func newOTLPMetrics(serviceName, version, hostname string) *otlpMetrics {
 	resourceAttrs.PutStr("service.version", version)
 	resourceAttrs.PutStr("host.name", hostname)
 	sm := rm.ScopeMetrics().AppendEmpty()
-	ms := sm.Metrics().AppendEmpty()
-	ms.SetName("bytes_received")
-	sum := ms.SetEmptySum()
-	sum.SetAggregationTemporality(pmetric.AggregationTemporalityDelta)
 	return &otlpMetrics{
 		metrics: metrics,
-		ms:      sum,
+		sums:    make(map[string]pmetric.Sum),
+		sm:      sm,
 	}
 }
 
+func (om *otlpMetrics) getOrCreateSum(metricName string) pmetric.Sum {
+	if sum, ok := om.sums[metricName]; ok {
+		return sum
+	}
+	ms := om.sm.Metrics().AppendEmpty()
+	ms.SetName(metricName)
+	sum := ms.SetEmptySum()
+	sum.SetAggregationTemporality(pmetric.AggregationTemporalityDelta)
+	om.sums[metricName] = sum
+	return sum
+}
+
 func (om *otlpMetrics) addOTLPSum(timestamp time.Time, value float64, signal usageSignal) error {
+	mapping, ok := signalToMetric[signal]
+	if !ok {
+		return fmt.Errorf("unknown usage signal: %s", signal)
+	}
+
 	intVal, err := convertFloat64ToInt64(value)
 	if err != nil {
 		return err
 	}
-	d := om.ms.DataPoints().AppendEmpty()
+	sum := om.getOrCreateSum(mapping.metricName)
+	d := sum.DataPoints().AppendEmpty()
 	d.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
 	d.SetIntValue(intVal)
-	d.Attributes().PutStr("signal", string(signal))
+	if mapping.signal != "" {
+		d.Attributes().PutStr("signal", mapping.signal)
+	}
 	return nil
 }
 

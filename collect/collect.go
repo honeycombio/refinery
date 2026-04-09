@@ -155,6 +155,7 @@ var inMemCollectorMetrics = []metrics.Metadata{
 
 	{Name: "dropped_from_stress", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans dropped due to stress relief"},
 	{Name: "kept_from_stress", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans kept due to stress relief"},
+	{Name: "events_dropped", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of events dropped"},
 	{Name: "trace_kept_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "sample rate of kept traces"},
 	{Name: "trace_aggregate_sample_rate", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "aggregate sample rate of both kept and dropped traces"},
 	{Name: "collector_collect_loop_duration_ms", Type: metrics.Histogram, Unit: metrics.Milliseconds, Description: "duration of the collect loop, the primary event processing goroutine"},
@@ -470,6 +471,7 @@ func (i *InMemCollector) ProcessSpanImmediately(sp *types.Span) (processed bool,
 
 	if !keep {
 		i.Metrics.Increment("dropped_from_stress")
+		i.Metrics.Increment("events_dropped")
 		return true, false
 	}
 
@@ -554,6 +556,7 @@ func (i *InMemCollector) dealWithSentTrace(ctx context.Context, tr cache.TraceSe
 		i.Transmission.EnqueueSpan(sp)
 		return
 	}
+	i.Metrics.Increment("events_dropped")
 	i.Logger.Debug().WithField("trace_id", sp.TraceID).Logf("Dropping span because of previous decision to drop trace")
 }
 
@@ -610,6 +613,8 @@ func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	// if we're supposed to drop this trace, and dry run mode is not enabled, then we're done.
 	if !trace.KeepSample && !i.Config.GetIsDryRun() {
 		i.Metrics.Increment("trace_send_dropped")
+		dropCount := int64(trace.DescendantCount())
+		i.Metrics.Count("events_dropped", dropCount)
 		i.Logger.Debug().WithFields(logFields).Logf("Dropping trace because of sampling decision")
 		return
 	}
