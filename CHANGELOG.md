@@ -1,5 +1,23 @@
 # Refinery Changelog
 
+## 3.2.0 2026-04-13
+
+### 💡 Enhancements
+
+- feat: add ReceiveKeyIDs config option for key ID-based authorization by @tdarwin in https://github.com/honeycombio/refinery/pull/1803
+- feat: add OTelMetrics.AdditionalAttributes config option by @tdarwin in https://github.com/honeycombio/refinery/pull/1804
+- feat: add granular event metrics by @tdarwin in https://github.com/honeycombio/refinery/pull/1805
+
+### 🐛 Fixes
+
+- fix: include AdditionalErrorFields in logs for transmission code by @VinozzZ in https://github.com/honeycombio/refinery/pull/1807
+
+### 🛠 Maintenance
+
+- fix: update ko build tooling and fix flaky integration test by @tdarwin in https://github.com/honeycombio/refinery/pull/1806
+- maint(deps): bump go.opentelemetry.io/otel/sdk from 1.42.0 to 1.43.0 by @dependabot in https://github.com/honeycombio/refinery/pull/1810
+- maint(deps): bump the minor-patch group across 1 directory with 12 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1812
+
 ## 3.1.2 2026-03-25
 
 This release addresses security vulnerabilities CVE-2026-27139, CVE-2026-27142, and CVE-2026-25679.
