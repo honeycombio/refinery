@@ -1,5 +1,14 @@
 # Refinery Changelog
 
+## 3.2.1 2026-05-04
+
+This release fixes a bug in OTLP JSON ingestion where `traceId` and `spanId` fields were incorrectly treated as base64-encoded. The OTLP JSON spec explicitly requires these fields to be hex-encoded strings, and clients sending data over OTLP HTTP/JSON would receive corrupted ID values as a result.
+
+### 🛠 Maintenance
+
+- maint: update honeycombio/husky to v0.43.1 by @VinozzZ in https://github.com/honeycombio/refinery/pull/1816
+- maint(deps): bump the minor-patch group with 8 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1814
+
 ## 3.2.0 2026-04-13
 
 ### 💡 Enhancements

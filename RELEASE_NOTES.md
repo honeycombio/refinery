@@ -2,6 +2,10 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.2.1
+
+This release fixes a bug where trace and span IDs were corrupted for clients sending data over OTLP HTTP/JSON.
+
 ## Version 3.2.0
 
 This release adds new configuration options for authorization and observability.
