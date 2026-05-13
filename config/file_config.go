@@ -608,6 +608,13 @@ func writeYAMLToFile(data any, filename string) error {
 // nil, it uses the command line arguments.
 // It also dumps the config and rules to the given files, if specified, which
 // will cause the program to exit.
+//
+// Return values follow an intentional two-level contract:
+//   - (nil, err): fatal error — config could not be loaded or has hard validation
+//     errors; the caller should not proceed.
+//   - (cfg, err): non-fatal warning — config loaded successfully but has deprecation
+//     or advisory warnings; the caller may log err and proceed using cfg.
+//   - (cfg, nil): success.
 func NewConfig(opts *CmdEnv, currentVersion ...string) (Config, error) {
 	cData, rData, err := newConfigAndRules(opts)
 	if err != nil {
