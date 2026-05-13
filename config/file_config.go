@@ -615,8 +615,7 @@ func NewConfig(opts *CmdEnv, currentVersion ...string) (Config, error) {
 	}
 
 	cfg, err := newFileConfig(opts, cData, rData, currentVersion...)
-	// only exit if we have no config at all; if it fails validation, we'll
-	// do the rest and return it anyway
+	// only exit on fatal errors (cfg == nil); non-nil cfg with err means warnings only
 	if err != nil && cfg == nil {
 		return nil, err
 	}

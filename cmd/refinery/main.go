@@ -99,11 +99,9 @@ func main() {
 
 	c, err := config.NewConfig(opts, version)
 	if err != nil {
-		if configErr, isConfigErr := err.(*config.FileConfigError); isConfigErr && configErr.HasErrors() {
-			fmt.Printf("%+v\n", err)
+		fmt.Printf("%+v\n", err)
+		if c == nil {
 			os.Exit(1)
-		} else {
-			fmt.Printf("%+v\n", err)
 		}
 	}
 	if opts.Validate {
