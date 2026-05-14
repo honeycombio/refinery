@@ -124,8 +124,6 @@ github.com/honeycombio/husky v0.43.1 h1:HRaSO59KujOsYNQO1Qkn8YFboizheTJcKlBvVhCl
 github.com/honeycombio/husky v0.43.1/go.mod h1:lQ1VzGZxeYPCr4zxmak1lVe29HJFqJ6bQXWCl0ZqlNg=
 github.com/honeycombio/libhoney-go v1.27.1 h1:79FR19fVpaeDMqTDfpXtMxd90vzsxhZnIOSysMrUSQQ=
 github.com/honeycombio/libhoney-go v1.27.1/go.mod h1:qLZO8Q3ep/hISEoVC7m8N9ZOvn2eqaGdoJg9XXXasqM=
-github.com/honeycombio/opentelemetry-proto-go/otlp v1.9.0-compat h1:g6pUF6IZVLG93vZbUefK0qF20CGx0zf0q3n3Fw4gv1s=
-github.com/honeycombio/opentelemetry-proto-go/otlp v1.9.0-compat/go.mod h1:ZyEcAltAA7tCBVo5o+5klmG2l+43E1fjpxGxvOIskic=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
 github.com/inconshreveable/mousetrap v1.1.0/go.mod h1:vpF70FUmC8bwa3OWnCshd2FqLfsEA9PFc4w1p2J65bw=
 github.com/jessevdk/go-flags v1.6.1 h1:Cvu5U8UGrLay1rZfv/zP7iLpSHGUZ/Ou68T0iX1bBK4=
@@ -273,6 +271,8 @@ go.opentelemetry.io/otel/sdk/metric v1.43.0 h1:S88dyqXjJkuBNLeMcVPRFXpRw2fuwdvfC
 go.opentelemetry.io/otel/sdk/metric v1.43.0/go.mod h1:C/RJtwSEJ5hzTiUz5pXF1kILHStzb9zFlIEe85bhj6A=
 go.opentelemetry.io/otel/trace v1.43.0 h1:BkNrHpup+4k4w+ZZ86CZoHHEkohws8AY+WTX09nk+3A=
 go.opentelemetry.io/otel/trace v1.43.0/go.mod h1:/QJhyVBUUswCphDVxq+8mld+AvhXZLhe+8WVFxiFff0=
+go.opentelemetry.io/proto/otlp v1.10.0 h1:IQRWgT5srOCYfiWnpqUYz9CVmbO8bFmKcwYxpuCSL2g=
+go.opentelemetry.io/proto/otlp v1.10.0/go.mod h1:/CV4QoCR/S9yaPj8utp3lvQPoqMtxXdzn7ozvvozVqk=
 go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.2.0 h1:40vBjolEOioNBl8zPj1wxqlA7kJ82RxR4HnUv7W8zRI=
 go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.2.0/go.mod h1:4wAsc1dEVb4D1ZykBNC9AriTU9uLYtmziLrB+7G4lb4=
 go.opentelemetry.io/proto/otlp/profiles/v1development v0.2.0 h1:yXinc284C6bmzA1r9jk7MxAhrBIIOH3qwmqwBmylZrA=
