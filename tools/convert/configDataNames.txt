@@ -141,6 +141,16 @@ OTelMetrics:
   - AdditionalAttributes
 
 
+OTelLogger:
+  - APIHost
+
+  - APIKey
+
+  - Dataset
+
+  - Compression
+
+
 OTelTracing:
   - Enabled
 

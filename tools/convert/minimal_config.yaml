@@ -75,6 +75,11 @@ OTelMetrics:
     "pipeline.id": "'12345'"
     "rollout.id": "'67890'"
 
+OTelLogger:
+  APIHost: "https://api.honeycomb.io"
+  APIKey: SetThisToAHoneycombKey
+  Dataset: "Refinery Logs"
+  Compression: gzip
 OTelTracing:
   Enabled: false
   APIHost: "https://api.honeycomb.io"

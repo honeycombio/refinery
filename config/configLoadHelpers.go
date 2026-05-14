@@ -436,6 +436,9 @@ func validateConfigs(configs []configData, opts *CmdEnv, currentVersion ...strin
 	if config.OTelMetrics.APIKey == "" {
 		config.OTelMetrics.APIKey = "InvalidHoneycombAPIKey"
 	}
+	if config.OTelLogger.APIKey == "" {
+		config.OTelLogger.APIKey = "InvalidHoneycombAPIKey"
+	}
 	if config.OTelTracing.APIKey == "" {
 		config.OTelTracing.APIKey = "InvalidHoneycombAPIKey"
 	}
