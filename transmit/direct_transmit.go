@@ -351,12 +351,14 @@ func (d *DirectTransmission) handleError(ev *types.Event, statusCode int, queueT
 // handleBatchFailure handles metrics updates when the entire batch fails
 func (d *DirectTransmission) handleBatchFailure(batch []*types.Event, errorMsg string, logMessage string) {
 	d.Metrics.Increment(d.metricKeys.counterSendErrors)
+	now := time.Now().UnixMicro()
 	if len(batch) > 0 {
-		queueTime := time.Now().UnixMicro() - batch[0].EnqueuedUnixMicro
+		queueTime := now - batch[0].EnqueuedUnixMicro
 		d.handleError(batch[0], 0, queueTime, errorMsg, nil, logMessage)
 	}
 
-	for range batch {
+	for _, ev := range batch {
+		d.Metrics.Histogram(d.metricKeys.histogramQueueTime, float64(now-ev.EnqueuedUnixMicro))
 		d.Metrics.Down(d.metricKeys.updownQueuedItems)
 	}
 }
@@ -535,11 +537,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		dequeuedAt := d.Clock.Now()
 
 		if err != nil {
-			// Network/connection error - affects all events in batch
-			for _, ev := range subBatch {
-				queueTime := dequeuedAt.UnixMicro() - ev.EnqueuedUnixMicro
-				d.handleEventError(ev, 0, queueTime, err.Error(), nil, "")
-			}
+			d.handleBatchFailure(subBatch, err.Error(), "")
 			continue
 		}
 
