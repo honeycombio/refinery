@@ -1029,20 +1029,6 @@ groups:
           compression costs may outweigh the benefits, in which case `none`
           may be used.
 
-      - name: ConfigFile
-        type: string
-        valuetype: nondefault
-        default: ""
-        reload: false
-        firstversion: v2.9
-        summary: is the path to an OpenTelemetry configuration file.
-        description: >
-          When set, Refinery reads the file and uses the OpenTelemetry
-          configuration spec to initialize the logger provider. Resource
-          attributes and all other OTel configuration can be set in this
-          file. The `APIHost`, `APIKey`, `Dataset`, and `Compression`
-          fields are ignored when this is set.
-
   - name: OTelTracing
     title: "OpenTelemetry Tracing"
     description: contains configuration for Refinery's own tracing.
