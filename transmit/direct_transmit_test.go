@@ -1208,6 +1208,9 @@ func TestDirectTransmissionRetryLogic(t *testing.T) {
 
 			if tt.expectSuccess {
 				assert.Contains(t, mockMetrics.CounterIncrements, "libhoney_upstream_response_20x")
+			} else if tt.statusCode == 0 {
+				// Network/timeout error: whole batch failed before any response
+				assert.Contains(t, mockMetrics.CounterIncrements, "libhoney_upstream_send_errors")
 			} else {
 				assert.Contains(t, mockMetrics.CounterIncrements, "libhoney_upstream_response_errors")
 			}
