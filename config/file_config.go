@@ -257,6 +257,7 @@ type OTelLoggerConfig struct {
 	APIKey      string `yaml:"APIKey" cmdenv:"OTelLoggerAPIKey,HoneycombAPIKey"`
 	Dataset     string `yaml:"Dataset" default:"Refinery Logs"`
 	Compression string `yaml:"Compression" default:"gzip"`
+	ConfigFile  string `yaml:"ConfigFile"`
 }
 
 type HoneycombLoggerConfig struct {

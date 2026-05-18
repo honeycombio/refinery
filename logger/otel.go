@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/honeycombio/refinery/config"
+	otelconf "go.opentelemetry.io/contrib/otelconf"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp"
 	otellog "go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
@@ -26,6 +28,24 @@ type OTelLogger struct {
 func (l *OTelLogger) Start() error {
 	l.level = l.Config.GetLoggerLevel()
 	cfg := l.Config.GetOTelLoggerConfig()
+
+	if cfg.ConfigFile != "" {
+		b, err := os.ReadFile(cfg.ConfigFile)
+		if err != nil {
+			return fmt.Errorf("otel logger: read config file: %w", err)
+		}
+		c, err := otelconf.ParseYAML(b)
+		if err != nil {
+			return fmt.Errorf("otel logger: parse config file: %w", err)
+		}
+		sdk, err := otelconf.NewSDK(otelconf.WithOpenTelemetryConfiguration(*c))
+		if err != nil {
+			return fmt.Errorf("otel logger: create SDK: %w", err)
+		}
+		l.logEmitter = sdk.LoggerProvider().Logger("github.com/honeycombio/refinery")
+		l.shutdownFunc = sdk.Shutdown
+		return nil
+	}
 
 	res := resource.NewWithAttributes(
 		semconv.SchemaURL,
