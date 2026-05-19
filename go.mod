@@ -13,7 +13,7 @@ require (
 	github.com/gorilla/mux v1.8.1
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.9
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/honeycombio/dynsampler-go v0.6.4
+	github.com/honeycombio/dynsampler-go v0.6.5-0.20260519200721-44705940a879
 	github.com/honeycombio/hpsf v0.14.0
 	github.com/honeycombio/husky v0.43.1
 	github.com/honeycombio/libhoney-go v1.27.1
