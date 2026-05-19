@@ -756,6 +756,88 @@ func TestRulesBasedSamplerDoesNotShareDynsamplersBetweenEnvironments(t *testing.
 	assert.Len(t, factory.sharedDynsamplers, 4)
 }
 
+// TestSharedDynsamplerMetricsRecorder verifies that two sampler wrappers created by the
+// same SamplerFactory for the same dataset key share a single dynsamplerMetricsRecorder,
+// preventing per-worker independent baselines from overcounting internal counter deltas.
+func TestSharedDynsamplerMetricsRecorder(t *testing.T) {
+	samplerTypes := []struct {
+		name    string
+		rulesYR string
+	}{
+		{"EMAThroughput", makeYAML(
+			"RulesVersion", 2,
+			"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+			"Samplers/production/EMAThroughputSampler/GoalThroughputPerSec", 10,
+		)},
+		{"TotalThroughput", makeYAML(
+			"RulesVersion", 2,
+			"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+			"Samplers/production/TotalThroughputSampler/GoalThroughputPerSec", 10,
+		)},
+		{"Dynamic", makeYAML(
+			"RulesVersion", 2,
+			"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+			"Samplers/production/DynamicSampler/SampleRate", 10,
+		)},
+		{"EMADynamic", makeYAML(
+			"RulesVersion", 2,
+			"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+			"Samplers/production/EMADynamicSampler/GoalSampleRate", 10,
+		)},
+		{"WindowedThroughput", makeYAML(
+			"RulesVersion", 2,
+			"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+			"Samplers/production/WindowedThroughputSampler/GoalThroughputPerSec", 10,
+		)},
+	}
+
+	for _, tt := range samplerTypes {
+		t.Run(tt.name, func(t *testing.T) {
+			cm := makeYAML("General/ConfigurationVersion", 2)
+			cfg, rules := createTempConfigs(t, cm, tt.rulesYR)
+			c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+			require.NoError(t, err)
+
+			factory := SamplerFactory{
+				Config:  c,
+				Logger:  &logger.NullLogger{},
+				Metrics: &metrics.NullMetrics{},
+				Peers:   peer.NewMockPeers([]string{"self"}, ""),
+			}
+			factory.Start()
+			defer factory.Stop()
+
+			s1 := factory.GetSamplerImplementationForKey("production")
+			s2 := factory.GetSamplerImplementationForKey("production")
+			require.NotNil(t, s1)
+			require.NotNil(t, s2)
+
+			// Extract the metricsRecorder pointer from each wrapper via type switch.
+			recorder := func(s Sampler) *dynsamplerMetricsRecorder {
+				switch v := s.(type) {
+				case *EMAThroughputSampler:
+					return v.metricsRecorder
+				case *TotalThroughputSampler:
+					return v.metricsRecorder
+				case *DynamicSampler:
+					return v.metricsRecorder
+				case *EMADynamicSampler:
+					return v.metricsRecorder
+				case *WindowedThroughputSampler:
+					return v.metricsRecorder
+				default:
+					t.Fatalf("unexpected sampler type %T", s)
+					return nil
+				}
+			}
+
+			r1, r2 := recorder(s1), recorder(s2)
+			require.NotNil(t, r1)
+			assert.Same(t, r1, r2, "both workers must share the same metrics recorder to avoid overcounting")
+		})
+	}
+}
+
 func BenchmarkGetSamplerImplementation(b *testing.B) {
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,

@@ -41,7 +41,7 @@ type DynamicSampler struct {
 	keyFields, nonRootFields []string
 
 	dynsampler      dynsampler.Sampler
-	metricsRecorder dynsamplerMetricsRecorder
+	metricsRecorder *dynsamplerMetricsRecorder
 }
 
 func (d *DynamicSampler) Start() error {
@@ -56,12 +56,13 @@ func (d *DynamicSampler) Start() error {
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
-	// Register statistics from the dynsampler-go package
-	d.metricsRecorder = dynsamplerMetricsRecorder{
-		met:    d.Metrics,
-		prefix: "dynamic",
+	if d.metricsRecorder == nil {
+		d.metricsRecorder = &dynsamplerMetricsRecorder{
+			met:    d.Metrics,
+			prefix: "dynamic",
+		}
+		d.metricsRecorder.RegisterMetrics(d.dynsampler)
 	}
-	d.metricsRecorder.RegisterMetrics(d.dynsampler)
 
 	return nil
 }
