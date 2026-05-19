@@ -569,7 +569,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	for _, bev := range batchedEvents.events {
 		datasetAny := bev.Data.Get("service.name")
 		dataset, ok := datasetAny.(string)
-		if !ok {
+		if !ok || dataset == "" {
 			dataset = datasetFromRequest
 		}
 		if !bev.Data.IsEmpty() {
