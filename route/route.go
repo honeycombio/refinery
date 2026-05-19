@@ -531,10 +531,11 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	}
 	defer recycleHTTPBodyBuffer(bodyBuffer)
 
-	dataset, err := getDatasetFromRequest(req)
+	datasetFromRequest, err := getDatasetFromRequest(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 	}
+	dataset := ""
 
 	apiKey := req.Header.Get(types.APIKeyHeader)
 	if apiKey == "" {
@@ -566,6 +567,11 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	userAgent := getUserAgentFromRequest(req)
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
 	for _, bev := range batchedEvents.events {
+		datasetAny := bev.Data.Get("service.name")
+		dataset, ok := datasetAny.(string)
+		if !ok {
+			dataset = datasetFromRequest
+		}
 		if !bev.Data.IsEmpty() {
 			ev := &types.Event{
 				Context:     ctx,
