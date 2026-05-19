@@ -2154,9 +2154,9 @@ func TestRulesBasedSamplerWithDownstreamAndClusterChanges(t *testing.T) {
 
 	// Verify that events contain expected fields for rules-based sampling
 	for _, event := range finalEvents {
-		assert.Equal(t, "dataset", event.Dataset)
 
 		serviceName := event.Data.Get("service.name")
+		assert.Equal(t, serviceName, event.Dataset)
 		statusCode := event.Data.Get("http.status_code")
 
 		// Most events should be from test-service (deterministic rules), but some may be from other-service (fallback rule)
