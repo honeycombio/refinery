@@ -122,6 +122,8 @@ github.com/honeycombio/dynsampler-go v0.6.5-0.20260520152731-9bf0edc9791e h1:1Pj
 github.com/honeycombio/dynsampler-go v0.6.5-0.20260520152731-9bf0edc9791e/go.mod h1:M5YYNOfxRrBlEWDatTlHMYo5F7GjwVnptx5z+uXIVMo=
 github.com/honeycombio/dynsampler-go v0.6.5-0.20260520174137-523f2099733f h1:GU06tV4HPcngKGjdIjKoZzeV8Yqp8aAaNnwz4IuNoig=
 github.com/honeycombio/dynsampler-go v0.6.5-0.20260520174137-523f2099733f/go.mod h1:M5YYNOfxRrBlEWDatTlHMYo5F7GjwVnptx5z+uXIVMo=
+github.com/honeycombio/dynsampler-go v0.6.5-0.20260520192513-18456caacbe4 h1:c2MTTwHRCw+lLGcY+Y9BwA0UaVGXEyQoiRISeFDXE24=
+github.com/honeycombio/dynsampler-go v0.6.5-0.20260520192513-18456caacbe4/go.mod h1:M5YYNOfxRrBlEWDatTlHMYo5F7GjwVnptx5z+uXIVMo=
 github.com/honeycombio/hpsf v0.14.0 h1:LeQbDuT+aVmiJnWp9Kqb9Qqz5OZcjDk85RMzzwKtCKI=
 github.com/honeycombio/hpsf v0.14.0/go.mod h1:VyPjyn1GViOiCrpBbPZCkEJnuDuSTUpU8LV5CWVTQm4=
 github.com/honeycombio/husky v0.43.1 h1:HRaSO59KujOsYNQO1Qkn8YFboizheTJcKlBvVhClDe8=
