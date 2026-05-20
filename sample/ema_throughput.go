@@ -12,16 +12,17 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-// createDynForEMAThroughputSampler creates a dynsampler for EMAThroughputSampler
-func createDynForEMAThroughputSampler(c *config.EMAThroughputSamplerConfig) *dynsampler.EMAThroughput {
+// createDynForEMAThroughputSampler creates a dynsampler for EMAThroughputSampler.
+// workerCount is the number of concurrent collection workers; the goal throughput is
+// divided by workerCount so the aggregate across all workers matches the configured goal.
+func createDynForEMAThroughputSampler(c *config.EMAThroughputSamplerConfig, workerCount int) *dynsampler.EMAThroughput {
 	maxKeys := c.MaxKeys
 	if maxKeys == 0 {
 		maxKeys = 500
 	}
-	clusterSize := 1 // Will be updated by SetClusterSize if needed
 
 	dynsamplerInstance := &dynsampler.EMAThroughput{
-		GoalThroughputPerSec: c.GoalThroughputPerSec / clusterSize,
+		GoalThroughputPerSec: max(c.GoalThroughputPerSec/workerCount, 1),
 		InitialSampleRate:    c.InitialSampleRate,
 		AdjustmentInterval:   time.Duration(c.AdjustmentInterval),
 		Weight:               c.Weight,
@@ -50,9 +51,9 @@ func (d *EMAThroughputSampler) Start() error {
 	d.Logger.Debug().Logf("Starting EMAThroughputSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting EMAThroughputSampler") }()
 
-	// If dynsampler is not set (e.g., in tests), create it
+	// If dynsampler is not set (e.g., in tests), create it with workerCount=1
 	if d.dynsampler == nil {
-		d.dynsampler = createDynForEMAThroughputSampler(d.Config)
+		d.dynsampler = createDynForEMAThroughputSampler(d.Config, 1)
 	}
 
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)

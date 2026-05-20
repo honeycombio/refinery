@@ -19,6 +19,7 @@ type RulesBasedSampler struct {
 	Metrics        metrics.Metrics
 	SamplerFactory *SamplerFactory
 	samplerPrefix  string
+	workerID       int
 	samplers       map[string]Sampler
 	keyFields      []string
 	nonRootFields  []string
@@ -54,8 +55,8 @@ func (s *RulesBasedSampler) Start() error {
 				return fmt.Errorf("SamplerFactory is required for rules with downstream samplers")
 			}
 
-			// Use SamplerFactory to create downstream sampler with shared dynsamplers
-			sampler := s.SamplerFactory.GetDownstreamSampler(s.samplerPrefix, rule.Sampler)
+			// Use SamplerFactory to create downstream sampler with per-worker dynsampler
+			sampler := s.SamplerFactory.GetDownstreamSampler(s.samplerPrefix, rule.Sampler, s.workerID)
 			if sampler == nil {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,

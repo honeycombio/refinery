@@ -96,6 +96,7 @@ func TestDependencyInjection(t *testing.T) {
 func TestTotalThroughputClusterSize(t *testing.T) {
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
+		"Collection/WorkerCount", 1,
 	)
 	rm := makeYAML(
 		"RulesVersion", 2,
@@ -114,7 +115,7 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production")
+	sampler := factory.GetSamplerImplementationForKey("production", 0)
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*TotalThroughputSampler)
@@ -125,6 +126,7 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 func TestEMAThroughputClusterSize(t *testing.T) {
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
+		"Collection/WorkerCount", 1,
 	)
 	rm := makeYAML(
 		"RulesVersion", 2,
@@ -143,7 +145,7 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production")
+	sampler := factory.GetSamplerImplementationForKey("production", 0)
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*EMAThroughputSampler)
@@ -154,6 +156,7 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 func TestWindowedThroughputClusterSize(t *testing.T) {
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
+		"Collection/WorkerCount", 1,
 	)
 	rm := makeYAML(
 		"RulesVersion", 2,
@@ -172,7 +175,7 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 		Peers:   peer.NewMockPeers([]string{"foo", "bar"}, ""),
 	}
 	factory.Start()
-	sampler := factory.GetSamplerImplementationForKey("production")
+	sampler := factory.GetSamplerImplementationForKey("production", 0)
 	sampler.Start()
 	assert.NotNil(t, sampler)
 	impl := sampler.(*WindowedThroughputSampler)
@@ -449,8 +452,8 @@ func TestDifferentDatasetsShouldNotShareDynsampler(t *testing.T) {
 	defer factory.Stop()
 
 	// Get samplers for both datasets
-	prodSampler := factory.GetSamplerImplementationForKey("production")
-	dogfoodSampler := factory.GetSamplerImplementationForKey("dogfood")
+	prodSampler := factory.GetSamplerImplementationForKey("production", 0)
+	dogfoodSampler := factory.GetSamplerImplementationForKey("dogfood", 0)
 
 	assert.NotNil(t, prodSampler)
 	assert.NotNil(t, dogfoodSampler)
@@ -471,6 +474,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	// Create a SamplerFactory directly for testing the cluster size behavior
 	cm := makeYAML(
 		"General/ConfigurationVersion", 2,
+		"Collection/WorkerCount", 1,
 	)
 	rm := makeYAML(
 		"RulesVersion", 2,
@@ -495,7 +499,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a sampler to verify initial throughput
-	sampler := factory.GetSamplerImplementationForKey("production")
+	sampler := factory.GetSamplerImplementationForKey("production", 0)
 	require.NotNil(t, sampler)
 
 	// It should be a TotalThroughputSampler
@@ -530,7 +534,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated back to 50 with 2 peers")
 
 	// Create another sampler instance with the same key to verify cluster size behavior is consistent
-	sampler2 := factory.GetSamplerImplementationForKey("production")
+	sampler2 := factory.GetSamplerImplementationForKey("production", 0)
 	require.NotNil(t, sampler2)
 
 	throughputSampler2, ok := sampler2.(*TotalThroughputSampler)
@@ -543,6 +547,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	// But first add a rule for it
 	cm2 := makeYAML(
 		"General/ConfigurationVersion", 2,
+		"Collection/WorkerCount", 1,
 	)
 	rm2 := makeYAML(
 		"RulesVersion", 2,
@@ -568,7 +573,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	err = factory2.Start()
 	require.NoError(t, err)
 
-	sampler3 := factory2.GetSamplerImplementationForKey("test2")
+	sampler3 := factory2.GetSamplerImplementationForKey("test2", 0)
 	require.NotNil(t, sampler3)
 
 	throughputSampler3, ok := sampler3.(*TotalThroughputSampler)
@@ -582,6 +587,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	// Test UseClusterSize=false: throughput should NOT be divided by peer count
 	cm3 := makeYAML(
 		"General/ConfigurationVersion", 2,
+		"Collection/WorkerCount", 1,
 	)
 	rm3 := makeYAML(
 		"RulesVersion", 2,
@@ -606,7 +612,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	err = factory3.Start()
 	require.NoError(t, err)
 
-	sampler4 := factory3.GetSamplerImplementationForKey("no-cluster-division")
+	sampler4 := factory3.GetSamplerImplementationForKey("no-cluster-division", 0)
 	require.NotNil(t, sampler4)
 
 	throughputSampler4, ok := sampler4.(*TotalThroughputSampler)
@@ -747,8 +753,8 @@ func TestRulesBasedSamplerDoesNotShareDynsamplersBetweenEnvironments(t *testing.
 	defer factory.Stop()
 
 	// Get samplers for both environments
-	prodSampler := factory.GetSamplerImplementationForKey("production")
-	stagingSampler := factory.GetSamplerImplementationForKey("staging")
+	prodSampler := factory.GetSamplerImplementationForKey("production", 0)
+	stagingSampler := factory.GetSamplerImplementationForKey("staging", 0)
 
 	assert.NotNil(t, prodSampler)
 	assert.NotNil(t, stagingSampler)
@@ -797,7 +803,7 @@ func BenchmarkGetSamplerImplementation(b *testing.B) {
 			// Evenly distribute among the 6 keys
 			key := keys[i%len(keys)]
 
-			_ = factory.GetSamplerImplementationForKey(key)
+			_ = factory.GetSamplerImplementationForKey(key, i%6)
 			i++
 		}
 	})

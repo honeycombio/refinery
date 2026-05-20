@@ -440,7 +440,7 @@ func (cl *CollectorWorker) makeDecision(ctx context.Context, trace *types.Trace,
 
 	// use sampler key to find sampler; create and cache if not found
 	if sampler, found = cl.datasetSamplers[samplerSelector]; !found {
-		sampler = cl.parent.SamplerFactory.GetSamplerImplementationForKey(samplerSelector)
+		sampler = cl.parent.SamplerFactory.GetSamplerImplementationForKey(samplerSelector, cl.ID)
 		cl.datasetSamplers[samplerSelector] = sampler
 	}
 

@@ -12,8 +12,10 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-// createDynForTotalThroughputSampler creates a dynsampler for TotalThroughputSampler
-func createDynForTotalThroughputSampler(c *config.TotalThroughputSamplerConfig) *dynsampler.TotalThroughput {
+// createDynForTotalThroughputSampler creates a dynsampler for TotalThroughputSampler.
+// workerCount is the number of concurrent collection workers; the goal throughput is
+// divided by workerCount so the aggregate across all workers matches the configured goal.
+func createDynForTotalThroughputSampler(c *config.TotalThroughputSamplerConfig, workerCount int) *dynsampler.TotalThroughput {
 	maxKeys := c.MaxKeys
 	if maxKeys == 0 {
 		maxKeys = 500
@@ -22,10 +24,9 @@ func createDynForTotalThroughputSampler(c *config.TotalThroughputSamplerConfig) 
 	if clearFreq == 0 {
 		clearFreq = config.Duration(30 * time.Second)
 	}
-	clusterSize := 1 // Will be updated by SetClusterSize if needed
 
 	dynsampler := &dynsampler.TotalThroughput{
-		GoalThroughputPerSec:   c.GoalThroughputPerSec / clusterSize,
+		GoalThroughputPerSec:   max(c.GoalThroughputPerSec/workerCount, 1),
 		ClearFrequencyDuration: time.Duration(clearFreq),
 		MaxKeys:                maxKeys,
 	}
@@ -49,9 +50,9 @@ func (d *TotalThroughputSampler) Start() error {
 	d.Logger.Debug().Logf("Starting TotalThroughputSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting TotalThroughputSampler") }()
 
-	// If dynsampler is not set (e.g., in tests), create it
+	// If dynsampler is not set (e.g., in tests), create it with workerCount=1
 	if d.dynsampler == nil {
-		d.dynsampler = createDynForTotalThroughputSampler(d.Config)
+		d.dynsampler = createDynForTotalThroughputSampler(d.Config, 1)
 	}
 
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)

@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"math"
 	"math/rand"
 	"time"
 
@@ -12,16 +13,17 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
-// createDynForWindowedThroughputSampler creates a dynsampler for WindowedThroughputSampler
-func createDynForWindowedThroughputSampler(c *config.WindowedThroughputSamplerConfig) *dynsampler.WindowedThroughput {
+// createDynForWindowedThroughputSampler creates a dynsampler for WindowedThroughputSampler.
+// workerCount is the number of concurrent collection workers; the goal throughput is
+// divided by workerCount so the aggregate across all workers matches the configured goal.
+func createDynForWindowedThroughputSampler(c *config.WindowedThroughputSamplerConfig, workerCount int) *dynsampler.WindowedThroughput {
 	maxKeys := c.MaxKeys
 	if maxKeys == 0 {
 		maxKeys = 500
 	}
-	clusterSize := 1 // Will be updated by SetClusterSize if needed
 
 	dynsamplerInstance := &dynsampler.WindowedThroughput{
-		GoalThroughputPerSec:      float64(c.GoalThroughputPerSec) / float64(clusterSize),
+		GoalThroughputPerSec:      math.Max(float64(c.GoalThroughputPerSec)/float64(workerCount), 1),
 		UpdateFrequencyDuration:   time.Duration(c.UpdateFrequency),
 		LookbackFrequencyDuration: time.Duration(c.LookbackFrequency),
 		MaxKeys:                   maxKeys,
@@ -46,9 +48,9 @@ func (d *WindowedThroughputSampler) Start() error {
 	d.Logger.Debug().Logf("Starting WindowedThroughputSampler")
 	defer func() { d.Logger.Debug().Logf("Finished starting WindowedThroughputSampler") }()
 
-	// If dynsampler is not set (e.g., in tests), create it
+	// If dynsampler is not set (e.g., in tests), create it with workerCount=1
 	if d.dynsampler == nil {
-		d.dynsampler = createDynForWindowedThroughputSampler(d.Config)
+		d.dynsampler = createDynForWindowedThroughputSampler(d.Config, 1)
 	}
 
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)

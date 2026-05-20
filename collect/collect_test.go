@@ -480,7 +480,7 @@ func TestDryRunMode(t *testing.T) {
 		Config: conf,
 		Logger: &logger.NullLogger{},
 	}
-	sampler := samplerFactory.GetSamplerImplementationForKey("test")
+	sampler := samplerFactory.GetSamplerImplementationForKey("test", 0)
 	coll.SamplerFactory = samplerFactory
 
 	var traceID1 = "abc123"

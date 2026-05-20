@@ -26,14 +26,15 @@ type CanSetGoalThroughputPerSec interface {
 
 // SamplerFactory is used to create new samplers with common (injected) resources
 type SamplerFactory struct {
-	Config    config.Config   `inject:""`
-	Logger    logger.Logger   `inject:""`
-	Metrics   metrics.Metrics `inject:"metrics"`
-	Peers     peer.Peers      `inject:""`
-	peerCount int
-	mutex     sync.Mutex
+	Config      config.Config   `inject:""`
+	Logger      logger.Logger   `inject:""`
+	Metrics     metrics.Metrics `inject:"metrics"`
+	Peers       peer.Peers      `inject:""`
+	peerCount   int
+	workerCount int
+	mutex       sync.Mutex
 
-	// Shared dynsampler instances to maintain global throughput tracking
+	// Per-worker dynsampler instances: key includes workerID so each worker gets its own instance.
 	sharedDynsamplers map[string]any
 
 	// Store original GoalThroughputPerSec values for cluster size calculations.
@@ -58,8 +59,9 @@ func (s *SamplerFactory) updatePeerCounts() {
 	for dynsamplerKey, dynsamplerInstance := range s.sharedDynsamplers {
 		if hasThroughput, ok := dynsamplerInstance.(CanSetGoalThroughputPerSec); ok {
 			if cfg, ok := s.goalThroughputConfigs[dynsamplerKey]; ok {
-				// Calculate new throughput based on cluster size
-				newThroughput := max(cfg/s.peerCount, 1)
+				// Divide by both cluster size and worker count so each dynsampler
+				// instance targets its share of the configured goal.
+				newThroughput := max(cfg/(s.peerCount*s.workerCount), 1)
 				hasThroughput.SetGoalThroughputPerSec(newThroughput)
 			}
 		}
@@ -68,6 +70,10 @@ func (s *SamplerFactory) updatePeerCounts() {
 
 func (s *SamplerFactory) Start() error {
 	s.peerCount = 1
+	s.workerCount = 1
+	if s.Config != nil {
+		s.workerCount = max(s.Config.GetCollectionConfig().GetWorkerCount(), 1)
+	}
 	s.sharedDynsamplers = make(map[string]any)
 	s.goalThroughputConfigs = make(map[string]int)
 	if s.Peers != nil {
@@ -94,31 +100,32 @@ func getSharedDynsampler[ST any, CT any](
 	return dynsamplerInstance
 }
 
-// createSampler creates a sampler with shared dynsamplers based on the config type.
-// A unique dynsampler is created based on a composite key that includes the keyPrefix
-// (dataset/environment), sampler type, and configuration parameters (e.g., sample rate
-// and field list). This ensures that samplers with identical configurations share the
-// same underlying dynsampler instance, guaranteeing consistent sampling decisions across
-// parallel collector workers within a single Refinery instance.
-func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
+// createSampler creates a sampler with a per-worker dynsampler based on the config type.
+// The dynsampler key includes the workerID so each worker gets its own isolated instance.
+// For throughput-based samplers the goal is divided by workerCount (and by peerCount when
+// UseClusterSize is true) so the aggregate throughput across all workers matches the config.
+func (s *SamplerFactory) createSampler(c any, keyPrefix string, workerID int) Sampler {
 	var sampler Sampler
 
 	switch c := c.(type) {
 	case *config.DeterministicSamplerConfig:
 		sampler = &DeterministicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.DynamicSamplerConfig:
-		dynsamplerKey := fmt.Sprintf("%s:dynamic:%d:%v", keyPrefix, c.SampleRate, c.FieldList)
+		dynsamplerKey := fmt.Sprintf("%s:dynamic:%d:%v:%d", keyPrefix, c.SampleRate, c.FieldList, workerID)
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForDynamicSampler)
 		sampler = &DynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.EMADynamicSamplerConfig:
-		dynsamplerKey := fmt.Sprintf("%s:emadynamic:%d:%v", keyPrefix, c.GoalSampleRate, c.FieldList)
+		dynsamplerKey := fmt.Sprintf("%s:emadynamic:%d:%v:%d", keyPrefix, c.GoalSampleRate, c.FieldList, workerID)
 		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForEMADynamicSampler)
 		sampler = &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.RulesBasedSamplerConfig:
-		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, SamplerFactory: s, samplerPrefix: keyPrefix}
+		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, SamplerFactory: s, samplerPrefix: keyPrefix, workerID: workerID}
 	case *config.TotalThroughputSamplerConfig:
-		dynsamplerKey := fmt.Sprintf("%s:totalthroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
-		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForTotalThroughputSampler)
+		dynsamplerKey := fmt.Sprintf("%s:totalthroughput:%d:%v:%d", keyPrefix, c.GoalThroughputPerSec, c.FieldList, workerID)
+		wc := s.workerCount
+		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, func(cfg *config.TotalThroughputSamplerConfig) *dynsampler.TotalThroughput {
+			return createDynForTotalThroughputSampler(cfg, wc)
+		})
 		// only track goal throughput config if we need to recalculate it later based on cluster size
 		if c.UseClusterSize {
 			s.mutex.Lock()
@@ -127,8 +134,11 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 		}
 		sampler = &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.EMAThroughputSamplerConfig:
-		dynsamplerKey := fmt.Sprintf("%s:emathroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
-		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForEMAThroughputSampler)
+		dynsamplerKey := fmt.Sprintf("%s:emathroughput:%d:%v:%d", keyPrefix, c.GoalThroughputPerSec, c.FieldList, workerID)
+		wc := s.workerCount
+		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, func(cfg *config.EMAThroughputSamplerConfig) *dynsampler.EMAThroughput {
+			return createDynForEMAThroughputSampler(cfg, wc)
+		})
 		// only track goal throughput config if we need to recalculate it later based on cluster size
 		if c.UseClusterSize {
 			s.mutex.Lock()
@@ -137,8 +147,11 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 		}
 		sampler = &EMAThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance}
 	case *config.WindowedThroughputSamplerConfig:
-		dynsamplerKey := fmt.Sprintf("%s:windowedthroughput:%d:%v", keyPrefix, c.GoalThroughputPerSec, c.FieldList)
-		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, createDynForWindowedThroughputSampler)
+		dynsamplerKey := fmt.Sprintf("%s:windowedthroughput:%d:%v:%d", keyPrefix, c.GoalThroughputPerSec, c.FieldList, workerID)
+		wc := s.workerCount
+		dynsamplerInstance := getSharedDynsampler(s, dynsamplerKey, c, func(cfg *config.WindowedThroughputSamplerConfig) *dynsampler.WindowedThroughput {
+			return createDynForWindowedThroughputSampler(cfg, wc)
+		})
 		// only track goal throughput config if we need to recalculate it later based on cluster size
 		if c.UseClusterSize {
 			s.mutex.Lock()
@@ -166,18 +179,20 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 }
 
 // GetSamplerImplementationForKey returns the sampler implementation for the given
-// samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined
-func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampler {
+// samplerKey (dataset for legacy keys, environment otherwise), or nil if it is not defined.
+// workerID must be the calling worker's ID so it receives its own dynsampler instance.
+func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string, workerID int) Sampler {
 	c, _ := s.Config.GetSamplerConfigForDestName(samplerKey)
 
-	return s.createSampler(c, samplerKey)
+	return s.createSampler(c, samplerKey, workerID)
 }
 
-// GetDownstreamSampler creates a downstream sampler for use in rules-based sampling,
-// ensuring it participates in the shared dynsampler system
+// GetDownstreamSampler creates a downstream sampler for use in rules-based sampling.
+// workerID must match the calling worker's ID to maintain per-worker dynsampler isolation.
 func (s *SamplerFactory) GetDownstreamSampler(
 	parentSamplerKey string,
 	downstreamConfig *config.RulesBasedDownstreamSampler,
+	workerID int,
 ) Sampler {
 	keyPrefix := fmt.Sprintf("rules:%s:", parentSamplerKey)
 
@@ -201,7 +216,7 @@ func (s *SamplerFactory) GetDownstreamSampler(
 		os.Exit(1)
 	}
 
-	return s.createSampler(actualConfig, keyPrefix)
+	return s.createSampler(actualConfig, keyPrefix, workerID)
 }
 
 // When the config changes, all our shared dynsamplers are invalid. This stops and clears
