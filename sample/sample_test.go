@@ -462,6 +462,73 @@ func TestDifferentDatasetsShouldNotShareDynsampler(t *testing.T) {
 	assert.Equal(t, prodImpl.dynsampler.GoalThroughputPerSec, dogfoodImpl.dynsampler.GoalThroughputPerSec)
 }
 
+// TestFieldListOrderDoesNotAffectDynsamplerSharing verifies that two sampler configs with identical
+// FieldList entries in different order share the same dynsampler instance.
+func TestFieldListOrderDoesNotAffectDynsamplerSharing(t *testing.T) {
+	fields1 := []string{"service.name", "http.method", "status.code"}
+	fields2 := []string{"status.code", "service.name", "http.method"}
+
+	newFactory := func() *SamplerFactory {
+		factory := &SamplerFactory{
+			Logger:  &logger.NullLogger{},
+			Metrics: &metrics.NullMetrics{},
+		}
+		factory.Start()
+		t.Cleanup(factory.Stop)
+		return factory
+	}
+
+	t.Run("DynamicSampler", func(t *testing.T) {
+		f := newFactory()
+		s1 := f.createSampler(&config.DynamicSamplerConfig{SampleRate: 10, FieldList: fields1}, "env")
+		s2 := f.createSampler(&config.DynamicSamplerConfig{SampleRate: 10, FieldList: fields2}, "env")
+		require.NotNil(t, s1)
+		require.NotNil(t, s2)
+		assert.Same(t, s1.(*DynamicSampler).dynsampler, s2.(*DynamicSampler).dynsampler)
+		assert.Len(t, f.sharedDynsamplers, 1)
+	})
+
+	t.Run("EMADynamicSampler", func(t *testing.T) {
+		f := newFactory()
+		s1 := f.createSampler(&config.EMADynamicSamplerConfig{GoalSampleRate: 10, FieldList: fields1}, "env")
+		s2 := f.createSampler(&config.EMADynamicSamplerConfig{GoalSampleRate: 10, FieldList: fields2}, "env")
+		require.NotNil(t, s1)
+		require.NotNil(t, s2)
+		assert.Same(t, s1.(*EMADynamicSampler).dynsampler, s2.(*EMADynamicSampler).dynsampler)
+		assert.Len(t, f.sharedDynsamplers, 1)
+	})
+
+	t.Run("TotalThroughputSampler", func(t *testing.T) {
+		f := newFactory()
+		s1 := f.createSampler(&config.TotalThroughputSamplerConfig{GoalThroughputPerSec: 10, FieldList: fields1}, "env")
+		s2 := f.createSampler(&config.TotalThroughputSamplerConfig{GoalThroughputPerSec: 10, FieldList: fields2}, "env")
+		require.NotNil(t, s1)
+		require.NotNil(t, s2)
+		assert.Same(t, s1.(*TotalThroughputSampler).dynsampler, s2.(*TotalThroughputSampler).dynsampler)
+		assert.Len(t, f.sharedDynsamplers, 1)
+	})
+
+	t.Run("EMAThroughputSampler", func(t *testing.T) {
+		f := newFactory()
+		s1 := f.createSampler(&config.EMAThroughputSamplerConfig{GoalThroughputPerSec: 10, FieldList: fields1}, "env")
+		s2 := f.createSampler(&config.EMAThroughputSamplerConfig{GoalThroughputPerSec: 10, FieldList: fields2}, "env")
+		require.NotNil(t, s1)
+		require.NotNil(t, s2)
+		assert.Same(t, s1.(*EMAThroughputSampler).dynsampler, s2.(*EMAThroughputSampler).dynsampler)
+		assert.Len(t, f.sharedDynsamplers, 1)
+	})
+
+	t.Run("WindowedThroughputSampler", func(t *testing.T) {
+		f := newFactory()
+		s1 := f.createSampler(&config.WindowedThroughputSamplerConfig{GoalThroughputPerSec: 10, FieldList: fields1}, "env")
+		s2 := f.createSampler(&config.WindowedThroughputSamplerConfig{GoalThroughputPerSec: 10, FieldList: fields2}, "env")
+		require.NotNil(t, s1)
+		require.NotNil(t, s2)
+		assert.Same(t, s1.(*WindowedThroughputSampler).dynsampler, s2.(*WindowedThroughputSampler).dynsampler)
+		assert.Len(t, f.sharedDynsamplers, 1)
+	})
+}
+
 // TestClusterSizeUpdatesSamplers verifies that the SamplerFactory properly handles dynamic peer updates
 // and their impact on throughput-based sampling behavior.
 func TestClusterSizeUpdatesSamplers(t *testing.T) {
