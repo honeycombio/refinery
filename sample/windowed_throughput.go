@@ -54,12 +54,13 @@ func (d *WindowedThroughputSampler) Start() error {
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 
-	// Register statistics this package will produce
-	d.metricsRecorder = &dynsamplerMetricsRecorder{
-		prefix: "windowedthroughput",
-		met:    d.Metrics,
+	if d.metricsRecorder == nil {
+		d.metricsRecorder = &dynsamplerMetricsRecorder{
+			prefix: "windowedthroughput",
+			met:    d.Metrics,
+		}
+		d.metricsRecorder.RegisterMetrics(d.dynsampler)
 	}
-	d.metricsRecorder.RegisterMetrics(d.dynsampler)
 	return nil
 }
 

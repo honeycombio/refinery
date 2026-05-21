@@ -56,12 +56,13 @@ func (d *EMADynamicSampler) Start() error {
 	d.keyFields, d.nonRootFields = config.GetKeyFields(d.Config.GetSamplingFields())
 	d.key = newTraceKey(d.Config.FieldList, d.Config.UseTraceLength)
 
-	// Register statistics this package will produce
-	d.metricsRecorder = &dynsamplerMetricsRecorder{
-		prefix: "emadynamic",
-		met:    d.Metrics,
+	if d.metricsRecorder == nil {
+		d.metricsRecorder = &dynsamplerMetricsRecorder{
+			prefix: "emadynamic",
+			met:    d.Metrics,
+		}
+		d.metricsRecorder.RegisterMetrics(d.dynsampler)
 	}
-	d.metricsRecorder.RegisterMetrics(d.dynsampler)
 	return nil
 }
 

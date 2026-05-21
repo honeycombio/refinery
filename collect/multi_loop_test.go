@@ -534,7 +534,7 @@ func TestCoordinatedReload(t *testing.T) {
 			PeerQueueSize:     3000,
 			WorkerCount:       4,
 		},
-		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		GetSamplerTypeVal:  &config.DynamicSamplerConfig{SampleRate: 1, FieldList: []string{"test"}},
 		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
 		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
 		SampleCache: config.SampleCacheConfig{
@@ -546,92 +546,71 @@ func TestCoordinatedReload(t *testing.T) {
 
 	collector := newTestCollector(t, conf)
 
-	// Send some test spans to create dataset samplers
-	processedInitial := int32(0)
-	for i := 0; i < 10; i++ {
-		span := &types.Span{
-			Event: &types.Event{
-				APIHost:    "http://api.honeycomb.io",
-				APIKey:     legacyAPIKey,
-				Dataset:    fmt.Sprintf("dataset-%d", i%3),
-				SampleRate: 1,
-				Timestamp:  time.Now(),
-				Data:       types.Payload{},
-			},
-			TraceID:     fmt.Sprintf("reload-trace-%d", i),
-			IsRoot:      true,
-			ArrivalTime: time.Now(),
-		}
-		if err := collector.AddSpan(span); err == nil {
-			atomic.AddInt32(&processedInitial, 1)
+	// waitForSamplersCreated waits until at least one worker has a sampler,
+	// proving traces were actually processed and makeDecision was called.
+	waitForSamplersCreated := func(msg string) {
+		t.Helper()
+		assert.Eventually(t, func() bool {
+			total := 0
+			for _, worker := range collector.workers {
+				ch := make(chan struct{})
+				worker.pause <- ch
+				total += len(worker.datasetSamplers)
+				close(ch)
+			}
+			return total > 0
+		}, 2*time.Second, 10*time.Millisecond, msg)
+	}
+
+	// waitForSamplersCleared waits until all workers have empty datasetSamplers.
+	waitForSamplersCleared := func(msg string) {
+		t.Helper()
+		assert.Eventually(t, func() bool {
+			for _, worker := range collector.workers {
+				ch := make(chan struct{})
+				worker.pause <- ch
+				n := len(worker.datasetSamplers)
+				close(ch)
+				if n > 0 {
+					return false
+				}
+			}
+			return true
+		}, 2*time.Second, 10*time.Millisecond, msg)
+	}
+
+	sendSpans := func(n int, dataset, traceIDPrefix string) {
+		for i := 0; i < n; i++ {
+			span := &types.Span{
+				Event: &types.Event{
+					APIHost:    "http://api.honeycomb.io",
+					APIKey:     legacyAPIKey,
+					Dataset:    fmt.Sprintf("%s", dataset),
+					SampleRate: 1,
+					Timestamp:  time.Now(),
+					Data:       types.Payload{},
+				},
+				TraceID:     fmt.Sprintf("%s-%d", traceIDPrefix, i),
+				IsRoot:      true,
+				ArrivalTime: time.Now(),
+			}
+			collector.AddSpan(span) //nolint:errcheck
 		}
 	}
 
-	// Wait for initial spans to be processed
-	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&processedInitial) >= 8
-	}, 2*time.Second, 10*time.Millisecond, "Initial spans should be processed")
+	// Send spans and wait for workers to process them and create samplers.
+	sendSpans(20, "dataset", "reload-trace")
+	waitForSamplersCreated("samplers should be created before first reload")
 
-	// Trigger a reload - this should cause workers to recreate their samplers
-	collector.sendReloadSignal("hash1", "hash2")
+	// Reload and verify all workers clear their samplers.
+	collector.sendReloadSignal("dataset", "hash2")
+	waitForSamplersCleared("samplers should be cleared after first reload")
 
-	// Give a moment for the reload signal to be processed (reload is async)
-	// We'll verify the reload worked by checking that spans still get processed
-	time.Sleep(50 * time.Millisecond)
+	// Send spans again; samplers must be recreated, proving the system still works.
+	sendSpans(20, "dataset", "after-reload")
+	waitForSamplersCreated("samplers should be recreated after first reload")
 
-	// Check that samplers were recreated by sending more spans
-	processedAfterReload := int32(0)
-	for i := 0; i < 20; i++ {
-		span := &types.Span{
-			Event: &types.Event{
-				APIHost:    "http://api.honeycomb.io",
-				APIKey:     legacyAPIKey,
-				Dataset:    "test.reload",
-				SampleRate: 1,
-				Timestamp:  time.Now(),
-				Data:       types.Payload{},
-			},
-			TraceID:     fmt.Sprintf("after-reload-%d", i),
-			IsRoot:      true,
-			ArrivalTime: time.Now(),
-		}
-		if err := collector.AddSpan(span); err == nil {
-			atomic.AddInt32(&processedAfterReload, 1)
-		}
-	}
-
-	// Verify spans were processed after reload
-	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&processedAfterReload) >= 15
-	}, 2*time.Second, 100*time.Millisecond, "Spans should be processed after reload")
-
-	// Trigger another reload to verify multiple reloads work
-	collector.sendReloadSignal("hash2", "hash3")
-	time.Sleep(50 * time.Millisecond)
-
-	// Send more spans to verify system still works
-	processedAfterSecondReload := int32(0)
-	for i := 0; i < 20; i++ {
-		span := &types.Span{
-			Event: &types.Event{
-				APIHost:    "http://api.honeycomb.io",
-				APIKey:     legacyAPIKey,
-				Dataset:    "test.reload2",
-				SampleRate: 1,
-				Timestamp:  time.Now(),
-				Data:       types.Payload{},
-			},
-			TraceID:     fmt.Sprintf("after-second-reload-%d", i),
-			IsRoot:      true,
-			ArrivalTime: time.Now(),
-		}
-		if err := collector.AddSpan(span); err == nil {
-			atomic.AddInt32(&processedAfterSecondReload, 1)
-		}
-	}
-
-	// Verify spans were processed after second reload
-	assert.Eventually(t, func() bool {
-		return atomic.LoadInt32(&processedAfterSecondReload) >= 15
-	}, 2*time.Second, 100*time.Millisecond, "Spans should be processed after second reload")
+	// Second reload cycle.
+	collector.sendReloadSignal("dataset", "hash3")
+	waitForSamplersCleared("samplers should be cleared after second reload")
 }
