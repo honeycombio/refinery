@@ -477,8 +477,9 @@ func TestDryRunMode(t *testing.T) {
 	transmission := coll.Transmission.(*transmit.MockTransmission)
 
 	samplerFactory := &sample.SamplerFactory{
-		Config: conf,
-		Logger: &logger.NullLogger{},
+		Config:  conf,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
 	}
 	sampler := samplerFactory.GetSamplerImplementationForKey("test")
 	coll.SamplerFactory = samplerFactory
