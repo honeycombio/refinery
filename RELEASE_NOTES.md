@@ -2,6 +2,17 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.2.2
+
+This release fixes dynamic sampling correctness and metrics accuracy when multiple collector workers are enabled.
+
+### Fixes
+
+* **Throughput sampler correctness**: Fixed throughput targets not being met. If you set `WorkerCount` to `1` as a workaround, you can now remove that override.
+* **Dynsampler metrics accuracy**: Fixed `event_count` and `request_count` being reported higher than actual throughput.
+* Fixed `send_errors` not being incremented for network-level transmission errors.
+* Fixed the config validator not exiting with a non-zero code on YAML parse errors in rules files.
+
 ## Version 3.2.1
 
 This release fixes a bug where trace and span IDs were corrupted for clients sending data over OTLP HTTP/JSON.
