@@ -8,9 +8,8 @@ This release contains bug fixes for dynamic sampling correctness when multiple c
 
 ### Fixes
 
-* Fixed incorrect event counting (`event_count`, `request_count`) in dynsampler-based samplers due to overcounting.
-* Fixed non-deterministic dynsampler keys caused by unsorted `FieldList` — sampling decisions are now consistent across restarts.
-* Fixed a related issue where the fields slice was mutated in place before sorting, causing data races.
+* **Throughput sampler correctness** (affects configurations with multiple collector workers): Fixed a bug where throughput targets were not being met when running with multiple collector workers. If you set `WorkerCount` to `1` as a workaround, you can now remove that override.
+* **Dynsampler metrics accuracy** (affects configurations with multiple collector workers): Fixed `event_count` and `request_count` metrics being reported higher than actual throughput.
 * Fixed `send_errors` not being incremented for network-level transmission errors.
 * Fixed the config validator not exiting with a non-zero code on YAML parse errors in rules files.
 
