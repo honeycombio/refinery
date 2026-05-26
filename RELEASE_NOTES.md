@@ -4,12 +4,12 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 3.2.2
 
-This release contains bug fixes for dynamic sampling correctness when multiple collector workers are enabled, and metrics accuracy.
+This release fixes dynamic sampling correctness and metrics accuracy when multiple collector workers are enabled.
 
 ### Fixes
 
-* **Throughput sampler correctness** (affects configurations with multiple collector workers): Fixed a bug where throughput targets were not being met when running with multiple collector workers. If you set `WorkerCount` to `1` as a workaround, you can now remove that override.
-* **Dynsampler metrics accuracy** (affects configurations with multiple collector workers): Fixed `event_count` and `request_count` metrics being reported higher than actual throughput.
+* **Throughput sampler correctness**: Fixed throughput targets not being met. If you set `WorkerCount` to `1` as a workaround, you can now remove that override.
+* **Dynsampler metrics accuracy**: Fixed `event_count` and `request_count` being reported higher than actual throughput.
 * Fixed `send_errors` not being incremented for network-level transmission errors.
 * Fixed the config validator not exiting with a non-zero code on YAML parse errors in rules files.
 
