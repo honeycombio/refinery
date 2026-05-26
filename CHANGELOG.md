@@ -1,5 +1,19 @@
 # Refinery Changelog
 
+## 3.2.2 2026-05-26
+
+### 🐛 Fixes
+
+- fix: validator exits non-zero on YAML parse errors in rules by @VinozzZ in https://github.com/honeycombio/refinery/pull/1820
+- fix: increment send_errors for network errors from request by @VinozzZ in https://github.com/honeycombio/refinery/pull/1823
+- fix: make sure FieldList is sorted before use it as dynsamplerKey by @VinozzZ in https://github.com/honeycombio/refinery/pull/1825
+- fix: overcounting dynsampler event_count and request_count by @VinozzZ in https://github.com/honeycombio/refinery/pull/1826
+- fix: copy fields slice before sorting in newTraceKey by @VinozzZ in https://github.com/honeycombio/refinery/pull/1827
+
+### 🛠 Maintenance
+
+- maint: remove proto/otlp fork reference by @VinozzZ in https://github.com/honeycombio/refinery/pull/1822
+
 ## 3.2.1 2026-05-04
 
 This release fixes a bug in OTLP JSON ingestion where `traceId` and `spanId` fields were incorrectly treated as base64-encoded. The OTLP JSON spec explicitly requires these fields to be hex-encoded strings, and clients sending data over OTLP HTTP/JSON would receive corrupted ID values as a result.
