@@ -28,10 +28,13 @@ type traceKey struct {
 
 func newTraceKey(fields []string, useTraceLength bool) *traceKey {
 	// always put the field list in sorted order for easier comparison
-	sort.Strings(fields)
-	rootOnlyFields := make([]string, 0, len(fields)/2)
-	nonRootFields := make([]string, 0, len(fields)/2)
-	for _, field := range fields {
+	copiedFields := make([]string, len(fields))
+	copy(copiedFields, fields)
+	sort.Strings(copiedFields)
+
+	rootOnlyFields := make([]string, 0, len(copiedFields)/2)
+	nonRootFields := make([]string, 0, len(copiedFields)/2)
+	for _, field := range copiedFields {
 		if strings.HasPrefix(field, config.RootPrefix) {
 			rootOnlyFields = append(rootOnlyFields, field[len(config.RootPrefix):])
 			continue
