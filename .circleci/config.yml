@@ -233,6 +233,10 @@ jobs:
           name: build and publish to private ECR
           command: |
             export PRIMARY_DOCKER_REPO="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com"
+            # Honeycomb-internal images are PGO-optimized against our own prod
+            # profile. Only the private ECR (and not the public release build)
+            # opts in, so customer images stay profile-neutral.
+            export PGO_PROFILE="${PWD}/cmd/refinery/honeycomb.pgo"
             ./build-docker.sh
 
   publish_docker_to_ecr_sippycup:

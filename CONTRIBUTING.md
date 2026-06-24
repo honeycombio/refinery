@@ -44,6 +44,21 @@ With the new configuration format redesign in v2.0.0, the workflow for making a 
 - The `rules_complete.yaml` file is an example file constructed manually. If there are substantive changes to rules, you should manually update `rules_complete.yaml`.
 - If you add new configurations that expect the environment, they must also be available from the command line. This will only work if you add them within the struct for cmdenv.go.
 
+# Profile-guided optimization (PGO)
+
+The build supports opt-in [PGO](https://go.dev/doc/pgo). `build-docker.sh` folds a
+pprof CPU profile into the build when `PGO_PROFILE` points at one:
+
+`PGO_PROFILE=$PWD/cmd/refinery/honeycomb.pgo ./build-docker.sh`
+
+The checked-in `cmd/refinery/honeycomb.pgo` is collected from Honeycomb's own
+production Refinery, whose traffic is libhoney-heavy; it is **not** guaranteed to
+be optimal for OTLP-dominant or otherwise different deployments. It is therefore
+not named `default.pgo` (which `go build` would apply implicitly to every build),
+and the public release build leaves `PGO_PROFILE` unset so the published image
+stays profile-neutral. If your workload resembles ours, opt in with the command
+above, or collect your own profile and point `PGO_PROFILE` at it.
+
 # References
 
 Please see our [general guide for OSS lifecycle and practices.](https://github.com/honeycombio/home/blob/main/honeycomb-oss-lifecycle-and-practices.md)

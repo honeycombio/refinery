@@ -63,6 +63,21 @@ unset GOARCH
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(make latest_modification_time)}
 
+# Opt-in profile-guided optimization. When PGO_PROFILE points at a pprof CPU
+# profile, fold it into the build. It is left unset for public release builds so
+# the customer image stays profile-neutral; Honeycomb's internal builds set it to
+# cmd/refinery/honeycomb.pgo (collected from our own prod traffic, which is
+# libhoney-heavy and may not be optimal for every deployment). The profile is
+# intentionally not named default.pgo, so go build never picks it up implicitly.
+if [[ -n "${PGO_PROFILE:-}" ]]; then
+  if [[ ! -f "${PGO_PROFILE}" ]]; then
+    echo "PGO_PROFILE set to '${PGO_PROFILE}' but no such file exists" >&2
+    exit 1
+  fi
+  echo "Building with PGO profile: ${PGO_PROFILE}"
+  export GOFLAGS="${GOFLAGS} -pgo=${PGO_PROFILE}"
+fi
+
 # Build the image once, either to a remote registry designated by PRIMARY_DOCKER_REPO
 # or to the local repository as "ko.local/refinery:<tags>" if PRIMARY_DOCKER_REPO is not set.
 export KO_DOCKER_REPO="${PRIMARY_DOCKER_REPO:-ko.local}"
