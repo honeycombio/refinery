@@ -35,7 +35,7 @@ import (
 	_ "google.golang.org/grpc/encoding/gzip"
 
 	// grpc/zstd compressor, auto registers on import
-	_ "github.com/mostynb/go-grpc-compression/zstd"
+	_ "github.com/honeycombio/refinery/internal/grpccomp"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
 
