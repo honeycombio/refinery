@@ -169,6 +169,26 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 2, len(events))
 	})
 
+	t.Run("can receive OTLP over GRPC with zstd compression", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    legacyAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req, grpc.UseCompressor("zstd"))
+		if err != nil {
+			t.Errorf(`Unexpected error: %s`, err)
+		}
+		events := mockTransmission.GetBlock(2)
+		assert.Equal(t, 2, len(events))
+	})
+
 	// TODO: (MG) figure out how we can test JSON created from OTLP requests
 	// Below is example, but requires significant usage of collector, sampler, conf, etc
 	t.Run("creates events for span events", func(t *testing.T) {
