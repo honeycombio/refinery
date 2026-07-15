@@ -34,6 +34,9 @@ import (
 	// grpc/gzip compressor, auto registers on import
 	_ "google.golang.org/grpc/encoding/gzip"
 
+	// grpc/zstd compressor, auto registers on import
+	_ "github.com/honeycombio/refinery/internal/grpccomp"
+
 	huskyotlp "github.com/honeycombio/husky/otlp"
 
 	"github.com/honeycombio/refinery/collect"
