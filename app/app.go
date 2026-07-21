@@ -41,7 +41,7 @@ func (a *App) Start() error {
 			a.Logger.Warn().WithFields(map[string]interface{}{
 				"configHash": cfgHash,
 				"rulesHash":  rulesHash,
-			}).Logf(msg)
+			}).Logf("%s", msg)
 		}
 		cfgMetric := config.ConfigHashMetrics(cfgHash)
 		ruleMetric := config.ConfigHashMetrics(rulesHash)
