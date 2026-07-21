@@ -40,6 +40,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          # Never cache here: this job builds untrusted PR code, and
+          # workflow_run cache writes are scoped to the default branch --
+          # caching would let a malicious dependency poison a cache later
+          # restored by a trusted run.
+          cache: false
 
       - name: Regenerate LICENSES
         env:
