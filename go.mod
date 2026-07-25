@@ -120,3 +120,7 @@ require (
 )
 
 tool github.com/google/go-licenses/v2
+
+// fix for arm64 zstd decoder asm overwriting the saved link register, which breaks
+// stack unwinding during GC scans and profiling: klauspost/compress#1176 (not yet merged upstream)
+replace github.com/klauspost/compress => github.com/honeycombio/compress v1.19.1-0.20260725070242-26c7cb34104b
