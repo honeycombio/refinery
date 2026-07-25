@@ -51,6 +51,23 @@ const (
 	staleDispatchTime           = "_stale_dispatch_time"
 )
 
+// apiKeyRejectionLogInterval controls how often we emit a log line for a
+// given API key that's repeatedly being rejected (HTTP 401) by the upstream.
+// A misconfigured or wrong-region key can cause every single batch to be
+// rejected, and without this we'd emit an ERROR log per batch -- which, under
+// load, can be many times a second. Instead we log the first rejection
+// immediately (so the problem is visible right away), then at most once per
+// interval after that, with a count of how many events were dropped since the
+// last log.
+const apiKeyRejectionLogInterval = time.Minute
+
+// apiKeyRejectionState tracks rejection logging state for a single API key.
+type apiKeyRejectionState struct {
+	mu           sync.Mutex
+	droppedCount int64
+	lastLogged   time.Time
+}
+
 // Instantiating a new encoder is expensive, so use a global one.
 // EncodeAll() is concurrency-safe.
 var zstdEncoder *zstd.Encoder
@@ -151,6 +168,11 @@ type DirectTransmission struct {
 	httpClient *http.Client
 	userAgent  string
 	metricKeys metricKeys
+
+	// rejectedAPIKeys tracks, per API key, how many events have been dropped
+	// due to HTTP 401 rejections and when we last logged about it. See
+	// recordAPIKeyRejected and apiKeyRejectionLogInterval.
+	rejectedAPIKeys sync.Map // map[string]*apiKeyRejectionState
 }
 
 func NewDirectTransmission(
@@ -314,6 +336,35 @@ func (d *DirectTransmission) Stop() error {
 	d.stop = nil
 
 	return nil
+}
+
+// recordAPIKeyRejected logs that events for the given API key are being
+// rejected by the upstream (HTTP 401), such as when the key's region doesn't
+// match the configured APIHost. The first rejection for a key is logged
+// immediately; subsequent rejections within apiKeyRejectionLogInterval are
+// only counted, then reported in the next log line once the interval has
+// elapsed, so operators still get a clear signal without per-batch log spam.
+func (d *DirectTransmission) recordAPIKeyRejected(apiKey string, numEvents int) {
+	v, _ := d.rejectedAPIKeys.LoadOrStore(apiKey, &apiKeyRejectionState{})
+	state := v.(*apiKeyRejectionState)
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	state.droppedCount += int64(numEvents)
+
+	now := d.Clock.Now()
+	if !state.lastLogged.IsZero() && now.Sub(state.lastLogged) < apiKeyRejectionLogInterval {
+		return
+	}
+
+	d.Logger.Error().
+		WithString("api_key", apiKey).
+		WithField("dropped_events", state.droppedCount).
+		Logf("APIKey was rejected. Please verify APIKey is correct.")
+
+	state.droppedCount = 0
+	state.lastLogged = now
 }
 
 // handleError logs an error with common fields and custom message
@@ -614,9 +665,12 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 				d.Metrics.Increment(d.metricKeys.counterResponseDecodeErrors)
 			}
 
-			// Special handling for unauthorized responses
+			// Special handling for unauthorized responses. This is rate-limited
+			// per API key so a persistently-rejected key (e.g. a valid-looking
+			// key for the wrong region/environment) doesn't flood the logs with
+			// one ERROR per batch.
 			if resp.StatusCode == http.StatusUnauthorized {
-				d.Logger.Error().WithString("api_key", apiKey).Logf("APIKey was rejected. Please verify APIKey is correct.")
+				d.recordAPIKeyRejected(apiKey, len(subBatch))
 			}
 
 			for _, ev := range subBatch {

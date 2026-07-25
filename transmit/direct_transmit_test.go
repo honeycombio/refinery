@@ -361,6 +361,75 @@ func TestDirectTransmissionErrorHandling(t *testing.T) {
 		require.True(t, unauthorizedFound, "Expected special unauthorized log message")
 	})
 
+	t.Run("unauthorized status is rate-limited per API key", func(t *testing.T) {
+		// Create a test server that always returns HTTP 401 Unauthorized, as
+		// would happen if a key were rejected for every request, e.g. a key
+		// for the wrong region being sent to an upstream in the wrong region.
+		unauthorizedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			w.Write([]byte(`{"error": "unauthorized"}`))
+		}))
+		defer unauthorizedServer.Close()
+
+		dt, _, mockLogger := setupDirectTransmissionTest(t)
+		fakeClock := clockwork.NewFakeClock()
+		dt.Clock = fakeClock
+
+		countRejectionLogs := func() (n int, lastDropped any) {
+			for _, event := range mockLogger.Events {
+				if errorMsg, ok := event.Fields["error"].(string); ok && strings.Contains(errorMsg, "APIKey was rejected") {
+					n++
+					lastDropped = event.Fields["dropped_events"]
+				}
+			}
+			return n, lastDropped
+		}
+
+		makeEvent := func(id int) *types.Event {
+			mockCfg := &config.MockConfig{}
+			eventData := types.NewPayload(mockCfg, map[string]any{"event_id": id})
+			eventData.ExtractMetadata()
+			return &types.Event{
+				Context:           context.Background(),
+				APIHost:           unauthorizedServer.URL,
+				APIKey:            "wrong-region-key",
+				Dataset:           "test-dataset",
+				Environment:       "test",
+				SampleRate:        1,
+				Timestamp:         time.Now().UTC(),
+				EnqueuedUnixMicro: time.Now().UnixMicro(),
+				Data:              eventData,
+			}
+		}
+
+		// First rejection: should be logged immediately, with a single event
+		// counted as dropped.
+		dt.sendBatch([]*types.Event{makeEvent(1)})
+		n, dropped := countRejectionLogs()
+		require.Equal(t, 1, n, "expected exactly one rejection log after the first rejected batch")
+		assert.EqualValues(t, 1, dropped)
+
+		// More rejections within the same minute: should be counted, but not
+		// logged again yet.
+		dt.sendBatch([]*types.Event{makeEvent(2), makeEvent(3)})
+		dt.sendBatch([]*types.Event{makeEvent(4)})
+		n, _ = countRejectionLogs()
+		require.Equal(t, 1, n, "expected no additional rejection logs within the rate-limit interval")
+
+		// Advance past the rate-limit interval and reject one more batch: a
+		// second log should appear, reporting everything dropped since the
+		// first log (2 + 1 + 1 = 4 events).
+		fakeClock.Advance(apiKeyRejectionLogInterval + time.Second)
+		dt.sendBatch([]*types.Event{makeEvent(5)})
+		n, dropped = countRejectionLogs()
+		require.Equal(t, 2, n, "expected a second rejection log after the rate-limit interval elapsed")
+		assert.EqualValues(t, 4, dropped)
+
+		err := dt.Stop()
+		require.NoError(t, err)
+	})
+
 	t.Run("msgpack response handling", func(t *testing.T) {
 		// Create a test server that returns msgpack responses
 		msgpackServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
