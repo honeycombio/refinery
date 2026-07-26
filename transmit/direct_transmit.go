@@ -396,7 +396,7 @@ func (d *DirectTransmission) handleError(ev *types.Event, statusCode int, queueT
 		}
 	}
 
-	log.Logf(logMessage)
+	log.Logf("%s", logMessage)
 }
 
 // handleBatchFailure handles metrics updates when the entire batch fails

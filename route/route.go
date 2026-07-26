@@ -293,7 +293,7 @@ func (r *Router) LnS() {
 	if r.Config.GetGRPCEnabled() && len(grpcAddr) > 0 {
 		l, err := net.Listen("tcp", grpcAddr)
 		if err != nil {
-			r.iopLogger.Error().Logf("failed to listen to grpc addr: " + grpcAddr)
+			r.iopLogger.Error().Logf("failed to listen to grpc addr: %s", grpcAddr)
 		}
 
 		r.iopLogger.Info().Logf("gRPC listening on %s", grpcAddr)
@@ -639,7 +639,7 @@ func (router *Router) processOTLPRequest(
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
 			if err := router.processEvent(event, requestID); err != nil {
-				router.Logger.Error().Logf("Error processing event: " + err.Error())
+				router.Logger.Error().Logf("Error processing event: %s", err.Error())
 			}
 		}
 	}
@@ -684,7 +684,7 @@ func (router *Router) processOTLPRequestBatchMsgp(
 			// TODO: Apply this optimization to all incoming data instead of relying on OTLP-specific behavior.
 			err := coreFieldsUnmarshaler.UnmarshalMsgpEventMetadataOnly(ev.Attributes, &payload)
 			if err != nil {
-				router.Logger.Error().Logf("Error unmarshaling payload: " + err.Error())
+				router.Logger.Error().Logf("Error unmarshaling payload: %s", err.Error())
 				continue
 			}
 
@@ -700,7 +700,7 @@ func (router *Router) processOTLPRequestBatchMsgp(
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
 			if err := router.processEvent(event, requestID); err != nil {
-				router.Logger.Error().Logf("Error processing event: " + err.Error())
+				router.Logger.Error().Logf("Error processing event: %s", err.Error())
 			}
 		}
 	}

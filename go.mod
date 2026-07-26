@@ -1,6 +1,6 @@
 module github.com/honeycombio/refinery
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/agnivade/levenshtein v1.2.1
@@ -20,7 +20,7 @@ require (
 	github.com/jessevdk/go-flags v1.6.1
 	github.com/jonboulle/clockwork v0.5.0
 	github.com/json-iterator/go v1.1.12
-	github.com/klauspost/compress v1.18.6
+	github.com/klauspost/compress v1.19.1
 	github.com/open-telemetry/opamp-go v0.23.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.153.0
 	github.com/panmari/cuckoofilter v1.0.6
