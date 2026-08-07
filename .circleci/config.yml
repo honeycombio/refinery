@@ -1,5 +1,11 @@
 version: 2.1
 
+parameters:
+  go_version:
+    description: cimg/go image version used by every Go job. Keep in sync with .tool-versions and go.mod as appropriate.
+    type: string
+    default: "1.26"
+
 orbs:
   aws-cli: circleci/aws-cli@3.2.0
   aws-ecr: circleci/aws-ecr@9.5.4
@@ -66,7 +72,7 @@ commands:
 jobs:
   test:
     docker:
-      - image: cimg/go:1.26
+      - image: cimg/go:<< pipeline.parameters.go_version >>
       - image: redis:6.2
     resource_class: xlarge
     steps:
@@ -94,7 +100,7 @@ jobs:
 
   build_binaries:
     docker:
-      - image: cimg/go:1.26
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - go-build:
@@ -185,7 +191,7 @@ jobs:
 
   build_docker:
     docker:
-      - image: cimg/go:1.26
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - setup_googleko
@@ -214,7 +220,7 @@ jobs:
 
   publish_docker_to_private_ecr:
     docker:
-      - image: cimg/go:1.26
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - setup_remote_docker
@@ -237,7 +243,7 @@ jobs:
 
   publish_docker_to_ecr_sippycup:
     docker:
-      - image: cimg/go:1.26
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - setup_remote_docker
@@ -261,7 +267,7 @@ jobs:
 
   publish_docker_to_all_public_registries:
     docker:
-      - image: cimg/go:1.26
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - setup_remote_docker
