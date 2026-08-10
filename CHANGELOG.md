@@ -1,5 +1,24 @@
 # Refinery Changelog
 
+## 3.3.0 2026-08-10
+
+In addition to zstd support for gRPC connections and performance improvements, this release includes updates to address CVEs in several dependencies.
+
+### 💡 Enhancements
+
+- feat: support zstd on gRPC by @mterhar in https://github.com/honeycombio/refinery/pull/1833
+- maint: upgrade to go1.26 (bonus: better CPU performance) by @lizthegrey in https://github.com/honeycombio/refinery/pull/1836
+
+### 🛠 Maintenance
+
+- maint(deps): bump the minor-patch group with 19 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1829
+- maint: bump klauspost/compress to v1.19.1 by @lizthegrey in https://github.com/honeycombio/refinery/pull/1834
+- fix: stop flaky duplicate-event failures in TestAppIntegrationSendKey by @lizthegrey in https://github.com/honeycombio/refinery/pull/1837
+- maint(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.1 by @dependabot in https://github.com/honeycombio/refinery/pull/1839
+- maint: bump klauspost/compress to v1.19.2 by @lizthegrey in https://github.com/honeycombio/refinery/pull/1843
+- maint: align Go version declarations in dev and CI by @robbkidd in https://github.com/honeycombio/refinery/pull/1846
+- maint(deps): bump the minor-patch group across 1 directory with 20 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1847
+
 ## 3.2.2 2026-05-26
 
 ### 🐛 Fixes

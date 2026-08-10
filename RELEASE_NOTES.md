@@ -2,6 +2,19 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.3.0
+
+This release adds zstd compression support for OTLP over gRPC, upgrades the Go toolchain for better CPU performance, and updates dependencies to address CVEs.
+
+### Features
+
+* **zstd on gRPC**: Refinery's gRPC server now accepts OTLP requests sent with `grpc-encoding: zstd`. Clients already sending gzip are unaffected. The compressor streams rather than buffering whole messages.
+
+### Maintenance
+
+* Built with Go 1.26, which improves CPU performance.
+* Updated dependencies to address security vulnerabilities.
+
 ## Version 3.2.2
 
 This release fixes dynamic sampling correctness and metrics accuracy when multiple collector workers are enabled.

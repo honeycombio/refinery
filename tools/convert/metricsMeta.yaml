@@ -244,6 +244,10 @@ complete:
       unit: Dimensionless
       description: The hash of the current rules configuration
 hasprefix:
+    - name: unique_dynsampler_count
+      type: Gauge
+      unit: Dimensionless
+      description: Number of unique dynsampler-go samplers created
     - name: _num_dropped
       type: Counter
       unit: Dimensionless
