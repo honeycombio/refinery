@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2026-04-09 at 22:21:31 UTC.
+It was automatically generated on 2026-08-10 at 18:45:39 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -81,6 +81,7 @@ Metrics in this table don't contain their expected prefixes. This is because the
 
 | Name | Type | Unit | Description |
 |------|------|------|-------------|
+| unique_dynsampler_count | Gauge | Dimensionless | Number of unique dynsampler-go samplers created |
 | _num_dropped | Counter | Dimensionless | Number of traces dropped by configured sampler |
 | _num_kept | Counter | Dimensionless | Number of traces kept by configured sampler |
 | _sample_rate | Histogram | Dimensionless | Sample rate for traces |
