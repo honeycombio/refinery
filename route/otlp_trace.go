@@ -232,6 +232,13 @@ func customTraceExportHandler(
 	// Update the RequestInfo with the processed key for the unmarshal step
 	ri.ApiKey = keyToUse
 
+	if err := ri.ValidateHeaders(); err != nil {
+		return nil, huskyotlp.AsGRPCError(err)
+	}
+	if err := ri.ValidateDatasetHeader(); err != nil {
+		return nil, huskyotlp.AsGRPCError(err)
+	}
+
 	in := &translatedTraceServiceRequest{
 		requestInfo: ri,
 		ctx:         ctx,
