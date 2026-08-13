@@ -28,7 +28,7 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 
-	if err := ri.ValidateLogsHeaders(); err != nil {
+	if err := ri.ValidateHeaders(); err != nil {
 		switch err {
 		case huskyotlp.ErrInvalidContentType:
 			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrInvalidContentType)
@@ -92,7 +92,7 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 
-	if err := ri.ValidateLogsHeaders(); err != nil && err != huskyotlp.ErrMissingAPIKeyHeader {
+	if err := ri.ValidateHeaders(); err != nil && err != huskyotlp.ErrMissingAPIKeyHeader {
 		return nil, huskyotlp.AsGRPCError(err)
 	}
 
