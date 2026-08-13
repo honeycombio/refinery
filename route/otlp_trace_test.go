@@ -642,7 +642,7 @@ func TestOTLPHandler(t *testing.T) {
 		})
 		_, err := grpcClient.Export(ctx, req)
 		require.Error(t, err)
-		assert.Equal(t, codes.Unauthenticated, status.Code(err))
+		assert.Equal(t, codes.Unauthenticated.String(), status.Code(err).String())
 
 		events := mockTransmission.GetBlock(0)
 		assert.Equal(t, 0, len(events))
