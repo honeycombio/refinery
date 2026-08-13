@@ -1,0 +1,65 @@
+name: "License Scan (Dependabot)"
+
+# Unprivileged: runs directly on the dependabot pull_request (read-only
+# token, no secrets -- GitHub's default for dependabot-triggered events).
+# Builds the PR's code to regenerate LICENSES/ and uploads the result as
+# an artifact for the separate, privileged commit workflow to apply.
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Regenerate LICENSES
+        env:
+          CGO_ENABLED: "0"
+        run: make update-licenses
+
+      - name: Compute diff manifest
+        id: diff
+        run: |
+          set -euo pipefail
+          changed=$(git status --porcelain --untracked-files=all -- . | awk '{print $2}')
+          outside=$(echo "$changed" | grep -v '^LICENSES/' || true)
+          if [ -n "$outside" ]; then
+            echo "::error::update-licenses touched unexpected files, refusing to auto-fix:"
+            echo "$outside"
+            exit 1
+          fi
+          if [ -z "$changed" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git status --porcelain --untracked-files=all -- LICENSES > manifest.txt
+
+      - name: Save PR metadata
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          echo "${{ github.event.pull_request.head.sha }}" > head_sha.txt
+          echo "${{ github.event.pull_request.head.ref }}" > head_branch.txt
+
+      - uses: actions/upload-artifact@v4
+        if: steps.diff.outputs.changed == 'true'
+        with:
+          name: licenses-fix
+          path: |
+            LICENSES
+            manifest.txt
+            head_sha.txt
+            head_branch.txt
