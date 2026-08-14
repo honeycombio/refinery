@@ -629,6 +629,25 @@ func TestOTLPHandler(t *testing.T) {
 		assert.Equal(t, 0, len(events))
 	})
 
+	t.Run("rejects missing dataset header - gRPC", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team": legacyAPIKey,
+		})
+		_, err := grpcClient.Export(ctx, req)
+		require.Error(t, err)
+		assert.Equal(t, codes.Unauthenticated.String(), status.Code(err).String())
+
+		events := mockTransmission.GetBlock(0)
+		assert.Equal(t, 0, len(events))
+	})
+
 	t.Run("spans record incoming user agent - gRPC", func(t *testing.T) {
 		req := &collectortrace.ExportTraceServiceRequest{
 			ResourceSpans: []*trace.ResourceSpans{{

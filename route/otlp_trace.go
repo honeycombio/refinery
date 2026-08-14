@@ -36,17 +36,24 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 
-	if err := ri.ValidateTracesHeaders(); err != nil {
+	if err := ri.ValidateHeaders(); err != nil {
 		switch err {
 		case huskyotlp.ErrInvalidContentType:
 			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrInvalidContentType)
 			return
-		case huskyotlp.ErrMissingAPIKeyHeader, huskyotlp.ErrMissingDatasetHeader:
+		case huskyotlp.ErrMissingAPIKeyHeader:
 			if len(keyToUse) == 0 {
 				r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 				return
 			}
 		default:
+			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
+			return
+		}
+	}
+
+	if err := ri.ValidateDatasetHeader(); err != nil {
+		if len(keyToUse) == 0 {
 			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 			return
 		}
@@ -224,6 +231,13 @@ func customTraceExportHandler(
 
 	// Update the RequestInfo with the processed key for the unmarshal step
 	ri.ApiKey = keyToUse
+
+	if err := ri.ValidateHeaders(); err != nil {
+		return nil, huskyotlp.AsGRPCError(err)
+	}
+	if err := ri.ValidateDatasetHeader(); err != nil {
+		return nil, huskyotlp.AsGRPCError(err)
+	}
 
 	in := &translatedTraceServiceRequest{
 		requestInfo: ri,
