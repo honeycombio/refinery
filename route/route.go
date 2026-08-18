@@ -1039,17 +1039,17 @@ type cacheItem struct {
 // Cache missed use the configured getFn to populate the cache.
 func (c *environmentCache) get(key string) (authData, error) {
 	var val authData
+	var hit bool
 	// get read lock so that we don't attempt to read from the map
 	// while another routine has a write lock and is actively writing
 	// to the map.
 	c.mutex.RLock()
-	if item, ok := c.items[key]; ok {
-		if time.Now().Before(item.expiresAt) {
-			val = item.value
-		}
+	if item, ok := c.items[key]; ok && time.Now().Before(item.expiresAt) {
+		val = item.value
+		hit = true
 	}
 	c.mutex.RUnlock()
-	if val.environment != "" {
+	if hit {
 		return val, nil
 	}
 
