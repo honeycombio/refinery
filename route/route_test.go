@@ -773,6 +773,22 @@ func TestEnvironmentCache(t *testing.T) {
 		}
 	})
 
+	t.Run("does not call getFn on cache hit with blank environment", func(t *testing.T) {
+		test_key := "a-key"
+		// Unmigrated Classic environments will return a blank environment name.
+		aStillVeryClassicEnvironment := authData{environment: ""}
+
+		cache := newEnvironmentCache(time.Second, func(key string) (authData, error) {
+			t.Errorf("should not have called getFn")
+			return authData{}, nil
+		})
+		cache.addItem(test_key, aStillVeryClassicEnvironment, time.Second)
+
+		val, err := cache.get(test_key)
+		assert.NoError(t, err)
+		assert.Equal(t, aStillVeryClassicEnvironment.environment, val.environment)
+	})
+
 	t.Run("ignores expired items", func(t *testing.T) {
 		called := false
 		cache := newEnvironmentCache(time.Millisecond, func(key string) (authData, error) {
