@@ -78,6 +78,36 @@ groups:
           Kubernetes ConfigMaps) may cause delays in propagating configuration
           changes.
 
+      - name: EnableMigratedClassicAsEnvironment
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        summary: treats OTLP traffic to a migrated Classic environment as Environments & Services traffic, regardless of key type.
+        description: >
+          When enabled, Refinery treats OTLP traffic sent to a migrated
+          Classic environment the same as Environments & Services
+          traffic, whether or not the request carries an
+          `x-honeycomb-dataset` header. The destination dataset comes
+          from the `service.name` resource attribute, and the sampler is
+          selected by environment name instead of dataset name.
+
+          This only applies to Classic environments that have been
+          migrated to have an environment name. An unmigrated Classic
+          environment, and any Environments & Services key, behaves the
+          same as when this setting is disabled.
+
+          ⚠️ Before enabling this setting, make sure every migrated Classic
+          environment sampled by Refinery is ready. This setting applies to the
+          whole cluster, not to one environment at a time, and takes effect
+          immediately with no gradual cutover. Each migrated environment's
+          per-dataset samplers must already be consolidated into one sampler for
+          that environment, or sampling silently falls back to the `__default__`
+          sampler. Because the destination dataset now comes from
+          `service.name`, boards, triggers, SLOs, and saved queries querying the
+          old dataset-named destinations must already be updated for the new
+          `service.name`-named ones.
+
   - name: Network
     title: "Network Configuration"
     description: contains network configuration options.
