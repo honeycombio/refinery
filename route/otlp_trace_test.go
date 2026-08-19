@@ -702,6 +702,35 @@ func TestOTLPHandler(t *testing.T) {
 			assert.Equal(t, migratedEnvName, events[0].Environment, "the event should carry the migrated environment name")
 		})
 
+		t.Run("ignores the dataset header - HTTP", func(t *testing.T) {
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			request.Header.Set("x-honeycomb-team", migratedClassicAPIKey)
+			request.Header.Set("x-honeycomb-dataset", "my-dataset")
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+			require.Equal(t, http.StatusOK, w.Code, "a request carrying both a header and service.name is still accepted")
+
+			events := mockTransmission.GetBlock(1)
+			require.Equal(t, 1, len(events), "the accepted span should reach transmission")
+			assert.Equal(t, "my-service", events[0].Dataset, "the dataset should come from service.name, not the header")
+		})
+
+		t.Run("ignores the dataset header - gRPC", func(t *testing.T) {
+			ctx := createGRPCContext(map[string]string{
+				"x-honeycomb-team":    migratedClassicAPIKey,
+				"x-honeycomb-dataset": "my-dataset",
+			})
+			_, err := grpcClient.Export(ctx, req)
+			require.NoError(t, err, "a request carrying both a header and service.name is still accepted")
+
+			events := mockTransmission.GetBlock(1)
+			require.Equal(t, 1, len(events), "the accepted span should reach transmission")
+			assert.Equal(t, "my-service", events[0].Dataset, "the dataset should come from service.name, not the header")
+		})
+
 		// SendKeyMode "all" replaces the incoming key, so only a lookup against
 		// the replacement key can find the migrated environment.
 		t.Run("with a replaced key", func(t *testing.T) {
