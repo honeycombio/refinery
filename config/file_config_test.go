@@ -290,7 +290,7 @@ func BenchmarkAccessKeyConfig_IsAccepted(b *testing.B) {
 	}
 }
 
-func TestCalculateSamplerKey(t *testing.T) {
+func TestDetermineSamplerKey(t *testing.T) {
 	testCases := []struct {
 		name        string
 		apiKey      string
@@ -300,39 +300,31 @@ func TestCalculateSamplerKey(t *testing.T) {
 		expected    string
 	}{
 		{
-			name:        "legacy key with dataset prefix",
+			name:        "classic key, with dataset prefix",
 			apiKey:      "a1b2c3d4e5f67890abcdef1234567890",
 			dataset:     "my-dataset",
-			environment: "production",
+			environment: "",
 			prefix:      "test-prefix",
 			expected:    "test-prefix.my-dataset",
 		},
 		{
-			name:        "legacy key without dataset prefix",
+			name:        "classic key, without dataset prefix",
 			apiKey:      "a1b2c3d4e5f67890abcdef1234567890",
 			dataset:     "my-dataset",
-			environment: "production",
+			environment: "",
 			prefix:      "",
 			expected:    "my-dataset",
 		},
 		{
-			name:        "legacy 64-char ingest key with prefix",
-			apiKey:      "hcaic_1234567890123456789012345678901234567890123456789012345678",
-			dataset:     "my-dataset",
-			environment: "production",
-			prefix:      "test-prefix",
-			expected:    "test-prefix.my-dataset",
-		},
-		{
-			name:        "E&S key returns environment",
+			name:        "E&S key returns environment name",
 			apiKey:      "abc123DEF456ghi789jklm",
 			dataset:     "my-dataset",
-			environment: "production",
+			environment: "the-environment-name",
 			prefix:      "test-prefix",
-			expected:    "production",
+			expected:    "the-environment-name",
 		},
 		{
-			name:        "E&S key with empty environment",
+			name:        "E&S key without environment name",
 			apiKey:      "abc123DEF456ghi789jklm",
 			dataset:     "my-dataset",
 			environment: "",
@@ -340,28 +332,28 @@ func TestCalculateSamplerKey(t *testing.T) {
 			expected:    "",
 		},
 		{
-			name:        "legacy key with empty dataset",
+			name:        "classic key, without dataset and with prefix",
 			apiKey:      "a1b2c3d4e5f67890abcdef1234567890",
 			dataset:     "",
-			environment: "production",
+			environment: "",
 			prefix:      "test-prefix",
 			expected:    "test-prefix.",
 		},
 		{
-			name:        "legacy key with empty dataset and no prefix",
+			name:        "classic key, without dataset and without prefix",
 			apiKey:      "a1b2c3d4e5f67890abcdef1234567890",
 			dataset:     "",
-			environment: "production",
+			environment: "",
 			prefix:      "",
 			expected:    "",
 		},
 		{
-			name:        "empty api key defaults to E&S behavior",
+			name:        "without api key defaults to E&S behavior",
 			apiKey:      "",
 			dataset:     "my-dataset",
-			environment: "production",
+			environment: "the-environment-name",
 			prefix:      "test-prefix",
-			expected:    "production",
+			expected:    "the-environment-name",
 		},
 	}
 
@@ -380,10 +372,10 @@ func TestCalculateSamplerKey(t *testing.T) {
 				t,
 				tc.expected,
 				result,
-				"CalculateSamplerKey(%q, %q, %q) = %q, want %q",
+				"DetermineSamplerKey(%q, %q, %q) = %q, want %q",
 				tc.apiKey,
-				tc.dataset,
 				tc.environment,
+				tc.dataset,
 				result,
 				tc.expected)
 		})
