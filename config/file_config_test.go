@@ -332,6 +332,14 @@ func TestDetermineSamplerKey(t *testing.T) {
 			expected:    "",
 		},
 		{
+			name:        "classic key, with migrated environment, returns environment name",
+			apiKey:      "a1b2c3d4e5f67890abcdef1234567890",
+			dataset:     "my-dataset",
+			environment: "the-environment-name",
+			prefix:      "test-prefix",
+			expected:    "the-environment-name",
+		},
+		{
 			name:        "E&S key returns environment name",
 			apiKey:      "abc123DEF456ghi789jklm",
 			dataset:     "my-dataset",
