@@ -28,6 +28,15 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 
+	// Look up the environment with the key that will actually be sent, so a
+	// replaced key resolves its own environment. A failed lookup leaves the
+	// name blank, which validates as an unmigrated Classic environment.
+	envName, envErr := r.getEnvironmentName(keyToUse)
+	if envErr != nil {
+		r.Logger.Error().WithField("error", envErr).Logf("failed to look up environment name for OTLP logs request")
+	}
+	ri.EnvironmentName = envName
+
 	if err := ri.ValidateHeaders(); err != nil {
 		switch err {
 		case huskyotlp.ErrInvalidContentType:
@@ -91,6 +100,15 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
+
+	// Look up the environment with the key that will actually be sent, so a
+	// replaced key resolves its own environment. A failed lookup leaves the
+	// name blank, which validates as an unmigrated Classic environment.
+	envName, envErr := l.router.getEnvironmentName(keyToUse)
+	if envErr != nil {
+		l.router.Logger.Error().WithField("error", envErr).Logf("failed to look up environment name for OTLP logs request")
+	}
+	ri.EnvironmentName = envName
 
 	if err := ri.ValidateHeaders(); err != nil && err != huskyotlp.ErrMissingAPIKeyHeader {
 		return nil, huskyotlp.AsGRPCError(err)
