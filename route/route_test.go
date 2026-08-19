@@ -823,6 +823,74 @@ func TestEnvironmentCache(t *testing.T) {
 	})
 }
 
+func TestGetEnvironmentName(t *testing.T) {
+	t.Run("option off: with a classic key", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: false},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				t.Errorf("should not have called getFn")
+				return authData{}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(legacyAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "", env, "returns a blank environment without a cache lookup")
+	})
+
+	t.Run("option on: with a classic key for an unmigrated environment", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: true},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				return authData{environment: ""}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(legacyAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "", env, "returns a blank environment from the cache")
+	})
+
+	t.Run("option on: with a classic key for a migrated environment", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: true},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				return authData{environment: "migrated-env"}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(legacyAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "migrated-env", env, "returns the migrated environment name from the cache")
+	})
+
+	t.Run("option off: with an E&S key", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: false},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				return authData{environment: "es-env"}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(esAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "es-env", env, "returns the E&S key's environment name from the cache")
+	})
+
+	t.Run("option on: with an E&S key", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: true},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				return authData{environment: "es-env"}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(esAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "es-env", env, "returns the E&S key's environment name from the cache")
+	})
+}
+
 func TestGRPCHealthProbeCheck(t *testing.T) {
 	router := &Router{
 		Config: &config.MockConfig{},
