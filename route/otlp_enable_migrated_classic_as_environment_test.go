@@ -66,20 +66,24 @@ func newEnableMigratedClassicAsEnvironmentTestRouter(t *testing.T) (*Router, *tr
 			Logger:         &logger.MockLogger{},
 			incomingOrPeer: "incoming",
 		},
-		Logger:           &logger.MockLogger{},
-		zstdDecoder:      zstdDecoder,
-		environmentCache: newEnvironmentCache(time.Minute, nil),
-		Sharder:          &sharder.SingleServerSharder{Logger: &logger.MockLogger{}},
-		Collector:        mockCollector,
-		routerType:       types.RouterTypeIncoming,
-		Tracer:           noop.Tracer{},
+		Logger:      &logger.MockLogger{},
+		zstdDecoder: zstdDecoder,
+		environmentCache: newEnvironmentCache(time.Minute, func(key string) (authData, error) {
+			switch key {
+			case migratedClassicAPIKey:
+				return authData{environment: migratedEnvName}, nil
+			case esAPIKey:
+				return authData{environment: esEnvName}, nil
+			default:
+				return authData{}, nil
+			}
+		}),
+		Sharder:    &sharder.SingleServerSharder{Logger: &logger.MockLogger{}},
+		Collector:  mockCollector,
+		routerType: types.RouterTypeIncoming,
+		Tracer:     noop.Tracer{},
 	}
 	router.registerMetricNames()
-
-	// Simulate /1/auth results that would already be cached for a migrated
-	// Classic environment and for an Environments & Services environment.
-	router.environmentCache.addItem(migratedClassicAPIKey, authData{environment: migratedEnvName}, time.Hour)
-	router.environmentCache.addItem(esAPIKey, authData{environment: esEnvName}, time.Hour)
 
 	return router, mockTransmission, mockCollector
 }

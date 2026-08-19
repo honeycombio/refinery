@@ -1101,7 +1101,10 @@ type AuthInfo struct {
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
-	if apiKey == "" || config.IsLegacyAPIKey(apiKey) {
+	if apiKey == "" {
+		return "", nil
+	}
+	if config.IsLegacyAPIKey(apiKey) && !r.Config.GetEnableMigratedClassicAsEnvironment() {
 		return "", nil
 	}
 
