@@ -940,7 +940,7 @@ func (f *fileConfig) GetAllSamplerRules() *V2SamplerConfig {
 }
 
 func (f *fileConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
-	if !IsLegacyAPIKey(apiKey) {
+	if !IsLegacyAPIKey(apiKey) || env != "" {
 		return env
 	}
 

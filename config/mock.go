@@ -494,7 +494,7 @@ func (f *MockConfig) SetMaxAlloc(v MemorySize) {
 }
 
 func (f *MockConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
-	if IsLegacyAPIKey(apiKey) {
+	if IsLegacyAPIKey(apiKey) && env == "" {
 		if f.DatasetPrefix != "" {
 			return fmt.Sprintf("%s.%s", f.DatasetPrefix, dataset)
 		}
