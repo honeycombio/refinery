@@ -45,6 +45,13 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	}
 	ri.EnvironmentName = envName
 
+	// An environment that has a name behaves like E&S, so the destination dataset
+	// is determined by the span's service.name value and not by the request's
+	// dataset header value.
+	if ri.EnvironmentName != "" {
+		ri.Dataset = ""
+	}
+
 	if err := ri.ValidateHeaders(); err != nil {
 		switch err {
 		case huskyotlp.ErrInvalidContentType:
@@ -249,6 +256,13 @@ func customTraceExportHandler(
 		traceServer.router.Logger.Error().WithField("error", envErr).Logf("failed to look up environment name for OTLP trace request")
 	}
 	ri.EnvironmentName = envName
+
+	// An environment that has a name behaves like E&S, so the destination dataset
+	// is determined by the span's service.name value and not by the request's
+	// dataset header value.
+	if ri.EnvironmentName != "" {
+		ri.Dataset = ""
+	}
 
 	if err := ri.ValidateHeaders(); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
