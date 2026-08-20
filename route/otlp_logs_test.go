@@ -61,9 +61,11 @@ func TestLogsOTLPHandler(t *testing.T) {
 			Logger:         logger,
 			incomingOrPeer: "incoming",
 		},
-		Logger:           logger,
-		zstdDecoder:      zstdDecoder,
-		environmentCache: newEnvironmentCache(time.Second, nil),
+		Logger:      logger,
+		zstdDecoder: zstdDecoder,
+		environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+			return authData{}, nil
+		}),
 		Sharder: &sharder.SingleServerSharder{
 			Logger: logger,
 		},

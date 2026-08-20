@@ -570,10 +570,12 @@ func TestOTLPRequest(t *testing.T) {
 			Logger:         &logger.MockLogger{},
 			incomingOrPeer: "incoming",
 		},
-		Logger:           &logger.MockLogger{},
-		environmentCache: newEnvironmentCache(time.Second, nil),
-		Tracer:           noop.Tracer{},
-		Collector:        collect.NewMockCollector(),
+		Logger: &logger.MockLogger{},
+		environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+			return authData{}, nil
+		}),
+		Tracer:    noop.Tracer{},
+		Collector: collect.NewMockCollector(),
 		Sharder: &sharder.MockSharder{
 			Self: &sharder.TestShard{Addr: "http://test"},
 		},
