@@ -715,6 +715,125 @@ func TestSampleConfigReload(t *testing.T) {
 	assert.Equal(t, uint(10), newRate)
 }
 
+// TestSamplerKeySelection tests which key a trace's sampler is selected by,
+// across the key and environment shapes a trace can arrive with.
+func TestSamplerKeySelection(t *testing.T) {
+	const esAPIKey = "abc123DEF456ghi789jklm"
+
+	newCollectorForSamplerKey := func(t *testing.T, datasetPrefix string) (*InMemCollector, *CollectorWorker) {
+		conf := &config.MockConfig{
+			GetTracesConfigVal: config.TracesConfig{
+				SendTicker:   config.Duration(2 * time.Millisecond),
+				SendDelay:    config.Duration(1 * time.Millisecond),
+				TraceTimeout: config.Duration(60 * time.Second),
+				MaxBatchSize: 500,
+			},
+			GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+			TraceIdFieldNames:  []string{"trace.trace_id"},
+			ParentIdFieldNames: []string{"trace.parent_id"},
+			DatasetPrefix:      datasetPrefix,
+			GetCollectionConfigVal: config.CollectionConfig{
+				WorkerCount:       1,
+				IncomingQueueSize: 10,
+				ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			},
+			SampleCache: config.SampleCacheConfig{
+				KeptSize:          100,
+				DroppedSize:       100,
+				SizeCheckInterval: config.Duration(1 * time.Second),
+			},
+		}
+
+		coll := newTestCollector(t, conf)
+		require.NoError(t, coll.SamplerFactory.Start())
+		// Just one worker keeps things intelligible.
+		return coll, coll.workers[0]
+	}
+
+	// samplerKeys reports which keys the worker has cached samplers under.
+	samplerKeys := func(worker *CollectorWorker) []string {
+		ch := make(chan struct{})
+		defer close(ch)
+
+		worker.pause <- ch
+		keys := make([]string, 0, len(worker.datasetSamplers))
+		for key := range worker.datasetSamplers {
+			keys = append(keys, key)
+		}
+		return keys
+	}
+
+	for _, tc := range []struct {
+		name          string
+		apiKey        string
+		environment   string
+		datasetPrefix string
+		expected      string
+		why           string
+	}{
+		{
+			name:        "classic key, unmigrated environment",
+			apiKey:      legacyAPIKey,
+			environment: "",
+			expected:    "my-dataset",
+			why:         "a classic key with no environment name selects the sampler by dataset",
+		},
+		{
+			name:          "classic key, unmigrated environment, with dataset prefix",
+			apiKey:        legacyAPIKey,
+			environment:   "",
+			datasetPrefix: "test-prefix",
+			expected:      "test-prefix.my-dataset",
+			why:           "the configured prefix qualifies a dataset-keyed sampler",
+		},
+		{
+			name:        "classic key, migrated environment",
+			apiKey:      legacyAPIKey,
+			environment: "migrated-env",
+			expected:    "migrated-env",
+			why:         "a classic key carrying an environment name selects the sampler by that name, not by dataset",
+		},
+		{
+			name:          "classic key, migrated environment, with dataset prefix",
+			apiKey:        legacyAPIKey,
+			environment:   "migrated-env",
+			datasetPrefix: "test-prefix",
+			expected:      "migrated-env",
+			why:           "the prefix applies only to dataset-keyed samplers, so a migrated environment ignores it",
+		},
+		{
+			name:        "E&S key",
+			apiKey:      esAPIKey,
+			environment: "es-env",
+			expected:    "es-env",
+			why:         "an E&S key selects the sampler by environment name",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			coll, worker := newCollectorForSamplerKey(t, tc.datasetPrefix)
+			coll.AddSpan(&types.Span{
+				TraceID: "sampler-key-trace",
+				Event: &types.Event{
+					APIKey:      tc.apiKey,
+					Dataset:     "my-dataset",
+					Environment: tc.environment,
+					Data: types.NewPayload(
+						&config.MockConfig{},
+						map[string]any{"service.name": "test-service"},
+					),
+				},
+				IsRoot: true,
+			})
+
+			assert.Eventually(t, func() bool {
+				return len(samplerKeys(worker)) > 0
+			}, time.Second, time.Millisecond, "a root span should load a sampler")
+
+			assert.Equal(t, []string{tc.expected}, samplerKeys(worker), tc.why)
+		})
+	}
+}
+
 // TestStableMaxAlloc tests memory pressure handling and cache eviction when memory allocation limits are exceeded
 func TestStableMaxAlloc(t *testing.T) {
 	conf := &config.MockConfig{
