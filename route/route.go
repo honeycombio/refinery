@@ -1115,6 +1115,37 @@ func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 	return data.environment, nil
 }
 
+// otlpSignal names the OTLP signal an ingest handler serves.
+type otlpSignal string
+
+const (
+	otlpSignalTrace otlpSignal = "trace"
+	otlpSignalLog   otlpSignal = "log"
+)
+
+// setOTLPEnvironmentName looks up the environment name associated with an
+// apiKey and records it on a RequestInfo instance. EnvironmentName is left
+// blank if the lookup fails. A trace request destined for an environment with a
+// non-blank name ("E&Sish": E&S or a migrated Classic) has its dataset header
+// value removed, so that its destination dataset comes from service.name
+// instead.
+func (r *Router) setOTLPEnvironmentName(
+	ri *huskyotlp.RequestInfo,
+	apiKey string,
+	signal otlpSignal,
+) {
+	envName, err := r.getEnvironmentName(apiKey)
+	if err != nil {
+		r.Logger.Error().WithField("error", err).WithField("signal", string(signal)).Logf("failed to look up environment name for OTLP request")
+	}
+	ri.EnvironmentName = envName
+
+	// ignore dataset header for traces destined for an E&Sish environment
+	if signal == otlpSignalTrace && ri.EnvironmentName != "" {
+		ri.Dataset = ""
+	}
+}
+
 // getKeyID returns the Honeycomb ingest key ID associated with the given API
 // key. It uses the environment cache, so no additional API call is made if the
 // key has already been looked up. Returns an empty string for legacy keys,

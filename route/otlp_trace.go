@@ -36,21 +36,7 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 
-	// Look up the environment with the key that will actually be sent, so a
-	// replaced key resolves its own environment. A failed lookup leaves the
-	// name blank, which validates as an unmigrated Classic environment.
-	envName, envErr := r.getEnvironmentName(keyToUse)
-	if envErr != nil {
-		r.Logger.Error().WithField("error", envErr).Logf("failed to look up environment name for OTLP trace request")
-	}
-	ri.EnvironmentName = envName
-
-	// An environment that has a name behaves like E&S, so the destination dataset
-	// is determined by the span's service.name value and not by the request's
-	// dataset header value.
-	if ri.EnvironmentName != "" {
-		ri.Dataset = ""
-	}
+	r.setOTLPEnvironmentName(&ri, keyToUse, otlpSignalTrace)
 
 	if err := ri.ValidateHeaders(); err != nil {
 		switch err {
@@ -248,21 +234,7 @@ func customTraceExportHandler(
 	// Update the RequestInfo with the processed key for the unmarshal step
 	ri.ApiKey = keyToUse
 
-	// Look up the environment with the key that will actually be sent, so a
-	// replaced key resolves its own environment. A failed lookup leaves the
-	// name blank, which validates as an unmigrated Classic environment.
-	envName, envErr := traceServer.router.getEnvironmentName(keyToUse)
-	if envErr != nil {
-		traceServer.router.Logger.Error().WithField("error", envErr).Logf("failed to look up environment name for OTLP trace request")
-	}
-	ri.EnvironmentName = envName
-
-	// An environment that has a name behaves like E&S, so the destination dataset
-	// is determined by the span's service.name value and not by the request's
-	// dataset header value.
-	if ri.EnvironmentName != "" {
-		ri.Dataset = ""
-	}
+	traceServer.router.setOTLPEnvironmentName(&ri, keyToUse, otlpSignalTrace)
 
 	if err := ri.ValidateHeaders(); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
