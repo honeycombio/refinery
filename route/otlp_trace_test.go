@@ -124,10 +124,14 @@ func TestOTLPHandler(t *testing.T) {
 		// resolving migratedClassicAPIKey to a migrated environment and every
 		// other key to a blank one.
 		environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
-			if key == migratedClassicAPIKey {
+			switch key {
+			case migratedClassicAPIKey:
 				return authData{environment: migratedEnvName}, nil
+			case esAPIKey:
+				return authData{environment: esEnvName}, nil
+			default:
+				return authData{}, nil
 			}
-			return authData{}, nil
 		}),
 		Tracer: noop.Tracer{},
 	}
@@ -765,6 +769,65 @@ func TestOTLPHandler(t *testing.T) {
 				assert.Equal(t, migratedEnvName, events[0].Environment, "the replacement key's environment should be the one resolved")
 			})
 		})
+	})
+
+	// An E&S key always resolves an environment name, so it takes the same
+	// dataset-clearing branch a migrated Classic environment does. That branch
+	// must stay invisible here: an E&S key's dataset has never come from the
+	// header, at either setting of the option.
+	t.Run("EnableMigratedClassicAsEnvironment leaves E&S traffic alone", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				Resource: createResource(),
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: []*trace.Span{{Name: "my-span"}},
+				}},
+			}},
+		}
+		body, err := protojson.Marshal(req)
+		require.NoError(t, err)
+
+		for _, optionOn := range []bool{false, true} {
+			setting := "off"
+			if optionOn {
+				setting = "on"
+			}
+			t.Run("option "+setting, func(t *testing.T) {
+				conf.EnableMigratedClassicAsEnvironment = optionOn
+				defer func() { conf.EnableMigratedClassicAsEnvironment = false }()
+
+				t.Run("HTTP", func(t *testing.T) {
+					request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+					request.Header = http.Header{}
+					request.Header.Set("content-type", "application/json")
+					request.Header.Set("x-honeycomb-team", esAPIKey)
+					request.Header.Set("x-honeycomb-dataset", "my-dataset")
+
+					w := httptest.NewRecorder()
+					router.postOTLPTrace(w, request)
+					require.Equal(t, http.StatusOK, w.Code, "an E&S key is accepted with or without a dataset header")
+
+					events := mockTransmission.GetBlock(1)
+					require.Equal(t, 1, len(events), "the accepted span should reach transmission")
+					assert.Equal(t, "my-service", events[0].Dataset, "an E&S key's dataset comes from service.name, never the header")
+					assert.Equal(t, esEnvName, events[0].Environment, "an E&S key's environment is unaffected by the option")
+				})
+
+				t.Run("gRPC", func(t *testing.T) {
+					ctx := createGRPCContext(map[string]string{
+						"x-honeycomb-team":    esAPIKey,
+						"x-honeycomb-dataset": "my-dataset",
+					})
+					_, err := grpcClient.Export(ctx, req)
+					require.NoError(t, err, "an E&S key is accepted with or without a dataset header")
+
+					events := mockTransmission.GetBlock(1)
+					require.Equal(t, 1, len(events), "the accepted span should reach transmission")
+					assert.Equal(t, "my-service", events[0].Dataset, "an E&S key's dataset comes from service.name, never the header")
+					assert.Equal(t, esEnvName, events[0].Environment, "an E&S key's environment is unaffected by the option")
+				})
+			})
+		}
 	})
 
 	t.Run("spans record incoming user agent - gRPC", func(t *testing.T) {
