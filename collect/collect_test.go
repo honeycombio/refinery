@@ -834,6 +834,83 @@ func TestSamplerKeySelection(t *testing.T) {
 	}
 }
 
+func TestSendTraceLogging(t *testing.T) {
+	const esAPIKey = "abc123DEF456ghi789jklm"
+
+	// sendTraceAndCaptureLog runs send() and returns the fields logged with
+	// the "Sending trace" message.
+	sendTraceAndCaptureLog := func(t *testing.T, apiKey, environment, samplerSelector string) map[string]any {
+		log := &logger.MockLogger{}
+		metric := &metrics.MockMetrics{}
+		metric.Start()
+
+		coll := &InMemCollector{
+			Config:       &config.MockConfig{},
+			Clock:        clockwork.NewRealClock(),
+			Logger:       log,
+			Tracer:       noop.NewTracerProvider().Tracer("test"),
+			Metrics:      metric,
+			tracesToSend: make(chan sendableTrace, 1),
+		}
+
+		trace := &types.Trace{
+			TraceID:     "sampler-selector-trace",
+			APIKey:      apiKey,
+			Dataset:     "my-dataset",
+			Environment: environment,
+			KeepSample:  true,
+		}
+		coll.send(context.Background(), sendableTrace{
+			Trace:           trace,
+			reason:          "rules/trace/matched-ruleset-" + samplerSelector,
+			samplerSelector: samplerSelector,
+		})
+
+		for _, event := range log.Events {
+			if event.Fields["debug"] == "Sending trace" {
+				return event.Fields
+			}
+		}
+		t.Fatal("send() did not log a trace as sent")
+		return nil
+	}
+
+	// The string that selected the trace's sampler is the same value for
+	// every kind of key, so the field naming it is too.
+	for _, tc := range []struct {
+		name            string
+		apiKey          string
+		environment     string
+		samplerSelector string
+	}{
+		{
+			name:            "classic key, unmigrated environment",
+			apiKey:          legacyAPIKey,
+			environment:     "",
+			samplerSelector: "my-dataset",
+		},
+		{
+			name:            "classic key, migrated environment",
+			apiKey:          legacyAPIKey,
+			environment:     "migrated-env",
+			samplerSelector: "migrated-env",
+		},
+		{
+			name:            "E&S key",
+			apiKey:          esAPIKey,
+			environment:     "es-env",
+			samplerSelector: "es-env",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fields := sendTraceAndCaptureLog(t, tc.apiKey, tc.environment, tc.samplerSelector)
+
+			assert.Equal(t, tc.samplerSelector, fields["samplerSelector"],
+				"the sampler selector is logged as samplerSelector")
+		})
+	}
+}
+
 // TestStableMaxAlloc tests memory pressure handling and cache eviction when memory allocation limits are exceeded
 func TestStableMaxAlloc(t *testing.T) {
 	conf := &config.MockConfig{
