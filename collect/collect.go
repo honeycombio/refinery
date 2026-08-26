@@ -634,11 +634,7 @@ func (i *InMemCollector) send(ctx context.Context, trace sendableTrace) {
 	}
 
 	i.Metrics.Increment(trace.sendReason)
-	if config.IsLegacyAPIKey(trace.APIKey) {
-		logFields["dataset"] = trace.samplerSelector
-	} else {
-		logFields["environment"] = trace.samplerSelector
-	}
+	logFields["samplerSelector"] = trace.samplerSelector
 	logFields["reason"] = trace.reason
 	if trace.sampleKey != "" {
 		logFields["sample_key"] = trace.sampleKey
