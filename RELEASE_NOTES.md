@@ -13,6 +13,7 @@ This release renames a field in the `Sending trace` debug log.
 ### Maintenance
 
 * Updated dependencies, including gRPC to 1.83.2, which addresses a heap memory exhaustion vulnerability.
+* Built with Go 1.27.1, which reduces the cost of small memory allocations.
 
 ## Version 3.3.0
 

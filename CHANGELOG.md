@@ -15,6 +15,7 @@ It was previously named `dataset` or `environment` depending on the API key type
 - maint: update to husky v0.44.0, adopt new header validators by @robbkidd in https://github.com/honeycombio/refinery/pull/1849
 - chore: remove llm-o11y and ai-o11y from codeowners by @VinozzZ in https://github.com/honeycombio/refinery/pull/1851
 - maint(deps): bump the minor-patch group with 18 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1852
+- maint: upgrade to go1.27.1 by @lizthegrey in https://github.com/honeycombio/refinery/pull/1854
 
 ## 3.3.0 2026-08-10
 
