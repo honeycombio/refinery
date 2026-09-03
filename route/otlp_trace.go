@@ -36,6 +36,8 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 
+	r.setOTLPEnvironmentName(&ri, keyToUse, otlpSignalTrace)
+
 	if err := ri.ValidateHeaders(); err != nil {
 		switch err {
 		case huskyotlp.ErrInvalidContentType:
@@ -231,6 +233,8 @@ func customTraceExportHandler(
 
 	// Update the RequestInfo with the processed key for the unmarshal step
 	ri.ApiKey = keyToUse
+
+	traceServer.router.setOTLPEnvironmentName(&ri, keyToUse, otlpSignalTrace)
 
 	if err := ri.ValidateHeaders(); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
