@@ -1039,17 +1039,17 @@ type cacheItem struct {
 // Cache missed use the configured getFn to populate the cache.
 func (c *environmentCache) get(key string) (authData, error) {
 	var val authData
+	var hit bool
 	// get read lock so that we don't attempt to read from the map
 	// while another routine has a write lock and is actively writing
 	// to the map.
 	c.mutex.RLock()
-	if item, ok := c.items[key]; ok {
-		if time.Now().Before(item.expiresAt) {
-			val = item.value
-		}
+	if item, ok := c.items[key]; ok && time.Now().Before(item.expiresAt) {
+		val = item.value
+		hit = true
 	}
 	c.mutex.RUnlock()
-	if val.environment != "" {
+	if hit {
 		return val, nil
 	}
 
@@ -1101,7 +1101,10 @@ type AuthInfo struct {
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
-	if apiKey == "" || config.IsLegacyAPIKey(apiKey) {
+	if apiKey == "" {
+		return "", nil
+	}
+	if config.IsLegacyAPIKey(apiKey) && !r.Config.GetEnableMigratedClassicAsEnvironment() {
 		return "", nil
 	}
 
@@ -1110,6 +1113,37 @@ func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 		return "", err
 	}
 	return data.environment, nil
+}
+
+// otlpSignal names the OTLP signal an ingest handler serves.
+type otlpSignal string
+
+const (
+	otlpSignalTrace otlpSignal = "trace"
+	otlpSignalLog   otlpSignal = "log"
+)
+
+// setOTLPEnvironmentName looks up the environment name associated with an
+// apiKey and records it on a RequestInfo instance. EnvironmentName is left
+// blank if the lookup fails. A trace request destined for an environment with a
+// non-blank name ("E&Sish": E&S or a migrated Classic) has its dataset header
+// value removed, so that its destination dataset comes from service.name
+// instead.
+func (r *Router) setOTLPEnvironmentName(
+	ri *huskyotlp.RequestInfo,
+	apiKey string,
+	signal otlpSignal,
+) {
+	envName, err := r.getEnvironmentName(apiKey)
+	if err != nil {
+		r.Logger.Error().WithField("error", err).WithField("signal", string(signal)).Logf("failed to look up environment name for OTLP request")
+	}
+	ri.EnvironmentName = envName
+
+	// ignore dataset header for traces destined for an E&Sish environment
+	if signal == otlpSignalTrace && ri.EnvironmentName != "" {
+		ri.Dataset = ""
+	}
 }
 
 // getKeyID returns the Honeycomb ingest key ID associated with the given API
