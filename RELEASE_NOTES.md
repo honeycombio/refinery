@@ -2,6 +2,19 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.4.0
+
+This release renames a field in the `Sending trace` debug log.
+
+### Operator-visible Changes
+
+* The `Sending trace` debug log line reports the sampler's selector in a field named `samplerSelector`. The field was previously named `dataset` or `environment`, chosen by the API key type. Anything reading or parsing `dataset` or `environment` out of that line will no longer find them. This applies to all traffic.
+
+### Maintenance
+
+* Updated dependencies, including gRPC to 1.83.2, which addresses a heap memory exhaustion vulnerability.
+* Built with Go 1.27.1, which reduces the cost of small memory allocations.
+
 ## Version 3.3.0
 
 This release adds zstd compression support for OTLP over gRPC, upgrades the Go toolchain for better CPU performance, and updates dependencies to address CVEs.
