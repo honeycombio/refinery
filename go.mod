@@ -1,6 +1,6 @@
 module github.com/honeycombio/refinery
 
-go 1.26.0
+go 1.27.1
 
 require (
 	github.com/agnivade/levenshtein v1.2.1
