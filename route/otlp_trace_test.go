@@ -37,7 +37,29 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
+// Keys and names shared by the OTLP trace and logs tests.
+const (
+	// A classic key. Old Faithful. A key so legacy it's not named "classicAPIKey".
+	legacyAPIKey = "c9945edf5d245834089a1bd6cc9ad01e"
+
+	// unmigratedClassicAPIKey exists to "belong" to a Classic environment that
+	// has not been migrated in place. Unmigrated means its environment name is
+	// blank. It is a different key value from legacyAPIKey so that they are
+	// distinct environments in the environment cache when separate test cases
+	// are sharing a cache.
+	unmigratedClassicAPIKey = "ffffeeeeddddccccbbbbaaaa99998888"
+
+	// migratedClassicAPIKey is a classic key whose environment has been migrated
+	// in place, so it resolves migratedEnvName.
+	migratedClassicAPIKey = "aaaabbbbccccddddeeeeffff00001111"
+	migratedEnvName       = "migrated-env"
+
+	esAPIKey  = "abc123DEF456ghi789jklm"
+	esEnvName = "es-env"
+
+	testServiceName   = "my-service"
+	testDatasetHeader = "my-dataset"
+)
 
 // setupGRPCTestEnvironment creates a GRPC test server with our custom trace service
 // registration. It returns a client connected to the server and automatically
@@ -117,10 +139,21 @@ func TestOTLPHandler(t *testing.T) {
 			Logger:         &logger.MockLogger{},
 			incomingOrPeer: "incoming",
 		},
-		Logger:           &logger.MockLogger{},
-		zstdDecoder:      zstdDecoder,
-		environmentCache: newEnvironmentCache(time.Second, nil),
-		Tracer:           noop.Tracer{},
+		Logger:      &logger.MockLogger{},
+		zstdDecoder: zstdDecoder,
+		// Some test cases trigger cache lookups, so provide a cache with a lookup function
+		// that will stand in for /1/auth.
+		environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+			switch key {
+			case migratedClassicAPIKey:
+				return authData{environment: migratedEnvName}, nil
+			case esAPIKey:
+				return authData{environment: esEnvName}, nil
+			default:
+				return authData{}, nil
+			}
+		}),
+		Tracer: noop.Tracer{},
 	}
 	router.registerMetricNames()
 
@@ -506,7 +539,7 @@ func TestOTLPHandler(t *testing.T) {
 		}
 		ctx := createGRPCContext(map[string]string{
 			"x-honeycomb-team":    legacyAPIKey,
-			"x-honeycomb-dataset": "my-dataset",
+			"x-honeycomb-dataset": testDatasetHeader,
 		})
 		_, err := grpcClient.Export(ctx, req)
 		if err != nil {
@@ -646,6 +679,230 @@ func TestOTLPHandler(t *testing.T) {
 
 		events := mockTransmission.GetBlock(0)
 		assert.Equal(t, 0, len(events))
+	})
+
+	// With EnableMigratedClassicAsEnvironment on, a classic environment that has
+	// migrated in place is treated as an Environments & Services one, so receiving
+	// with its classic keys no longer needs a dataset header. The handlers signal
+	// this to the header validation functions by setting ri.EnvironmentName.
+	// The option-off path is covered by "rejects missing dataset header" above.
+	t.Run("use EnableMigratedClassicAsEnvironment", func(t *testing.T) {
+		conf.EnableMigratedClassicAsEnvironment = true
+		defer func() { conf.EnableMigratedClassicAsEnvironment = false }()
+
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				Resource: createResource(),
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: []*trace.Span{{Name: "my-span"}},
+				}},
+			}},
+		}
+		body, err := protojson.Marshal(req)
+		require.NoError(t, err)
+
+		t.Run("accepted without a dataset header - HTTP", func(t *testing.T) {
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			request.Header.Set("x-honeycomb-team", migratedClassicAPIKey)
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+			require.Equal(t, http.StatusOK, w.Code, "a classic key in a migrated environment no longer needs the dataset header")
+
+			events := mockTransmission.GetBlock(1)
+			require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+			assert.Equal(t, testServiceName, events[0].Dataset, "with no header sent, the dataset comes from service.name")
+			assert.Equal(t, migratedEnvName, events[0].Environment, "the event's environment name should be the migrated one")
+		})
+
+		t.Run("accepted without a dataset header - gRPC", func(t *testing.T) {
+			ctx := createGRPCContext(map[string]string{"x-honeycomb-team": migratedClassicAPIKey})
+			_, err := grpcClient.Export(ctx, req)
+			require.NoError(t, err, "a classic key in a migrated environment no longer needs the dataset header")
+
+			events := mockTransmission.GetBlock(1)
+			require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+			assert.Equal(t, testServiceName, events[0].Dataset, "with no header sent, the dataset comes from service.name")
+			assert.Equal(t, migratedEnvName, events[0].Environment, "the event's environment name should be the migrated one")
+		})
+
+		t.Run("ignores the dataset header - HTTP", func(t *testing.T) {
+			request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+			request.Header = http.Header{}
+			request.Header.Set("content-type", "application/json")
+			request.Header.Set("x-honeycomb-team", migratedClassicAPIKey)
+			request.Header.Set("x-honeycomb-dataset", testDatasetHeader)
+
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, request)
+			require.Equal(t, http.StatusOK, w.Code, "a request with both a header and service.name is still accepted")
+
+			events := mockTransmission.GetBlock(1)
+			require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+			assert.Equal(t, testServiceName, events[0].Dataset, "the dataset should come from service.name, not the header")
+			assert.Equal(t, migratedEnvName, events[0].Environment, "the event's environment name should be the migrated one")
+		})
+
+		t.Run("ignores the dataset header - gRPC", func(t *testing.T) {
+			ctx := createGRPCContext(map[string]string{
+				"x-honeycomb-team":    migratedClassicAPIKey,
+				"x-honeycomb-dataset": testDatasetHeader,
+			})
+			_, err := grpcClient.Export(ctx, req)
+			require.NoError(t, err, "a request with both a header and service.name is still accepted")
+
+			events := mockTransmission.GetBlock(1)
+			require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+			assert.Equal(t, testServiceName, events[0].Dataset, "the dataset should come from service.name, not the header")
+			assert.Equal(t, migratedEnvName, events[0].Environment, "the event's environment name should be the migrated one")
+		})
+
+		// SendKeyMode "all" replaces the incoming key, so only a lookup against
+		// the replacement key can find the migrated environment.
+		t.Run("with a replaced key", func(t *testing.T) {
+			conf.GetAccessKeyConfigVal = config.AccessKeyConfig{
+				SendKey:     migratedClassicAPIKey,
+				SendKeyMode: "all",
+			}
+			defer func() { conf.GetAccessKeyConfigVal = config.AccessKeyConfig{} }()
+
+			t.Run("environment lookup uses the replacement key - HTTP", func(t *testing.T) {
+				request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+				request.Header = http.Header{}
+				request.Header.Set("content-type", "application/json")
+				request.Header.Set("x-honeycomb-team", unmigratedClassicAPIKey)
+
+				w := httptest.NewRecorder()
+				router.postOTLPTrace(w, request)
+				require.Equal(t, http.StatusOK, w.Code, "the environment lookup must use the replacement key, not the incoming one")
+
+				events := mockTransmission.GetBlock(1)
+				require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+				assert.Equal(t, migratedEnvName, events[0].Environment, "the replacement key's environment should be the one resolved")
+			})
+
+			t.Run("environment lookup uses the replacement key - gRPC", func(t *testing.T) {
+				ctx := createGRPCContext(map[string]string{"x-honeycomb-team": unmigratedClassicAPIKey})
+				_, err := grpcClient.Export(ctx, req)
+				require.NoError(t, err, "the environment lookup must use the replacement key, not the incoming one")
+
+				events := mockTransmission.GetBlock(1)
+				require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+				assert.Equal(t, migratedEnvName, events[0].Environment, "the replacement key's environment should be the one resolved")
+			})
+		})
+
+		t.Run("an unmigrated environment is unaffected", func(t *testing.T) {
+			t.Run("still uses the dataset header", func(t *testing.T) {
+				w := sendOTLPTrace(t, router, unmigratedClassicAPIKey, testDatasetHeader, req)
+				require.Equal(t, http.StatusOK, w.Code, "a classic key sending the dataset header is always accepted")
+
+				events := mockTransmission.GetBlock(1)
+				require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+				assert.Equal(t, testDatasetHeader, events[0].Dataset, "an unmigrated environment still takes its dataset from the header")
+				assert.Equal(t, "", events[0].Environment, "an unmigrated environment resolves no name")
+			})
+
+			t.Run("still requires the dataset header", func(t *testing.T) {
+				w := sendOTLPTrace(t, router, unmigratedClassicAPIKey, "", req)
+				assert.Equal(t, http.StatusUnauthorized, w.Code, "the option does not excuse an unmigrated environment from the dataset header")
+
+				events := mockTransmission.GetBlock(0)
+				assert.Equal(t, 0, len(events), "a rejected request produces no event")
+			})
+		})
+	})
+
+	// While the option is off, Refinery treats a migrated environment like an unmigrated one.
+	t.Run("EnableMigratedClassicAsEnvironment off leaves a migrated environment alone", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				Resource: resourceWithServiceName(testServiceName),
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: []*trace.Span{{Name: "my-span"}},
+				}},
+			}},
+		}
+
+		t.Run("still uses the dataset header", func(t *testing.T) {
+			w := sendOTLPTrace(t, router, migratedClassicAPIKey, testDatasetHeader, req)
+			require.Equal(t, http.StatusOK, w.Code, "a classic key sending the dataset header is always accepted")
+
+			events := mockTransmission.GetBlock(1)
+			require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+			assert.Equal(t, testDatasetHeader, events[0].Dataset, "with the option off, the dataset still comes from the header")
+			assert.Equal(t, "", events[0].Environment, "with the option off, a classic key's environment is never looked up")
+		})
+
+		t.Run("still requires the dataset header", func(t *testing.T) {
+			w := sendOTLPTrace(t, router, migratedClassicAPIKey, "", req)
+			assert.Equal(t, http.StatusUnauthorized, w.Code, "with the option off, a migrated environment is rejected the same as an unmigrated one")
+
+			events := mockTransmission.GetBlock(0)
+			assert.Equal(t, 0, len(events), "a rejected request produces no event")
+		})
+	})
+
+	// An E&S key always resolves an environment name, so it takes the same
+	// dataset-clearing branch a migrated Classic environment does. That branch
+	// must stay invisible here: an E&S key's dataset has never come from the
+	// header, at either setting of the option.
+	t.Run("EnableMigratedClassicAsEnvironment leaves E&S traffic alone", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				Resource: resourceWithServiceName(testServiceName),
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: []*trace.Span{{Name: "my-span"}},
+				}},
+			}},
+		}
+
+		for _, option := range []struct {
+			name  string
+			state bool
+		}{
+			{"option off", false},
+			{"option on", true},
+		} {
+			t.Run(option.name, func(t *testing.T) {
+				conf.EnableMigratedClassicAsEnvironment = option.state
+				defer func() { conf.EnableMigratedClassicAsEnvironment = false }()
+
+				for _, tc := range []struct {
+					name          string
+					datasetHeader string
+				}{
+					{"without a dataset header", ""},
+					{"with a dataset header", testDatasetHeader},
+				} {
+					t.Run(tc.name+" - HTTP", func(t *testing.T) {
+						w := sendOTLPTrace(t, router, esAPIKey, tc.datasetHeader, req)
+						require.Equal(t, http.StatusOK, w.Code, "an E&S key is accepted with or without a dataset header")
+
+						events := mockTransmission.GetBlock(1)
+						require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+						assert.Equal(t, testServiceName, events[0].Dataset, "an E&S key's dataset comes from service.name, never the header")
+						assert.Equal(t, esEnvName, events[0].Environment, "an E&S key's environment is unaffected by the option")
+					})
+
+					t.Run(tc.name+" - gRPC", func(t *testing.T) {
+						headers := map[string]string{"x-honeycomb-team": esAPIKey}
+						if tc.datasetHeader != "" {
+							headers["x-honeycomb-dataset"] = tc.datasetHeader
+						}
+						_, err := grpcClient.Export(createGRPCContext(headers), req)
+						require.NoError(t, err, "an E&S key is accepted with or without a dataset header")
+
+						events := mockTransmission.GetBlock(1)
+						require.Equal(t, 1, len(events), "the accepted span should be sent upstream")
+						assert.Equal(t, testServiceName, events[0].Dataset, "an E&S key's dataset comes from service.name, never the header")
+						assert.Equal(t, esEnvName, events[0].Environment, "an E&S key's environment is unaffected by the option")
+					})
+				}
+			})
+		}
 	})
 
 	t.Run("spans record incoming user agent - gRPC", func(t *testing.T) {
@@ -1004,6 +1261,53 @@ func TestOTLPHandler(t *testing.T) {
 			})
 		}
 	})
+}
+
+// resourceWithServiceName builds an OTLP resource with only service.name.
+func resourceWithServiceName(serviceName string) *resource.Resource {
+	return &resource.Resource{
+		Attributes: []*common.KeyValue{
+			{Key: "service.name", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: serviceName}}},
+		},
+	}
+}
+
+// otlpTraceRequestWithTraceID builds a span with an explicit trace.trace_id
+// attribute, so it is held and sampled as part of a trace. An event with no
+// trace_id is not part of a trace and goes straight upstream.
+func otlpTraceRequestWithTraceID(traceID string) *collectortrace.ExportTraceServiceRequest {
+	return &collectortrace.ExportTraceServiceRequest{
+		ResourceSpans: []*trace.ResourceSpans{{
+			Resource: resourceWithServiceName(testServiceName),
+			ScopeSpans: []*trace.ScopeSpans{{
+				Spans: []*trace.Span{{
+					Name: "my-span",
+					Attributes: []*common.KeyValue{
+						{Key: "trace.trace_id", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: traceID}}},
+					},
+				}},
+			}},
+		}},
+	}
+}
+
+// sendOTLPTrace POSTs a trace request through postOTLPTrace and returns the
+// recorded response. A blank datasetHeader sends no dataset header at all.
+func sendOTLPTrace(t *testing.T, router *Router, apiKey, datasetHeader string, req *collectortrace.ExportTraceServiceRequest) *httptest.ResponseRecorder {
+	body, err := protojson.Marshal(req)
+	require.NoError(t, err)
+
+	request, _ := http.NewRequest("POST", "/v1/traces", bytes.NewReader(body))
+	request.Header = http.Header{}
+	request.Header.Set("content-type", "application/json")
+	request.Header.Set("x-honeycomb-team", apiKey)
+	if datasetHeader != "" {
+		request.Header.Set("x-honeycomb-dataset", datasetHeader)
+	}
+
+	w := httptest.NewRecorder()
+	router.postOTLPTrace(w, request)
+	return w
 }
 
 func helperOTLPRequestSpansWithoutStatus() []*trace.Span {

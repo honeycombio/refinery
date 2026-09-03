@@ -797,6 +797,33 @@ func TestDatasetPrefix(t *testing.T) {
 	assert.Equal(t, "dataset", c.GetDatasetPrefix())
 }
 
+func TestEnableMigratedClassicAsEnvironment(t *testing.T) {
+	t.Run("defaults to false", func(t *testing.T) {
+		cm := makeYAML(
+			"General.ConfigurationVersion", 2,
+		)
+		rm := makeYAML("ConfigVersion", 2)
+		config, rules := createTempConfigs(t, cm, rm)
+		c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+		assert.NoError(t, err)
+
+		assert.False(t, c.GetEnableMigratedClassicAsEnvironment())
+	})
+
+	t.Run("loads true when set", func(t *testing.T) {
+		cm := makeYAML(
+			"General.ConfigurationVersion", 2,
+			"General.EnableMigratedClassicAsEnvironment", true,
+		)
+		rm := makeYAML("ConfigVersion", 2)
+		config, rules := createTempConfigs(t, cm, rm)
+		c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+		assert.NoError(t, err)
+
+		assert.True(t, c.GetEnableMigratedClassicAsEnvironment())
+	})
+}
+
 func TestQueryAuthToken(t *testing.T) {
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,

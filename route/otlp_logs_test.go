@@ -61,9 +61,18 @@ func TestLogsOTLPHandler(t *testing.T) {
 			Logger:         logger,
 			incomingOrPeer: "incoming",
 		},
-		Logger:           logger,
-		zstdDecoder:      zstdDecoder,
-		environmentCache: newEnvironmentCache(time.Second, nil),
+		Logger:      logger,
+		zstdDecoder: zstdDecoder,
+		environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+			switch key {
+			case migratedClassicAPIKey:
+				return authData{environment: migratedEnvName}, nil
+			case esAPIKey:
+				return authData{environment: esEnvName}, nil
+			default:
+				return authData{}, nil
+			}
+		}),
 		Sharder: &sharder.SingleServerSharder{
 			Logger: logger,
 		},
@@ -649,6 +658,105 @@ func TestLogsOTLPHandler(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("use EnableMigratedClassicAsEnvironment", func(t *testing.T) {
+		setOption := func(state bool) {
+			router.Config.(*config.MockConfig).EnableMigratedClassicAsEnvironment = state
+		}
+		t.Cleanup(func() { setOption(false) })
+
+		for _, tc := range []struct {
+			name        string
+			apiKey      string
+			optionState bool
+			wantEnv     string
+		}{
+			{"an unmigrated classic environment gets a blank environment name", unmigratedClassicAPIKey, true, ""},
+			{"a migrated environment gets a blank environment name while the option is off", migratedClassicAPIKey, false, ""},
+			{"a migrated environment gets its new environment name", migratedClassicAPIKey, true, migratedEnvName},
+			{"an E&S key is unaffected, option off", esAPIKey, false, esEnvName},
+			{"an E&S key is unaffected, option on", esAPIKey, true, esEnvName},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				setOption(tc.optionState)
+				require.NoError(t, sendOTLPLogs(logsServer, tc.apiKey, "", otlpLogsRequest()))
+
+				events := mockTransmission.GetBlock(1)
+				require.Equal(t, 1, len(events), "a standalone log is not rejected for a missing dataset header")
+				assert.Equal(t, testServiceName, events[0].Dataset, "a log's dataset always comes from service.name, never the header")
+				assert.Equal(t, tc.wantEnv, events[0].Environment)
+			})
+		}
+
+		t.Run("a log participating in a trace gets the environment name", func(t *testing.T) {
+			setOption(true)
+			require.NoError(t, sendOTLPLogs(logsServer, migratedClassicAPIKey, "", otlpLogsRequestWithTraceID("log-only-trace")))
+
+			require.Equal(t, 1, len(mockCollector.Spans), "a log with a trace_id is held for sampling as part of a trace, not sent straight upstream")
+			span := <-mockCollector.Spans
+			assert.Equal(t, testServiceName, span.Event.Dataset, "a log's dataset always comes from service.name")
+			assert.Equal(t, migratedEnvName, span.Event.Environment, "the environment name reaches the shared trace pipeline, where it selects the sampler")
+			mockCollector.Flush()
+		})
+
+		t.Run("a sibling span's dataset header does not reach the log's trace", func(t *testing.T) {
+			setOption(true)
+			traceID := "log-and-span-trace"
+
+			// The span sends the dataset header; the log in the same trace does not.
+			w := sendOTLPTrace(t, router, migratedClassicAPIKey, testDatasetHeader, otlpTraceRequestWithTraceID(traceID))
+			require.Equal(t, http.StatusOK, w.Code, "the sibling span with the header present is still accepted")
+			require.NoError(t, sendOTLPLogs(logsServer, migratedClassicAPIKey, "", otlpLogsRequestWithTraceID(traceID)))
+
+			require.Equal(t, 2, len(mockCollector.Spans), "the span and the log share one trace, so both are held for sampling")
+			for _, span := range []*types.Span{<-mockCollector.Spans, <-mockCollector.Spans} {
+				assert.Equal(t, testServiceName, span.Event.Dataset, "neither event takes its dataset from the header the span sent")
+				assert.Equal(t, migratedEnvName, span.Event.Environment, "both events get the migrated environment name, whichever one sent the header")
+			}
+			mockCollector.Flush()
+		})
+	})
+}
+
+func otlpLogsRequest() *collectorlogs.ExportLogsServiceRequest {
+	return &collectorlogs.ExportLogsServiceRequest{
+		ResourceLogs: []*logs.ResourceLogs{{
+			Resource: resourceWithServiceName(testServiceName),
+			ScopeLogs: []*logs.ScopeLogs{{
+				LogRecords: []*logs.LogRecord{{TimeUnixNano: uint64(time.Now().UnixNano())}},
+			}},
+		}},
+	}
+}
+
+// otlpLogsRequestWithTraceID builds a log with an explicit trace.trace_id
+// attribute, so it participates in a trace and is held for sampling.
+func otlpLogsRequestWithTraceID(traceID string) *collectorlogs.ExportLogsServiceRequest {
+	return &collectorlogs.ExportLogsServiceRequest{
+		ResourceLogs: []*logs.ResourceLogs{{
+			Resource: resourceWithServiceName(testServiceName),
+			ScopeLogs: []*logs.ScopeLogs{{
+				LogRecords: []*logs.LogRecord{{
+					TimeUnixNano: uint64(time.Now().UnixNano()),
+					Attributes: []*common.KeyValue{
+						{Key: "trace.trace_id", Value: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: traceID}}},
+					},
+				}},
+			}},
+		}},
+	}
+}
+
+// sendOTLPLogs sends a logs request through a LogsServer's gRPC Export. A blank
+// datasetHeader sends no dataset header at all.
+func sendOTLPLogs(logsServer *LogsServer, apiKey, datasetHeader string, req *collectorlogs.ExportLogsServiceRequest) error {
+	headers := map[string]string{"x-honeycomb-team": apiKey}
+	if datasetHeader != "" {
+		headers["x-honeycomb-dataset"] = datasetHeader
+	}
+	ctx := metadata.NewIncomingContext(context.Background(), metadata.New(headers))
+	_, err := logsServer.Export(ctx, req)
+	return err
 }
 
 func createLogsRecords() []*logs.LogRecord {
