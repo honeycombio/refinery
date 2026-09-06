@@ -357,3 +357,66 @@ func Test_expandEnvVarsInValues(t *testing.T) {
 	assert.ElementsMatch(t, []any{"value1", "value1", "value3"}, got["key5"], "key5 should have the second element replaced with value1")
 	assert.Equal(t, "${ENV_VAR_NOT_SET}", got["key6"], "key6 should remain unchanged since ENV_VAR_NOT_SET is not defined")
 }
+
+func Test_validateRules_downstreamSampler(t *testing.T) {
+	rulesWithDownstreamSampler := func(sampler string) string {
+		return `
+RulesVersion: 2
+Samplers:
+    __default__:
+        RulesBasedSampler:
+            Rules:
+                - Name: default
+                  Sampler:
+                      ` + sampler + `
+`
+	}
+
+	tests := []struct {
+		name    string
+		sampler string
+		want    string
+	}{
+		{
+			"deterministic",
+			`DeterministicSampler:
+                          SampleRate: 10`,
+			"",
+		},
+		{
+			"dynamic",
+			`DynamicSampler:
+                          SampleRate: 10
+                          FieldList:
+                            - request.status_code`,
+			"",
+		},
+		{
+			"unknown",
+			`NotASampler:
+                          SampleRate: 10`,
+			"field Rules.Sampler contains unknown key NotASampler",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rulesFiles := createTempConfigs(t, rulesWithDownstreamSampler(tt.sampler))
+			rules, err := getConfigDataForLocations(rulesFiles)
+			require.NoError(t, err)
+
+			got, err := validateRules(rules)
+			require.NoError(t, err)
+
+			if tt.want == "" {
+				assert.Empty(t, got)
+				return
+			}
+			var messages []string
+			for _, result := range got {
+				messages = append(messages, result.Message)
+			}
+			assert.Contains(t, strings.Join(messages, "\n"), tt.want)
+		})
+	}
+}
