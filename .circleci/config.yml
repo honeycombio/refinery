@@ -71,9 +71,13 @@ commands:
 
 jobs:
   test:
+    parameters:
+      redis_image:
+        description: Docker image for the Redis-compatible server the test suite runs against.
+        type: string
     docker:
       - image: cimg/go:<< pipeline.parameters.go_version >>
-      - image: redis:6.2
+      - image: << parameters.redis_image >>
     resource_class: xlarge
     steps:
       - checkout
@@ -297,6 +301,12 @@ workflows:
   build:
     jobs:
       - test:
+          matrix:
+            alias: test
+            parameters:
+              redis_image:
+                - redis:8
+                - valkey/valkey:9
           filters:
             tags:
               only: /.*/
