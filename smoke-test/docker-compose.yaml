@@ -15,7 +15,7 @@ services:
         condition: service_healthy
 
   redis:
-    image: redis:7
+    image: redis:8
     command: "redis-server"
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping | grep PONG"]

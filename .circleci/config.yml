@@ -305,8 +305,8 @@ workflows:
             alias: test
             parameters:
               redis_image:
-                - redis:6.2
-                - valkey/valkey:8
+                - redis:8
+                - valkey/valkey:9
           filters:
             tags:
               only: /.*/
