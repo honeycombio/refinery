@@ -46,7 +46,8 @@ EVENTUALLY_TICK=${EVENTUALLY_TICK:-1}
 #   $@ - the command to poll
 assert_eventually() {
 	local deadline=$(( SECONDS + EVENTUALLY_TIMEOUT ))
-	echo -n "# ⏳ Waiting up to ${EVENTUALLY_TIMEOUT}s for: $*" >&3
+	echo "# 🍿 Waiting up to ${EVENTUALLY_TIMEOUT}s for: $*" >&3
+	echo -n "# ⏳ " >&3
 	until "$@" >/dev/null 2>&1
 	do
 		if (( SECONDS >= deadline )); then
@@ -78,7 +79,8 @@ assert_eventually_equal() {
 	shift
 	local deadline=$(( SECONDS + EVENTUALLY_TIMEOUT ))
 	local actual
-	echo -n "# ⏳ Waiting up to ${EVENTUALLY_TIMEOUT}s for '$*' to be ${expected}" >&3
+	echo "# 🍿 Waiting up to ${EVENTUALLY_TIMEOUT}s for '$*' to be ${expected}" >&3
+	echo -n "# ⏳ " >&3
 	while true
 	do
 		actual=$("$@" 2>/dev/null)
