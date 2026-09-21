@@ -5,7 +5,7 @@ This is not an example of a production-ready Refinery deployment.
 
 ## What Is Under Test
 
-Refinery sharing one Redis backend that requires **TLS**. The unencrypted path is well-covered by the Go test suite.
+Refinery sharing one Redis backend that requires **TLS and AUTH**. The unencrypted, unauthenticated path is well-covered by the Go test suite.
 
 Multiple Refinery hosts, so we can assert the primary usage of a Redis backend: peers discovering each other.
 

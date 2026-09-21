@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# Smoke test: two Refinery nodes against a Redis requiring TLS.
+# Smoke test: two Refinery nodes against a Redis requiring TLS and AUTH.
 #
 # See docker-compose.yaml for why that is the configuration under test.
 
