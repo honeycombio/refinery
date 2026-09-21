@@ -9,6 +9,7 @@ parameters:
 orbs:
   aws-cli: circleci/aws-cli@3.2.0
   aws-ecr: circleci/aws-ecr@9.5.4
+  bats: circleci/bats@1.0.0
 
 commands:
   go-build:
@@ -219,8 +220,20 @@ jobs:
       - restore_cache:
           keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
-      - run: make smoke
-      - run: make unsmoke
+      - bats/install
+      - run:
+          name: Smoke Test
+          command: make smoke
+      - store_test_results:
+          path: ./smoke-test/
+          when: always
+      - store_artifacts:
+          path: ./smoke-test/report.xml
+          when: always
+      - run:
+          name: Extinguish the flames
+          command: make unsmoke
+          when: always
 
   publish_docker_to_private_ecr:
     docker:

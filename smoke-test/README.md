@@ -3,25 +3,54 @@
 ⚠️ All configuration in this directory is for development and testing purposes.
 This is not an example of a production-ready Refinery deployment.
 
+## What Is Under Test
+
+Refinery sharing one Redis backend that requires **TLS**. The unencrypted path is well-covered by the Go test suite.
+
+Multiple Refinery hosts, so we can assert the primary usage of a Redis backend: peers discovering each other.
+
 ## How Do I Even?
 
 From the root of the project repo:
 
 ```shell
-> make local_image
+> make smoke
 ```
 
-Then change to this directory and run docker compose:
+That builds the local image and runs the [bats](https://bats-core.readthedocs.io/) suite in this directory.
+Bats brings the services up and runs the assertions.
+
+The services stay up afterwards, pass or fail, so you can poke at it or use it as a local two-node Refinery to develop against.
+
+To tear it down:
 
 ```shell
+> make unsmoke
+```
+
+To do a re-run from a clean slate:
+
+```shell
+> make resmoke
+```
+
+Congratulations! You have applied power and [the magic smoke was not released](https://en.wikipedia.org/wiki/Smoke_testing_(software)#Etymology)!
+
+### Poking At It By Hand
+
+```shell
+> make local_image
 > cd smoke-test
 > docker compose up
 ```
 
-Observe the log output of the services.
-Refinery ought to have connected to Redis to report and then find itself in the peer list.
 
-Congratulations! You have applied power and [the magic smoke was not released](https://en.wikipedia.org/wiki/Smoke_testing_(software)#Etymology)!
+|             | node 1                                                         | node 2                                                         |
+| ----------- | -------------------------------------------------------------- | -------------------------------------------------------------- |
+| HTTP ingest | [http://localhost:8080](http://localhost:8080)                 | [http://localhost:8081](http://localhost:8081)                 |
+| gRPC ingest | [http://localhost:9090](http://localhost:9090)                 | [http://localhost:9091](http://localhost:9091)                 |
+| metrics     | [http://localhost:2112/metrics](http://localhost:2112/metrics) | [http://localhost:2113/metrics](http://localhost:2113/metrics) |
+
 
 ## Shooting Trouble
 
@@ -55,7 +84,7 @@ Error response from daemon: No such image: ko.local/refinery:latest
 
 #### Solution
 
-The local image needs to be built. Run `make local_target` at the root of the repo.
+The local image needs to be built. Run `make local_image` at the root of the repo.
 
 ### Redis Error: SSL routines::wrong version number
 
@@ -73,6 +102,7 @@ This is a sign that Refinery is not using TLS to connect to Redis which *is* usi
 
 Check the config.yaml used by the Refinery container.
 
-* Is `UseTLS` set to true?
-* Is `UseTLSInsecure` set to true? (because we're self-signed locally)
-* Do we have a bug with TLS connections?
+- Is `UseTLS` set to true?
+- Is `UseTLSInsecure` set to true? (because we're self-signed locally)
+- Do we have a bug with TLS connections?
+

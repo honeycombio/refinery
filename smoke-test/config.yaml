@@ -14,8 +14,17 @@ Logger:
 #   Enabled: true
 #   Dataset: refinery_metrics_otel
 
+# For making metrics available directly to smoke test assertions.
+PrometheusMetrics:
+  Enabled: true
+  ListenAddr: 0.0.0.0:2112
+
 PeerManagement:
     Type: redis
+
+RedisPeerManagement:
+    UseTLS: true
+    UseTLSInsecure: true # the smoke test's certs are self-signed
 
 RefineryTelemetry:
   AddRuleReasonToTrace: true
