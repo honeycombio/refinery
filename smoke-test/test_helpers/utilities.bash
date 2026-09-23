@@ -30,6 +30,27 @@ num_peers_for() {
 	metric_value_for "${1:?metrics port is a required parameter}" "num_peers"
 }
 
+# How many peer messages a node has received over its subscription. Unlike
+# num_peers, which only updates when a message arrives, this stops climbing
+# the moment the subscription stops delivering.
+#
+# Arguments:
+#   $1 - the host port the node's metrics endpoint is published on
+peer_messages_for() {
+	metric_value_for "${1:?metrics port is a required parameter}" "peer_messages"
+}
+
+# Succeeds when a node has received more peer messages than a given count.
+#
+# Arguments:
+#   $1 - the host port the node's metrics endpoint is published on
+#   $2 - the count to exceed
+peer_messages_exceed() {
+	local count
+	count=$(peer_messages_for "${1:?metrics port is a required parameter}")
+	[[ -n ${count} ]] && (( count > ${2:?count to exceed is a required parameter} ))
+}
+
 # How long the assert_eventually* helpers keep trying, and how long they pause
 # between attempts. Both in seconds. To give one assertion longer, prefix it:
 #

@@ -9,6 +9,10 @@ Refinery sharing one Redis backend that requires **TLS and AUTH**. The unencrypt
 
 Multiple Refinery hosts, so we can assert the primary usage of a Redis backend: peers discovering each other.
 
+Refinery's subscriptions recovering after Redis restarts.
+
+`10-peers.bats` covers the first two; `20-redis-restart.bats` the last. Bats runs the files in sorted order, so the numeric prefixes set the order: peers first, against a freshly started stack, then the tests that disrupt it.
+
 ## How Do I Even?
 
 From the root of the project repo:
