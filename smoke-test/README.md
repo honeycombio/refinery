@@ -22,6 +22,12 @@ Bats brings the services up and runs the assertions.
 
 The services stay up afterwards, pass or fail, so you can poke at it or use it as a local two-node Refinery to develop against.
 
+To run against another Redis-compatible server, set `REDIS_IMAGE`:
+
+```shell
+> make resmoke REDIS_IMAGE=valkey/valkey:9
+```
+
 To tear it down:
 
 ```shell

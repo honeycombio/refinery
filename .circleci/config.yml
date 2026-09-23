@@ -210,8 +210,14 @@ jobs:
             - /home/circleci/.cache/go-build
 
   smoke-test:
+    parameters:
+      redis_image:
+        description: Docker image for the Redis-compatible server the smoke test runs against.
+        type: string
     machine:
       image: ubuntu-2204:2024.01.1
+    environment:
+      REDIS_IMAGE: << parameters.redis_image >>
     steps:
       - checkout
       - restore_cache:
@@ -336,6 +342,12 @@ workflows:
             tags:
               only: /.*/
       - smoke-test:
+          matrix:
+            alias: smoke-test
+            parameters:
+              redis_image:
+                - redis:8
+                - valkey/valkey:9
           requires:
             - build_docker
           filters:
