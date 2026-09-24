@@ -84,6 +84,14 @@ func (ps *GoRedisPubSub) Start() error {
 				InsecureSkipVerify: redisCfg.UseTLSInsecure,
 			}
 		}
+
+		// Authenticate every connection as it is established.
+		if authcode != "" {
+			ps.Logger.Info().Logf("Using Redis AuthCode to authenticate connection")
+			options.OnConnect = func(ctx context.Context, cn *redis.Conn) error {
+				return cn.Auth(ctx, authcode).Err()
+			}
+		}
 	}
 
 	var client redis.UniversalClient
@@ -95,12 +103,10 @@ func (ps *GoRedisPubSub) Start() error {
 		client = redis.NewUniversalClient(options)
 	}
 
-	// if an authcode was provided, use it to authenticate the connection
+	// If authcode was provided, ping once to check the credentials.
 	if authcode != "" {
-		ps.Logger.Info().Logf("Using Redis AuthCode to authenticate connection")
-		pipe := client.Pipeline()
-		pipe.Auth(context.Background(), authcode)
-		if _, err := pipe.Exec(context.Background()); err != nil {
+		if err := client.Ping(context.Background()).Err(); err != nil {
+			client.Close()
 			return err
 		}
 	}

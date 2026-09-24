@@ -1,24 +1,50 @@
+# Two Refinery nodes sharing a Redis that requires TLS and AUTH.
+#
+# See README.md for what is under test and why.
+
+x-refinery: &refinery
+  image: ko.local/refinery:local # build this with 'make local_image' at the root of the repo
+  pull_policy: never # 'Error response from daemon: No such image' means you need to build it. 👆
+  environment: # these take precedence over the settings in the config file
+    REFINERY_REDIS_HOST: redis:6379
+    REFINERY_REDIS_AUTH_CODE: "12345"
+  volumes:
+    - ./config.yaml:/etc/refinery/refinery.yaml
+    - ./rules.yaml:/etc/refinery/rules.yaml
+  depends_on:
+    redis:
+      condition: service_healthy
+
 services:
   refinery:
-    image: ko.local/refinery:local # build this with 'make local_image' at the root of the repo
-    pull_policy: never # 'Error response from daemon: No such image' means you need to build it. 👆
-    environment: # these take precedence over the settings in env_file
-      REFINERY_REDIS_HOST: redis:6379
-    volumes:
-      - ./config.yaml:/etc/refinery/refinery.yaml
-      - ./rules.yaml:/etc/refinery/rules.yaml
+    <<: *refinery
     ports:
-      - 127.0.0.1:8080:8080
-      - 127.0.0.1:9090:9090
-    depends_on:
-      redis:
-        condition: service_healthy
+      - 127.0.0.1:8080:8080 # http
+      - 127.0.0.1:9090:9090 # grpc
+      - 127.0.0.1:2112:2112 # prometheus metrics
+
+  refinery2:
+    <<: *refinery
+    ports:
+      - 127.0.0.1:8081:8080
+      - 127.0.0.1:9091:9090
+      - 127.0.0.1:2113:2112
 
   redis:
-    image: redis:8
-    command: "redis-server"
+    image: ${REDIS_IMAGE:-redis:8} # CI also runs this against valkey/valkey:9
+    command: [ "redis-server",
+      "--port", "0",
+      "--requirepass", "12345",
+      "--tls-port", "6379",
+      "--tls-cert-file", "/certs/cert.pem",
+      "--tls-key-file", "/certs/key.pem",
+      "--tls-ca-cert-file", "/certs/ca.pem",
+      "--tls-auth-clients", "no"
+      ]
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      # -a, because the server now requires a password. Without it the probe
+      # only ever gets NOAUTH and the container never reports healthy.
+      test: ["CMD-SHELL", "redis-cli --tls --insecure -a 12345 --no-auth-warning ping | grep PONG"]
       interval: 2s
       timeout: 3s
       retries: 5
@@ -26,6 +52,47 @@ services:
       - 127.0.0.1:6379:6379
     volumes:
       - redis-data:/data
+      - certs:/certs
+    depends_on:
+      gen-certs:
+        condition: service_completed_successfully
+
+  # Self-signed CA plus a server certificate for the "redis" hostname.
+  #
+  # A CA rather than a lone self-signed cert: it gives --tls-ca-cert-file
+  # something meaningful, and a chain to verify if we ever test with
+  # UseTLSInsecure off.
+  gen-certs:
+    image: alpine/openssl:3.5.8
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        cd /certs
+        if [ -f cert.pem ]; then
+          echo "Certs exist!"
+          exit 0
+        fi
+
+        openssl req -x509 -newkey rsa:2048 -nodes -days 365 \
+          -keyout ca-key.pem -out ca.pem \
+          -subj "/CN=refinery-smoke-test-ca"
+
+        openssl req -newkey rsa:2048 -nodes \
+          -keyout key.pem -out key.csr \
+          -subj "/CN=redis"
+
+        printf 'subjectAltName=DNS:redis,DNS:localhost\nextendedKeyUsage=serverAuth\n' > ext.cnf
+
+        openssl x509 -req -days 365 \
+          -in key.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
+          -out cert.pem -extfile ext.cnf
+
+        # The redis image drops privileges and cannot read a root-owned 0600 key.
+        chmod a+r key.pem
+    volumes:
+      - certs:/certs
 
 volumes:
+  certs:
   redis-data:

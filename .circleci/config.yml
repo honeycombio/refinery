@@ -9,6 +9,7 @@ parameters:
 orbs:
   aws-cli: circleci/aws-cli@3.2.0
   aws-ecr: circleci/aws-ecr@9.5.4
+  bats: circleci/bats@1.0.0
 
 commands:
   go-build:
@@ -209,8 +210,14 @@ jobs:
             - /home/circleci/.cache/go-build
 
   smoke-test:
+    parameters:
+      redis_image:
+        description: Docker image for the Redis-compatible server the smoke test runs against.
+        type: string
     machine:
       image: ubuntu-2204:2024.01.1
+    environment:
+      REDIS_IMAGE: << parameters.redis_image >>
     steps:
       - checkout
       - restore_cache:
@@ -219,8 +226,20 @@ jobs:
       - restore_cache:
           keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
-      - run: make smoke
-      - run: make unsmoke
+      - bats/install
+      - run:
+          name: Smoke Test
+          command: make smoke
+      - store_test_results:
+          path: ./smoke-test/
+          when: always
+      - store_artifacts:
+          path: ./smoke-test/report.xml
+          when: always
+      - run:
+          name: Extinguish the flames
+          command: make unsmoke
+          when: always
 
   publish_docker_to_private_ecr:
     docker:
@@ -323,6 +342,12 @@ workflows:
             tags:
               only: /.*/
       - smoke-test:
+          matrix:
+            alias: smoke-test
+            parameters:
+              redis_image:
+                - redis:8
+                - valkey/valkey:9
           requires:
             - build_docker
           filters:
