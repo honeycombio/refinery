@@ -25,7 +25,7 @@ func createDynForTotalThroughputSampler(c *config.TotalThroughputSamplerConfig) 
 	clusterSize := 1 // Will be updated by SetClusterSize if needed
 
 	dynsampler := &dynsampler.TotalThroughput{
-		GoalThroughputPerSec:   c.GoalThroughputPerSec / clusterSize,
+		GoalThroughputPerSec:   float64(c.GoalThroughputPerSec) / float64(clusterSize),
 		ClearFrequencyDuration: time.Duration(clearFreq),
 		MaxKeys:                maxKeys,
 	}

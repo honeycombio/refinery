@@ -119,7 +119,39 @@ func TestTotalThroughputClusterSize(t *testing.T) {
 	assert.NotNil(t, sampler)
 	impl := sampler.(*TotalThroughputSampler)
 	defer impl.dynsampler.Stop()
-	assert.Equal(t, 5, impl.dynsampler.GoalThroughputPerSec)
+	assert.Equal(t, float64(5), impl.dynsampler.GoalThroughputPerSec)
+}
+
+// A goal smaller than the cluster used to floor at 1 per peer, so a 4 peer
+// cluster sharing a goal of 10 delivered 4 events a second rather than 10. The
+// division is fractional now, so each peer targets its real share.
+func TestThroughputClusterSizeKeepsFractionalShare(t *testing.T) {
+	cm := makeYAML(
+		"General/ConfigurationVersion", 2,
+	)
+	rm := makeYAML(
+		"RulesVersion", 2,
+		"Samplers/__default__/DeterministicSampler/SampleRate", 1,
+		"Samplers/production/EMAThroughputSampler/GoalThroughputPerSec", 10,
+		"Samplers/production/EMAThroughputSampler/UseClusterSize", true,
+	)
+	cfg, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	assert.NoError(t, err)
+
+	factory := SamplerFactory{
+		Config:  c,
+		Logger:  &logger.NullLogger{},
+		Metrics: &metrics.NullMetrics{},
+		Peers:   peer.NewMockPeers([]string{"a", "b", "c", "d"}, ""),
+	}
+	factory.Start()
+	sampler := factory.GetSamplerImplementationForKey("production")
+	sampler.Start()
+	assert.NotNil(t, sampler)
+	impl := sampler.(*EMAThroughputSampler)
+	defer impl.dynsampler.Stop()
+	assert.Equal(t, 2.5, impl.dynsampler.GoalThroughputPerSec)
 }
 
 func TestEMAThroughputClusterSize(t *testing.T) {
@@ -148,7 +180,7 @@ func TestEMAThroughputClusterSize(t *testing.T) {
 	assert.NotNil(t, sampler)
 	impl := sampler.(*EMAThroughputSampler)
 	defer impl.dynsampler.Stop()
-	assert.Equal(t, 5, impl.dynsampler.GoalThroughputPerSec)
+	assert.Equal(t, float64(5), impl.dynsampler.GoalThroughputPerSec)
 }
 
 func TestWindowedThroughputClusterSize(t *testing.T) {
@@ -177,7 +209,7 @@ func TestWindowedThroughputClusterSize(t *testing.T) {
 	assert.NotNil(t, sampler)
 	impl := sampler.(*WindowedThroughputSampler)
 	defer impl.dynsampler.Stop()
-	assert.Equal(t, 5.0, impl.dynsampler.GoalThroughputPerSec)
+	assert.Equal(t, float64(5), impl.dynsampler.GoalThroughputPerSec)
 }
 
 func TestRulesBasedSamplerGetKeyFields(t *testing.T) {
@@ -570,30 +602,30 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	require.True(t, ok, "Expected TotalThroughputSampler")
 
 	// With 1 peer, throughput should be 100 (full original value)
-	assert.Equal(t, 100, throughputSampler.dynsampler.GoalThroughputPerSec)
+	assert.Equal(t, float64(100), throughputSampler.dynsampler.GoalThroughputPerSec)
 
 	// Add a second peer
 	testPeers.UpdatePeers([]string{"peer1", "peer2"})
 
 	// Throughput should now be 100/2 = 50
 	assert.Eventually(t, func() bool {
-		return throughputSampler.dynsampler.GoalThroughputPerSec == 50
+		return throughputSampler.dynsampler.GoalThroughputPerSec == float64(50)
 	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated to 50 with 2 peers")
 
 	// Add a third peer
 	testPeers.UpdatePeers([]string{"peer1", "peer2", "peer3"})
 
-	// Throughput should now be 100/3 = 33 (rounded down to at least 1)
+	// Throughput should now be 100/3, kept fractional rather than truncated to 33
 	assert.Eventually(t, func() bool {
-		return throughputSampler.dynsampler.GoalThroughputPerSec == 33
-	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated to 33 with 3 peers")
+		return throughputSampler.dynsampler.GoalThroughputPerSec == float64(100)/3.0
+	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated to 100/3 with 3 peers")
 
 	// Remove a peer (back to 2)
 	testPeers.UpdatePeers([]string{"peer1", "peer2"})
 
 	// Throughput should be back to 100/2 = 50
 	assert.Eventually(t, func() bool {
-		return throughputSampler.dynsampler.GoalThroughputPerSec == 50
+		return throughputSampler.dynsampler.GoalThroughputPerSec == float64(50)
 	}, 2*time.Second, 50*time.Millisecond, "Throughput should be updated back to 50 with 2 peers")
 
 	// Create another sampler instance with the same key to verify cluster size behavior is consistent
@@ -643,7 +675,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 
 	// This sampler should have different base throughput (200) but same cluster division (200/2=100)
 	assert.Eventually(t, func() bool {
-		return throughputSampler3.dynsampler.GoalThroughputPerSec == 100
+		return throughputSampler3.dynsampler.GoalThroughputPerSec == float64(100)
 	}, 2*time.Second, 50*time.Millisecond, "New sampler with 200 throughput should have 100 with 2 peers")
 
 	// Test UseClusterSize=false: throughput should NOT be divided by peer count
@@ -680,7 +712,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	require.True(t, ok, "Expected TotalThroughputSampler")
 
 	// With 1 peer and UseClusterSize=false, throughput should be 100 (full original value)
-	assert.Equal(t, 100, throughputSampler4.dynsampler.GoalThroughputPerSec)
+	assert.Equal(t, float64(100), throughputSampler4.dynsampler.GoalThroughputPerSec)
 
 	// Add a second peer
 	testPeers2.UpdatePeers([]string{"peer1", "peer2"})
@@ -689,7 +721,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Throughput should STILL be 100 (not divided by 2) because UseClusterSize is false
-	assert.Equal(t, 100, throughputSampler4.dynsampler.GoalThroughputPerSec,
+	assert.Equal(t, float64(100), throughputSampler4.dynsampler.GoalThroughputPerSec,
 		"Throughput should remain 100 with 2 peers when UseClusterSize=false")
 
 	// Add a third peer
@@ -699,7 +731,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Throughput should STILL be 100 (not divided by 3) because UseClusterSize is false
-	assert.Equal(t, 100, throughputSampler4.dynsampler.GoalThroughputPerSec,
+	assert.Equal(t, float64(100), throughputSampler4.dynsampler.GoalThroughputPerSec,
 		"Throughput should remain 100 with 3 peers when UseClusterSize=false")
 
 	// Remove a peer (back to 2)
@@ -709,7 +741,7 @@ func TestClusterSizeUpdatesSamplers(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Throughput should STILL be 100 because UseClusterSize is false
-	assert.Equal(t, 100, throughputSampler4.dynsampler.GoalThroughputPerSec,
+	assert.Equal(t, float64(100), throughputSampler4.dynsampler.GoalThroughputPerSec,
 		"Throughput should remain 100 after removing peers when UseClusterSize=false")
 
 	// Cleanup dynsampler instances to prevent goroutine leaks

@@ -21,7 +21,7 @@ func createDynForEMAThroughputSampler(c *config.EMAThroughputSamplerConfig) *dyn
 	clusterSize := 1 // Will be updated by SetClusterSize if needed
 
 	dynsamplerInstance := &dynsampler.EMAThroughput{
-		GoalThroughputPerSec: c.GoalThroughputPerSec / clusterSize,
+		GoalThroughputPerSec: float64(c.GoalThroughputPerSec) / float64(clusterSize),
 		InitialSampleRate:    c.InitialSampleRate,
 		AdjustmentInterval:   time.Duration(c.AdjustmentInterval),
 		Weight:               c.Weight,

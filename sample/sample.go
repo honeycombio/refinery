@@ -22,7 +22,7 @@ type Sampler interface {
 }
 
 type CanSetGoalThroughputPerSec interface {
-	SetGoalThroughputPerSec(int)
+	SetGoalThroughputPerSec(float64)
 }
 
 type sharedDynsamplerEntry struct {
@@ -67,9 +67,12 @@ func (s *SamplerFactory) updatePeerCounts() {
 	// Update goal throughput for all throughput-based dynsamplers
 	for dynsamplerKey, entry := range s.sharedDynsamplers {
 		if hasThroughput, ok := entry.dynsampler.(CanSetGoalThroughputPerSec); ok {
-			if cfg, ok := s.goalThroughputConfigs[dynsamplerKey]; ok {
-				// Calculate new throughput based on cluster size
-				newThroughput := max(cfg/s.peerCount, 1)
+			if cfg, ok := s.goalThroughputConfigs[dynsamplerKey]; ok && s.peerCount > 0 {
+				// Calculate new throughput based on cluster size. The division is
+				// fractional so a goal smaller than the cluster keeps its share
+				// rather than flooring at 1 per peer, which made the cluster
+				// deliver peerCount instead of the configured goal.
+				newThroughput := float64(cfg) / float64(s.peerCount)
 				hasThroughput.SetGoalThroughputPerSec(newThroughput)
 			}
 		}

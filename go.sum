@@ -119,6 +119,8 @@ github.com/hashicorp/golang-lru/v2 v2.0.7 h1:a+bsQ5rvGLjzHuww6tVxozPZFVghXaHOwFs
 github.com/hashicorp/golang-lru/v2 v2.0.7/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/honeycombio/dynsampler-go v0.6.4 h1:EM3FXN2Lfmso41MRMmSvRynMrz+AHiRffaWHPf4ZHDs=
 github.com/honeycombio/dynsampler-go v0.6.4/go.mod h1:M5YYNOfxRrBlEWDatTlHMYo5F7GjwVnptx5z+uXIVMo=
+github.com/honeycombio/dynsampler-go v0.6.5-0.20260929093308-69e415ebac8e h1:CQjWp1LZkPvNaddom3y3BKbA2Z3+Y5EtDhEGIA9Q+bc=
+github.com/honeycombio/dynsampler-go v0.6.5-0.20260929093308-69e415ebac8e/go.mod h1:QGCVVUvE6fNqfkRFjd0vYbyH8/b2K8Y237juoe7PIg0=
 github.com/honeycombio/hpsf v0.14.0 h1:LeQbDuT+aVmiJnWp9Kqb9Qqz5OZcjDk85RMzzwKtCKI=
 github.com/honeycombio/hpsf v0.14.0/go.mod h1:VyPjyn1GViOiCrpBbPZCkEJnuDuSTUpU8LV5CWVTQm4=
 github.com/honeycombio/husky v0.44.0 h1:VJhJOEs5FQ5BFECFfi4g2rG5cMH8Ven4wqHbuk/zr40=
