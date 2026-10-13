@@ -2076,9 +2076,12 @@ func TestWorkerHealthReporting(t *testing.T) {
 		return healthReporter.IsReady()
 	}, 2*time.Second, 50*time.Millisecond, "InMemCollector should initially be healthy")
 
+	// Workers initialize their health timestamp as their goroutine starts, which
+	// isn't ordered against the collector reporting ready, so poll for it.
 	for i, worker := range coll.workers {
-		lastUpdate := worker.healthCheckInAt.Load()
-		assert.NotZero(t, lastUpdate, "Worker %d should have initialized health timestamp", i)
+		assert.Eventually(t, func() bool {
+			return worker.healthCheckInAt.Load() != 0
+		}, 2*time.Second, 10*time.Millisecond, "Worker %d should have initialized health timestamp", i)
 	}
 
 	// Pause one worker to simulate it becoming unhealthy
