@@ -1,5 +1,20 @@
 # Refinery Changelog
 
+## 3.4.1 2026-10-13
+
+This is a patch release with two fixes and a dependency update to address CVEs in `golang.org/x/mod`.
+
+### 🐛 Fixes
+
+- fix: allow `DeterministicSampler` as a nested sampler in `RulesBasedSampler` by @bennetthardwick in https://github.com/honeycombio/refinery/pull/1856
+- fix: peers can't find each other when Redis requires AUTH by @robbkidd in https://github.com/honeycombio/refinery/pull/1861
+
+### 🛠 Maintenance
+
+- ci: test against Valkey as well as Redis by @robbkidd in https://github.com/honeycombio/refinery/pull/1858
+- ci: skip ECR publish jobs on dependabot branches by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1865
+- maint(deps): bump the minor-patch group across 1 directory with 7 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1864
+
 ## 3.4.0 2026-09-03
 
 The `Sending trace` debug log now reports the sampler's selector in a field named `samplerSelector`.

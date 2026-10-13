@@ -2,6 +2,20 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.4.1
+
+This is a patch release with two fixes and a dependency update. There are no configuration or behaviour changes.
+
+### Fixes
+
+* Peers no longer fail to find each other when Redis requires `AUTH`. Clusters using an authenticated Redis for peer management were unable to form a peer list.
+* `DeterministicSampler` can again be used as a nested sampler inside `RulesBasedSampler`.
+
+### Maintenance
+
+* Updated `golang.org/x/mod` to 0.41.0, which addresses CVE-2026-56865 and CVE-2026-56864. Both require a compromised GOPROXY to exploit, and CVE-2026-56864 also requires control of the GOSUMDB.
+* Updated gRPC to 1.84.0, which fixes a bug where a client connection could get stuck in IDLE when an RPC was cancelled during stream creation.
+
 ## Version 3.4.0
 
 This release renames a field in the `Sending trace` debug log.
