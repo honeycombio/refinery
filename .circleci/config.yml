@@ -361,7 +361,9 @@ workflows:
             - smoke-test
           filters:
             branches:
-              ignore: /pull\/.*/
+              ignore:
+                - /pull\/.*/
+                - /dependabot\/.*/
       - publish_docker_to_all_public_registries:
           context: Honeycomb Secrets for Public Repos
           requires:
@@ -381,7 +383,9 @@ workflows:
             - smoke-test
           filters:
             branches:
-              ignore: /pull\/.*/
+              ignore:
+                - /pull\/.*/
+                - /dependabot\/.*/
       - publish_github:
           context: Honeycomb Secrets for Public Repos
           requires:
