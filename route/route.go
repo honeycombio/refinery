@@ -962,15 +962,13 @@ func makeDecoders(concurrency int) (*zstd.Decoder, error) {
 func unmarshal(r *http.Request, data []byte, v interface{}) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
-		// msgp decoders bound themselves at the one site that sizes an
-		// allocation from a header, so they need no pass over the body here.
+		// The batch decoder bounds its own event count, and nothing below it
+		// sizes from a header, so it needs no pass over the body.
 		if unmarshaler, ok := v.(msgp.Unmarshaler); ok {
 			_, err := unmarshaler.UnmarshalMsg(data)
 			return err
 		}
-		// The msgpack decoder sizes slices and maps from headers wherever they
-		// appear and has no limit of its own, so check the declared lengths
-		// before handing it the body.
+		// The msgpack decoder has no such bound, so check the body first.
 		if err := checkMsgpackDeclaredLengths(data); err != nil {
 			return err
 		}

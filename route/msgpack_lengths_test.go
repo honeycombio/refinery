@@ -45,8 +45,8 @@ func nilElems(n int) []byte {
 	return b
 }
 
-// chained nests array headers that each pass a per-header check but together
-// declare many times the body, ended by a byte no decoder can read.
+// chained nests array headers that each pass alone but together declare many
+// times the body, ended by a byte no decoder can read.
 func chained(bodyLen, levels int) []byte {
 	out := join(map32(1), fixstr("a"))
 	for i := range levels {
@@ -70,16 +70,16 @@ func TestCheckMsgpackDeclaredLengths(t *testing.T) {
 		body []byte
 		want error
 	}{
-		{"batch array header longer than the body", arr32(declaredUnderCap), ErrMsgpackLengthMismatch},
-		{"batch array header far over the body", arr32(declaredHuge), ErrMsgpackLengthMismatch},
-		{"bin header inside a batch element", join(arr32(1), bin32(declaredHuge)), ErrMsgpackLengthMismatch},
-		{"map header in an event data field", join(arr32(1), map32(1), fixstr("data"), map32(declaredHuge)), ErrMsgpackLengthMismatch},
-		{"event map header longer than the body", map32(declaredHuge), ErrMsgpackLengthMismatch},
+		{"array header longer than the body", arr32(declaredUnderCap), ErrMsgpackLengthMismatch},
+		{"array header far over the body", arr32(declaredHuge), ErrMsgpackLengthMismatch},
+		{"bin header nested in an array", join(arr32(1), bin32(declaredHuge)), ErrMsgpackLengthMismatch},
+		{"map header nested two deep", join(arr32(1), map32(1), fixstr("data"), map32(declaredHuge)), ErrMsgpackLengthMismatch},
+		{"top-level map header longer than the body", map32(declaredHuge), ErrMsgpackLengthMismatch},
 		{"string field value longer than the body", join(map32(1), fixstr("f"), str32(declaredHuge)), ErrMsgpackLengthMismatch},
 		{"array field value longer than the body", join(map32(1), fixstr("f"), arr32(declaredHuge)), ErrMsgpackLengthMismatch},
 		// A guard keyed off msgp.Skip's error lets these through.
-		{"event map header masked by a trailing invalid byte", append(map32(declaredHuge), 0xc1), ErrMsgpackLengthMismatch},
-		{"batch array header masked by a trailing invalid byte", append(arr32(declaredUnderCap), 0xc1), ErrMsgpackLengthMismatch},
+		{"map header masked by a trailing invalid byte", append(map32(declaredHuge), 0xc1), ErrMsgpackLengthMismatch},
+		{"array header masked by a trailing invalid byte", append(arr32(declaredUnderCap), 0xc1), ErrMsgpackLengthMismatch},
 		{"chained array headers masked by a trailing invalid byte", chained(4096, 10), ErrMsgpackLengthMismatch},
 		{"deeply chained array headers masked", chained(4096, 500), ErrMsgpackLengthMismatch},
 		// Not a lie: a dense body can hold that many one-byte elements.
@@ -122,8 +122,7 @@ func TestBatchedEventsRejectsOversizedCount(t *testing.T) {
 	}{
 		{"count past the bytes remaining", arr32(declaredUnderCap), ErrMsgpackLengthMismatch},
 		{"count far past the bytes remaining", arr32(declaredHuge), ErrMsgpackLengthMismatch},
-		// Nil elements fail later on type, which is fine: what matters is that
-		// the count check itself lets the limit through.
+		// Nil elements fail later on type. What matters is the count check passes.
 		{"at the event count limit", join(arr32(maxBatchEventCount), nilElems(maxBatchEventCount)), nil},
 		{"one over the event count limit", join(arr32(maxBatchEventCount+1), nilElems(maxBatchEventCount+1)), ErrBatchTooManyEvents},
 	}
@@ -140,11 +139,9 @@ func TestBatchedEventsRejectsOversizedCount(t *testing.T) {
 	}
 }
 
-// TestBatchPathDoesNotPreSizeNestedHeaders pins the property the split rests on.
-// The batch decoders loop over entries rather than pre-sizing from a header, so
-// the top-level count is the only allocation the batch path needs bounded and it
-// does not need a walk over the body. If a decoder here ever starts pre-sizing,
-// this fails and the walk has to cover the batch path too.
+// TestBatchPathDoesNotPreSizeNestedHeaders pins what lets the batch path get by
+// with a count check instead of a walk. If a decoder here ever starts pre-sizing
+// from a header, this fails and the walk has to cover this path too.
 func TestBatchPathDoesNotPreSizeNestedHeaders(t *testing.T) {
 	const ceiling = 1 << 20
 	req := msgpackRequest()
@@ -196,8 +193,7 @@ func allocatedBy(f func()) uint64 {
 }
 
 // TestUnmarshalBoundsAllocations checks a tiny body with a vast declared length
-// is rejected without allocating on the way. The batch path decodes with msgp
-// and the single event path with the msgpack fallback, so both are covered.
+// is rejected without allocating on the way, on both decode paths.
 func TestUnmarshalBoundsAllocations(t *testing.T) {
 	const ceiling = 1 << 20
 
@@ -249,6 +245,26 @@ func TestUnmarshalAcceptsValidMsgpack(t *testing.T) {
 	})
 }
 
+// realisticEvent builds one event's worth of fields, the shape the single event
+// path decodes.
+func realisticEvent(fields int) []byte {
+	body := msgp.AppendMapHeader(nil, uint32(fields))
+	for f := range fields {
+		body = msgp.AppendString(body, "field."+itoa(f))
+		switch f % 4 {
+		case 0:
+			body = msgp.AppendString(body, "value."+itoa(f))
+		case 1:
+			body = msgp.AppendInt64(body, int64(f)*1000)
+		case 2:
+			body = msgp.AppendFloat64(body, float64(f)*1.5)
+		case 3:
+			body = msgp.AppendBool(body, f%8 == 3)
+		}
+	}
+	return body
+}
+
 // realisticBatch builds a libhoney-shaped batch, to price against real traffic.
 func realisticBatch(events, fields int) []byte {
 	body := arr32(uint32(events))
@@ -287,14 +303,13 @@ func itoa(i int) string {
 	return string(b)
 }
 
-// BenchmarkCheckMsgpackDeclaredLengths prices the pass the guard adds.
+// BenchmarkCheckMsgpackDeclaredLengths prices the walk on the shape it actually
+// sees. Only the single event path runs it, so a batch-shaped body here would
+// measure a case that cannot occur.
 func BenchmarkCheckMsgpackDeclaredLengths(b *testing.B) {
-	for _, shape := range []struct {
-		name           string
-		events, fields int
-	}{{"typical/2events", 2, 20}, {"p999/500events", 500, 20}, {"large/10000events", 10_000, 20}} {
-		body := realisticBatch(shape.events, shape.fields)
-		b.Run(shape.name, func(b *testing.B) {
+	for _, fields := range []int{10, 50, 200} {
+		body := realisticEvent(fields)
+		b.Run("fields="+itoa(fields), func(b *testing.B) {
 			b.SetBytes(int64(len(body)))
 			b.ReportAllocs()
 			for b.Loop() {
@@ -306,8 +321,28 @@ func BenchmarkCheckMsgpackDeclaredLengths(b *testing.B) {
 	}
 }
 
-// BenchmarkUnmarshalMsgpackBatch is a full batch decode, guard included. Stub
-// out checkMsgpackDeclaredLengths to measure the before/after delta.
+// BenchmarkUnmarshalMsgpackEvent is the single event path end to end, walk
+// included. Stub out checkMsgpackDeclaredLengths to measure the delta.
+func BenchmarkUnmarshalMsgpackEvent(b *testing.B) {
+	req := msgpackRequest()
+	for _, fields := range []int{10, 50, 200} {
+		body := realisticEvent(fields)
+		b.Run("fields="+itoa(fields), func(b *testing.B) {
+			b.SetBytes(int64(len(body)))
+			b.ReportAllocs()
+			for b.Loop() {
+				data := map[string]interface{}{}
+				if err := unmarshal(req, body, &data); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkUnmarshalMsgpackBatch is a full batch decode. The walk does not run
+// on this path, so the bound being measured is the count check in
+// batchedEvents.UnmarshalMsg.
 func BenchmarkUnmarshalMsgpackBatch(b *testing.B) {
 	req := msgpackRequest()
 	for _, shape := range []struct {

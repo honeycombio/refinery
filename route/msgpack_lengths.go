@@ -10,11 +10,12 @@ import (
 const (
 	// maxBatchEventCount is the most events we'll accept in a single batch, as
 	// a ceiling on well-formed batches rather than a size limit. It matches the
-	// array limit the Datadog trace decoder has shipped with for years.
+	// Datadog trace decoder's array limit.
 	maxBatchEventCount = 500_000
 
 	// maxMsgpackDepth bounds the walk's recursion. Real events nest a few
-	// levels, so this is far above anything a client sends.
+	// levels, but it does reject deeper bodies that the msgpack decoder would
+	// otherwise accept.
 	maxMsgpackDepth = 1000
 )
 
@@ -29,22 +30,20 @@ var (
 	// maxBatchEventCount.
 	ErrBatchTooManyEvents = fmt.Errorf("batch declares more than %d events", maxBatchEventCount)
 
-	// errStopWalk means the walk hit a byte it cannot read. The decoder stops at
-	// the same byte, so anything past it is the decoder's to judge.
+	// errStopWalk means the walk hit a byte it cannot read. The decoder fails on
+	// that byte too, so anything past it is never reached.
 	errStopWalk = errors.New("cannot interpret further")
 )
 
 // checkMsgpackDeclaredLengths rejects a body whose array and map headers declare
-// more objects than it contains, before a decoder sizes an allocation from one.
-// msgp already checks blob headers itself.
+// more objects than it contains. It guards the msgpack decoder, which sizes
+// slices and maps from those headers and has no limit of its own.
 //
-// It counts every object declared but not yet visited across all open
-// containers and requires the total to fit in the bytes remaining, since each
-// object needs at least one byte. Counting globally and at the header is what
-// makes the check unmaskable: a count validated only by reaching the element
-// that isn't there can be hidden behind any earlier error, and nested
-// containers that are each checked alone can together declare many times the
-// body.
+// It counts every object declared but not yet visited across all open containers
+// and requires the total to fit in the bytes remaining, since each object needs
+// at least one byte. Checking at the header keeps the count out of reach of a
+// trailing unreadable byte, and counting across containers stops nested headers
+// from each claiming the whole body.
 func checkMsgpackDeclaredLengths(b []byte) error {
 	// An empty body isn't an overrun. Leave it to the decoder to report.
 	if len(b) == 0 {

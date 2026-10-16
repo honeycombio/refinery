@@ -123,10 +123,10 @@ func (b *batchedEvents) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
-	// The count is attacker-controlled and this is the only place on the batch
-	// path that sizes an allocation from a header, so bound it here rather than
-	// walking the whole body. Every element needs at least one byte on the wire,
-	// so a count past the bytes remaining can never be satisfied.
+	// The only place on this path that sizes an allocation from a header, so
+	// bounding it here avoids a pass over the body. Every element needs at least
+	// one byte, so a count past the bytes remaining can never be satisfied.
+	// TestBatchPathDoesNotPreSizeNestedHeaders pins that nothing below pre-sizes.
 	if uint64(totalValues) > uint64(len(bts)) {
 		err = ErrMsgpackLengthMismatch
 		return
