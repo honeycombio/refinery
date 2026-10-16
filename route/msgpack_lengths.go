@@ -30,8 +30,10 @@ var (
 	// maxBatchEventCount.
 	ErrBatchTooManyEvents = fmt.Errorf("batch declares more than %d events", maxBatchEventCount)
 
-	// errStopWalk means the walk hit a byte it cannot read. The decoder fails on
-	// that byte too, so anything past it is never reached.
+	// errStopWalk means the walk hit a byte it cannot read, so the body passes
+	// through unjudged. The decoder fails on that byte too, so this only changes
+	// which error the client gets, never whether the request succeeds.
+	// TestGuardAddsNoRejections pins that.
 	errStopWalk = errors.New("cannot interpret further")
 )
 

@@ -1,6 +1,7 @@
 package route
 
 import (
+	"bytes"
 	"encoding/binary"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tinylib/msgp/msgp"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 // Headers written with whatever length we claim, regardless of what follows.
@@ -89,6 +91,9 @@ func TestCheckMsgpackDeclaredLengths(t *testing.T) {
 		{"invalid prefix is left for the decoder", []byte{0xc1}, nil},
 		{"invalid prefix before a lying header", append([]byte{0xc1}, map32(declaredHuge)...), nil},
 		{"empty body is left for the decoder", []byte{}, nil},
+		// Fewer bytes than the header needs, so the walk cannot read the count.
+		{"truncated array header", []byte{0xdd, 0x00}, nil},
+		{"truncated map header", []byte{0xdf, 0x00, 0x00}, nil},
 	}
 
 	for _, tc := range cases {
@@ -104,12 +109,54 @@ func TestCheckMsgpackDeclaredLengths(t *testing.T) {
 }
 
 func TestCheckMsgpackDeclaredLengthsNesting(t *testing.T) {
-	// 0x91 is a one-element fixarray, so each byte opens another level.
-	deep := make([]byte, maxMsgpackDepth+2)
-	for i := range deep {
-		deep[i] = 0x91
+	// 0x91 is a one-element fixarray, so each byte opens another level. The
+	// innermost nil is the element the last array declares.
+	nest := func(levels int) []byte {
+		b := make([]byte, levels, levels+1)
+		for i := range b {
+			b[i] = 0x91
+		}
+		return append(b, 0xc0)
 	}
-	require.ErrorIs(t, checkMsgpackDeclaredLengths(deep), ErrMsgpackTooDeeplyNested)
+
+	require.NoError(t, checkMsgpackDeclaredLengths(nest(maxMsgpackDepth)),
+		"a body at exactly the depth limit must be accepted")
+	require.ErrorIs(t, checkMsgpackDeclaredLengths(nest(maxMsgpackDepth+1)), ErrMsgpackTooDeeplyNested)
+}
+
+// TestGuardAddsNoRejections pins the property that makes the pass-through safe.
+// The guard must never reject a body the decoder would have accepted, or it
+// silently drops traffic that works today.
+func TestGuardAddsNoRejections(t *testing.T) {
+	// Decode without the guard in front, otherwise unmarshal returns the guard's
+	// own error and the comparison is circular.
+	decodes := func(body []byte) bool {
+		data := map[string]interface{}{}
+		dec := msgpack.NewDecoder(bytes.NewReader(body))
+		dec.UseLooseInterfaceDecoding(true)
+		return dec.Decode(&data) == nil
+	}
+
+	bodies := [][]byte{}
+	for lead := range 256 {
+		for _, pad := range []int{0, 1, 4, 20} {
+			bodies = append(bodies, append([]byte{byte(lead)}, make([]byte, pad)...))
+		}
+	}
+	bodies = append(bodies,
+		join(map32(1), fixstr("a"), fixstr("b")),
+		join(map32(2), fixstr("a"), []byte{0x2a}, fixstr("b"), []byte{0xc3}),
+		join(map32(1), fixstr("a"), join(arr32(2), nilElems(2))),
+		join(map32(1), []byte{0x2a}, fixstr("v")),
+		realisticEvent(10),
+	)
+
+	for _, body := range bodies {
+		guard := checkMsgpackDeclaredLengths(body)
+		if guard != nil && decodes(body) {
+			t.Errorf("guard rejected %x with %v but the decoder accepts it", body, guard)
+		}
+	}
 }
 
 // TestBatchedEventsRejectsOversizedCount covers the O(1) check at the one site
