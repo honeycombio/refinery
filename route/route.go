@@ -537,6 +537,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
+		return
 	}
 
 	apiKey := req.Header.Get(types.APIKeyHeader)
@@ -548,6 +549,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	environment, err := r.getEnvironmentName(apiKey)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
+		return
 	}
 
 	batchedEvents := newBatchedEvents(
