@@ -537,6 +537,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	dataset, err := getDatasetFromRequest(req)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
+		return
 	}
 
 	apiKey := req.Header.Get(types.APIKeyHeader)
@@ -548,6 +549,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	environment, err := r.getEnvironmentName(apiKey)
 	if err != nil {
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
+		return
 	}
 
 	batchedEvents := newBatchedEvents(
@@ -960,8 +962,14 @@ func makeDecoders(concurrency int) (*zstd.Decoder, error) {
 func unmarshal(r *http.Request, data []byte, v interface{}) error {
 	switch r.Header.Get("Content-Type") {
 	case "application/x-msgpack", "application/msgpack":
+		// The batch decoder bounds its own event count, and nothing below it
+		// sizes from a header, so it needs no pass over the body.
 		if unmarshaler, ok := v.(msgp.Unmarshaler); ok {
 			_, err := unmarshaler.UnmarshalMsg(data)
+			return err
+		}
+		// The msgpack decoder has no such bound, so check the body first.
+		if err := checkMsgpackDeclaredLengths(data); err != nil {
 			return err
 		}
 		decoder := msgpack.NewDecoder(bytes.NewReader(data))

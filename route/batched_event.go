@@ -123,6 +123,18 @@ func (b *batchedEvents) UnmarshalMsg(bts []byte) (o []byte, err error) {
 		err = msgp.WrapError(err)
 		return
 	}
+	// The only place on this path that sizes an allocation from a header, so
+	// bounding it here avoids a pass over the body. Every element needs at least
+	// one byte, so a count past the bytes remaining can never be satisfied.
+	// TestBatchPathDoesNotPreSizeNestedHeaders pins that nothing below pre-sizes.
+	if uint64(totalValues) > uint64(len(bts)) {
+		err = ErrMsgpackLengthMismatch
+		return
+	}
+	if totalValues > maxBatchEventCount {
+		err = ErrBatchTooManyEvents
+		return
+	}
 	b.events = make([]batchedEvent, totalValues)
 	for i := range b.events {
 		b.events[i].cfg = b.cfg

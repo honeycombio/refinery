@@ -1257,6 +1257,35 @@ func TestProcessEventMetrics(t *testing.T) {
 	}
 }
 
+// TestBatchStopsOnDatasetError covers the missing return after
+// handlerReturnWithError. Without it the handler kept running past the error and
+// wrote a second response body on top of the first.
+func TestBatchStopsOnDatasetError(t *testing.T) {
+	t.Parallel()
+
+	router := newBatchRouter(t)
+	batch := createBatchEvents(router.Config)
+	batchMsgpack, err := msgpack.Marshal(batch.events)
+	require.NoError(t, err)
+
+	// No datasetName mux var, so getDatasetFromRequest fails.
+	req, err := http.NewRequest("POST", "/1/batch/", bytes.NewReader(batchMsgpack))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/x-msgpack")
+	req.Header.Set("X-Honeycomb-Team", "test-api-key")
+
+	w := httptest.NewRecorder()
+	router.batch(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	// One response, not the error followed by a batch result.
+	var body map[string]any
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body),
+		"body should be a single JSON object, got %q", w.Body.String())
+	assert.NotContains(t, w.Body.String(), "\"status\"",
+		"handler continued past the error and wrote a batch response too")
+}
+
 func newBatchRouter(t testing.TB) *Router {
 	// Set up mock collector and transmission
 	mockCollector := collect.NewMockCollector()
@@ -1285,8 +1314,11 @@ func newBatchRouter(t testing.TB) *Router {
 	}
 
 	r := &Router{
-		Config:               mockConfig,
-		Metrics:              &mockMetrics,
+		Config:  mockConfig,
+		Metrics: &mockMetrics,
+		// handlerReturnWithError logs through Logger, so error paths panic
+		// without it.
+		Logger:               &logger.NullLogger{},
 		UpstreamTransmission: mockTransmission,
 		Collector:            mockCollector,
 		Sharder:              mockSharder,
