@@ -579,11 +579,12 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 	mainconf.SampleCache.WorkerCount = uint(mainconf.Collection.GetWorkerCount())
 
 	cfg := &fileConfig{
-		mainConfig:  mainconf,
-		mainHash:    mainhash,
-		rulesConfig: rulesconf,
-		rulesHash:   ruleshash,
-		opts:        opts,
+		mainConfig:   mainconf,
+		mainHash:     mainhash,
+		rulesConfig:  rulesconf,
+		rulesHash:    ruleshash,
+		opts:         opts,
+		lastLoadTime: time.Now(),
 	}
 
 	// Return warning error if there were warnings but no real errors
@@ -683,6 +684,7 @@ func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) error {
 	f.mainHash = cfg.mainHash
 	f.rulesConfig = cfg.rulesConfig
 	f.rulesHash = cfg.rulesHash
+	f.lastLoadTime = cfg.lastLoadTime
 	f.mux.Unlock() // can't defer -- we don't want callbacks to deadlock
 
 	for _, cb := range f.callbacks {
@@ -1170,6 +1172,9 @@ func (f *fileConfig) GetParentIdFieldNames() []string {
 }
 
 func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	ret := make([]ConfigMetadata, 2)
 	ret[0] = ConfigMetadata{
 		Type:     "config",

@@ -1509,3 +1509,42 @@ func TestAdditionalHeadersReservedHeadersRejected(t *testing.T) {
 		})
 	}
 }
+
+func TestConfigMetadataLoadedAt(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "Network.ListenAddr", "0.0.0.0:8080")
+	rm := makeYAML("ConfigVersion", 2)
+	cfg, rules := createTempConfigs(t, cm, rm)
+
+	// LoadedAt has a resolution of one second.
+	beforeLoad := time.Now().Truncate(time.Second)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	require.NoError(t, err)
+
+	loadedAt := func() []time.Time {
+		md := c.GetConfigMetadata()
+		require.Len(t, md, 2)
+		times := make([]time.Time, 0, len(md))
+		for _, m := range md {
+			ts, err := time.Parse(time.RFC3339, m.LoadedAt)
+			require.NoError(t, err)
+			times = append(times, ts)
+		}
+		return times
+	}
+
+	for _, ts := range loadedAt() {
+		assert.False(t, ts.Before(beforeLoad), "LoadedAt %v is earlier than the load at %v", ts, beforeLoad)
+	}
+
+	// Make sure a reload happens in a later second, then change the config.
+	time.Sleep(1100 * time.Millisecond)
+	beforeReload := time.Now().Truncate(time.Second)
+	cm = makeYAML("General.ConfigurationVersion", 2, "Network.ListenAddr", "0.0.0.0:9000")
+	require.NoError(t, os.WriteFile(cfg, []byte(cm), 0644))
+	require.NoError(t, c.Reload())
+	require.Equal(t, "0.0.0.0:9000", c.GetListenAddr())
+
+	for _, ts := range loadedAt() {
+		assert.False(t, ts.Before(beforeReload), "LoadedAt %v is earlier than the reload at %v", ts, beforeReload)
+	}
+}
