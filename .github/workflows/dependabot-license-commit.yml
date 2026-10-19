@@ -1,0 +1,73 @@
+name: "Commit LICENSES fix (Dependabot)"
+
+# Privileged: triggered by completion of "License Scan (Dependabot)", which
+# runs this workflow in default-branch context with a write-scoped token.
+# This job deliberately never checks out or executes any PR-sourced code --
+# it only downloads the artifact built by the unprivileged scan job and
+# writes those pre-computed files to the branch via the Git Data API.
+on:
+  workflow_run:
+    workflows: ["License Scan (Dependabot)"]
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+jobs:
+  commit-fix:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/download-artifact@v4
+        id: dl
+        continue-on-error: true
+        with:
+          name: licenses-fix
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: No changes to apply
+        if: steps.dl.outcome == 'failure'
+        run: echo "No licenses-fix artifact (nothing changed); nothing to do."
+
+      - name: Build tree, commit, and update ref via Git Data API
+        if: steps.dl.outcome == 'success'
+        run: |
+          set -euo pipefail
+
+          head_sha=$(cat head_sha.txt)
+          head_branch=$(cat head_branch.txt)
+
+          base_tree=$(gh api "repos/${REPO}/git/commits/${head_sha}" --jq .tree.sha)
+
+          entries="[]"
+          while IFS= read -r line; do
+            status="${line:0:2}"
+            path="${line:3}"
+            if [[ "$status" == *D* ]]; then
+              entries=$(jq -c --arg path "$path" \
+                '. + [{path:$path, mode:"100644", type:"blob", sha:null}]' <<<"$entries")
+            else
+              blob_sha=$(gh api "repos/${REPO}/git/blobs" -f encoding="base64" \
+                --raw-field content="$(base64 -w0 "$path")" --jq .sha)
+              entries=$(jq -c --arg path "$path" --arg sha "$blob_sha" \
+                '. + [{path:$path, mode:"100644", type:"blob", sha:$sha}]' <<<"$entries")
+            fi
+          done < manifest.txt
+
+          new_tree=$(jq -n --arg base_tree "$base_tree" --argjson entries "$entries" \
+            '{base_tree:$base_tree, tree:$entries}' | \
+            gh api "repos/${REPO}/git/trees" --input - --jq .sha)
+
+          new_commit=$(jq -n --arg tree "$new_tree" --arg parent "$head_sha" \
+            '{message:"maint: update LICENSES for dependency changes", tree:$tree, parents:[$parent]}' | \
+            gh api "repos/${REPO}/git/commits" --input - --jq .sha)
+
+          jq -n --arg sha "$new_commit" '{sha:$sha, force:false}' | \
+            gh api "repos/${REPO}/git/refs/heads/${head_branch}" -X PATCH --input -

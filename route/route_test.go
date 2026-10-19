@@ -570,10 +570,12 @@ func TestOTLPRequest(t *testing.T) {
 			Logger:         &logger.MockLogger{},
 			incomingOrPeer: "incoming",
 		},
-		Logger:           &logger.MockLogger{},
-		environmentCache: newEnvironmentCache(time.Second, nil),
-		Tracer:           noop.Tracer{},
-		Collector:        collect.NewMockCollector(),
+		Logger: &logger.MockLogger{},
+		environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+			return authData{}, nil
+		}),
+		Tracer:    noop.Tracer{},
+		Collector: collect.NewMockCollector(),
 		Sharder: &sharder.MockSharder{
 			Self: &sharder.TestShard{Addr: "http://test"},
 		},
@@ -773,6 +775,22 @@ func TestEnvironmentCache(t *testing.T) {
 		}
 	})
 
+	t.Run("does not call getFn on cache hit with blank environment", func(t *testing.T) {
+		test_key := "a-key"
+		// Unmigrated Classic environments will return a blank environment name.
+		aStillVeryClassicEnvironment := authData{environment: ""}
+
+		cache := newEnvironmentCache(time.Second, func(key string) (authData, error) {
+			t.Errorf("should not have called getFn")
+			return authData{}, nil
+		})
+		cache.addItem(test_key, aStillVeryClassicEnvironment, time.Second)
+
+		val, err := cache.get(test_key)
+		assert.NoError(t, err)
+		assert.Equal(t, aStillVeryClassicEnvironment.environment, val.environment)
+	})
+
 	t.Run("ignores expired items", func(t *testing.T) {
 		called := false
 		cache := newEnvironmentCache(time.Millisecond, func(key string) (authData, error) {
@@ -804,6 +822,74 @@ func TestEnvironmentCache(t *testing.T) {
 		if err != expectedErr {
 			t.Errorf("expected %e - got %e", expectedErr, err)
 		}
+	})
+}
+
+func TestGetEnvironmentName(t *testing.T) {
+	t.Run("option off: with a classic key", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: false},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				t.Errorf("should not have called getFn")
+				return authData{}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(legacyAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "", env, "returns a blank environment without a cache lookup")
+	})
+
+	t.Run("option on: with a classic key for an unmigrated environment", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: true},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				return authData{environment: ""}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(legacyAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "", env, "returns a blank environment from the cache")
+	})
+
+	t.Run("option on: with a classic key for a migrated environment", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: true},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				return authData{environment: "migrated-env"}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(legacyAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "migrated-env", env, "returns the migrated environment name from the cache")
+	})
+
+	t.Run("option off: with an E&S key", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: false},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				return authData{environment: "es-env"}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(esAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "es-env", env, "returns the E&S key's environment name from the cache")
+	})
+
+	t.Run("option on: with an E&S key", func(t *testing.T) {
+		router := &Router{
+			Config: &config.MockConfig{EnableMigratedClassicAsEnvironment: true},
+			environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				return authData{environment: "es-env"}, nil
+			}),
+		}
+
+		env, err := router.getEnvironmentName(esAPIKey)
+		assert.NoError(t, err)
+		assert.Equal(t, "es-env", env, "returns the E&S key's environment name from the cache")
 	})
 }
 

@@ -9,59 +9,60 @@ import (
 // MockConfig will respond with whatever config it's set to do during
 // initialization
 type MockConfig struct {
-	Callbacks                        []ConfigReloadCallback
-	GetAccessKeyConfigVal            AccessKeyConfig
-	GetCollectorTypeVal              string
-	GetCollectionConfigVal           CollectionConfig
-	GetTracesConfigVal               TracesConfig
-	GetHoneycombAPIVal               string
-	GetListenAddrVal                 string
-	GetPeerListenAddrVal             string
-	GetHTTPIdleTimeoutVal            time.Duration
-	GetCompressPeerCommunicationsVal bool
-	GetGRPCEnabledVal                bool
-	GetGRPCListenAddrVal             string
-	GetGRPCServerParameters          GRPCServerParameters
-	GetLoggerTypeVal                 string
-	GetHoneycombLoggerConfigVal      HoneycombLoggerConfig
-	GetStdoutLoggerConfigVal         StdoutLoggerConfig
-	GetLoggerLevelVal                Level
-	GetPeersVal                      []string
-	GetRedisPeerManagementVal        RedisPeerManagementConfig
-	GetSamplerTypeName               string
-	GetSamplerTypeVal                interface{}
-	GetMetricsTypeVal                string
-	GetGeneralConfigVal              GeneralConfig
-	GetPrometheusMetricsConfigVal    PrometheusMetricsConfig
-	GetOpAmpConfigVal                OpAMPConfig
-	GetOTelMetricsConfigVal          OTelMetricsConfig
-	GetOTelTracingConfigVal          OTelTracingConfig
-	IdentifierInterfaceName          string
-	UseIPV6Identifier                bool
-	RedisIdentifier                  string
-	PeerManagementType               string
-	DebugServiceAddr                 string
-	DryRun                           bool
-	DryRunFieldName                  string
-	AddHostMetadataToTrace           bool
-	AddRuleReasonToTrace             bool
-	EnvironmentCacheTTL              time.Duration
-	DatasetPrefix                    string
-	QueryAuthToken                   string
-	PeerTimeout                      time.Duration
-	AdditionalErrorFields            []string
-	AddSpanCountToRoot               bool
-	AddCountsToRoot                  bool
-	CacheOverrunStrategy             string
-	SampleCache                      SampleCacheConfig
-	StressRelief                     StressReliefConfig
-	AdditionalAttributes             map[string]string
-	AdditionalHeaders                map[string]string
-	TraceIdFieldNames                []string
-	ParentIdFieldNames               []string
-	CfgMetadata                      []ConfigMetadata
-	CfgHash                          string
-	RulesHash                        string
+	Callbacks                          []ConfigReloadCallback
+	GetAccessKeyConfigVal              AccessKeyConfig
+	GetCollectorTypeVal                string
+	GetCollectionConfigVal             CollectionConfig
+	GetTracesConfigVal                 TracesConfig
+	GetHoneycombAPIVal                 string
+	GetListenAddrVal                   string
+	GetPeerListenAddrVal               string
+	GetHTTPIdleTimeoutVal              time.Duration
+	GetCompressPeerCommunicationsVal   bool
+	GetGRPCEnabledVal                  bool
+	GetGRPCListenAddrVal               string
+	GetGRPCServerParameters            GRPCServerParameters
+	GetLoggerTypeVal                   string
+	GetHoneycombLoggerConfigVal        HoneycombLoggerConfig
+	GetStdoutLoggerConfigVal           StdoutLoggerConfig
+	GetLoggerLevelVal                  Level
+	GetPeersVal                        []string
+	GetRedisPeerManagementVal          RedisPeerManagementConfig
+	GetSamplerTypeName                 string
+	GetSamplerTypeVal                  interface{}
+	GetMetricsTypeVal                  string
+	GetGeneralConfigVal                GeneralConfig
+	GetPrometheusMetricsConfigVal      PrometheusMetricsConfig
+	GetOpAmpConfigVal                  OpAMPConfig
+	GetOTelMetricsConfigVal            OTelMetricsConfig
+	GetOTelTracingConfigVal            OTelTracingConfig
+	IdentifierInterfaceName            string
+	UseIPV6Identifier                  bool
+	RedisIdentifier                    string
+	PeerManagementType                 string
+	DebugServiceAddr                   string
+	DryRun                             bool
+	DryRunFieldName                    string
+	AddHostMetadataToTrace             bool
+	AddRuleReasonToTrace               bool
+	EnvironmentCacheTTL                time.Duration
+	DatasetPrefix                      string
+	EnableMigratedClassicAsEnvironment bool
+	QueryAuthToken                     string
+	PeerTimeout                        time.Duration
+	AdditionalErrorFields              []string
+	AddSpanCountToRoot                 bool
+	AddCountsToRoot                    bool
+	CacheOverrunStrategy               string
+	SampleCache                        SampleCacheConfig
+	StressRelief                       StressReliefConfig
+	AdditionalAttributes               map[string]string
+	AdditionalHeaders                  map[string]string
+	TraceIdFieldNames                  []string
+	ParentIdFieldNames                 []string
+	CfgMetadata                        []ConfigMetadata
+	CfgHash                            string
+	RulesHash                          string
 
 	// Samplers allows per-dataset/environment sampler configuration
 	// Map key is the dataset name or environment, value is the sampler choice
@@ -373,6 +374,13 @@ func (f *MockConfig) GetDatasetPrefix() string {
 	return f.DatasetPrefix
 }
 
+func (f *MockConfig) GetEnableMigratedClassicAsEnvironment() bool {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.EnableMigratedClassicAsEnvironment
+}
+
 func (f *MockConfig) GetQueryAuthToken() string {
 	f.Mux.RLock()
 	defer f.Mux.RUnlock()
@@ -486,7 +494,7 @@ func (f *MockConfig) SetMaxAlloc(v MemorySize) {
 }
 
 func (f *MockConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
-	if IsLegacyAPIKey(apiKey) {
+	if IsLegacyAPIKey(apiKey) && env == "" {
 		if f.DatasetPrefix != "" {
 			return fmt.Sprintf("%s.%s", f.DatasetPrefix, dataset)
 		}

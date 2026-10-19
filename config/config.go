@@ -140,6 +140,8 @@ type Config interface {
 
 	GetDatasetPrefix() string
 
+	GetEnableMigratedClassicAsEnvironment() bool
+
 	// GetQueryAuthToken returns the token that must be used to access the /query endpoints
 	GetQueryAuthToken() string
 

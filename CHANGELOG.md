@@ -1,5 +1,56 @@
 # Refinery Changelog
 
+## 3.4.1 2026-10-13
+
+This is a patch release with two fixes and a dependency update to address CVEs in `golang.org/x/mod`.
+
+### 🐛 Fixes
+
+- fix: allow `DeterministicSampler` as a nested sampler in `RulesBasedSampler` by @bennetthardwick in https://github.com/honeycombio/refinery/pull/1856
+- fix: peers can't find each other when Redis requires AUTH by @robbkidd in https://github.com/honeycombio/refinery/pull/1861
+
+### 🛠 Maintenance
+
+- ci: test against Valkey as well as Redis by @robbkidd in https://github.com/honeycombio/refinery/pull/1858
+- ci: skip ECR publish jobs on dependabot branches by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1865
+- maint(deps): bump the minor-patch group across 1 directory with 7 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1864
+
+## 3.4.0 2026-09-03
+
+The `Sending trace` debug log now reports the sampler's selector in a field named `samplerSelector`.
+It was previously named `dataset` or `environment` depending on the API key type.
+
+### 💡 Enhancements
+
+- feat: support Classic environments that have been migrated in-place to E&S by @robbkidd in https://github.com/honeycombio/refinery/pull/1850
+
+### 🛠 Maintenance
+
+- ci: auto-fix LICENSES drift on dependabot PRs by @lizthegrey in https://github.com/honeycombio/refinery/pull/1838
+- maint: update to husky v0.44.0, adopt new header validators by @robbkidd in https://github.com/honeycombio/refinery/pull/1849
+- chore: remove llm-o11y and ai-o11y from codeowners by @VinozzZ in https://github.com/honeycombio/refinery/pull/1851
+- maint(deps): bump the minor-patch group with 18 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1852
+- maint: upgrade to go1.27.1 by @lizthegrey in https://github.com/honeycombio/refinery/pull/1854
+
+## 3.3.0 2026-08-10
+
+In addition to zstd support for gRPC connections and performance improvements, this release includes updates to address CVEs in several dependencies.
+
+### 💡 Enhancements
+
+- feat: support zstd on gRPC by @mterhar in https://github.com/honeycombio/refinery/pull/1833
+- maint: upgrade to go1.26 (bonus: better CPU performance) by @lizthegrey in https://github.com/honeycombio/refinery/pull/1836
+
+### 🛠 Maintenance
+
+- maint(deps): bump the minor-patch group with 19 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1829
+- maint: bump klauspost/compress to v1.19.1 by @lizthegrey in https://github.com/honeycombio/refinery/pull/1834
+- fix: stop flaky duplicate-event failures in TestAppIntegrationSendKey by @lizthegrey in https://github.com/honeycombio/refinery/pull/1837
+- maint(deps): bump google.golang.org/grpc from 1.81.1 to 1.82.1 by @dependabot in https://github.com/honeycombio/refinery/pull/1839
+- maint: bump klauspost/compress to v1.19.2 by @lizthegrey in https://github.com/honeycombio/refinery/pull/1843
+- maint: align Go version declarations in dev and CI by @robbkidd in https://github.com/honeycombio/refinery/pull/1846
+- maint(deps): bump the minor-patch group across 1 directory with 20 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1847
+
 ## 3.2.2 2026-05-26
 
 ### 🐛 Fixes

@@ -70,10 +70,11 @@ type configContents struct {
 }
 
 type GeneralConfig struct {
-	ConfigurationVersion int      `yaml:"ConfigurationVersion"`
-	MinRefineryVersion   string   `yaml:"MinRefineryVersion" default:"v2.0"`
-	DatasetPrefix        string   `yaml:"DatasetPrefix" `
-	ConfigReloadInterval Duration `yaml:"ConfigReloadInterval" default:"15s"`
+	ConfigurationVersion               int      `yaml:"ConfigurationVersion"`
+	MinRefineryVersion                 string   `yaml:"MinRefineryVersion" default:"v2.0"`
+	DatasetPrefix                      string   `yaml:"DatasetPrefix" `
+	ConfigReloadInterval               Duration `yaml:"ConfigReloadInterval" default:"15s"`
+	EnableMigratedClassicAsEnvironment bool     `yaml:"EnableMigratedClassicAsEnvironment"`
 }
 
 type OpAMPConfig struct {
@@ -939,7 +940,7 @@ func (f *fileConfig) GetAllSamplerRules() *V2SamplerConfig {
 }
 
 func (f *fileConfig) DetermineSamplerKey(apiKey, env, dataset string) string {
-	if !IsLegacyAPIKey(apiKey) {
+	if !IsLegacyAPIKey(apiKey) || env != "" {
 		return env
 	}
 
@@ -1089,6 +1090,13 @@ func (f *fileConfig) GetDatasetPrefix() string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.General.DatasetPrefix
+}
+
+func (f *fileConfig) GetEnableMigratedClassicAsEnvironment() bool {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.General.EnableMigratedClassicAsEnvironment
 }
 
 func (f *fileConfig) GetGeneralConfig() GeneralConfig {

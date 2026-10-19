@@ -562,12 +562,13 @@ groups:
         validations:
           - type: validChildren
             arg:
+              - DeterministicSampler
               - DynamicSampler
               - EMADynamicSampler
               - EMAThroughputSampler
               - WindowedThroughputSampler
               - TotalThroughputSampler
-        summary: is the Dynamic Sampler to use if the rule matches.
+        summary: is the sampler to use if the rule matches.
         description: >
           The sampler to use if the rule matches. If this is set, the sample
           rate will be determined by this downstream sampler. If this is not

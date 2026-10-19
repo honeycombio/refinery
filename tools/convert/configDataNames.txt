@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2026-04-09 at 22:21:29 UTC.
+# Automatically generated on 2026-10-13 at 11:46:56 UTC.
 
 General:
   - ConfigurationVersion
@@ -9,6 +9,8 @@ General:
   - DatasetPrefix
 
   - ConfigReloadInterval
+
+  - EnableMigratedClassicAsEnvironment
 
 
 Network:

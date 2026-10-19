@@ -1,8 +1,15 @@
 version: 2.1
 
+parameters:
+  go_version:
+    description: cimg/go image version used by every Go job. Keep in sync with .tool-versions and go.mod as appropriate.
+    type: string
+    default: "1.27"
+
 orbs:
   aws-cli: circleci/aws-cli@3.2.0
   aws-ecr: circleci/aws-ecr@9.5.4
+  bats: circleci/bats@1.0.0
 
 commands:
   go-build:
@@ -65,9 +72,13 @@ commands:
 
 jobs:
   test:
+    parameters:
+      redis_image:
+        description: Docker image for the Redis-compatible server the test suite runs against.
+        type: string
     docker:
-      - image: cimg/go:1.25
-      - image: redis:6.2
+      - image: cimg/go:<< pipeline.parameters.go_version >>
+      - image: << parameters.redis_image >>
     resource_class: xlarge
     steps:
       - checkout
@@ -94,7 +105,7 @@ jobs:
 
   build_binaries:
     docker:
-      - image: cimg/go:1.25
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - go-build:
@@ -185,7 +196,7 @@ jobs:
 
   build_docker:
     docker:
-      - image: cimg/go:1.25
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - setup_googleko
@@ -199,8 +210,14 @@ jobs:
             - /home/circleci/.cache/go-build
 
   smoke-test:
+    parameters:
+      redis_image:
+        description: Docker image for the Redis-compatible server the smoke test runs against.
+        type: string
     machine:
       image: ubuntu-2204:2024.01.1
+    environment:
+      REDIS_IMAGE: << parameters.redis_image >>
     steps:
       - checkout
       - restore_cache:
@@ -209,12 +226,24 @@ jobs:
       - restore_cache:
           keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
-      - run: make smoke
-      - run: make unsmoke
+      - bats/install
+      - run:
+          name: Smoke Test
+          command: make smoke
+      - store_test_results:
+          path: ./smoke-test/
+          when: always
+      - store_artifacts:
+          path: ./smoke-test/report.xml
+          when: always
+      - run:
+          name: Extinguish the flames
+          command: make unsmoke
+          when: always
 
   publish_docker_to_private_ecr:
     docker:
-      - image: cimg/go:1.25
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - setup_remote_docker
@@ -237,7 +266,7 @@ jobs:
 
   publish_docker_to_ecr_sippycup:
     docker:
-      - image: cimg/go:1.25
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - setup_remote_docker
@@ -261,7 +290,7 @@ jobs:
 
   publish_docker_to_all_public_registries:
     docker:
-      - image: cimg/go:1.25
+      - image: cimg/go:<< pipeline.parameters.go_version >>
     steps:
       - checkout
       - setup_remote_docker
@@ -291,6 +320,12 @@ workflows:
   build:
     jobs:
       - test:
+          matrix:
+            alias: test
+            parameters:
+              redis_image:
+                - redis:8
+                - valkey/valkey:9
           filters:
             tags:
               only: /.*/
@@ -307,6 +342,12 @@ workflows:
             tags:
               only: /.*/
       - smoke-test:
+          matrix:
+            alias: smoke-test
+            parameters:
+              redis_image:
+                - redis:8
+                - valkey/valkey:9
           requires:
             - build_docker
           filters:
@@ -320,7 +361,9 @@ workflows:
             - smoke-test
           filters:
             branches:
-              ignore: /pull\/.*/
+              ignore:
+                - /pull\/.*/
+                - /dependabot\/.*/
       - publish_docker_to_all_public_registries:
           context: Honeycomb Secrets for Public Repos
           requires:
@@ -340,7 +383,9 @@ workflows:
             - smoke-test
           filters:
             branches:
-              ignore: /pull\/.*/
+              ignore:
+                - /pull\/.*/
+                - /dependabot\/.*/
       - publish_github:
           context: Honeycomb Secrets for Public Repos
           requires:

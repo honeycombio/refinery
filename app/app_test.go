@@ -98,7 +98,7 @@ func newTestAPIServer(t testing.TB) *testAPIServer {
 		io.Copy(io.Discard, resp.Body)
 
 		return resp.StatusCode == http.StatusOK
-	}, 100*time.Millisecond, 10*time.Millisecond, "Test server failed to become ready")
+	}, 2*time.Second, 10*time.Millisecond, "Test server failed to become ready")
 
 	// Clear the health check events from the events array
 	server.mutex.Lock()
@@ -344,7 +344,7 @@ func newStartedApp(
 	if mockTransmission != nil {
 		upstreamTransmission = mockTransmission
 	} else {
-		upstreamTransmission = transmit.NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 500, 100*time.Millisecond, 100*time.Millisecond, true, nil)
+		upstreamTransmission = transmit.NewDirectTransmission(types.TransmitTypeUpstream, http.DefaultTransport.(*http.Transport), 500, 100*time.Millisecond, 2*time.Second, true, nil)
 	}
 
 	// Always create real peer transmission using DirectTransmission
@@ -354,7 +354,7 @@ func newStartedApp(
 			Timeout: 3 * time.Second,
 		}).Dial,
 	}
-	peerTransmissionWrapper := transmit.NewDirectTransmission(types.TransmitTypePeer, peerTransport, int(cfg.GetTracesConfigVal.MaxBatchSize), 100*time.Millisecond, 100*time.Millisecond, false, nil)
+	peerTransmissionWrapper := transmit.NewDirectTransmission(types.TransmitTypePeer, peerTransport, int(cfg.GetTracesConfigVal.MaxBatchSize), 100*time.Millisecond, 2*time.Second, false, nil)
 
 	var g inject.Graph
 	err = g.Provide(

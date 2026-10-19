@@ -170,22 +170,21 @@ verify-licenses: update-licenses
 	fi
 
 .PHONY: smoke
-smoke: dockerize local_image
+#: run the smoke test suite against a freshly built local image; stack left running
+smoke: local_image
 	@echo ""
 	@echo "+++ Smoking all the tests."
 	@echo ""
-	@echo ""
-	@echo "+++ Spin up Refinery and Redis."
-	@echo ""
-	cd smoke-test && docker compose up --detach --wait-timeout 10
-	@echo ""
-	@echo "+++ Verify Refinery is ready within the timeout."
-	@echo ""
-	./dockerize -wait http://localhost:8080/ready -timeout 5s
+	cd smoke-test && bats . --report-formatter junit --output ./
 
 .PHONY: unsmoke
+#: destroy the smoke test stack
 unsmoke:
 	@echo ""
 	@echo "+++ Spinning down the smokers."
 	@echo ""
-	cd smoke-test && docker-compose down --volumes
+	cd smoke-test && docker compose down --volumes
+
+.PHONY: resmoke
+#: run the smoke test suite with a clean-slate
+resmoke: unsmoke smoke

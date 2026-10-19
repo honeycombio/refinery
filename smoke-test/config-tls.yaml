@@ -1,3 +1,0 @@
-RedisPeerManagement:
-    UseTLS: true
-    UseTLSInsecure: true
