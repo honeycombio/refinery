@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -12,22 +13,38 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// effectiveTotalThroughputSamplerConfig fills in the defaults that would
+// otherwise be applied when the engine is built. See effectiveDynamicSamplerConfig.
+func effectiveTotalThroughputSamplerConfig(c *config.TotalThroughputSamplerConfig) config.TotalThroughputSamplerConfig {
+	e := *c
+	if e.GoalThroughputPerSec == 0 {
+		e.GoalThroughputPerSec = 100
+	}
+	if e.ClearFrequency == 0 {
+		e.ClearFrequency = config.Duration(30 * time.Second)
+	}
+	if e.MaxKeys == 0 {
+		e.MaxKeys = 500
+	}
+	return e
+}
+
+// totalThroughputSamplerConfigKey is the config half of the shared-dynsampler key.
+func totalThroughputSamplerConfigKey(c *config.TotalThroughputSamplerConfig) string {
+	e := effectiveTotalThroughputSamplerConfig(c)
+	return fmt.Sprintf("GoalThroughputPerSec=%d,UseClusterSize=%t,ClearFrequency=%v,FieldList=%q,MaxKeys=%d,UseTraceLength=%t",
+		e.GoalThroughputPerSec, e.UseClusterSize, time.Duration(e.ClearFrequency), sortedFieldList(e.FieldList), e.MaxKeys, e.UseTraceLength)
+}
+
 // createDynForTotalThroughputSampler creates a dynsampler for TotalThroughputSampler
 func createDynForTotalThroughputSampler(c *config.TotalThroughputSamplerConfig) *dynsampler.TotalThroughput {
-	maxKeys := c.MaxKeys
-	if maxKeys == 0 {
-		maxKeys = 500
-	}
-	clearFreq := c.ClearFrequency
-	if clearFreq == 0 {
-		clearFreq = config.Duration(30 * time.Second)
-	}
+	e := effectiveTotalThroughputSamplerConfig(c)
 	clusterSize := 1 // Will be updated by SetClusterSize if needed
 
 	dynsampler := &dynsampler.TotalThroughput{
-		GoalThroughputPerSec:   c.GoalThroughputPerSec / clusterSize,
-		ClearFrequencyDuration: time.Duration(clearFreq),
-		MaxKeys:                maxKeys,
+		GoalThroughputPerSec:   e.GoalThroughputPerSec / clusterSize,
+		ClearFrequencyDuration: time.Duration(e.ClearFrequency),
+		MaxKeys:                e.MaxKeys,
 	}
 	dynsampler.Start()
 	return dynsampler

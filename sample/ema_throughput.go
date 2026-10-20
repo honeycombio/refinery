@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -12,23 +13,59 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// effectiveEMAThroughputSamplerConfig fills in the defaults that would otherwise
+// be applied when the engine is built. See effectiveDynamicSamplerConfig.
+func effectiveEMAThroughputSamplerConfig(c *config.EMAThroughputSamplerConfig) config.EMAThroughputSamplerConfig {
+	e := *c
+	if e.GoalThroughputPerSec == 0 {
+		e.GoalThroughputPerSec = 100
+	}
+	if e.InitialSampleRate == 0 {
+		e.InitialSampleRate = 10
+	}
+	if e.AdjustmentInterval == 0 {
+		e.AdjustmentInterval = config.Duration(15 * time.Second)
+	}
+	if e.Weight == 0 {
+		e.Weight = 0.5
+	}
+	// AgeOutValue follows Weight, so it has to be defaulted after it.
+	if e.AgeOutValue == 0 {
+		e.AgeOutValue = e.Weight
+	}
+	if e.BurstMultiple == 0 {
+		e.BurstMultiple = 2
+	}
+	if e.BurstDetectionDelay == 0 {
+		e.BurstDetectionDelay = 3
+	}
+	if e.MaxKeys == 0 {
+		e.MaxKeys = 500
+	}
+	return e
+}
+
+// emaThroughputSamplerConfigKey is the config half of the shared-dynsampler key.
+func emaThroughputSamplerConfigKey(c *config.EMAThroughputSamplerConfig) string {
+	e := effectiveEMAThroughputSamplerConfig(c)
+	return fmt.Sprintf("GoalThroughputPerSec=%d,UseClusterSize=%t,InitialSampleRate=%d,AdjustmentInterval=%v,Weight=%s,AgeOutValue=%s,BurstMultiple=%s,BurstDetectionDelay=%d,FieldList=%q,MaxKeys=%d,UseTraceLength=%t",
+		e.GoalThroughputPerSec, e.UseClusterSize, e.InitialSampleRate, time.Duration(e.AdjustmentInterval), formatFloat(e.Weight), formatFloat(e.AgeOutValue), formatFloat(e.BurstMultiple), e.BurstDetectionDelay, sortedFieldList(e.FieldList), e.MaxKeys, e.UseTraceLength)
+}
+
 // createDynForEMAThroughputSampler creates a dynsampler for EMAThroughputSampler
 func createDynForEMAThroughputSampler(c *config.EMAThroughputSamplerConfig) *dynsampler.EMAThroughput {
-	maxKeys := c.MaxKeys
-	if maxKeys == 0 {
-		maxKeys = 500
-	}
+	e := effectiveEMAThroughputSamplerConfig(c)
 	clusterSize := 1 // Will be updated by SetClusterSize if needed
 
 	dynsamplerInstance := &dynsampler.EMAThroughput{
-		GoalThroughputPerSec: c.GoalThroughputPerSec / clusterSize,
-		InitialSampleRate:    c.InitialSampleRate,
-		AdjustmentInterval:   time.Duration(c.AdjustmentInterval),
-		Weight:               c.Weight,
-		AgeOutValue:          c.AgeOutValue,
-		BurstDetectionDelay:  c.BurstDetectionDelay,
-		BurstMultiple:        c.BurstMultiple,
-		MaxKeys:              maxKeys,
+		GoalThroughputPerSec: e.GoalThroughputPerSec / clusterSize,
+		InitialSampleRate:    e.InitialSampleRate,
+		AdjustmentInterval:   time.Duration(e.AdjustmentInterval),
+		Weight:               e.Weight,
+		AgeOutValue:          e.AgeOutValue,
+		BurstDetectionDelay:  e.BurstDetectionDelay,
+		BurstMultiple:        e.BurstMultiple,
+		MaxKeys:              e.MaxKeys,
 	}
 	dynsamplerInstance.Start()
 	return dynsamplerInstance

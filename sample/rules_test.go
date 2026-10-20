@@ -2914,9 +2914,10 @@ func TestRulesRootSpanContext(t *testing.T) {
 	}
 }
 
-// TestRulesBasedSamplerWithSharedDynsamplers tests that RulesBasedSampler properly
-// shares dynsamplers when using a SamplerFactory
-func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
+// TestRulesBasedSamplerGivesEachRuleItsOwnDynsampler tests that two rules with
+// identical downstream sampler configs get their own engine, so that each rule
+// gets the throughput goal it asked for instead of sharing one budget.
+func TestRulesBasedSamplerGivesEachRuleItsOwnDynsampler(t *testing.T) {
 	mockCfg := &config.MockConfig{}
 
 	// Create a SamplerFactory for shared dynsampler management
@@ -3021,8 +3022,6 @@ func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
 	assert.Contains(t, reason2, "test-rule-2")
 	assert.Equal(t, "test-service•,", key2)
 
-	// Verify that both rules actually share the same dynsampler by checking
-	// that they reference the same underlying dynsampler instance
 	rule1Key := rulesConfig.Rules[0].String()
 	rule2Key := rulesConfig.Rules[1].String()
 
@@ -3032,7 +3031,20 @@ func TestRulesBasedSamplerWithSharedDynsamplers(t *testing.T) {
 	rule2Sampler, ok := rulesSampler.samplers[rule2Key].(*DynamicSampler)
 	require.True(t, ok, "rule 2 sampler should be a DynamicSampler")
 
-	// This is the critical assertion: both rules must share the exact same dynsampler instance
-	assert.Same(t, rule1Sampler.dynsampler, rule2Sampler.dynsampler,
-		"Both rules should share the same underlying dynsampler instance")
+	assert.NotSame(t, rule1Sampler.dynsampler, rule2Sampler.dynsampler,
+		"each rule should get its own dynsampler instance")
+	assert.Len(t, samplerFactory.sharedDynsamplers, 2)
+
+	// Rebuilding the same rules against the same factory, which is what each
+	// collector worker does, must reuse the engines rather than add more.
+	second := &RulesBasedSampler{
+		Config:         rulesConfig,
+		Logger:         &logger.NullLogger{},
+		Metrics:        mockMetrics,
+		SamplerFactory: samplerFactory,
+	}
+	require.NoError(t, second.Start())
+	assert.Len(t, samplerFactory.sharedDynsamplers, 2)
+	assert.Same(t, rule1Sampler.dynsampler, second.samplers[rule1Key].(*DynamicSampler).dynsampler)
+	assert.Same(t, rule2Sampler.dynsampler, second.samplers[rule2Key].(*DynamicSampler).dynsampler)
 }

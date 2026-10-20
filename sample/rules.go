@@ -26,6 +26,13 @@ type RulesBasedSampler struct {
 	metricNames samplerMetricNames
 }
 
+// makeRuleID identifies a rule within its rules file. The index is what makes it
+// unique, since rule names are not required to be; the name rides along so the
+// shared-dynsampler keys stay readable.
+func makeRuleID(index int, name string) string {
+	return fmt.Sprintf("%d:%s", index, name)
+}
+
 func (s *RulesBasedSampler) Start() error {
 	s.Logger.Debug().Logf("Starting RulesBasedSampler")
 	defer func() { s.Logger.Debug().Logf("Finished starting RulesBasedSampler") }()
@@ -35,7 +42,7 @@ func (s *RulesBasedSampler) Start() error {
 	s.samplers = make(map[string]Sampler)
 	s.keyFields, s.nonRootFields = config.GetKeyFields(s.Config.GetSamplingFields())
 
-	for _, rule := range s.Config.Rules {
+	for i, rule := range s.Config.Rules {
 		for _, cond := range rule.Conditions {
 			if err := cond.Init(); err != nil {
 				s.Logger.Debug().WithFields(map[string]interface{}{
@@ -55,7 +62,7 @@ func (s *RulesBasedSampler) Start() error {
 			}
 
 			// Use SamplerFactory to create downstream sampler with shared dynsamplers
-			sampler := s.SamplerFactory.GetDownstreamSampler(s.samplerPrefix, rule.Sampler)
+			sampler := s.SamplerFactory.GetDownstreamSampler(s.samplerPrefix, makeRuleID(i, rule.Name), rule.Sampler)
 			if sampler == nil {
 				s.Logger.Debug().WithFields(map[string]interface{}{
 					"rule_name": rule.Name,

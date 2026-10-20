@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -12,21 +13,42 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// effectiveDynamicSamplerConfig fills in the defaults that would otherwise be
+// applied when the engine is built, some by us and some by dynsampler.Start.
+// The engine and the shared-dynsampler key are both derived from the result, so
+// a config that omits a field cannot land on a different engine from one that
+// writes that field's default.
+func effectiveDynamicSamplerConfig(c *config.DynamicSamplerConfig) config.DynamicSamplerConfig {
+	e := *c
+	if e.SampleRate == 0 {
+		e.SampleRate = 10
+	}
+	if e.ClearFrequency == 0 {
+		e.ClearFrequency = config.Duration(30 * time.Second)
+	}
+	if e.MaxKeys == 0 {
+		e.MaxKeys = 500
+	}
+	return e
+}
+
+// dynamicSamplerConfigKey is the config half of the shared-dynsampler key. It
+// must name every field effectiveDynamicSamplerConfig feeds to the engine, or
+// two differently behaving samplers share one.
+func dynamicSamplerConfigKey(c *config.DynamicSamplerConfig) string {
+	e := effectiveDynamicSamplerConfig(c)
+	return fmt.Sprintf("SampleRate=%d,ClearFrequency=%v,FieldList=%q,MaxKeys=%d,UseTraceLength=%t",
+		e.SampleRate, time.Duration(e.ClearFrequency), sortedFieldList(e.FieldList), e.MaxKeys, e.UseTraceLength)
+}
+
 // createDynForDynamicSampler creates a dynsampler for DynamicSampler
 func createDynForDynamicSampler(c *config.DynamicSamplerConfig) dynsampler.Sampler {
-	maxKeys := c.MaxKeys
-	if maxKeys == 0 {
-		maxKeys = 500
-	}
-	clearFreq := c.ClearFrequency
-	if clearFreq == 0 {
-		clearFreq = config.Duration(30 * time.Second)
-	}
+	e := effectiveDynamicSamplerConfig(c)
 
 	dynsamplerInstance := &dynsampler.AvgSampleRate{
-		GoalSampleRate:         int(c.SampleRate),
-		ClearFrequencyDuration: time.Duration(clearFreq),
-		MaxKeys:                maxKeys,
+		GoalSampleRate:         int(e.SampleRate),
+		ClearFrequencyDuration: time.Duration(e.ClearFrequency),
+		MaxKeys:                e.MaxKeys,
 	}
 	dynsamplerInstance.Start()
 	return dynsamplerInstance

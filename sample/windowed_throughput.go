@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -12,19 +13,45 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// effectiveWindowedThroughputSamplerConfig fills in the defaults that would
+// otherwise be applied when the engine is built. See effectiveDynamicSamplerConfig.
+func effectiveWindowedThroughputSamplerConfig(c *config.WindowedThroughputSamplerConfig) config.WindowedThroughputSamplerConfig {
+	e := *c
+	if e.GoalThroughputPerSec == 0 {
+		e.GoalThroughputPerSec = 100
+	}
+	if e.UpdateFrequency == 0 {
+		e.UpdateFrequency = config.Duration(time.Second)
+	}
+	if e.LookbackFrequency == 0 {
+		e.LookbackFrequency = 30 * e.UpdateFrequency
+	}
+	// The engine floors the lookback to a whole number of update windows, so a
+	// 90s and a 91s lookback over a 2s window are the same engine.
+	e.LookbackFrequency = e.UpdateFrequency * (e.LookbackFrequency / e.UpdateFrequency)
+	if e.MaxKeys == 0 {
+		e.MaxKeys = 500
+	}
+	return e
+}
+
+// windowedThroughputSamplerConfigKey is the config half of the shared-dynsampler key.
+func windowedThroughputSamplerConfigKey(c *config.WindowedThroughputSamplerConfig) string {
+	e := effectiveWindowedThroughputSamplerConfig(c)
+	return fmt.Sprintf("UpdateFrequency=%v,LookbackFrequency=%v,GoalThroughputPerSec=%d,UseClusterSize=%t,FieldList=%q,MaxKeys=%d,UseTraceLength=%t",
+		time.Duration(e.UpdateFrequency), time.Duration(e.LookbackFrequency), e.GoalThroughputPerSec, e.UseClusterSize, sortedFieldList(e.FieldList), e.MaxKeys, e.UseTraceLength)
+}
+
 // createDynForWindowedThroughputSampler creates a dynsampler for WindowedThroughputSampler
 func createDynForWindowedThroughputSampler(c *config.WindowedThroughputSamplerConfig) *dynsampler.WindowedThroughput {
-	maxKeys := c.MaxKeys
-	if maxKeys == 0 {
-		maxKeys = 500
-	}
+	e := effectiveWindowedThroughputSamplerConfig(c)
 	clusterSize := 1 // Will be updated by SetClusterSize if needed
 
 	dynsamplerInstance := &dynsampler.WindowedThroughput{
-		GoalThroughputPerSec:      float64(c.GoalThroughputPerSec) / float64(clusterSize),
-		UpdateFrequencyDuration:   time.Duration(c.UpdateFrequency),
-		LookbackFrequencyDuration: time.Duration(c.LookbackFrequency),
-		MaxKeys:                   maxKeys,
+		GoalThroughputPerSec:      float64(e.GoalThroughputPerSec) / float64(clusterSize),
+		UpdateFrequencyDuration:   time.Duration(e.UpdateFrequency),
+		LookbackFrequencyDuration: time.Duration(e.LookbackFrequency),
+		MaxKeys:                   e.MaxKeys,
 	}
 	dynsamplerInstance.Start()
 	return dynsamplerInstance
