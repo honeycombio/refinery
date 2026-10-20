@@ -2,6 +2,21 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.4.2
+
+This patch release primarily addresses security vulnerabilities in dependencies. There are no configuration changes.
+
+### Operator-visible Changes
+
+* Refinery now rejects some msgpack requests with a `400` response that it previously tried to decode. The `/1/batch` and `/1/events` handlers no longer size allocations from length headers that claim more data than the request body holds, so a small request can no longer cause a large allocation. Two cases that decoded before are now rejected:
+  * A `/1/batch` request that declares more than 500,000 events.
+  * A single-event msgpack body nested more than 1000 levels deep.
+
+### Maintenance
+
+* Updated `golang.org/x/net` to 0.60.0 to address security vulnerabilities GO-2026-6612, GO-2026-6603, GO-2026-6611, and GO-2026-6617.
+* Built with Go 1.27.3 to address security vulnerability CVE-2026-111943 in `crypto/x509`.
+
 ## Version 3.4.1
 
 This is a patch release with two fixes and a dependency update. There are no configuration or behaviour changes.
