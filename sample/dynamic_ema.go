@@ -1,6 +1,7 @@
 package sample
 
 import (
+	"fmt"
 	"math/rand"
 	"time"
 
@@ -12,21 +13,54 @@ import (
 	"github.com/honeycombio/refinery/types"
 )
 
+// effectiveEMADynamicSamplerConfig fills in the defaults that would otherwise be
+// applied when the engine is built. See effectiveDynamicSamplerConfig.
+func effectiveEMADynamicSamplerConfig(c *config.EMADynamicSamplerConfig) config.EMADynamicSamplerConfig {
+	e := *c
+	if e.GoalSampleRate == 0 {
+		e.GoalSampleRate = 10
+	}
+	if e.AdjustmentInterval == 0 {
+		e.AdjustmentInterval = config.Duration(15 * time.Second)
+	}
+	if e.Weight == 0 {
+		e.Weight = 0.5
+	}
+	// AgeOutValue follows Weight, so it has to be defaulted after it.
+	if e.AgeOutValue == 0 {
+		e.AgeOutValue = e.Weight
+	}
+	if e.BurstMultiple == 0 {
+		e.BurstMultiple = 2
+	}
+	if e.BurstDetectionDelay == 0 {
+		e.BurstDetectionDelay = 3
+	}
+	if e.MaxKeys == 0 {
+		e.MaxKeys = 500
+	}
+	return e
+}
+
+// emaDynamicSamplerConfigKey is the config half of the shared-dynsampler key.
+func emaDynamicSamplerConfigKey(c *config.EMADynamicSamplerConfig) string {
+	e := effectiveEMADynamicSamplerConfig(c)
+	return fmt.Sprintf("GoalSampleRate=%d,AdjustmentInterval=%v,Weight=%s,AgeOutValue=%s,BurstMultiple=%s,BurstDetectionDelay=%d,FieldList=%q,MaxKeys=%d,UseTraceLength=%t",
+		e.GoalSampleRate, time.Duration(e.AdjustmentInterval), formatFloat(e.Weight), formatFloat(e.AgeOutValue), formatFloat(e.BurstMultiple), e.BurstDetectionDelay, sortedFieldList(e.FieldList), e.MaxKeys, e.UseTraceLength)
+}
+
 // createDynForEMADynamicSampler creates a dynsampler for EMADynamicSampler
 func createDynForEMADynamicSampler(c *config.EMADynamicSamplerConfig) *dynsampler.EMASampleRate {
-	maxKeys := c.MaxKeys
-	if maxKeys == 0 {
-		maxKeys = 500
-	}
+	e := effectiveEMADynamicSamplerConfig(c)
 
 	dynsampler := &dynsampler.EMASampleRate{
-		GoalSampleRate:             c.GoalSampleRate,
-		AdjustmentIntervalDuration: time.Duration(c.AdjustmentInterval),
-		Weight:                     c.Weight,
-		AgeOutValue:                c.AgeOutValue,
-		BurstDetectionDelay:        c.BurstDetectionDelay,
-		BurstMultiple:              c.BurstMultiple,
-		MaxKeys:                    maxKeys,
+		GoalSampleRate:             e.GoalSampleRate,
+		AdjustmentIntervalDuration: time.Duration(e.AdjustmentInterval),
+		Weight:                     e.Weight,
+		AgeOutValue:                e.AgeOutValue,
+		BurstDetectionDelay:        e.BurstDetectionDelay,
+		BurstMultiple:              e.BurstMultiple,
+		MaxKeys:                    e.MaxKeys,
 	}
 	dynsampler.Start()
 	return dynsampler
