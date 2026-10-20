@@ -529,6 +529,53 @@ func TestFieldListOrderDoesNotAffectDynsamplerSharing(t *testing.T) {
 	})
 }
 
+// TestDifferentConfigsDoNotShareDynsampler verifies that two samplers with the
+// same sampler type, goal rate, and field list but different behavioral config
+// (e.g., MaxKeys) do NOT share a dynsampler instance. This is a regression guard
+// for the v3 engine-merge bug where the shared-dynsampler key omitted config
+// fields that affect sampling decisions.
+func TestDifferentConfigsDoNotShareDynsampler(t *testing.T) {
+	newFactory := func() *SamplerFactory {
+		factory := &SamplerFactory{
+			Logger:  &logger.NullLogger{},
+			Metrics: &metrics.NullMetrics{},
+		}
+		factory.Start()
+		t.Cleanup(factory.Stop)
+		return factory
+	}
+
+	t.Run("EMADynamicDifferentMaxKeys", func(t *testing.T) {
+		f := newFactory()
+		s1 := f.createSampler(&config.EMADynamicSamplerConfig{GoalSampleRate: 10, FieldList: []string{"sampling.reason"}, MaxKeys: 500}, "env")
+		s2 := f.createSampler(&config.EMADynamicSamplerConfig{GoalSampleRate: 10, FieldList: []string{"sampling.reason"}, MaxKeys: 1000}, "env")
+		require.NotNil(t, s1)
+		require.NotNil(t, s2)
+		assert.NotSame(t, s1.(*EMADynamicSampler).dynsampler, s2.(*EMADynamicSampler).dynsampler)
+		assert.Len(t, f.sharedDynsamplers, 2)
+	})
+
+	t.Run("EMADynamicDifferentAdjustmentInterval", func(t *testing.T) {
+		f := newFactory()
+		s1 := f.createSampler(&config.EMADynamicSamplerConfig{GoalSampleRate: 10, FieldList: []string{"sampling.reason"}, AdjustmentInterval: config.Duration(15 * time.Second)}, "env")
+		s2 := f.createSampler(&config.EMADynamicSamplerConfig{GoalSampleRate: 10, FieldList: []string{"sampling.reason"}, AdjustmentInterval: config.Duration(30 * time.Second)}, "env")
+		require.NotNil(t, s1)
+		require.NotNil(t, s2)
+		assert.NotSame(t, s1.(*EMADynamicSampler).dynsampler, s2.(*EMADynamicSampler).dynsampler)
+		assert.Len(t, f.sharedDynsamplers, 2)
+	})
+
+	t.Run("IdenticalConfigsStillShare", func(t *testing.T) {
+		f := newFactory()
+		s1 := f.createSampler(&config.EMADynamicSamplerConfig{GoalSampleRate: 10, FieldList: []string{"sampling.reason"}, MaxKeys: 1000}, "env")
+		s2 := f.createSampler(&config.EMADynamicSamplerConfig{GoalSampleRate: 10, FieldList: []string{"sampling.reason"}, MaxKeys: 1000}, "env")
+		require.NotNil(t, s1)
+		require.NotNil(t, s2)
+		assert.Same(t, s1.(*EMADynamicSampler).dynsampler, s2.(*EMADynamicSampler).dynsampler)
+		assert.Len(t, f.sharedDynsamplers, 1)
+	})
+}
+
 // TestClusterSizeUpdatesSamplers verifies that the SamplerFactory properly handles dynamic peer updates
 // and their impact on throughput-based sampling behavior.
 func TestClusterSizeUpdatesSamplers(t *testing.T) {
