@@ -2,6 +2,7 @@ version: 2.1
 
 orbs:
   aws-cli: circleci/aws-cli@3.2.0
+  aws-ecr: circleci/aws-ecr@9.5.4
 
 commands:
   go-build:
@@ -55,11 +56,12 @@ commands:
       - restore_cache:
           keys:
             - v2-googleko-{{ checksum "Makefile" }}
-      - run: make ko
+      - run: make ko crane
       - save_cache:
           key: v2-googleko-{{ checksum "Makefile" }}
           paths:
             - ./ko
+            - ./crane
 
 jobs:
   test:
@@ -265,7 +267,7 @@ jobs:
               | docker login --username AWS --password-stdin "${ECR_HOST}"
             ./build-docker.sh
 
-  publish_docker_to_dockerhub:
+  publish_docker_to_all_public_registries:
     docker:
       - image: cimg/go:1.27
     steps:
@@ -277,12 +279,20 @@ jobs:
       - restore_cache:
           keys:
             - go_build_cache-{{ .Environment.CIRCLE_SHA1 }}
+      - aws-cli/setup:
+          role-arn: "arn:aws:iam::702835727665:role/circleci-public-repos"
+          role-session-name: "refinery"
+          aws-region: AWS_REGION
+      - aws-ecr/ecr_login
+      - aws-ecr/ecr_login:
+          public_registry: true
       - run:
-          name: build docker images and publish to Docker Hub
-          environment:
-            KO_DOCKER_REPO: honeycombio
+          name: build once and publish to all public registries
           command: |
+            export PRIMARY_DOCKER_REPO="honeycombio"
+            export COPY_DOCKER_REPOS="${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com,public.ecr.aws/honeycombio,ghcr.io/honeycombio/refinery"
             echo "${DOCKER_PASSWORD}" | docker login -u "${DOCKER_USERNAME}" --password-stdin
+            echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${GITHUB_USERNAME}" --password-stdin
             ./build-docker.sh
 
 workflows:
@@ -350,7 +360,7 @@ workflows:
               only: /^v.*/
             branches:
               ignore: /.*/
-      - publish_docker_to_dockerhub:
+      - publish_docker_to_all_public_registries:
           context: Honeycomb Secrets for Public Repos
           requires:
             - build_binaries
