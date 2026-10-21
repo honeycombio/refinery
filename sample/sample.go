@@ -115,8 +115,8 @@ func getSharedDynsamplerAndRecorder[ST dynsampler.Sampler, CT any](
 // makeDynsamplerKey builds a dynsampler map key from the prefix identifying where
 // the sampler is configured, its type, and a config-derived signature. The config
 // signature must name every field that affects sampling behavior, with defaults
-// already applied, so that two differently configured samplers never silently
-// share one engine and two identically configured ones always do.
+// already applied, so that two differently configured samplers never share one
+// engine and two identically configured ones always do.
 func makeDynsamplerKey(prefix, samplerType, configKey string) string {
 	return fmt.Sprintf("%s:%s:%s", prefix, samplerType, configKey)
 }
@@ -137,10 +137,11 @@ func formatFloat(f float64) string {
 // createSampler creates a sampler with shared dynsamplers based on the config type.
 // A unique dynsampler is created based on a composite key that includes the keyPrefix
 // (dataset/environment, plus the rule for rules-based samplers), sampler type, and a
-// signature derived from the full sampler configuration. This ensures that samplers with identical configurations share the
-// same underlying dynsampler instance, guaranteeing consistent sampling decisions across
-// parallel collector workers within a single Refinery instance, while preventing
-// differently configured samplers from silently sharing one engine.
+// signature derived from the full sampler configuration. This ensures that samplers
+// with identical configurations share the same underlying dynsampler instance,
+// guaranteeing consistent sampling decisions across parallel collector workers within
+// a single Refinery instance, while preventing differently configured samplers from
+// sharing one engine.
 func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	var sampler Sampler
 

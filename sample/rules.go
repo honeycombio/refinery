@@ -27,8 +27,8 @@ type RulesBasedSampler struct {
 }
 
 // makeRuleID identifies a rule within its rules file. The index is what makes it
-// unique, since rule names are not required to be; the name rides along so the
-// shared-dynsampler keys stay readable.
+// unique, since rule names are not required to be. The name rides along to keep
+// the shared-dynsampler keys readable.
 func makeRuleID(index int, name string) string {
 	return fmt.Sprintf("%d:%s", index, name)
 }
