@@ -8,6 +8,7 @@ This release addresses security vulnerabilities CVE-2026-111943, GO-2026-6603, G
 
 - maint: upgrade to go1.27.3 (#1874) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
 - maint: bump golang.org/x/net to v0.60.0 (#1875) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- maint: publish 2.9.x release images to all public registries (#1879) | [Robb Kidd](https://github.com/robbkidd)
 
 ## 2.9.7 2025-07-16
 

@@ -12,6 +12,7 @@ Refinery 2.x reached the end of its [maintenance window](https://docs.honeycomb.
 
 * Built with Go 1.27.3 to address security vulnerability CVE-2026-111943 in `crypto/x509`, which allowed a compromised set of intermediate certificates to be trusted. This affects any Refinery that sends to Honeycomb over the public internet.
 * Updated `golang.org/x/net` to 0.60.0 to address security vulnerabilities GO-2026-6603, GO-2026-6611, GO-2026-6612, and GO-2026-6617. All four affect the HTTP/2 server, which Refinery uses to receive OTLP.
+* Release images for 2.9.x are now published to Docker Hub, ghcr.io, and public.ecr.aws, as 3.x releases are. The `latest` image tag stays on the 3.x line.
 
 ## Version 2.9.7
 
