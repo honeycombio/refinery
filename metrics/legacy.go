@@ -206,7 +206,7 @@ func (h *LegacyMetrics) readResponses(ctx context.Context) {
 					"status_code": resp.StatusCode,
 					"body":        string(resp.Body),
 					"duration":    resp.Duration,
-				}).Logf(msg)
+				}).Logf("%s", msg)
 			}
 		case <-ctx.Done():
 			// bail out; we're refreshing the config and will launch a new
