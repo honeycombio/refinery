@@ -228,7 +228,7 @@ func (r *Router) LnS(incomingOrPeer string) {
 	if r.Config.GetGRPCEnabled() && len(grpcAddr) > 0 {
 		l, err := net.Listen("tcp", grpcAddr)
 		if err != nil {
-			r.iopLogger.Error().Logf("failed to listen to grpc addr: " + grpcAddr)
+			r.iopLogger.Error().Logf("failed to listen to grpc addr: %s", grpcAddr)
 		}
 
 		r.iopLogger.Info().Logf("gRPC listening on %s", grpcAddr)
@@ -582,7 +582,7 @@ func (router *Router) processOTLPRequest(
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
 			if err = router.processEvent(event, requestID); err != nil {
-				router.Logger.Error().Logf("Error processing event: " + err.Error())
+				router.Logger.Error().Logf("Error processing event: %s", err.Error())
 			}
 		}
 	}

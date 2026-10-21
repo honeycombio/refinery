@@ -77,11 +77,11 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 }
 
 func (r *Router) handleOTLPFailureResponse(w http.ResponseWriter, req *http.Request, otlpErr husky.OTLPError) {
-	r.Logger.Error().Logf(otlpErr.Error())
+	r.Logger.Error().Logf("%s", otlpErr.Error())
 	if err := husky.WriteOtlpHttpFailureResponse(w, req, otlpErr); err != nil {
 		// If we made it here we had a problem writing an OTLP HTTP response
 		resp := fmt.Sprintf("failed to write otlp http response, %v", err.Error())
-		r.Logger.Error().Logf(resp)
+		r.Logger.Error().Logf("%s", resp)
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusInternalServerError)
 		_, _ = io.WriteString(w, resp)
