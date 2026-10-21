@@ -3,72 +3,101 @@ set -o nounset
 set -o pipefail
 set -o xtrace
 
-# Determine a version number based on most recent version tag in git.
-#   git describe - Return the most recent annotated tag that is reachable from a commit.
-#     --tags - OK, any tag, not just the annotated ones. We don't always remember to annotate a version tag.
-#     --match='v[0-9]*' - But of all those tags, only the version ones (starts with a v and a digit).
-#     --always - … and if a tag can't be found, fallback to the commit ID.
-# Ex: v2.1.1-45-ga1b2c3d
-#   - The build was on git commit ID a1b2c3d.
-#   - v2.1.1 is the most recent version tag in the history behind that commit
-#   - That commit is 45 commits ahead of that version tag.
+### Versioning and image tagging ###
+#
+# Three build scenarios:
+#   1. CI release build: triggered by git tag
+#      - Stable (vX.Y.Z): tagged with major, minor, and patch
+#      - Pre-release (vX.Y.Z-suffix): tagged only with exact version
+#   2. CI branch build: version + CI job ID, tagged with branch name (+ "latest" if main)
+#   3. Local build: version from git describe, tagged with that version
+
+# Get version info from git (used by branch and local builds)
+#   --tags: use any tag, not just annotated ones
+#   --match='v[0-9]*': only version tags (starts with v and a digit)
+#   --always: fall back to commit ID if no tag found
+# e.g., v2.1.1-45-ga1b2c3d means commit a1b2c3d, 45 commits ahead of tag v2.1.1
 VERSION_FROM_GIT=$(git describe --tags --match='v[0-9]*' --always)
-# trim the v prefix per Docker image version-tagging conventions
-VERSION=${VERSION_FROM_GIT#'v'}
 
-# If we are doing a dev build on circle, append the build number (job id) to the version
-# Ex: v2.1.1-45-ga1b2c3d-ci8675309
-#   - The git information gleaned above plus ...
-#   - The build happened within CircleCI job 8675309.
-if [[ -n "${CIRCLE_BUILD_NUM:-}" ]]; then
-  VERSION="${VERSION}-ci${CIRCLE_BUILD_NUM}"
-fi
+if [[ -n "${CIRCLE_TAG:-}" ]]; then
+  # Release build (triggered by git tag)
+  VERSION=${CIRCLE_TAG#"v"}
 
-### Image tagging ###
-TAGS="${VERSION}"
-
-## CI dev tagging: append the dev branch name to image tags
-if [[ -n "${CIRCLE_BRANCH:-}" ]]; then
-  BRANCH_TAG=${CIRCLE_BRANCH//\//-}
-  TAGS+=",branch-${BRANCH_TAG}"
-
-  # If the dev build is on main, we tag it as latest in ECR
-  if [[ "${CIRCLE_BRANCH}" == "main" ]]; then
-      TAGS+=",latest"
+  if [[ "${CIRCLE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    # Stable release: tag with major, minor, and patch
+    # e.g., v2.1.1 -> "2", "2.1", "2.1.1"
+    MAJOR_VERSION=${VERSION%%.*}
+    MINOR_VERSION=${VERSION%.*}
+    TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION"
+  else
+    # Pre-release: only the exact version tag
+    # e.g., v3.0.0-rc1 -> "3.0.0-rc1"
+    TAGS="$VERSION"
   fi
-fi
 
-## CI release tagging: apply major, major.minor, major.minor.patch, and latest tags
+elif [[ -n "${CIRCLE_BRANCH:-}" ]]; then
+  # CI branch build
+  # Version from git describe + CI job ID
+  # e.g., 2.1.1-45-ga1b2c3d-ci8675309
+  VERSION="${VERSION_FROM_GIT#'v'}-ci${CIRCLE_BUILD_NUM}"
+  BRANCH_TAG=${CIRCLE_BRANCH//\//-}
+  TAGS="${VERSION},branch-${BRANCH_TAG}"
 
-# if we're running off a git tag, it is a release which we tag with the versions as well as latest
-# caution: this means if we ever release an update to a previous version, it will be marked latest
-# it is probably best if people just use the major or minor version tags
+  # Main branch builds are tagged "latest" in the private registry
+  if [[ "${CIRCLE_BRANCH}" == "main" ]]; then
+    TAGS+=",latest"
+  fi
 
-if [[ -n ${CIRCLE_TAG:-} ]]; then
-  VERSION=${CIRCLE_TAG#"v"} # trim the v prefix per version-tagging convention
-
-  # Extract major, major.minor, and major.minor.patch versions
-  MAJOR_VERSION=${VERSION%%.*}
-  MINOR_VERSION=${VERSION%.*}
-
-  # Reset tag list: add major, major.minor, major.minor.patch, and latest
-  # So 2.1.1 would be tagged with "2","2.1","2.1.1", and "latest".
-  TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION,latest"
+else
+  # Local build
+  # Version from git describe only
+  # e.g., 2.1.1-45-ga1b2c3d
+  VERSION=${VERSION_FROM_GIT#'v'}
+  TAGS="${VERSION}"
 fi
 
 GIT_COMMIT=${CIRCLE_SHA1:-$(git rev-parse HEAD)}
 
 unset GOOS
 unset GOARCH
-export KO_DOCKER_REPO=${KO_DOCKER_REPO:-ko.local}
 export GOFLAGS="-ldflags=-X=main.BuildID=$VERSION"
 export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(make latest_modification_time)}
+
+# Build the image once, either to a remote registry designated by PRIMARY_DOCKER_REPO
+# or to the local repository as "ko.local/refinery:<tags>" if PRIMARY_DOCKER_REPO is not set.
+export KO_DOCKER_REPO="${PRIMARY_DOCKER_REPO:-ko.local}"
+
+echo "Building image locally with ko for multi-registry push..."
 # shellcheck disable=SC2086
-./ko publish \
+IMAGE_REF=$(./ko publish \
   --tags "${TAGS}" \
   --base-import-paths \
   --platform "linux/amd64,linux/arm64" \
   --image-label org.opencontainers.image.source=https://github.com/honeycombio/refinery \
   --image-label org.opencontainers.image.licenses=Apache-2.0 \
   --image-label org.opencontainers.image.revision=${GIT_COMMIT} \
-  ./cmd/refinery
+  ./cmd/refinery)
+
+echo "Built image: ${IMAGE_REF}"
+
+# If COPY_DOCKER_REPOS is set, copy the built image to each of the listed registries.
+# This is a comma-separated list of registry/repo names, e.g.
+#   "public.ecr.aws/honeycombio,ghcr.io/honeycombio/refinery"
+if [[ -n "${COPY_DOCKER_REPOS:-}" ]]; then
+  echo "Pushing to multiple registries: ${COPY_DOCKER_REPOS}"
+
+  IFS=',' read -ra REPOS <<< "$COPY_DOCKER_REPOS"
+  for REPO in "${REPOS[@]}"; do
+    REPO=$(echo "$REPO" | xargs) # trim whitespace
+    echo "Tagging and pushing to: $REPO"
+
+    # Tag for each tag in the TAGS list
+    IFS=',' read -ra TAG_LIST <<< "$TAGS"
+    for TAG in "${TAG_LIST[@]}"; do
+      TAG=$(echo "$TAG" | xargs) # trim whitespace
+      TARGET_IMAGE="$REPO/refinery:$TAG"
+      echo "Copying $IMAGE_REF to $TARGET_IMAGE"
+      ./crane copy "$IMAGE_REF" "$TARGET_IMAGE"
+    done
+  done
+fi
