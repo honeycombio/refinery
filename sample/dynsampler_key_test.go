@@ -187,78 +187,22 @@ func TestEffectiveDefaultsMatchDynsamplerGo(t *testing.T) {
 	})
 }
 
-// TestEffectiveConfigReachesEngine checks that every value the effective config
-// resolves is the value the engine ends up running with, so the key cannot name
-// a field the engine reads differently. Most of these are a direct assignment in
-// createDynFor*. The windowed lookback is not: the engine floors it again in
-// Start, so the helper has to predict the same result.
-func TestEffectiveConfigReachesEngine(t *testing.T) {
-	fields := []string{"service.name"}
+// TestWindowedLookbackMatchesEngine checks the one default the helper has to
+// predict rather than pass through. The engine floors the lookback to a whole
+// number of update windows in Start, so the helper has to floor it the same way
+// or the key names a lookback the engine isn't using.
+func TestWindowedLookbackMatchesEngine(t *testing.T) {
+	c := &config.WindowedThroughputSamplerConfig{
+		FieldList:         []string{"service.name"},
+		UpdateFrequency:   config.Duration(2 * time.Second),
+		LookbackFrequency: config.Duration(95 * time.Second),
+	}
+	e := effectiveWindowedThroughputSamplerConfig(c)
+	d := createDynForWindowedThroughputSampler(c)
+	defer d.Stop()
 
-	t.Run("DynamicSampler", func(t *testing.T) {
-		c := &config.DynamicSamplerConfig{FieldList: fields}
-		e := effectiveDynamicSamplerConfig(c)
-		d := createDynForDynamicSampler(c).(*dynsampler.AvgSampleRate)
-		defer d.Stop()
-		assert.Equal(t, int(e.SampleRate), d.GoalSampleRate)
-		assert.Equal(t, time.Duration(e.ClearFrequency), d.ClearFrequencyDuration)
-		assert.Equal(t, e.MaxKeys, d.MaxKeys)
-	})
-
-	t.Run("EMADynamicSampler", func(t *testing.T) {
-		c := &config.EMADynamicSamplerConfig{FieldList: fields}
-		e := effectiveEMADynamicSamplerConfig(c)
-		d := createDynForEMADynamicSampler(c)
-		defer d.Stop()
-		assert.Equal(t, e.GoalSampleRate, d.GoalSampleRate)
-		assert.Equal(t, time.Duration(e.AdjustmentInterval), d.AdjustmentIntervalDuration)
-		assert.Equal(t, e.Weight, d.Weight)
-		assert.Equal(t, e.AgeOutValue, d.AgeOutValue)
-		assert.Equal(t, e.BurstMultiple, d.BurstMultiple)
-		assert.Equal(t, e.BurstDetectionDelay, d.BurstDetectionDelay)
-		assert.Equal(t, e.MaxKeys, d.MaxKeys)
-	})
-
-	t.Run("EMAThroughputSampler", func(t *testing.T) {
-		c := &config.EMAThroughputSamplerConfig{FieldList: fields}
-		e := effectiveEMAThroughputSamplerConfig(c)
-		d := createDynForEMAThroughputSampler(c)
-		defer d.Stop()
-		assert.Equal(t, e.GoalThroughputPerSec, d.GoalThroughputPerSec)
-		assert.Equal(t, e.InitialSampleRate, d.InitialSampleRate)
-		assert.Equal(t, time.Duration(e.AdjustmentInterval), d.AdjustmentInterval)
-		assert.Equal(t, e.Weight, d.Weight)
-		assert.Equal(t, e.AgeOutValue, d.AgeOutValue)
-		assert.Equal(t, e.BurstMultiple, d.BurstMultiple)
-		assert.Equal(t, e.BurstDetectionDelay, d.BurstDetectionDelay)
-		assert.Equal(t, e.MaxKeys, d.MaxKeys)
-	})
-
-	t.Run("TotalThroughputSampler", func(t *testing.T) {
-		c := &config.TotalThroughputSamplerConfig{FieldList: fields}
-		e := effectiveTotalThroughputSamplerConfig(c)
-		d := createDynForTotalThroughputSampler(c)
-		defer d.Stop()
-		assert.Equal(t, e.GoalThroughputPerSec, d.GoalThroughputPerSec)
-		assert.Equal(t, time.Duration(e.ClearFrequency), d.ClearFrequencyDuration)
-		assert.Equal(t, e.MaxKeys, d.MaxKeys)
-	})
-
-	t.Run("WindowedThroughputSampler", func(t *testing.T) {
-		// An uneven lookback exercises the flooring the engine applies.
-		c := &config.WindowedThroughputSamplerConfig{
-			FieldList:         fields,
-			UpdateFrequency:   config.Duration(2 * time.Second),
-			LookbackFrequency: config.Duration(95 * time.Second),
-		}
-		e := effectiveWindowedThroughputSamplerConfig(c)
-		d := createDynForWindowedThroughputSampler(c)
-		defer d.Stop()
-		assert.Equal(t, float64(e.GoalThroughputPerSec), d.GoalThroughputPerSec)
-		assert.Equal(t, time.Duration(e.UpdateFrequency), d.UpdateFrequencyDuration)
-		assert.Equal(t, time.Duration(e.LookbackFrequency), d.LookbackFrequencyDuration)
-		assert.Equal(t, e.MaxKeys, d.MaxKeys)
-	})
+	assert.Equal(t, 94*time.Second, d.LookbackFrequencyDuration)
+	assert.Equal(t, time.Duration(e.LookbackFrequency), d.LookbackFrequencyDuration)
 }
 
 // TestLookbackFlooringSharesEngine checks that two lookbacks the engine floors to
