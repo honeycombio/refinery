@@ -7,7 +7,7 @@ set -o xtrace
 #
 # Three build scenarios:
 #   1. CI release build: triggered by git tag
-#      - Stable (vX.Y.Z): tagged with major, minor, patch, and "latest"
+#      - Stable (vX.Y.Z): tagged with major, minor, and patch
 #      - Pre-release (vX.Y.Z-suffix): tagged only with exact version
 #   2. CI branch build: version + CI job ID, tagged with branch name (+ "latest" if main)
 #   3. Local build: version from git describe, tagged with that version
@@ -24,11 +24,11 @@ if [[ -n "${CIRCLE_TAG:-}" ]]; then
   VERSION=${CIRCLE_TAG#"v"}
 
   if [[ "${CIRCLE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    # Stable release: tag with major, minor, patch, and latest
-    # e.g., v2.1.1 -> "2", "2.1", "2.1.1", "latest"
+    # Stable release: tag with major, minor, and patch
+    # e.g., v2.1.1 -> "2", "2.1", "2.1.1"
     MAJOR_VERSION=${VERSION%%.*}
     MINOR_VERSION=${VERSION%.*}
-    TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION,latest"
+    TAGS="$MAJOR_VERSION,$MINOR_VERSION,$VERSION"
   else
     # Pre-release: only the exact version tag
     # e.g., v3.0.0-rc1 -> "3.0.0-rc1"
