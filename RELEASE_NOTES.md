@@ -2,6 +2,17 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 2.9.8
+
+This patch release addresses security vulnerabilities in the Go standard library and in a dependency. There are no configuration or behaviour changes, so upgrading from 2.9.7 needs no config edits.
+
+Refinery 2.x reached the end of its [maintenance window](https://docs.honeycomb.io/troubleshoot/product-lifecycle/release-stages/#maintenance) on 1 April 2026. This release is a targeted security patch published outside that window, because moving from 2.x to 3.x requires [configuration changes](https://docs.honeycomb.io/troubleshoot/product-lifecycle/recommended-migrations/upgrade-refinery/) rather than a straight version bump. It is not a general dependency refresh. Other dependency vulnerabilities remain in the 2.x line and will not be addressed, so [upgrading to Refinery 3](https://docs.honeycomb.io/troubleshoot/product-lifecycle/recommended-migrations/upgrade-refinery/) is still the recommended path.
+
+### Maintenance
+
+* Built with Go 1.27.3 to address security vulnerability CVE-2026-111943 in `crypto/x509`, which allowed a compromised set of intermediate certificates to be trusted. This affects any Refinery that sends to Honeycomb over the public internet.
+* Updated `golang.org/x/net` to 0.60.0 to address security vulnerabilities GO-2026-6603, GO-2026-6611, GO-2026-6612, and GO-2026-6617. All four affect the HTTP/2 server, which Refinery uses to receive OTLP.
+
 ## Version 2.9.7
 
 This release focuses on improving Refinery by fixing a bug with empty payloads. It also adds a new feature that allows you to add static fields to all internal refinery logs.

@@ -1,5 +1,14 @@
 # Refinery Changelog
 
+## 2.9.8 2026-10-21
+
+This release addresses security vulnerabilities CVE-2026-111943, GO-2026-6603, GO-2026-6611, GO-2026-6612, and GO-2026-6617.
+
+### Maintenance
+
+- maint: upgrade to go1.27.3 (#1874) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+- maint: bump golang.org/x/net to v0.60.0 (#1875) | [Mike Goldsmith](https://github.com/MikeGoldsmith)
+
 ## 2.9.7 2025-07-16
 
 ### Features
