@@ -108,12 +108,91 @@ func TestOmittedFieldsShareWithWrittenDefaults(t *testing.T) {
 	}
 }
 
-// TestEffectiveConfigMatchesEngine checks that each effective config reports the
-// values the engine actually runs with, so the key describes the engine it names.
-// Since every value is now passed explicitly, dynsampler-go's own defaults no
-// longer apply: Refinery pins them, and a later library change will not move
-// behaviour without these functions moving with it.
-func TestEffectiveConfigMatchesEngine(t *testing.T) {
+// TestEffectiveDefaultsMatchDynsamplerGo pins our defaults to the ones
+// dynsampler-go applies in Start. Because the effective config passes every value
+// explicitly, the library's defaults never fire, so nothing else would notice a
+// library change moving one of them. MaxKeys is the one deliberate divergence:
+// the library leaves it unbounded and Refinery caps it at 500.
+func TestEffectiveDefaultsMatchDynsamplerGo(t *testing.T) {
+	const refineryMaxKeys = 500
+
+	t.Run("DynamicSampler", func(t *testing.T) {
+		lib := &dynsampler.AvgSampleRate{}
+		require.NoError(t, lib.Start())
+		defer lib.Stop()
+
+		e := effectiveDynamicSamplerConfig(&config.DynamicSamplerConfig{})
+		assert.Equal(t, lib.GoalSampleRate, int(e.SampleRate))
+		assert.Equal(t, lib.ClearFrequencyDuration, time.Duration(e.ClearFrequency))
+		assert.Equal(t, 0, lib.MaxKeys)
+		assert.Equal(t, refineryMaxKeys, e.MaxKeys)
+	})
+
+	t.Run("EMADynamicSampler", func(t *testing.T) {
+		lib := &dynsampler.EMASampleRate{}
+		require.NoError(t, lib.Start())
+		defer lib.Stop()
+
+		e := effectiveEMADynamicSamplerConfig(&config.EMADynamicSamplerConfig{})
+		assert.Equal(t, lib.GoalSampleRate, e.GoalSampleRate)
+		assert.Equal(t, lib.AdjustmentIntervalDuration, time.Duration(e.AdjustmentInterval))
+		assert.Equal(t, lib.Weight, e.Weight)
+		assert.Equal(t, lib.AgeOutValue, e.AgeOutValue)
+		assert.Equal(t, lib.BurstMultiple, e.BurstMultiple)
+		assert.Equal(t, lib.BurstDetectionDelay, e.BurstDetectionDelay)
+		assert.Equal(t, 0, lib.MaxKeys)
+		assert.Equal(t, refineryMaxKeys, e.MaxKeys)
+	})
+
+	t.Run("EMAThroughputSampler", func(t *testing.T) {
+		lib := &dynsampler.EMAThroughput{}
+		require.NoError(t, lib.Start())
+		defer lib.Stop()
+
+		e := effectiveEMAThroughputSamplerConfig(&config.EMAThroughputSamplerConfig{})
+		assert.Equal(t, lib.GoalThroughputPerSec, e.GoalThroughputPerSec)
+		assert.Equal(t, lib.InitialSampleRate, e.InitialSampleRate)
+		assert.Equal(t, lib.AdjustmentInterval, time.Duration(e.AdjustmentInterval))
+		assert.Equal(t, lib.Weight, e.Weight)
+		assert.Equal(t, lib.AgeOutValue, e.AgeOutValue)
+		assert.Equal(t, lib.BurstMultiple, e.BurstMultiple)
+		assert.Equal(t, lib.BurstDetectionDelay, e.BurstDetectionDelay)
+		assert.Equal(t, 0, lib.MaxKeys)
+		assert.Equal(t, refineryMaxKeys, e.MaxKeys)
+	})
+
+	t.Run("TotalThroughputSampler", func(t *testing.T) {
+		lib := &dynsampler.TotalThroughput{}
+		require.NoError(t, lib.Start())
+		defer lib.Stop()
+
+		e := effectiveTotalThroughputSamplerConfig(&config.TotalThroughputSamplerConfig{})
+		assert.Equal(t, lib.GoalThroughputPerSec, e.GoalThroughputPerSec)
+		assert.Equal(t, lib.ClearFrequencyDuration, time.Duration(e.ClearFrequency))
+		assert.Equal(t, 0, lib.MaxKeys)
+		assert.Equal(t, refineryMaxKeys, e.MaxKeys)
+	})
+
+	t.Run("WindowedThroughputSampler", func(t *testing.T) {
+		lib := &dynsampler.WindowedThroughput{}
+		require.NoError(t, lib.Start())
+		defer lib.Stop()
+
+		e := effectiveWindowedThroughputSamplerConfig(&config.WindowedThroughputSamplerConfig{})
+		assert.Equal(t, lib.GoalThroughputPerSec, float64(e.GoalThroughputPerSec))
+		assert.Equal(t, lib.UpdateFrequencyDuration, time.Duration(e.UpdateFrequency))
+		assert.Equal(t, lib.LookbackFrequencyDuration, time.Duration(e.LookbackFrequency))
+		assert.Equal(t, 0, lib.MaxKeys)
+		assert.Equal(t, refineryMaxKeys, e.MaxKeys)
+	})
+}
+
+// TestEffectiveConfigReachesEngine checks that every value the effective config
+// resolves is the value the engine ends up running with, so the key cannot name
+// a field the engine reads differently. Most of these are a direct assignment in
+// createDynFor*. The windowed lookback is not: the engine floors it again in
+// Start, so the helper has to predict the same result.
+func TestEffectiveConfigReachesEngine(t *testing.T) {
 	fields := []string{"service.name"}
 
 	t.Run("DynamicSampler", func(t *testing.T) {
