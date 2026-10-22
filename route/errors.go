@@ -76,12 +76,10 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 	w.Write(jsonErrMsg)
 }
 
-// handleOTLPFailureResponse writes otlpErr as the OTLP response and logs it.
-//
-// Pass cause when otlpErr is one of husky's canonical errors. Those replace the
-// error husky actually returned, so without it the wrapped reason never reaches
-// the log and an operator sees only the canonical text. The response keeps the
-// canonical message either way, which holds parser internals out of it.
+// handleOTLPFailureResponse responds with otlpErr and logs it. Pass cause when
+// otlpErr is a canonical husky error, which replaces the error husky returned
+// and would otherwise leave the log with no reason. The response stays canonical
+// either way, keeping parser internals out of it.
 func (r *Router) handleOTLPFailureResponse(w http.ResponseWriter, req *http.Request, otlpErr husky.OTLPError, cause ...error) {
 	entry := r.Logger.Error()
 	if len(cause) > 0 && cause[0] != nil {

@@ -75,8 +75,7 @@ func TestHandleOTLPFailureResponseLogsCause(t *testing.T) {
 			require.Len(t, l.Events, 1)
 			fields := l.Events[0].Fields
 
-			assert.Equal(t, canonical.Error(), fields["error"],
-				"the logged message should stay the canonical one")
+			assert.Equal(t, canonical.Error(), fields["error"])
 
 			if tt.expectCause == "" {
 				assert.NotContains(t, fields, "cause")
@@ -84,8 +83,6 @@ func TestHandleOTLPFailureResponseLogsCause(t *testing.T) {
 				assert.Equal(t, tt.expectCause, fields["cause"])
 			}
 
-			// The response is a public contract, so it carries the canonical
-			// message whether or not a cause was logged.
 			assert.Equal(t, canonical.HTTPStatusCode, w.Code)
 			assert.Contains(t, w.Body.String(), canonical.Message)
 		})
