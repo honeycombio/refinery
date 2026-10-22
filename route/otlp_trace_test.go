@@ -1002,7 +1002,15 @@ func TestOTLPHandler(t *testing.T) {
 			router.postOTLPTrace(w, request)
 
 			assert.Equal(t, http.StatusBadRequest, w.Code)
-			assert.NotEmpty(t, w.Body.String())
+
+			assert.Contains(t, w.Body.String(), "failed to parse OTLP request body")
+			assert.NotContains(t, w.Body.String(), "proto:", "response reports general error, not the decoder's cause")
+
+			events := router.Logger.(*logger.MockLogger).Events
+			require.NotEmpty(t, events)
+			logged := events[len(events)-1].Fields
+			assert.Equal(t, "failed to parse OTLP request body", logged["error"])
+			assert.Contains(t, logged["cause"], "failed to parse OTLP request body: proto:", "log includes the decoder's error as cause")
 		})
 
 		t.Run("malformed JSON body", func(t *testing.T) {
@@ -1019,7 +1027,15 @@ func TestOTLPHandler(t *testing.T) {
 			router.postOTLPTrace(w, request)
 
 			assert.Equal(t, http.StatusBadRequest, w.Code)
-			assert.NotEmpty(t, w.Body.String())
+
+			assert.Contains(t, w.Body.String(), "failed to parse OTLP request body")
+			assert.NotContains(t, w.Body.String(), "cannot parse JSON", "response reports general error, not the decoder's cause")
+
+			events := router.Logger.(*logger.MockLogger).Events
+			require.NotEmpty(t, events)
+			logged := events[len(events)-1].Fields
+			assert.Equal(t, "failed to parse OTLP request body", logged["error"])
+			assert.Contains(t, logged["cause"], "failed to parse OTLP request body: cannot parse JSON", "log includes the decoder's error as cause")
 		})
 
 		t.Run("empty body", func(t *testing.T) {
