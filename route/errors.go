@@ -76,8 +76,16 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 	w.Write(jsonErrMsg)
 }
 
-func (r *Router) handleOTLPFailureResponse(w http.ResponseWriter, req *http.Request, otlpErr husky.OTLPError) {
-	r.Logger.Error().Logf("%s", otlpErr.Error())
+// handleOTLPFailureResponse responds with otlpErr and logs it. Pass cause when
+// otlpErr is a canonical husky error, which replaces the error husky returned
+// and would otherwise leave the log with no reason. The response stays canonical
+// either way, keeping parser internals out of it.
+func (r *Router) handleOTLPFailureResponse(w http.ResponseWriter, req *http.Request, otlpErr husky.OTLPError, cause ...error) {
+	entry := r.Logger.Error()
+	if len(cause) > 0 && cause[0] != nil {
+		entry = entry.WithString("cause", cause[0].Error())
+	}
+	entry.Logf("%s", otlpErr.Error())
 	if err := husky.WriteOtlpHttpFailureResponse(w, req, otlpErr); err != nil {
 		// If we made it here we had a problem writing an OTLP HTTP response
 		resp := fmt.Sprintf("failed to write otlp http response, %v", err.Error())
