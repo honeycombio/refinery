@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/honeycombio/dynsampler-go"
 	"github.com/honeycombio/refinery/config"
@@ -113,10 +112,11 @@ func getSharedDynsamplerAndRecorder[ST dynsampler.Sampler, CT any](
 	return dynsamplerInstance, r
 }
 
-// makeDynsamplerKey builds a dynsampler map key from the environment prefix,
-// sampler type, and a config-derived signature. The config signature must include
-// every field that affects sampling behavior so that two differently configured
-// samplers never silently share one engine.
+// makeDynsamplerKey builds a dynsampler map key from the prefix identifying where
+// the sampler is configured, its type, and a config-derived signature. The config
+// signature must name every field that affects sampling behavior, with defaults
+// already applied, so that two differently configured samplers never share one
+// engine and two identically configured ones always do.
 func makeDynsamplerKey(prefix, samplerType, configKey string) string {
 	return fmt.Sprintf("%s:%s:%s", prefix, samplerType, configKey)
 }
@@ -134,38 +134,14 @@ func formatFloat(f float64) string {
 	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
-func dynamicSamplerConfigKey(c *config.DynamicSamplerConfig) string {
-	return fmt.Sprintf("SampleRate=%d,ClearFrequency=%v,FieldList=%v,MaxKeys=%d,UseTraceLength=%t",
-		c.SampleRate, time.Duration(c.ClearFrequency), sortedFieldList(c.FieldList), c.MaxKeys, c.UseTraceLength)
-}
-
-func emaDynamicSamplerConfigKey(c *config.EMADynamicSamplerConfig) string {
-	return fmt.Sprintf("GoalSampleRate=%d,AdjustmentInterval=%v,Weight=%s,AgeOutValue=%s,BurstMultiple=%s,BurstDetectionDelay=%d,FieldList=%v,MaxKeys=%d,UseTraceLength=%t",
-		c.GoalSampleRate, time.Duration(c.AdjustmentInterval), formatFloat(c.Weight), formatFloat(c.AgeOutValue), formatFloat(c.BurstMultiple), c.BurstDetectionDelay, sortedFieldList(c.FieldList), c.MaxKeys, c.UseTraceLength)
-}
-
-func totalThroughputSamplerConfigKey(c *config.TotalThroughputSamplerConfig) string {
-	return fmt.Sprintf("GoalThroughputPerSec=%d,UseClusterSize=%t,ClearFrequency=%v,FieldList=%v,MaxKeys=%d,UseTraceLength=%t",
-		c.GoalThroughputPerSec, c.UseClusterSize, time.Duration(c.ClearFrequency), sortedFieldList(c.FieldList), c.MaxKeys, c.UseTraceLength)
-}
-
-func emaThroughputSamplerConfigKey(c *config.EMAThroughputSamplerConfig) string {
-	return fmt.Sprintf("GoalThroughputPerSec=%d,UseClusterSize=%t,InitialSampleRate=%d,AdjustmentInterval=%v,Weight=%s,AgeOutValue=%s,BurstMultiple=%s,BurstDetectionDelay=%d,FieldList=%v,MaxKeys=%d,UseTraceLength=%t",
-		c.GoalThroughputPerSec, c.UseClusterSize, c.InitialSampleRate, time.Duration(c.AdjustmentInterval), formatFloat(c.Weight), formatFloat(c.AgeOutValue), formatFloat(c.BurstMultiple), c.BurstDetectionDelay, sortedFieldList(c.FieldList), c.MaxKeys, c.UseTraceLength)
-}
-
-func windowedThroughputSamplerConfigKey(c *config.WindowedThroughputSamplerConfig) string {
-	return fmt.Sprintf("UpdateFrequency=%v,LookbackFrequency=%v,GoalThroughputPerSec=%d,UseClusterSize=%t,FieldList=%v,MaxKeys=%d,UseTraceLength=%t",
-		time.Duration(c.UpdateFrequency), time.Duration(c.LookbackFrequency), c.GoalThroughputPerSec, c.UseClusterSize, sortedFieldList(c.FieldList), c.MaxKeys, c.UseTraceLength)
-}
-
 // createSampler creates a sampler with shared dynsamplers based on the config type.
 // A unique dynsampler is created based on a composite key that includes the keyPrefix
-// (dataset/environment), sampler type, and a signature derived from the full sampler
-// configuration. This ensures that samplers with identical configurations share the
-// same underlying dynsampler instance, guaranteeing consistent sampling decisions across
-// parallel collector workers within a single Refinery instance, while preventing
-// differently configured samplers from silently sharing one engine.
+// (dataset/environment, plus the rule for rules-based samplers), sampler type, and a
+// signature derived from the full sampler configuration. This ensures that samplers
+// with identical configurations share the same underlying dynsampler instance,
+// guaranteeing consistent sampling decisions across parallel collector workers within
+// a single Refinery instance, while preventing differently configured samplers from
+// sharing one engine.
 func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	var sampler Sampler
 
@@ -227,7 +203,11 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	s.Logger.Debug().WithField("dataset", keyPrefix).Logf("created implementation for sampler type %T", c)
 	// Update peer counts after creating a sampler
 	s.updatePeerCounts()
-	s.Metrics.Gauge("unique_dynsampler_count", float64(len(s.sharedDynsamplers)))
+
+	s.mutex.Lock()
+	dynsamplerCount := len(s.sharedDynsamplers)
+	s.mutex.Unlock()
+	s.Metrics.Gauge("unique_dynsampler_count", float64(dynsamplerCount))
 
 	return sampler
 }
@@ -241,12 +221,15 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampl
 }
 
 // GetDownstreamSampler creates a downstream sampler for use in rules-based sampling,
-// ensuring it participates in the shared dynsampler system
+// ensuring it participates in the shared dynsampler system. ruleID identifies the
+// rule the sampler belongs to, so that two rules configured the same way each get
+// their own engine and their own throughput budget rather than splitting one.
 func (s *SamplerFactory) GetDownstreamSampler(
 	parentSamplerKey string,
+	ruleID string,
 	downstreamConfig *config.RulesBasedDownstreamSampler,
 ) Sampler {
-	keyPrefix := fmt.Sprintf("rules:%s:", parentSamplerKey)
+	keyPrefix := fmt.Sprintf("rules:%s:%s:", parentSamplerKey, ruleID)
 
 	// Extract the actual config from the downstream wrapper
 	var actualConfig any
