@@ -2,11 +2,15 @@ package route
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	husky "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/logger"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandlerReturnWithError(t *testing.T) {
@@ -32,5 +36,55 @@ func TestHandlerReturnWithError(t *testing.T) {
 
 	if _, ok := e.Fields["error.stack_trace"]; !ok {
 		t.Error("expected fields to contain error.stack_trace", e.Fields)
+	}
+}
+
+func TestHandleOTLPFailureResponseLogsCause(t *testing.T) {
+	canonical := husky.ErrFailedParseBody
+
+	tests := []struct {
+		name        string
+		cause       []error
+		expectCause string
+	}{
+		{
+			name:  "no cause keeps the log to the canonical message",
+			cause: nil,
+		},
+		{
+			name:        "wrapped cause is logged alongside it",
+			cause:       []error{fmt.Errorf("%w: unexpected EOF", canonical)},
+			expectCause: "failed to parse OTLP request body: unexpected EOF",
+		},
+		{
+			name:  "explicit nil cause is ignored",
+			cause: []error{nil},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := &logger.MockLogger{}
+			router := &Router{Logger: l}
+
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/v1/traces", nil)
+			req.Header.Set("content-type", "application/protobuf")
+			router.handleOTLPFailureResponse(w, req, canonical, tt.cause...)
+
+			require.Len(t, l.Events, 1)
+			fields := l.Events[0].Fields
+
+			assert.Equal(t, canonical.Error(), fields["error"])
+
+			if tt.expectCause == "" {
+				assert.NotContains(t, fields, "cause")
+			} else {
+				assert.Equal(t, tt.expectCause, fields["cause"])
+			}
+
+			assert.Equal(t, canonical.HTTPStatusCode, w.Code)
+			assert.Contains(t, w.Body.String(), canonical.Message)
+		})
 	}
 }

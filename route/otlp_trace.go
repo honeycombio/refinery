@@ -78,7 +78,7 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, huskyotlp.ErrFailedParseBody):
-			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrFailedParseBody)
+			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrFailedParseBody, err)
 		case errors.Is(err, ErrTranslateTraceRequest):
 			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusBadRequest})
 		case errors.Is(err, huskyotlp.ErrInvalidContentType):
