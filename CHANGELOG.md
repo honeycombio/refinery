@@ -1,5 +1,13 @@
 # Refinery Changelog
 
+## 3.4.3 2026-10-23
+
+This is a patch release with one fix.
+
+### 🐛 Fixes
+
+- fix(route): log the cause when an OTLP body fails to parse by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1880
+
 ## 3.4.2 2026-10-20
 
 This release addresses security vulnerabilities CVE-2026-111943, GO-2026-6612, GO-2026-6603, GO-2026-6611, and GO-2026-6617.
