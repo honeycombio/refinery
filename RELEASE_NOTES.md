@@ -2,6 +2,17 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.4.4
+
+This patch release contains one dependency update. There are no configuration changes.
+
+### Operator-visible Changes
+
+* An OTLP trace request sent as JSON is no longer rejected when a single attribute value cannot be decoded. The attribute is dropped and recorded, and the rest of the request is accepted. Previously one malformed attribute cost every span in that request. An attribute sent as `"intValue": ""` is the case this addresses.
+* A nested `intValue` sent as a JSON number is now read. Previously only the string form was, so a numeric one inside an array or key-value list was rejected.
+
+Both come from [husky v0.45.0](https://github.com/honeycombio/husky/releases/tag/v0.45.0) and apply to the HTTP JSON path. Requests sent as protobuf or over gRPC are unaffected, since neither can express these cases.
+
 ## Version 3.4.3
 
 This patch release contains one fix. There are no configuration changes.

@@ -1,5 +1,13 @@
 # Refinery Changelog
 
+## 3.4.4 2026-10-23
+
+This is a patch release carrying a husky update that changes how a malformed OTLP attribute is handled.
+
+### 🛠 Maintenance
+
+- maint(deps): bump husky to v0.45.0 by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1883
+
 ## 3.4.3 2026-10-23
 
 This is a patch release with one fix.
