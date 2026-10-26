@@ -51,6 +51,26 @@ peer_messages_exceed() {
 	[[ -n ${count} ]] && (( count > ${2:?count to exceed is a required parameter} ))
 }
 
+# The HTTP status code a node answers on a path, such as /alive or /ready.
+#
+# Arguments:
+#   $1 - the host port the node's HTTP listener is published on
+#   $2 - the path to request
+http_status_for() {
+	PORT=${1:?http port is a required parameter}
+	URL_PATH=${2:?path is a required parameter}
+	curl --silent --output /dev/null --write-out '%{http_code}' --max-time 2 "http://localhost:${PORT}${URL_PATH}"
+}
+
+# Succeeds when a node answers 200 on a path.
+#
+# Arguments:
+#   $1 - the host port the node's HTTP listener is published on
+#   $2 - the path to request
+http_ok_for() {
+	[[ $(http_status_for "$@") == "200" ]]
+}
+
 # How long the assert_eventually* helpers keep trying, and how long they pause
 # between attempts. Both in seconds. To give one assertion longer, prefix it:
 #
@@ -78,6 +98,39 @@ assert_eventually() {
 				echo "-- 💥 condition never became true 💥 --"
 				echo "command : $*"
 				echo "waited  : ${EVENTUALLY_TIMEOUT}s"
+				echo "--"
+				echo
+			} >&2 # output error to STDERR
+			return 1
+		fi
+		echo -n "." >&3
+		sleep "${EVENTUALLY_TICK}"
+	done
+	echo "" >&3
+}
+
+# Poll a command for a number of seconds and fail the first time it fails.
+#
+# The opposite of assert_eventually: the condition must hold the whole time.
+#
+# Arguments:
+#   $1 - how many seconds to keep checking
+#   $@ - the command to poll
+assert_always() {
+	local duration=${1:?duration is a required parameter}
+	shift
+	local deadline=$(( SECONDS + duration ))
+	echo "# 🍿 Checking for ${duration}s that this keeps succeeding: $*" >&3
+	echo -n "# ⏳ " >&3
+	while (( SECONDS < deadline ))
+	do
+		if ! "$@" >/dev/null 2>&1; then
+			echo "" >&3
+			{
+				echo
+				echo "-- 💥 condition stopped being true 💥 --"
+				echo "command : $*"
+				echo "after   : $(( duration - (deadline - SECONDS) ))s of ${duration}s"
 				echo "--"
 				echo
 			} >&2 # output error to STDERR
