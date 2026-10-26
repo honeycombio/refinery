@@ -2,6 +2,7 @@ package collect
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -218,6 +219,64 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 	localLevel = sr.Recalc()
 	assert.Equal(t, sr.overallStressLevel, localLevel)
 	assert.False(t, sr.stressed)
+}
+
+// snoozyPubSub's Publish blocks until woken up, ignoring its context, the way
+// a go-redis Publish does while reading from a connection that never answers.
+type snoozyPubSub struct {
+	pubsub.LocalPubSub
+	published chan struct{}
+	wakeup    chan struct{}
+}
+
+func (s *snoozyPubSub) Publish(ctx context.Context, topic, message string) error {
+	select {
+	case s.published <- struct{}{}:
+	default:
+	}
+	<-s.wakeup
+	return errors.New("snoozy publish woke up")
+}
+
+// TestStressRelief_StaysAliveWhenPublishStalls covers a Redis outage: a stress
+// level publish that never returns must not mark stress relief dead and fail
+// the liveness check.
+func TestStressRelief_StaysAliveWhenPublishStalls(t *testing.T) {
+	clock := clockwork.NewFakeClock()
+	metric := &metrics.MockMetrics{}
+	metric.Start()
+	channel := &snoozyPubSub{
+		LocalPubSub: pubsub.LocalPubSub{Metrics: metric},
+		published:   make(chan struct{}, 1),
+		wakeup:      make(chan struct{}),
+	}
+	sr, stop := newStressRelief(t, clock, channel)
+	defer stop()
+	defer close(channel.wakeup)
+	sr.Config = &config.MockConfig{
+		StressRelief: config.StressReliefConfig{Mode: "never"}, // never is default, we still publish stress even if there is no action
+	}
+	sr.UpdateFromConfig()
+	require.NoError(t, sr.Start())
+
+	healthReporter := sr.Health.(*health.Health)
+	require.Eventually(t, func() bool {
+		clock.Advance(100 * time.Millisecond)
+		select {
+		case <-channel.published:
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, time.Millisecond, "stress relief should publish its level")
+	require.True(t, healthReporter.IsAlive())
+
+	// Run the fake clock well past stress relief's 15s health timeout.
+	for range 2 * 15 * time.Second / health.TickerTime {
+		clock.Advance(health.TickerTime)
+		time.Sleep(time.Millisecond)
+	}
+	assert.True(t, healthReporter.IsAlive(), "a stalled publish should not fail liveness")
 }
 
 func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub) (*StressRelief, func()) {
