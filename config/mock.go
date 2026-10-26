@@ -58,6 +58,7 @@ type MockConfig struct {
 	StressRelief                       StressReliefConfig
 	AdditionalAttributes               map[string]string
 	AdditionalHeaders                  map[string]string
+	UpstreamTLS                        UpstreamTLSConfig
 	TraceIdFieldNames                  []string
 	ParentIdFieldNames                 []string
 	CfgMetadata                        []ConfigMetadata
@@ -477,6 +478,13 @@ func (f *MockConfig) GetAdditionalHeaders() map[string]string {
 		return make(map[string]string)
 	}
 	return f.AdditionalHeaders
+}
+
+func (f *MockConfig) GetUpstreamTLSConfig() UpstreamTLSConfig {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.UpstreamTLS
 }
 
 func (f *MockConfig) GetOpAMPConfig() OpAMPConfig {

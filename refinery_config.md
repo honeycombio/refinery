@@ -141,6 +141,56 @@ Reserved Honeycomb header prefixes ("x-honeycomb-" and "x-hny-") cannot be set.
 - Type: `map`
 - Example: `FORWARD_TO_URL:https://api.honeycomb.io`
 
+### `UpstreamTLSCertFile`
+
+`UpstreamTLSCertFile` is the path to a PEM-encoded client certificate that Refinery presents to the upstream Honeycomb API for mutual TLS.
+
+When set together with `UpstreamTLSKeyFile`, Refinery presents this client certificate on all HTTPS connections to the upstream Honeycomb API, including trace data, OTel metrics, OTel traces, logs, and API key lookups (`/1/auth`).
+This is useful when Refinery sends through a proxy that requires mutual TLS.
+Peer-to-peer traffic and fetching configuration over HTTP(S) do not use this certificate.
+Refinery checks the certificate and key files for changes on each new TLS connection and reloads them without a restart, so short-lived certificates can be rotated in place.
+If the new files cannot be loaded, Refinery keeps using the last valid certificate.
+Changing the configured path requires a restart.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `/etc/refinery/tls/client.crt`
+
+### `UpstreamTLSKeyFile`
+
+`UpstreamTLSKeyFile` is the path to the PEM-encoded private key for `UpstreamTLSCertFile`.
+
+Must be set together with `UpstreamTLSCertFile`.
+The key file is reloaded along with the certificate when either file changes.
+Changing the configured path requires a restart.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `/etc/refinery/tls/client.key`
+
+### `UpstreamTLSCAFile`
+
+`UpstreamTLSCAFile` is the path to a PEM-encoded CA bundle used to verify the upstream Honeycomb API server certificate.
+
+When set, Refinery trusts only the certificates in this bundle when connecting to the upstream Honeycomb API, instead of the system's trusted root certificates.
+Use this when the upstream endpoint, such as an mTLS proxy, presents a certificate from a private CA.
+This setting can be used with or without a client certificate.
+Changes to the file contents or path require a restart.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `/etc/refinery/tls/ca.crt`
+
+### `UpstreamTLSInsecureSkipVerify`
+
+`UpstreamTLSInsecureSkipVerify` disables verification of the upstream Honeycomb API server certificate.
+
+If `true`, Refinery does not verify the certificate presented by the upstream Honeycomb API, which makes connections vulnerable to interception.
+This is intended only for testing and is not recommended for production; use `UpstreamTLSCAFile` to trust a private CA instead.
+
+- Not eligible for live reload.
+- Type: `bool`
+
 ## OpAMP Configuration
 
 `OpAMP` contains OpAMP configuration options.

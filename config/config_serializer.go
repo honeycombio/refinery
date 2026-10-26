@@ -28,14 +28,20 @@ func SerializeToYAML(cfg Config) ([]byte, []byte, error) {
 // populateConfigContents creates a configContents struct from a Config interface
 func populateConfigContents(cfg Config) configContents {
 	opAMPConfig := cfg.GetOpAMPConfig()
+	upstreamTLS := cfg.GetUpstreamTLSConfig()
 
 	return configContents{
 		General: cfg.GetGeneralConfig(),
 		Network: NetworkConfig{
-			ListenAddr:      cfg.GetListenAddr(),
-			PeerListenAddr:  cfg.GetPeerListenAddr(),
-			HoneycombAPI:    cfg.GetHoneycombAPI(),
-			HTTPIdleTimeout: Duration(cfg.GetHTTPIdleTimeout()),
+			ListenAddr:                    cfg.GetListenAddr(),
+			PeerListenAddr:                cfg.GetPeerListenAddr(),
+			HoneycombAPI:                  cfg.GetHoneycombAPI(),
+			HTTPIdleTimeout:               Duration(cfg.GetHTTPIdleTimeout()),
+			AdditionalHeaders:             cfg.GetAdditionalHeaders(),
+			UpstreamTLSCertFile:           upstreamTLS.CertFile,
+			UpstreamTLSKeyFile:            upstreamTLS.KeyFile,
+			UpstreamTLSCAFile:             upstreamTLS.CAFile,
+			UpstreamTLSInsecureSkipVerify: upstreamTLS.InsecureSkipVerify,
 		},
 		OpAMP: OpAMPConfig{
 			Endpoint:    opAMPConfig.Endpoint,

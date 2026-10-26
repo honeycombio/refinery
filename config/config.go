@@ -74,6 +74,10 @@ type Config interface {
 	// Honeycomb API calls, both processed and generated telemetry
 	GetAdditionalHeaders() map[string]string
 
+	// GetUpstreamTLSConfig returns the TLS settings, including an optional
+	// client certificate for mutual TLS, used for all upstream Honeycomb API calls
+	GetUpstreamTLSConfig() UpstreamTLSConfig
+
 	GetTracesConfig() TracesConfig
 
 	// GetLoggerType returns the type of the logger to use. Valid types are in

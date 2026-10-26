@@ -89,6 +89,18 @@ type NetworkConfig struct {
 	HoneycombAPI      string            `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
 	HTTPIdleTimeout   Duration          `yaml:"HTTPIdleTimeout"`
 	AdditionalHeaders map[string]string `yaml:"AdditionalHeaders" default:"{}"`
+
+	UpstreamTLSCertFile           string `yaml:"UpstreamTLSCertFile"`
+	UpstreamTLSKeyFile            string `yaml:"UpstreamTLSKeyFile"`
+	UpstreamTLSCAFile             string `yaml:"UpstreamTLSCAFile"`
+	UpstreamTLSInsecureSkipVerify bool   `yaml:"UpstreamTLSInsecureSkipVerify" default:"false"`
+}
+
+type UpstreamTLSConfig struct {
+	CertFile           string
+	KeyFile            string
+	CAFile             string
+	InsecureSkipVerify bool
 }
 
 type AccessKeyConfig struct {
@@ -901,6 +913,19 @@ func (f *fileConfig) GetAdditionalHeaders() map[string]string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Network.AdditionalHeaders
+}
+
+func (f *fileConfig) GetUpstreamTLSConfig() UpstreamTLSConfig {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	n := f.mainConfig.Network
+	return UpstreamTLSConfig{
+		CertFile:           n.UpstreamTLSCertFile,
+		KeyFile:            n.UpstreamTLSKeyFile,
+		CAFile:             n.UpstreamTLSCAFile,
+		InsecureSkipVerify: n.UpstreamTLSInsecureSkipVerify,
+	}
 }
 
 func (f *fileConfig) GetLoggerLevel() Level {

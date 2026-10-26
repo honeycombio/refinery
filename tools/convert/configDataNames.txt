@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2026-10-13 at 11:46:56 UTC.
+# Automatically generated on 2026-10-26 at 18:01:51 UTC.
 
 General:
   - ConfigurationVersion
@@ -23,6 +23,14 @@ Network:
   - HoneycombAPI
 
   - AdditionalHeaders
+
+  - UpstreamTLSCertFile
+
+  - UpstreamTLSKeyFile
+
+  - UpstreamTLSCAFile
+
+  - UpstreamTLSInsecureSkipVerify
 
 
 OpAMP:

@@ -59,6 +59,13 @@ func (a *App) Start() error {
 	a.PeerRouter.SetType(types.RouterTypePeer)
 
 	record_hashes("loaded configuration at startup")
+	upstreamTLS := a.Config.GetUpstreamTLSConfig()
+	a.Logger.Warn().WithFields(map[string]interface{}{
+		"cert_file":            upstreamTLS.CertFile,
+		"key_file":             upstreamTLS.KeyFile,
+		"ca_file":              upstreamTLS.CAFile,
+		"insecure_skip_verify": upstreamTLS.InsecureSkipVerify,
+	}).Logf("loaded upstream TLS configuration at startup")
 	a.Config.RegisterReloadCallback(func(configHash, rulesHash string) {
 		record_hashes("configuration change was detected and the configuration was reloaded.")
 	})

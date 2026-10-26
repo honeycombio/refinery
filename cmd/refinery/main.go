@@ -31,6 +31,7 @@ import (
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/internal/tlsconfig"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -155,6 +156,12 @@ func main() {
 		TLSHandshakeTimeout: 15 * time.Second,
 		ForceAttemptHTTP2:   true,
 	}
+	upstreamTLS, err := tlsconfig.New(tlsconfig.Options(c.GetUpstreamTLSConfig()))
+	if err != nil {
+		fmt.Printf("unable to configure upstream TLS: %v\n", err)
+		os.Exit(1)
+	}
+	upstreamTransport.TLSClientConfig = upstreamTLS
 
 	// peerTransport is the http transport used to send things to a local peer
 	peerTransport := &http.Transport{
@@ -206,7 +213,7 @@ func main() {
 
 	if c.GetOTelTracingConfig().Enabled {
 		// let's set up some OTel tracing
-		tracer, shutdown = otelutil.SetupTracing(c.GetOTelTracingConfig(), resourceLib, resourceVer, c.GetAdditionalHeaders())
+		tracer, shutdown = otelutil.SetupTracing(c.GetOTelTracingConfig(), resourceLib, resourceVer, c.GetAdditionalHeaders(), c.GetUpstreamTLSConfig())
 
 		// add telemetry callback so husky can enrich spans with attributes
 		husky.AddTelemetryAttributeFunc = func(ctx context.Context, key string, value any) {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/tlsconfig"
 	"github.com/honeycombio/refinery/types"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -103,7 +104,7 @@ func StartSpanMulti(ctx context.Context, tracer trace.Tracer, name string, field
 	return tracer.Start(ctx, name, trace.WithAttributes(Attributes(fields)...))
 }
 
-func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resourceVersion string, additionalHeaders map[string]string) (tracer trace.Tracer, shutdown func()) {
+func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resourceVersion string, additionalHeaders map[string]string, upstreamTLS config.UpstreamTLSConfig) (tracer trace.Tracer, shutdown func()) {
 	if !cfg.Enabled {
 		pr := noop.NewTracerProvider()
 		return pr.Tracer(resourceLibrary, trace.WithInstrumentationVersion(resourceVersion)), func() {}
@@ -144,7 +145,14 @@ func SetupTracing(cfg config.OTelTracingConfig, resourceLibrary string, resource
 	if cfg.Insecure {
 		options = append(options, otlptracehttp.WithInsecure())
 	} else {
-		options = append(options, otlptracehttp.WithTLSClientConfig(&tls.Config{}))
+		tlsCfg, err := tlsconfig.New(tlsconfig.Options(upstreamTLS))
+		if err != nil {
+			log.Fatalf("failed to configure otel trace exporter TLS: %v", err)
+		}
+		if tlsCfg == nil {
+			tlsCfg = &tls.Config{}
+		}
+		options = append(options, otlptracehttp.WithTLSClientConfig(tlsCfg))
 	}
 	exporter, err := otlptrace.New(
 		context.Background(),

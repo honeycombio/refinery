@@ -26,6 +26,8 @@ import (
 	libhoney "github.com/honeycombio/libhoney-go"
 	"github.com/honeycombio/libhoney-go/transmission"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/tlsconfig"
+	"github.com/honeycombio/refinery/internal/tlsconfig/tlsconfigtest"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/types"
@@ -1678,6 +1680,91 @@ func TestDirectTransmission_AdditionalHeaders(t *testing.T) {
 			assert.Equal(t, "test-additional-headers", headers.Get("X-Honeycomb-Team"))
 			assert.Equal(t, "application/msgpack", headers.Get("Content-Type"))
 			assert.Contains(t, headers.Get("User-Agent"), tC.desc+"-test")
+		})
+	}
+}
+
+// TestDirectTransmission_MutualTLS validates that events reach an upstream that requires a client certificate.
+func TestDirectTransmission_MutualTLS(t *testing.T) {
+	pki := tlsconfigtest.New(t)
+
+	testCases := []struct {
+		desc      string
+		opts      tlsconfig.Options
+		wantEvent bool
+	}{
+		{
+			desc:      "with-client-cert",
+			opts:      tlsconfig.Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile, CAFile: pki.CAFile},
+			wantEvent: true,
+		},
+		{
+			desc:      "without-client-cert",
+			opts:      tlsconfig.Options{CAFile: pki.CAFile},
+			wantEvent: false,
+		},
+	}
+	for _, tC := range testCases {
+		t.Run(tC.desc, func(t *testing.T) {
+			t.Parallel()
+
+			var received atomic.Int32
+			server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				_, _ = io.ReadAll(r.Body)
+				r.Body.Close()
+				received.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(`[{"status": 202}]`))
+			}))
+			server.TLS = pki.ServerTLSConfig()
+			server.StartTLS()
+			t.Cleanup(server.Close)
+
+			tlsCfg, err := tlsconfig.New(tC.opts)
+			require.NoError(t, err)
+
+			mockMetrics := &metrics.MockMetrics{}
+			mockMetrics.Start()
+			t.Cleanup(mockMetrics.Stop)
+
+			dt := NewDirectTransmission(
+				types.TransmitTypeUpstream,
+				&http.Transport{TLSClientConfig: tlsCfg, ForceAttemptHTTP2: true},
+				10,
+				50*time.Millisecond,
+				2*time.Second,
+				false,
+				nil,
+			)
+			dt.Logger = &logger.NullLogger{}
+			dt.Metrics = mockMetrics
+			require.NoError(t, dt.Start())
+			t.Cleanup(func() { dt.Stop() })
+
+			eventData := types.NewPayload(&config.MockConfig{}, map[string]any{"test": "value"})
+			eventData.ExtractMetadata()
+			dt.EnqueueEvent(&types.Event{
+				Context:    context.Background(),
+				APIHost:    server.URL,
+				APIKey:     "test-mtls",
+				Dataset:    "test-dataset",
+				SampleRate: 1,
+				Timestamp:  time.Now().UTC(),
+				Data:       eventData,
+			})
+
+			if tC.wantEvent {
+				require.Eventually(t, func() bool {
+					return received.Load() == 1
+				}, 5*time.Second, 50*time.Millisecond, "event should reach the mTLS server")
+			} else {
+				require.Eventually(t, func() bool {
+					sendErrors, _ := mockMetrics.Get(dt.metricKeys.counterSendErrors)
+					return sendErrors >= 1
+				}, 5*time.Second, 50*time.Millisecond, "send should fail without a client certificate")
+				assert.Zero(t, received.Load())
+			}
 		})
 	}
 }

@@ -1509,3 +1509,57 @@ func TestAdditionalHeadersReservedHeadersRejected(t *testing.T) {
 		})
 	}
 }
+
+func TestUpstreamTLS(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Network.UpstreamTLSCertFile", "/etc/refinery/tls/client.crt",
+		"Network.UpstreamTLSKeyFile", "/etc/refinery/tls/client.key",
+		"Network.UpstreamTLSCAFile", "/etc/refinery/tls/ca.crt",
+		"Network.UpstreamTLSInsecureSkipVerify", true,
+	)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	cfgFile, rulesFile := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--config", cfgFile, "--rules_config", rulesFile})
+	require.NoError(t, err)
+
+	assert.Equal(t, config.UpstreamTLSConfig{
+		CertFile:           "/etc/refinery/tls/client.crt",
+		KeyFile:            "/etc/refinery/tls/client.key",
+		CAFile:             "/etc/refinery/tls/ca.crt",
+		InsecureSkipVerify: true,
+	}, c.GetUpstreamTLSConfig())
+}
+
+func TestUpstreamTLSEmpty(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	cfgFile, rulesFile := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--config", cfgFile, "--rules_config", rulesFile})
+	require.NoError(t, err)
+
+	assert.Equal(t, config.UpstreamTLSConfig{}, c.GetUpstreamTLSConfig())
+}
+
+func TestUpstreamTLSCertAndKeyRequiredTogether(t *testing.T) {
+	testCases := []struct {
+		field   string
+		missing string
+	}{
+		{"UpstreamTLSCertFile", "UpstreamTLSKeyFile"},
+		{"UpstreamTLSKeyFile", "UpstreamTLSCertFile"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.field, func(t *testing.T) {
+			cm := makeYAML(
+				"General.ConfigurationVersion", 2,
+				"Network."+tc.field, "/etc/refinery/tls/file.pem",
+			)
+			rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+			cfgFile, rulesFile := createTempConfigs(t, cm, rm)
+			_, err := getConfig([]string{"--config", cfgFile, "--rules_config", rulesFile})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "includes "+tc.field+", which also requires "+tc.missing)
+		})
+	}
+}
