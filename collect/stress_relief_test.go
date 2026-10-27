@@ -221,8 +221,8 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 	assert.False(t, sr.stressed)
 }
 
-// snoozyPubSub's Publish blocks until woken up, ignoring its context, the way
-// a go-redis Publish does while reading from a connection that never answers.
+// snoozyPubSub's Publish blocks until woken up and ignores its context, as a
+// go-redis read on a hung connection does.
 type snoozyPubSub struct {
 	pubsub.LocalPubSub
 	published chan struct{}
