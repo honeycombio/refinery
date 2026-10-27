@@ -1721,7 +1721,7 @@ func TestDirectTransmission_MutualTLS(t *testing.T) {
 			server.StartTLS()
 			t.Cleanup(server.Close)
 
-			tlsCfg, err := tlsconfig.New(tC.opts)
+			tlsCfg, err := tlsconfig.New(tC.opts, nil)
 			require.NoError(t, err)
 
 			mockMetrics := &metrics.MockMetrics{}

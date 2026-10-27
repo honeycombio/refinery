@@ -60,7 +60,7 @@ func touch(t *testing.T, ahead time.Duration, paths ...string) {
 }
 
 func TestNewEmpty(t *testing.T) {
-	cfg, err := New(Options{})
+	cfg, err := New(Options{}, nil)
 	require.NoError(t, err)
 	assert.Nil(t, cfg)
 }
@@ -71,7 +71,7 @@ func TestNewCAOnly(t *testing.T) {
 	serverCfg.ClientAuth = tls.NoClientCert
 	srv := startServer(t, serverCfg)
 
-	cfg, err := New(Options{CAFile: pki.CAFile})
+	cfg, err := New(Options{CAFile: pki.CAFile}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, uint16(tls.VersionTLS12), cfg.MinVersion)
 	assert.Nil(t, cfg.GetClientCertificate)
@@ -88,13 +88,13 @@ func TestNewMutualTLS(t *testing.T) {
 	pki := tlsconfigtest.New(t)
 	srv := startServer(t, pki.ServerTLSConfig())
 
-	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile, CAFile: pki.CAFile})
+	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile, CAFile: pki.CAFile}, nil)
 	require.NoError(t, err)
 	body, err := get(t, cfg, srv.URL)
 	require.NoError(t, err)
 	assert.Equal(t, "client", body)
 
-	noCert, err := New(Options{CAFile: pki.CAFile})
+	noCert, err := New(Options{CAFile: pki.CAFile}, nil)
 	require.NoError(t, err)
 	_, err = get(t, noCert, srv.URL)
 	require.Error(t, err)
@@ -104,7 +104,7 @@ func TestNewInsecureSkipVerify(t *testing.T) {
 	pki := tlsconfigtest.New(t)
 	srv := startServer(t, pki.ServerTLSConfig())
 
-	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile, InsecureSkipVerify: true})
+	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile, InsecureSkipVerify: true}, nil)
 	require.NoError(t, err)
 	body, err := get(t, cfg, srv.URL)
 	require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestNewErrors(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cfg, err := New(tc.opts)
+			cfg, err := New(tc.opts, nil)
 			require.ErrorContains(t, err, tc.wantErr)
 			assert.Nil(t, cfg)
 		})
@@ -143,7 +143,7 @@ func TestNewErrors(t *testing.T) {
 
 func TestClientCertificateRotation(t *testing.T) {
 	pki := tlsconfigtest.New(t)
-	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile})
+	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "client", clientCN(t, cfg))
 
@@ -160,20 +160,33 @@ func TestClientCertificateRotation(t *testing.T) {
 
 func TestClientCertificateReloadFailureKeepsLastGood(t *testing.T) {
 	pki := tlsconfigtest.New(t)
-	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile})
+	var reloadErrs []error
+	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile}, func(err error) {
+		reloadErrs = append(reloadErrs, err)
+	})
 	require.NoError(t, err)
 	assert.Equal(t, "client", clientCN(t, cfg))
+	assert.Empty(t, reloadErrs)
 
 	// cert rotated but key corrupt
 	pki.WriteClientCert(t, "rotated")
 	require.NoError(t, os.WriteFile(pki.ClientKeyFile, []byte("corrupt"), 0o600))
 	touch(t, time.Minute, pki.ClientCertFile, pki.ClientKeyFile)
 	assert.Equal(t, "client", clientCN(t, cfg))
+	assert.Equal(t, "client", clientCN(t, cfg))
+	require.Len(t, reloadErrs, 1)
+	assert.ErrorContains(t, reloadErrs[0], "client certificate")
 
 	require.NoError(t, os.Remove(pki.ClientKeyFile))
 	assert.Equal(t, "client", clientCN(t, cfg))
+	require.Len(t, reloadErrs, 2)
+	assert.ErrorContains(t, reloadErrs[1], "key file")
 
 	pki.WriteClientCert(t, "recovered")
 	touch(t, 2*time.Minute, pki.ClientCertFile, pki.ClientKeyFile)
 	assert.Equal(t, "recovered", clientCN(t, cfg))
+
+	require.NoError(t, os.Remove(pki.ClientKeyFile))
+	assert.Equal(t, "recovered", clientCN(t, cfg))
+	assert.Len(t, reloadErrs, 3)
 }

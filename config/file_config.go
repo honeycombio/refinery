@@ -12,6 +12,8 @@ import (
 
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
+
+	"github.com/honeycombio/refinery/internal/tlsconfig"
 )
 
 // In order to be able to unmarshal "15s" etc. into time.Duration, we need to
@@ -94,13 +96,6 @@ type NetworkConfig struct {
 	UpstreamTLSKeyFile            string `yaml:"UpstreamTLSKeyFile"`
 	UpstreamTLSCAFile             string `yaml:"UpstreamTLSCAFile"`
 	UpstreamTLSInsecureSkipVerify bool   `yaml:"UpstreamTLSInsecureSkipVerify" default:"false"`
-}
-
-type UpstreamTLSConfig struct {
-	CertFile           string
-	KeyFile            string
-	CAFile             string
-	InsecureSkipVerify bool
 }
 
 type AccessKeyConfig struct {
@@ -656,6 +651,15 @@ func NewConfig(opts *CmdEnv, currentVersion ...string) (Config, error) {
 		os.Exit(0)
 	}
 
+	if !opts.NoValidate {
+		if _, tlsErr := tlsconfig.New(cfg.GetUpstreamTLSConfig(), nil); tlsErr != nil {
+			return nil, &FileConfigError{
+				ConfigLocations: opts.ConfigLocations,
+				ConfigResults:   ValidationResults{{Message: tlsErr.Error(), Severity: Error}},
+			}
+		}
+	}
+
 	cfg.callbacks = make([]ConfigReloadCallback, 0)
 
 	return cfg, err
@@ -915,12 +919,12 @@ func (f *fileConfig) GetAdditionalHeaders() map[string]string {
 	return f.mainConfig.Network.AdditionalHeaders
 }
 
-func (f *fileConfig) GetUpstreamTLSConfig() UpstreamTLSConfig {
+func (f *fileConfig) GetUpstreamTLSConfig() tlsconfig.Options {
 	f.mux.RLock()
 	defer f.mux.RUnlock()
 
 	n := f.mainConfig.Network
-	return UpstreamTLSConfig{
+	return tlsconfig.Options{
 		CertFile:           n.UpstreamTLSCertFile,
 		KeyFile:            n.UpstreamTLSKeyFile,
 		CAFile:             n.UpstreamTLSCAFile,

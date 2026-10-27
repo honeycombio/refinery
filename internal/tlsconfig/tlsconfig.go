@@ -18,7 +18,9 @@ type Options struct {
 }
 
 // New returns a new *tls.Config built from opts, or nil if opts is empty.
-func New(opts Options) (*tls.Config, error) {
+// onReloadError, if non-nil, is called when the client certificate changes on
+// disk but can't be reloaded; repeats of the same error are not reported.
+func New(opts Options, onReloadError func(error)) (*tls.Config, error) {
 	if opts == (Options{}) {
 		return nil, nil
 	}
@@ -44,7 +46,7 @@ func New(opts Options) (*tls.Config, error) {
 		if opts.CertFile == "" || opts.KeyFile == "" {
 			return nil, errors.New("upstream TLS cert file and key file must be set together")
 		}
-		r := &certReloader{certFile: opts.CertFile, keyFile: opts.KeyFile}
+		r := &certReloader{certFile: opts.CertFile, keyFile: opts.KeyFile, onReloadError: onReloadError}
 		if err := r.load(); err != nil {
 			return nil, err
 		}
@@ -58,10 +60,12 @@ func New(opts Options) (*tls.Config, error) {
 // serving the last good certificate if a reload fails.
 type certReloader struct {
 	certFile, keyFile string
+	onReloadError     func(error)
 
 	mu              sync.Mutex
 	cert            *tls.Certificate
 	certMod, keyMod time.Time
+	lastErr         string
 }
 
 func (r *certReloader) load() error {
@@ -89,6 +93,13 @@ func (r *certReloader) load() error {
 func (r *certReloader) getClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	_ = r.load()
+	if err := r.load(); err != nil {
+		if err.Error() != r.lastErr && r.onReloadError != nil {
+			r.onReloadError(err)
+		}
+		r.lastErr = err.Error()
+	} else {
+		r.lastErr = ""
+	}
 	return r.cert, nil
 }

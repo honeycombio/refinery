@@ -156,7 +156,11 @@ func main() {
 		TLSHandshakeTimeout: 15 * time.Second,
 		ForceAttemptHTTP2:   true,
 	}
-	upstreamTLS, err := tlsconfig.New(tlsconfig.Options(c.GetUpstreamTLSConfig()))
+	// loggerTransport is the http transport used to send Refinery's own logs to Honeycomb
+	loggerTransport := upstreamTransport.Clone()
+	upstreamTLS, err := tlsconfig.New(c.GetUpstreamTLSConfig(), func(err error) {
+		lgr.Warn().WithField("error", err.Error()).Logf("failed to reload upstream TLS client certificate; continuing with the previous certificate")
+	})
 	if err != nil {
 		fmt.Printf("unable to configure upstream TLS: %v\n", err)
 		os.Exit(1)
@@ -213,7 +217,7 @@ func main() {
 
 	if c.GetOTelTracingConfig().Enabled {
 		// let's set up some OTel tracing
-		tracer, shutdown = otelutil.SetupTracing(c.GetOTelTracingConfig(), resourceLib, resourceVer, c.GetAdditionalHeaders(), c.GetUpstreamTLSConfig())
+		tracer, shutdown = otelutil.SetupTracing(c.GetOTelTracingConfig(), resourceLib, resourceVer, c.GetAdditionalHeaders())
 
 		// add telemetry callback so husky can enrich spans with attributes
 		husky.AddTelemetryAttributeFunc = func(ctx context.Context, key string, value any) {
@@ -245,6 +249,7 @@ func main() {
 		{Value: pubsubber},
 		{Value: lgr},
 		{Value: upstreamTransport, Name: "upstreamTransport"},
+		{Value: loggerTransport, Name: "loggerTransport"},
 		{Value: peerTransport, Name: "peerTransport"},
 		{Value: upstreamTransmission, Name: "upstreamTransmission"},
 		{Value: peerTransmission, Name: "peerTransmission"},

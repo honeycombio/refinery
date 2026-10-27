@@ -4,6 +4,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/honeycombio/refinery/internal/tlsconfig"
 )
 
 const (
@@ -76,7 +78,7 @@ type Config interface {
 
 	// GetUpstreamTLSConfig returns the TLS settings, including an optional
 	// client certificate for mutual TLS, used for all upstream Honeycomb API calls
-	GetUpstreamTLSConfig() UpstreamTLSConfig
+	GetUpstreamTLSConfig() tlsconfig.Options
 
 	GetTracesConfig() TracesConfig
 

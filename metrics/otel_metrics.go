@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/honeycombio/refinery/config"
-	"github.com/honeycombio/refinery/internal/tlsconfig"
 	"github.com/honeycombio/refinery/logger"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
@@ -103,15 +102,6 @@ func (o *OTelMetrics) Start() error {
 
 	if host.Scheme == "http" {
 		options = append(options, otlpmetrichttp.WithInsecure())
-	} else {
-		tlsCfg, err := tlsconfig.New(tlsconfig.Options(o.Config.GetUpstreamTLSConfig()))
-		if err != nil {
-			o.Logger.Error().WithString("msg", "failed to configure metrics TLS").WithString("error", err.Error())
-			return err
-		}
-		if tlsCfg != nil {
-			options = append(options, otlpmetrichttp.WithTLSClientConfig(tlsCfg))
-		}
 	}
 
 	exporter, err := otlpmetrichttp.New(ctx, options...)
