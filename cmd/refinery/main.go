@@ -156,8 +156,6 @@ func main() {
 		TLSHandshakeTimeout: 15 * time.Second,
 		ForceAttemptHTTP2:   true,
 	}
-	// loggerTransport is the http transport used to send Refinery's own logs to Honeycomb
-	loggerTransport := upstreamTransport.Clone()
 	upstreamTLS, err := tlsconfig.New(c.GetUpstreamTLSConfig(), func(err error) {
 		lgr.Warn().WithField("error", err.Error()).Logf("failed to reload upstream TLS client certificate; continuing with the previous certificate")
 	})
@@ -249,7 +247,6 @@ func main() {
 		{Value: pubsubber},
 		{Value: lgr},
 		{Value: upstreamTransport, Name: "upstreamTransport"},
-		{Value: loggerTransport, Name: "loggerTransport"},
 		{Value: peerTransport, Name: "peerTransport"},
 		{Value: upstreamTransmission, Name: "upstreamTransmission"},
 		{Value: peerTransmission, Name: "peerTransmission"},

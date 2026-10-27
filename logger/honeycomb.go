@@ -31,7 +31,7 @@ func (t *headerInjectingTransport) RoundTrip(req *http.Request) (*http.Response,
 // dataset.
 type HoneycombLogger struct {
 	Config            config.Config   `inject:""`
-	UpstreamTransport *http.Transport `inject:"loggerTransport"`
+	UpstreamTransport *http.Transport `inject:"upstreamTransport"`
 	Version           string          `inject:"version"`
 	level             config.Level
 	loggerConfig      config.HoneycombLoggerConfig

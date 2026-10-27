@@ -193,10 +193,10 @@ groups:
           When set together with `UpstreamTLSKeyFile`, Refinery presents this
           client certificate on HTTPS connections to `HoneycombAPI`, which
           carry the trace data Refinery forwards and API key lookups
-          (`/1/auth`). This is useful when Refinery sends through a proxy that
-          requires mutual TLS. Refinery's own logs, metrics, and traces,
-          peer-to-peer traffic, and fetching configuration over HTTP(S) do not
-          use this certificate.
+          (`/1/auth`), and on logs sent by the `honeycomb` logger. This is
+          useful when Refinery sends through a proxy that requires mutual
+          TLS. Refinery's OTel metrics and traces, peer-to-peer traffic, and
+          fetching configuration over HTTP(S) do not use this certificate.
 
           Refinery checks the certificate and key files for changes on each
           new TLS connection and reloads them without a restart, so
@@ -228,7 +228,8 @@ groups:
         summary: is the path to a PEM-encoded CA bundle used to verify the upstream Honeycomb API server certificate.
         description: >
           When set, Refinery trusts only the certificates in this bundle when
-          connecting to `HoneycombAPI`, instead of the system's
+          connecting to `HoneycombAPI` and sending `honeycomb` logger output,
+          instead of the system's
           trusted root certificates. Use this when the upstream endpoint, such
           as an mTLS proxy, presents a certificate from a private CA. This
           setting can be used with or without a client certificate. Changes to

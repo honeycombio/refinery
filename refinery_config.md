@@ -145,9 +145,9 @@ Reserved Honeycomb header prefixes ("x-honeycomb-" and "x-hny-") cannot be set.
 
 `UpstreamTLSCertFile` is the path to a PEM-encoded client certificate that Refinery presents to the upstream Honeycomb API for mutual TLS.
 
-When set together with `UpstreamTLSKeyFile`, Refinery presents this client certificate on HTTPS connections to `HoneycombAPI`, which carry the trace data Refinery forwards and API key lookups (`/1/auth`).
+When set together with `UpstreamTLSKeyFile`, Refinery presents this client certificate on HTTPS connections to `HoneycombAPI`, which carry the trace data Refinery forwards and API key lookups (`/1/auth`), and on logs sent by the `honeycomb` logger.
 This is useful when Refinery sends through a proxy that requires mutual TLS.
-Refinery's own logs, metrics, and traces, peer-to-peer traffic, and fetching configuration over HTTP(S) do not use this certificate.
+Refinery's OTel metrics and traces, peer-to-peer traffic, and fetching configuration over HTTP(S) do not use this certificate.
 Refinery checks the certificate and key files for changes on each new TLS connection and reloads them without a restart, so short-lived certificates can be rotated in place.
 If the new files cannot be loaded, Refinery logs a warning and keeps using the last valid certificate.
 Changing the configured path requires a restart.
@@ -172,7 +172,7 @@ Changing the configured path requires a restart.
 
 `UpstreamTLSCAFile` is the path to a PEM-encoded CA bundle used to verify the upstream Honeycomb API server certificate.
 
-When set, Refinery trusts only the certificates in this bundle when connecting to `HoneycombAPI`, instead of the system's trusted root certificates.
+When set, Refinery trusts only the certificates in this bundle when connecting to `HoneycombAPI` and sending `honeycomb` logger output, instead of the system's trusted root certificates.
 Use this when the upstream endpoint, such as an mTLS proxy, presents a certificate from a private CA.
 This setting can be used with or without a client certificate.
 Changes to the file contents or path require a restart.
