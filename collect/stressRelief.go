@@ -135,9 +135,7 @@ func (s *StressRelief) Start() error {
 	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
 
 	// register with health
-	// Set health check timeout to 15 seconds (3x go-redis DialTimeout of 5s).
-	// This allows the stress relief system multiple retry attempts before
-	// the health check fails, preventing premature failure during transient issues.
+	// This trips only if the monitor loop stops running.
 	s.Health.Register(StressReliefHealthKey, 15*time.Second)
 
 	// register stress level metrics
@@ -187,6 +185,10 @@ func (s *StressRelief) Start() error {
 			tickCounter      = 0
 		)
 
+		// the hand off for calculated stress level to the publisher
+		levels := make(chan uint, 1)
+		go s.publishStressLevels(levels)
+
 		tick := s.Clock.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {
@@ -195,9 +197,14 @@ func (s *StressRelief) Start() error {
 				currentLevel := s.Recalc()
 
 				if lastLevel != currentLevel || tickCounter == maxTicksBetweenReports {
-					err := s.PubSub.Publish(context.Background(), s.topic, newStressReliefMessage(currentLevel, s.hostID).String())
-					if err != nil {
-						s.Logger.Error().Logf("failed to publish stress level: %s", err)
+					select {
+					case levels <- currentLevel: // queue for publish
+					default: // ope, can't because publisher is busy
+						select {
+						case <-levels: // throw away an old level waiting for publish
+						default: // but it's OK if publish cleared the channel in the meantime
+						}
+						levels <- currentLevel // queue updated level for publish
 					}
 
 					lastLevel = currentLevel
@@ -215,6 +222,24 @@ func (s *StressRelief) Start() error {
 		}
 	}(s)
 	return nil
+}
+
+// publishStressLevels publishes each level it receives to the cluster's PubSub system
+// while the stress relief system is running.
+func (s *StressRelief) publishStressLevels(levels <-chan uint) {
+	for {
+		select {
+		case level := <-levels:
+			ctx, cancel := context.WithTimeout(context.Background(), s.Config.GetPeerTimeout())
+			err := s.PubSub.Publish(ctx, s.topic, newStressReliefMessage(level, s.hostID).String())
+			cancel()
+			if err != nil {
+				s.Logger.Error().Logf("failed to publish stress level: %s", err)
+			}
+		case <-s.Done:
+			return
+		}
+	}
 }
 
 const stressReliefMessageSeparator = "|"
