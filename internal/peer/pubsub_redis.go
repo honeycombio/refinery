@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/rand"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgryski/go-wyhash"
@@ -27,6 +28,12 @@ const (
 	// timeout phase in order to allow multiple timeouts to fail and yet still
 	// keep the host in the mix.
 	refreshCacheInterval = 3 * time.Second
+
+	// unreachableAfter is how long this host can go without seeing its own
+	// registration come back through the peers channel before it reports
+	// itself as disconnected. It is longer than the time a managed Redis
+	// typically takes to fail over.
+	unreachableAfter = 30 * time.Second
 )
 
 type peerAction string
@@ -103,6 +110,19 @@ type RedisPubsubPeers struct {
 	callbacks []func()
 	sub       pubsub.Subscription
 	topic     string // formatted topic name
+
+	// lastSelfSeen is when our own registration last came back through the
+	// peers channel, as unix nanoseconds. It proves both our publishes and our
+	// subscription are reaching Redis.
+	lastSelfSeen atomic.Int64
+}
+
+// Connected reports whether this host has recently seen its own registration
+// come back through Redis. A host alone in its cluster still sees its own
+// registration, so this does not mistake a cluster of one for an outage.
+func (p *RedisPubsubPeers) Connected() bool {
+	last := time.Unix(0, p.lastSelfSeen.Load())
+	return p.Clock.Since(last) < unreachableAfter
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
@@ -126,6 +146,9 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 		return
 	}
 	p.Metrics.Count("peer_messages", 1)
+	if cmd.action == Register && cmd.id == p.InstanceID {
+		p.lastSelfSeen.Store(p.Clock.Now().UnixNano())
+	}
 	switch cmd.action {
 	case Unregister:
 		p.peers.Delete(cmd.id)
@@ -170,6 +193,9 @@ func (p *RedisPubsubPeers) Start() error {
 		return err
 	}
 	p.peers.Set(p.InstanceID, myaddr)
+	// start the clock on the grace period so a slow first registration is not
+	// reported as an outage
+	p.lastSelfSeen.Store(p.Clock.Now().UnixNano())
 	return nil
 }
 

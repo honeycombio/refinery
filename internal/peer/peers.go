@@ -22,6 +22,14 @@ type Peers interface {
 	startstop.Starter
 }
 
+// ConnectivityReporter is implemented by Peers that depend on an external
+// service to learn about their peers.
+type ConnectivityReporter interface {
+	// Connected is false when the host cannot reach the service, which means
+	// the list of peers is no longer being kept up to date.
+	Connected() bool
+}
+
 func publicAddr(logger logger.Logger, cfg config.Config) (string, error) {
 	// compute the public version of my peer listen address
 	listenAddr := cfg.GetPeerListenAddr()

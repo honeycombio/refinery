@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -319,5 +320,60 @@ func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub)
 		close(sr.Done)
 		require.NoError(t, healthReporter.Stop())
 		require.NoError(t, channel.Stop())
+	}
+}
+
+// unreachablePeers is a peer.Peers that can be told its Redis is unreachable.
+type unreachablePeers struct {
+	peer.MockPeers
+	unreachable atomic.Bool
+}
+
+func (p *unreachablePeers) Connected() bool { return !p.unreachable.Load() }
+
+// TestStressRelief_PeersUnreachable tests that a host which cannot reach
+// Redis for peer membership activates stress relief in monitor mode, and
+// never in "never" mode.
+func TestStressRelief_PeersUnreachable(t *testing.T) {
+	for _, tc := range []struct {
+		mode       string
+		wantStress bool
+	}{
+		{mode: "monitor", wantStress: true},
+		{mode: "never", wantStress: false},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			clock := clockwork.NewFakeClock()
+			sr, stop := newStressRelief(t, clock, nil)
+			defer stop()
+			peers := &unreachablePeers{}
+			sr.Peer = peers
+			require.NoError(t, sr.Start())
+			sr.Config = &config.MockConfig{
+				StressRelief: config.StressReliefConfig{
+					Mode:                      tc.mode,
+					ActivationLevel:           80,
+					DeactivationLevel:         50,
+					SamplingRate:              2,
+					MinimumActivationDuration: config.Duration(5 * time.Second),
+				},
+			}
+			sr.UpdateFromConfig()
+			sr.Recalc()
+			require.False(t, sr.Stressed())
+
+			peers.unreachable.Store(true)
+			sr.Recalc()
+			assert.Equal(t, tc.wantStress, sr.Stressed())
+			if tc.wantStress {
+				_, _, reason := sr.GetSampleRate("a-trace")
+				assert.Equal(t, "stress_relief/deterministic/RedisUnreachable", reason)
+			}
+
+			peers.unreachable.Store(false)
+			clock.Advance(6 * time.Second)
+			sr.Recalc()
+			assert.False(t, sr.Stressed())
+		})
 	}
 }
