@@ -7,9 +7,9 @@
 #
 # `docker compose pause` freezes Redis without closing its sockets. The
 # kernel still completes TCP handshakes, but nothing answers after that, so
-# Refinery's TLS handshakes and commands hang rather than fail fast. That is
-# closer to a Redis pod disappearing behind a stale address than
-# `docker compose stop`, which refuses connections at once.
+# Refinery's TLS handshakes and commands hang rather than fail fast, as with
+# a frozen or overloaded Redis. `docker compose stop` instead refuses
+# connections at once.
 
 load test_helpers/utilities
 
