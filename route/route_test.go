@@ -12,7 +12,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1790,4 +1792,142 @@ func readAll(t testing.TB, r io.Reader) []byte {
 	got, err := io.ReadAll(r)
 	require.NoError(t, err)
 	return got
+}
+
+// stressReliefCollector stands in for InMemCollector while stress relief is
+// active: like InMemCollector.ProcessSpanImmediately, it keeps every span and
+// enqueues it for upstream transmission.
+type stressReliefCollector struct {
+	collect.MockCollector
+	upstream transmit.Transmission
+}
+
+func (c *stressReliefCollector) Stressed() bool { return true }
+
+func (c *stressReliefCollector) ProcessSpanImmediately(sp *types.Span) (bool, bool) {
+	c.upstream.EnqueueSpan(sp)
+	return true, true
+}
+
+// batchRecorder is an HTTP server that records the events posted to /1/batch.
+type batchRecorder struct {
+	server *httptest.Server
+	mu     sync.Mutex
+	events []map[string]any
+}
+
+func newBatchRecorder(t *testing.T) *batchRecorder {
+	r := &batchRecorder{}
+	r.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		var batch []struct {
+			Data map[string]any `msgpack:"data"`
+		}
+		dec := msgpack.NewDecoder(req.Body)
+		dec.UseLooseInterfaceDecoding(true)
+		if err := dec.Decode(&batch); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		resp := make([]map[string]any, len(batch))
+		r.mu.Lock()
+		for i, ev := range batch {
+			r.events = append(r.events, ev.Data)
+			resp[i] = map[string]any{"status": http.StatusAccepted}
+		}
+		r.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(r.server.Close)
+	return r
+}
+
+func (r *batchRecorder) received() []map[string]any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.events)
+}
+
+// TestStressReliefKeptSpansAreNotMutatedIntoProbes checks that when stress
+// relief keeps a span whose trace is owned by another node, the span that goes
+// upstream is delivered intact (and exactly once), and only a probe goes to the
+// owning peer. Both are built from the same *types.Event, so the probe must not
+// change the event that is already queued for upstream.
+func TestStressReliefKeptSpansAreNotMutatedIntoProbes(t *testing.T) {
+	upstreamServer := newBatchRecorder(t)
+	peerServer := newBatchRecorder(t)
+
+	mockConfig := &config.MockConfig{TraceIdFieldNames: []string{"trace.trace_id"}}
+
+	newTransmission := func(tt types.TransmitType) *transmit.DirectTransmission {
+		dt := transmit.NewDirectTransmission(tt, http.DefaultTransport.(*http.Transport), 100, time.Minute, 10*time.Second, false, nil)
+		dt.Logger = &logger.NullLogger{}
+		dt.Metrics = &metrics.NullMetrics{}
+		require.NoError(t, dt.Start())
+		return dt
+	}
+	upstream := newTransmission(types.TransmitTypeUpstream)
+	peer := newTransmission(types.TransmitTypePeer)
+
+	// Traces whose owner is the peer must be probed; the one we own is not.
+	remoteTraces := []string{"remote-1", "remote-2", "remote-3"}
+	const localTrace = "local-1"
+	const spansPerTrace = 4
+
+	router := &Router{
+		Config:               mockConfig,
+		Logger:               &logger.NullLogger{},
+		Metrics:              &metrics.NullMetrics{},
+		UpstreamTransmission: upstream,
+		PeerTransmission:     peer,
+		Collector:            &stressReliefCollector{upstream: upstream},
+		Sharder: &sharder.MockSharder{
+			Self:  &sharder.TestShard{Addr: "http://self.invalid"},
+			Other: &sharder.TestShard{Addr: peerServer.server.URL, TraceIDs: remoteTraces},
+		},
+		routerType: types.RouterTypeIncoming,
+		iopLogger:  iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: types.RouterTypeIncoming.String()},
+	}
+	router.registerMetricNames()
+
+	for _, traceID := range append(slices.Clone(remoteTraces), localTrace) {
+		for i := range spansPerTrace {
+			ev := &types.Event{
+				Context:   context.Background(),
+				APIHost:   upstreamServer.server.URL,
+				APIKey:    "key",
+				Dataset:   "dataset",
+				Timestamp: time.Now(),
+				Data: types.NewPayload(mockConfig, map[string]any{
+					"trace.trace_id": traceID,
+					"span_num":       i,
+				}),
+			}
+			require.NoError(t, router.processEvent(ev, "req"))
+		}
+	}
+
+	// Stop flushes whatever is still batched.
+	require.NoError(t, upstream.Stop())
+	require.NoError(t, peer.Stop())
+
+	// Every kept span must reach upstream exactly once, without probe marking.
+	seen := map[string]int{}
+	for _, ev := range upstreamServer.received() {
+		assert.NotContains(t, ev, types.MetaRefineryProbe, "upstream span carries the probe marker: %v", ev)
+		seen[fmt.Sprintf("%v/%v", ev["trace.trace_id"], ev["span_num"])]++
+	}
+	for _, traceID := range append(slices.Clone(remoteTraces), localTrace) {
+		for i := range spansPerTrace {
+			assert.Equal(t, 1, seen[fmt.Sprintf("%s/%d", traceID, i)], "span %d of trace %s should reach upstream once", i, traceID)
+		}
+	}
+
+	// The peer gets one probe per kept span of the traces it owns, and nothing else.
+	peerEvents := peerServer.received()
+	assert.Len(t, peerEvents, len(remoteTraces)*spansPerTrace)
+	for _, ev := range peerEvents {
+		assert.Equal(t, true, ev[types.MetaRefineryProbe], "peer should only receive probes: %v", ev)
+		assert.Contains(t, remoteTraces, ev["trace.trace_id"])
+	}
 }
