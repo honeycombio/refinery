@@ -1864,6 +1864,8 @@ func TestStressReliefKeptSpansAreNotMutatedIntoProbes(t *testing.T) {
 		dt.Logger = &logger.NullLogger{}
 		dt.Metrics = &metrics.NullMetrics{}
 		require.NoError(t, dt.Start())
+		// Stop is called explicitly below to flush; this covers early test failures.
+		t.Cleanup(func() { _ = dt.Stop() })
 		return dt
 	}
 	upstream := newTransmission(types.TransmitTypeUpstream)
