@@ -92,10 +92,10 @@ type NetworkConfig struct {
 	HTTPIdleTimeout   Duration          `yaml:"HTTPIdleTimeout"`
 	AdditionalHeaders map[string]string `yaml:"AdditionalHeaders" default:"{}"`
 
-	UpstreamTLSCertFile           string `yaml:"UpstreamTLSCertFile"`
-	UpstreamTLSKeyFile            string `yaml:"UpstreamTLSKeyFile"`
-	UpstreamTLSCAFile             string `yaml:"UpstreamTLSCAFile"`
-	UpstreamTLSInsecureSkipVerify bool   `yaml:"UpstreamTLSInsecureSkipVerify" default:"false"`
+	UpstreamTLSCertFile string `yaml:"UpstreamTLSCertFile"`
+	UpstreamTLSKeyFile  string `yaml:"UpstreamTLSKeyFile"`
+	UpstreamTLSCAFile   string `yaml:"UpstreamTLSCAFile"`
+	UpstreamTLSInsecure bool   `yaml:"UpstreamTLSInsecure" default:"false"`
 }
 
 type AccessKeyConfig struct {
@@ -928,7 +928,7 @@ func (f *fileConfig) GetUpstreamTLSConfig() tlsconfig.Options {
 		CertFile:           n.UpstreamTLSCertFile,
 		KeyFile:            n.UpstreamTLSKeyFile,
 		CAFile:             n.UpstreamTLSCAFile,
-		InsecureSkipVerify: n.UpstreamTLSInsecureSkipVerify,
+		InsecureSkipVerify: n.UpstreamTLSInsecure,
 	}
 }
 

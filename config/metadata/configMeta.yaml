@@ -235,7 +235,7 @@ groups:
           setting can be used with or without a client certificate. Changes to
           the file contents or path require a restart.
 
-      - name: UpstreamTLSInsecureSkipVerify
+      - name: UpstreamTLSInsecure
         type: bool
         valuetype: nondefault
         default: false
