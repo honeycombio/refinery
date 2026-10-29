@@ -4,45 +4,61 @@
 
 ## Setup Environment
 
-First, You will need to install and configure [Go](https://golang.org/doc/install) on your computer.
+Clone the Refinery repository: `git clone https://github.com/honeycombio/refinery.git`
 
-## Running Refinery Locally
+The project has required versions of tools declared in a `.tool-versions` file in the repo, used by utilities like [mise](https://mise.jdx.dev/) (recommended) and [asdf](https://asdf-vm.com/) to ensure you have the expected local development tooling.
+With mise, install necessary tools by running the following command at the root of the repo:
 
-Once you have your local environment setup, clone the Refinery repository.
-`git clone https://github.com/honeycombio/refinery.git`
+`mise install`
 
-Now that you have the source code, you can build refinery and ensure everything is working by running the command below
-at the root of the Refinery directory.
+If you opt not to use either mise or asdf, you will need to install and configure the version of [Go](https://golang.org/doc/install) declared in that file.
+
+## Running Refinery locally
+
+Once your local environment is set up, you can build Refinery and ensure everything is working by running the command below at the root of the Refinery directory.
 
 `go run ./cmd/refinery/main.go -c config_complete.yaml -r rules_complete.yaml`
 
-# Running Refinery tests locally
+## Running tests locally
 
-Tests require a local installation of redis. See [here](https://redis.io/docs/install/install-stack) for how to get it running.
+Tests require a local instance of [redis](https://redis.io/docs/install/install-stack) or [valkey](https://hub.docker.com/r/valkey/valkey/#how-to-use-this-image) to be available.
 
-You can run Refinery tests by running the command below at the root of the Refinery directory.
+You can run Refinery tests by running the following command at the root of the repo.
 
 `make test`
 
-# Generated licenses and documentation
-
-Refinery uses generated data for licenses and documentation.
-
-The documentation resides in the `config/config.meta` and `config/rules.meta` files.
-These two files should be edited when information in them needs to change. They provide the base data for generated documentation.
-
-It is not necessary to run the regeneration code licenses or documentation as part of a standard PR for Refinery. They cause a lot of noise and should generally only be run prior to a release.
-
 # Making changes to configuration code
 
-With the new configuration format redesign in v2.0.0, the workflow for making a configuration requires the following steps:
+The workflow for making a configuration change requires the following steps:
 
 - Make changes to the YAML tags for a configuration struct.
-- Update `config/metadata/configMeta.yaml` or `config/metadata/rulesMeta.yaml` to reflect such change.
-- Run the command below from inside the `./refinery/tools/convert/` directory to generate the updated `config.md`, `config_complete.md`, and `rules.md`. These two files are used to generate the official Refinery configuration documentation.
-`make all`
-- The `rules_complete.yaml` file is an example file constructed manually. If there are substantive changes to rules, you should manually update `rules_complete.yaml`.
-- If you add new configurations that expect the environment, they must also be available from the command line. This will only work if you add them within the struct for cmdenv.go.
+- Update `config/metadata/configMeta.yaml` or `config/metadata/rulesMeta.yaml` to reflect that change.
+- The `rules_complete.yaml` file is an example file constructed manually.
+  If there are substantive changes to rules, you should manually update `rules_complete.yaml`.
+- If you add new configurations that expect the environment, they must also be available from the command line.
+  This will only work if you add them within the struct for `cmdenv.go`.
+
+# Generated licenses and documentation
+
+Refinery generates the `LICENSES` directory and its reference documentation.
+
+## Licenses
+
+The `LICENSES` directory records the licenses of Refinery's dependencies.
+CI runs `make verify-licenses` and fails if `LICENSES` is out of date.
+
+If your PR changes dependencies, run `make update-licenses`, review the changes for license compatibility, and commit them.
+We recommend putting the `LICENSES` update in its own commit on your branch so it is easy to review separate from code changes.
+
+## Documentation
+
+The `config/metadata/configMeta.yaml` and `config/metadata/rulesMeta.yaml` files provide the base content for generated documentation.
+These are the files that should be edited when documentation needs updating.
+
+Do not include the generated documentation output in your PR; it causes a lot of unnecessary noise for the review.
+Regeneration happens as part of release preparation.
+Running `make all` from `tools/convert` locally is good practice for checking that your metadata changes generate valid output.
+It rewrites tracked files, so do not stage them, and discard the changes afterwards.
 
 # References
 

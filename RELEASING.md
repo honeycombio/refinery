@@ -1,6 +1,8 @@
 # Release Process
 
-Note that it is not necessary to regenerate licenses or documentation as part of a standard PR for Refinery. They cause a lot of noise and should generally only be run immediately before a release.
+Note that it is not necessary to regenerate documentation as part of a standard PR for Refinery. It causes a lot of noise and should only be run immediately before a release. Generated documentation should not be committed in a standard PR, even if a contributor ran `make all` locally to validate their changes.
+
+Licenses are different: a PR that changes dependencies must include the matching `LICENSES` update (CI runs `make verify-licenses`), ideally as its own commit. Dependabot PRs get this automatically.
 
 - Check that licenses are current with `make verify-licenses`
 - Regenerate documentation with `make all` from within the `tools/convert` folder.
