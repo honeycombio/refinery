@@ -1,11 +1,16 @@
 package peer
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/logger"
+	"github.com/honeycombio/refinery/pubsub"
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_publicAddr(t *testing.T) {
@@ -55,4 +60,38 @@ func TestPeerActions(t *testing.T) {
 
 	b = cmd2.unmarshal("Rfoo")
 	assert.False(t, b)
+}
+
+// TestRedisPubsubPeers_Connected tests that a host is connected only while it
+// keeps seeing its own registration come back through the peers channel.
+func TestRedisPubsubPeers_Connected(t *testing.T) {
+	clock := clockwork.NewFakeClock()
+	ps := &pubsub.LocalPubSub{
+		Config: &config.MockConfig{},
+	}
+	require.NoError(t, ps.Start())
+	defer ps.Stop()
+
+	peers := &RedisPubsubPeers{
+		Config: &config.MockConfig{
+			GetPeerListenAddrVal: "127.0.0.1:3443",
+			RedisIdentifier:      "somehostname",
+		},
+		PubSub:     ps,
+		Clock:      clock,
+		InstanceID: "me",
+		Done:       make(chan struct{}),
+	}
+	require.NoError(t, peers.Start())
+	assert.True(t, peers.Connected(), "grace period starts at Start")
+
+	clock.Advance(unreachableAfter + time.Second)
+	assert.False(t, peers.Connected(), "no registration seen within the window")
+
+	// someone else's registration does not count
+	peers.listen(context.Background(), newPeerCommand(Register, "http://other:3443", "other").marshal())
+	assert.False(t, peers.Connected())
+
+	peers.listen(context.Background(), newPeerCommand(Register, "http://somehostname:3443", "me").marshal())
+	assert.True(t, peers.Connected())
 }

@@ -11,7 +11,9 @@ Multiple Refinery hosts, so we can assert the primary usage of a Redis backend: 
 
 Refinery's subscriptions recovering after Redis restarts.
 
-`10-peers.bats` covers the first two; `20-redis-restart.bats` the last. Bats runs the files in sorted order, so the numeric prefixes set the order: peers first, against a freshly started stack, then the tests that disrupt it.
+Refinery staying alive and ready while Redis is up but not answering.
+
+`10-peers.bats` covers the first two; `20-redis-restart.bats` the third; `30-redis-unresponsive.bats` the last. Bats runs the files in sorted order, so the numeric prefixes set the order: peers first, against a freshly started stack, then the tests that disrupt it.
 
 ## How Do I Even?
 

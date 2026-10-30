@@ -109,6 +109,7 @@ type StressRelief struct {
 	reason             string
 	formula            string
 	stressed           bool
+	peersUnreachable   bool
 	stayOnUntil        time.Time
 	minDuration        time.Duration
 	topic              string // formatted topic name
@@ -135,9 +136,7 @@ func (s *StressRelief) Start() error {
 	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
 
 	// register with health
-	// Set health check timeout to 15 seconds (3x go-redis DialTimeout of 5s).
-	// This allows the stress relief system multiple retry attempts before
-	// the health check fails, preventing premature failure during transient issues.
+	// This trips only if the monitor loop stops running.
 	s.Health.Register(StressReliefHealthKey, 15*time.Second)
 
 	// register stress level metrics
@@ -187,6 +186,10 @@ func (s *StressRelief) Start() error {
 			tickCounter      = 0
 		)
 
+		// the hand off for calculated stress level to the publisher
+		levels := make(chan uint, 1)
+		go s.publishStressLevels(levels)
+
 		tick := s.Clock.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {
@@ -195,9 +198,14 @@ func (s *StressRelief) Start() error {
 				currentLevel := s.Recalc()
 
 				if lastLevel != currentLevel || tickCounter == maxTicksBetweenReports {
-					err := s.PubSub.Publish(context.Background(), s.topic, newStressReliefMessage(currentLevel, s.hostID).String())
-					if err != nil {
-						s.Logger.Error().Logf("failed to publish stress level: %s", err)
+					select {
+					case levels <- currentLevel: // queue for publish
+					default: // ope, can't because publisher is busy
+						select {
+						case <-levels: // throw away an old level waiting for publish
+						default: // but it's OK if publish cleared the channel in the meantime
+						}
+						levels <- currentLevel // queue updated level for publish
 					}
 
 					lastLevel = currentLevel
@@ -215,6 +223,24 @@ func (s *StressRelief) Start() error {
 		}
 	}(s)
 	return nil
+}
+
+// publishStressLevels publishes each level it receives to the cluster's PubSub system
+// while the stress relief system is running.
+func (s *StressRelief) publishStressLevels(levels <-chan uint) {
+	for {
+		select {
+		case level := <-levels:
+			ctx, cancel := context.WithTimeout(context.Background(), s.Config.GetPeerTimeout())
+			err := s.PubSub.Publish(ctx, s.topic, newStressReliefMessage(level, s.hostID).String())
+			cancel()
+			if err != nil {
+				s.Logger.Error().Logf("failed to publish stress level: %s", err)
+			}
+		case <-s.Done:
+			return
+		}
+	}
 }
 
 const stressReliefMessageSeparator = "|"
@@ -444,6 +470,22 @@ func (s *StressRelief) Recalc() uint {
 	s.overallStressLevel = overallStressLevel
 	s.RefineryMetrics.Gauge("stress_level", float64(s.overallStressLevel))
 
+	// A host that cannot reach Redis cannot keep its list of peers up to date
+	// and would shard as a cluster of one, so it counts as stressed.
+	unreachable := s.peersAreUnreachable()
+	if unreachable != s.peersUnreachable {
+		s.peersUnreachable = unreachable
+		if unreachable {
+			s.Logger.Warn().WithField("mode", s.mode).Logf("cannot reach Redis for peer membership; peers are out of date")
+		} else {
+			s.Logger.Warn().WithField("mode", s.mode).Logf("reached Redis for peer membership again")
+		}
+	}
+	if unreachable {
+		reason = "RedisUnreachable"
+		formula = ""
+	}
+
 	s.reason = reason
 	s.formula = formula
 
@@ -454,7 +496,7 @@ func (s *StressRelief) Recalc() uint {
 		s.stressed = true
 	case Monitor:
 		// If it's off, should we activate it?
-		if !s.stressed && s.overallStressLevel >= s.activateLevel {
+		if !s.stressed && (s.overallStressLevel >= s.activateLevel || unreachable) {
 			s.stressed = true
 			s.Logger.Warn().WithFields(map[string]interface{}{
 				"individual_stress_level": localLevel,
@@ -467,11 +509,11 @@ func (s *StressRelief) Recalc() uint {
 		// We want make sure that stress relief is below the deactivate level
 		// for a minimum time after the last time we said it should be, so
 		// whenever it's above that value we push the time out.
-		if s.stressed && s.overallStressLevel >= s.deactivateLevel {
+		if s.stressed && (s.overallStressLevel >= s.deactivateLevel || unreachable) {
 			s.stayOnUntil = s.Clock.Now().Add(s.minDuration)
 		}
 		// If it's on, should we deactivate it?
-		if s.stressed && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
+		if s.stressed && !unreachable && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
 			s.stressed = false
 			s.Logger.Warn().WithFields(map[string]interface{}{
 				"individual_stress_level": localLevel,
@@ -488,6 +530,11 @@ func (s *StressRelief) Recalc() uint {
 	}
 
 	return localLevel
+}
+
+func (s *StressRelief) peersAreUnreachable() bool {
+	reporter, ok := s.Peer.(peer.ConnectivityReporter)
+	return ok && !reporter.Connected()
 }
 
 // clusterStressLevel calculates the overall stress level for the cluster
