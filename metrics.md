@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2026-10-13 at 11:46:58 UTC.
+It was automatically generated on 2026-10-30 at 05:40:57 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -40,7 +40,8 @@ This table includes metrics with fully defined names.
 | collector_peer_queue | Histogram | Dimensionless | number of spans currently in the peer queue |
 | collector_cache_size | Gauge | Dimensionless | number of traces currently stored in the trace cache |
 | collect_cache_entries | Histogram | Dimensionless | Total number of traces currently stored in the cache from all workers |
-| memory_heap_allocation | Gauge | Bytes | current heap allocation |
+| memory_heap_allocation | Gauge | Bytes | current heap allocation; the live heap as of the last GC when a Go memory limit is set |
+| memory_live_heap | Gauge | Bytes | heap memory occupied by live objects as of the last GC |
 | memory_limit | Gauge | Bytes | configured maximum memory allocation for the collector (derived from MaxAlloc or AvailableMemory * MaxMemoryPercentage) |
 | span_received | Counter | Dimensionless | number of spans received by the collector |
 | span_processed | Counter | Dimensionless | number of spans processed by the collector |

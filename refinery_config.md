@@ -949,6 +949,9 @@ Fractional values with a suffix are supported.
 If `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
 A useful value for this setting will leave 1-2GB of pod memory for overages.
 For typical configurations this may be about 85%-90% of the pod's total memory.
+If `GOMEMLIMIT` is not set in the environment, Refinery sets the Go memory limit to 95% of this value and, unless `GOGC` is set, turns off percentage-based garbage collection.
+Garbage is then collected as the heap nears that limit, and the live heap, rather than all allocated memory, is what `MaxMemoryPercentage` is compared to.
+This is skipped if `MaxMemoryPercentage` is 95 or more, and it takes effect only at startup.
 
 - Eligible for live reload.
 - Type: `memorysize`

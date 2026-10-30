@@ -122,6 +122,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	if limit := collect.ConfigureGCPacing(c.GetCollectionConfig()); limit > 0 {
+		lgr.Info().WithField("gomemlimit_bytes", limit).Logf("GC paced by GOMEMLIMIT from AvailableMemory, GOGC off")
+	}
+
 	// when refinery receives a shutdown signal, we need to
 	// immediately let its peers know so they can stop sending
 	// data to it.
