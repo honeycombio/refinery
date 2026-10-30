@@ -774,9 +774,9 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 			}
 
-			// If the span was kept, we want to generate a probe that we'll forward
-			// to a peer IF this span would have been forwarded.
-			ev.Data.MetaRefineryProbe.Set(true)
+			// If the span was kept, it has already been queued for upstream. We
+			// want to generate a probe that we'll forward to a peer IF this
+			// span would have been forwarded.
 			isProbe = true
 		}
 	}
@@ -790,6 +790,14 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 			WithField("isprobe", isProbe).
 			Logf("Sending span from batch to peer")
 
+		if isProbe {
+			// ev is already queued for upstream, so mark and address a copy
+			// instead of ev itself. The copy shares the payload's underlying
+			// data, which nothing modifies from here on.
+			probe := *ev
+			probe.Data.MetaRefineryProbe.Set(true)
+			ev = &probe
+		}
 		ev.APIHost = targetShard.GetAddress()
 
 		// Unfortunately this doesn't tell us if the event was actually
