@@ -25,6 +25,12 @@ Now, if `Collection.AvailableMemory` is set (the recommended setup, and the one 
 * **Alerts on memory.** Dashboards or alerts on `memory_inuse` or container memory may need new thresholds. `memory_inuse` still reports all heap objects. The new `memory_live_heap` gauge reports the live heap directly.
 * **More collector CPU near the limit**, if the live heap approaches the limit.
 
+#### When not to use it
+
+Opt out if the container's memory limit is tight, if the node is shared with other memory-hungry processes, or if you cannot set `AvailableMemory` below the container's real limit with 1-2 GB to spare. Go will use up to 95% of `AvailableMemory` before it collects, and the limit does not cover memory Go does not track. Keep `MaxMemoryPercentage` comfortably below 95. Deployments that set `MaxAlloc` instead of `AvailableMemory` are unaffected.
+
+To confirm pacing is active, look for the startup log line `GC paced by GOMEMLIMIT from AvailableMemory, GOGC off`.
+
 #### Already setting `GOMEMLIMIT` or `GOGC`?
 
 * An explicit `GOMEMLIMIT` is respected and Refinery does not change it or `GOGC`. However, the memory check now uses the live heap whenever any memory limit is set, so it behaves differently from before even for you.
@@ -32,7 +38,7 @@ Now, if `Collection.AvailableMemory` is set (the recommended setup, and the one 
 
 #### Opting out
 
-Set `GOMEMLIMIT=off` in the environment. Refinery then changes nothing and compares all heap objects to the budget, as in earlier releases. Deployments that do not set `AvailableMemory` are unaffected.
+Set `GOMEMLIMIT=off` in the environment. Setting `GOGC=100` alone is not enough: Refinery would still set the limit and compare the live heap. With `GOMEMLIMIT=off`, Refinery changes nothing and compares all heap objects to the budget, as in earlier releases. Deployments that do not set `AvailableMemory` are unaffected.
 
 ## Version 3.4.4
 
