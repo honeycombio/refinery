@@ -2,6 +2,38 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Unreleased
+
+**This release changes how Refinery manages memory for most deployments. Read this section before upgrading.**
+
+### Behavior change: garbage collection is paced by a memory limit
+
+Previously Refinery ran the Go garbage collector at its default `GOGC=100` and compared all heap objects, including garbage not yet collected, to the memory budget. That reading followed the garbage collector's sawtooth, so it could not tell traces held in the cache from short-lived garbage, and it prevented any lazier collection.
+
+Now, if `Collection.AvailableMemory` is set (the recommended setup, and the one `MaxMemoryPercentage` requires):
+
+* Refinery sets the Go memory limit (`GOMEMLIMIT`) to 95% of `AvailableMemory`.
+* Unless `GOGC` is set in the environment, Refinery turns off percentage-based collection. The collector then runs as the heap nears the limit.
+* The memory check compares the **live heap** (as of the last collection) to `MaxAlloc` or `AvailableMemory * MaxMemoryPercentage`. If that reading is over budget, Refinery forces a collection to refresh it, at most once a second, before evicting traces.
+* This is decided at startup. Changing `AvailableMemory` with a live reload does not change the limit.
+* It is skipped if the memory budget is at or above 95% of `AvailableMemory`, because the collector would then run back to back.
+
+#### What to expect
+
+* **Higher process memory.** Garbage now stays resident until the heap nears the limit, so container memory (RSS) and `memory_inuse` will read higher and swing more than before. This is expected and is not a leak. Check that your container's memory limit leaves room for 95% of `AvailableMemory`; the existing advice to set `AvailableMemory` to 85-90% of the pod's memory still applies. If `AvailableMemory` is larger than the memory actually available, the process can now be killed for exceeding its container limit before the collector reacts.
+* **Less eviction and steadier stress relief.** The `memory_heap_allocation` gauge, which feeds stress relief, now holds the live heap, so garbage no longer triggers early trace decisions or stress.
+* **Alerts on memory.** Dashboards or alerts on `memory_inuse` or container memory may need new thresholds. `memory_inuse` still reports all heap objects. The new `memory_live_heap` gauge reports the live heap directly.
+* **More collector CPU near the limit**, if the live heap approaches the limit.
+
+#### Already setting `GOMEMLIMIT` or `GOGC`?
+
+* An explicit `GOMEMLIMIT` is respected and Refinery does not change it or `GOGC`. However, the memory check now uses the live heap whenever any memory limit is set, so it behaves differently from before even for you.
+* An explicit `GOGC` is kept, but Refinery still sets the memory limit from `AvailableMemory`.
+
+#### Opting out
+
+Set `GOMEMLIMIT=off` in the environment. Refinery then changes nothing and compares all heap objects to the budget, as in earlier releases. Deployments that do not set `AvailableMemory` are unaffected.
+
 ## Version 3.4.4
 
 This patch release contains one dependency update. There are no configuration changes.

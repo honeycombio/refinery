@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2026-10-30 at 05:40:08 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2026-10-30 at 21:44:15 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -1018,7 +1018,8 @@ Collection:
     ## is then collected as the heap nears that limit, and the live heap,
     ## rather than all allocated memory, is what `MaxMemoryPercentage` is
     ## compared to. This is skipped if `MaxMemoryPercentage` is 95 or more,
-    ## and it takes effect only at startup.
+    ## and it takes effect only at startup. To keep the previous behavior,
+    ## set `GOMEMLIMIT=off` in the environment.
     ##
     ## Eligible for live reload.
     {{ memorysize .Data "AvailableMemory" "AvailableMemory" "4.5Gb" }}

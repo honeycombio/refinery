@@ -952,6 +952,7 @@ For typical configurations this may be about 85%-90% of the pod's total memory.
 If `GOMEMLIMIT` is not set in the environment, Refinery sets the Go memory limit to 95% of this value and, unless `GOGC` is set, turns off percentage-based garbage collection.
 Garbage is then collected as the heap nears that limit, and the live heap, rather than all allocated memory, is what `MaxMemoryPercentage` is compared to.
 This is skipped if `MaxMemoryPercentage` is 95 or more, and it takes effect only at startup.
+To keep the previous behavior, set `GOMEMLIMIT=off` in the environment.
 
 - Eligible for live reload.
 - Type: `memorysize`

@@ -1,5 +1,15 @@
 # Refinery Changelog
 
+## Unreleased
+
+### ⚠️ Behavior change: garbage collection is now paced by a memory limit
+
+If `AvailableMemory` is set, Refinery now sets the Go memory limit to 95% of it and turns off percentage-based garbage collection (`GOGC`). Memory checks compare the live heap, not all allocated memory, to `MaxAlloc`. Process memory will sit higher between collections, and `memory_inuse` will rise and become sawtooth-shaped. Set `GOMEMLIMIT=off` to keep the previous behavior. See the [release notes](./RELEASE_NOTES.md) for details.
+
+### 💡 Enhancements
+
+- feat: pace GC by GOMEMLIMIT and evict on live heap in https://github.com/honeycombio/refinery/pull/1892
+
 ## 3.4.4 2026-10-23
 
 This is a patch release carrying a husky update that changes how a malformed OTLP attribute is handled.

@@ -1433,6 +1433,7 @@ groups:
           heap nears that limit, and the live heap, rather than all allocated
           memory, is what `MaxMemoryPercentage` is compared to. This is skipped
           if `MaxMemoryPercentage` is 95 or more, and it takes effect only at startup.
+          To keep the previous behavior, set `GOMEMLIMIT=off` in the environment.
 
       - name: MaxMemoryPercentage
         type: percentage
