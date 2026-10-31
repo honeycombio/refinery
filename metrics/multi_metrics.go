@@ -144,6 +144,12 @@ func (m *MultiMetrics) Histogram(name string, obs float64) {
 	}
 }
 
+func (m *MultiMetrics) HistogramBatch(name string, obs []float64) {
+	for _, ch := range m.children {
+		ch.HistogramBatch(name, obs)
+	}
+}
+
 func (m *MultiMetrics) Up(name string) {
 	for _, ch := range m.children {
 		ch.Up(name)

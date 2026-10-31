@@ -570,6 +570,8 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	apiHost := r.Config.GetHoneycombAPI()
 	userAgent := getUserAgentFromRequest(req)
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
+	em := eventMetricsPool.Get().(*eventMetrics)
+	defer r.flushEventMetrics(em)
 	for _, bev := range batchedEvents.events {
 		if !bev.Data.IsEmpty() {
 			ev := &types.Event{
@@ -584,7 +586,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			}
 
 			addIncomingUserAgent(ev, userAgent)
-			err = r.processEvent(ev, reqID)
+			err = r.processEventInto(ev, reqID, em)
 		} else {
 			err = fmt.Errorf("empty event data")
 		}
@@ -626,6 +628,8 @@ func (router *Router) processOTLPRequest(
 		return nil
 	}
 	totalEvents := 0
+	em := eventMetricsPool.Get().(*eventMetrics)
+	defer router.flushEventMetrics(em)
 	for _, batch := range batches {
 		totalEvents += len(batch.Events)
 		for _, ev := range batch.Events {
@@ -640,7 +644,7 @@ func (router *Router) processOTLPRequest(
 				Data:        types.NewPayload(router.Config, ev.Attributes),
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
-			if err := router.processEvent(event, requestID); err != nil {
+			if err := router.processEventInto(event, requestID, em); err != nil {
 				router.Logger.Error().Logf("Error processing event: %s", err.Error())
 			}
 		}
@@ -666,6 +670,8 @@ func (router *Router) processOTLPRequestBatchMsgp(
 		return nil
 	}
 	totalEvents := 0
+	em := eventMetricsPool.Get().(*eventMetrics)
+	defer router.flushEventMetrics(em)
 	for _, batch := range batches {
 		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
 			Config:  router.Config,
@@ -701,7 +707,7 @@ func (router *Router) processOTLPRequestBatchMsgp(
 				Data:        payload,
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
-			if err := router.processEvent(event, requestID); err != nil {
+			if err := router.processEventInto(event, requestID, em); err != nil {
 				router.Logger.Error().Logf("Error processing event: %s", err.Error())
 			}
 		}
@@ -710,7 +716,58 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	return nil
 }
 
+// eventMetrics accumulates the per-event metrics of one request so they are
+// recorded once per request instead of once per event.
+type eventMetrics struct {
+	eventBytes                      []float64
+	spans, nonspans, peers, dropped int64
+	logBytes, traceBytes            int64
+}
+
+const maxPooledEventBytes = 4096
+
+var eventMetricsPool = sync.Pool{
+	New: func() any { return new(eventMetrics) },
+}
+
+func (r *Router) flushEventMetrics(em *eventMetrics) {
+	if len(em.eventBytes) > 0 {
+		r.Metrics.HistogramBatch(r.metricsNames.routerEventBytes, em.eventBytes)
+	}
+	for _, c := range []struct {
+		name string
+		n    int64
+	}{
+		{r.metricsNames.routerSpan, em.spans},
+		{r.metricsNames.routerNonspan, em.nonspans},
+		{r.metricsNames.routerPeer, em.peers},
+		{r.metricsNames.routerDropped, em.dropped},
+		{"bytes_received_logs", em.logBytes},
+		{"bytes_received_traces", em.traceBytes},
+	} {
+		if c.n != 0 {
+			r.Metrics.Count(c.name, c.n)
+		}
+	}
+
+	eventBytes := em.eventBytes[:0]
+	if cap(eventBytes) > maxPooledEventBytes {
+		eventBytes = nil
+	}
+	*em = eventMetrics{eventBytes: eventBytes}
+	eventMetricsPool.Put(em)
+}
+
+// processEvent handles a single event and records its metrics immediately.
 func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
+	em := eventMetricsPool.Get().(*eventMetrics)
+	defer r.flushEventMetrics(em)
+	return r.processEventInto(ev, reqID, em)
+}
+
+// processEventInto handles an event and adds its metrics to em, which the
+// caller flushes with flushEventMetrics once its request is done.
+func (r *Router) processEventInto(ev *types.Event, reqID interface{}, em *eventMetrics) error {
 	debugLog := r.iopLogger.Debug().
 		WithField("request_id", reqID).
 		WithString("api_host", ev.APIHost).
@@ -719,7 +776,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	// record the event bytes size
 	// we do this early so can include all event types (span, event, log, etc)
-	r.Metrics.Histogram(r.metricsNames.routerEventBytes, float64(ev.GetDataSize()))
+	em.eventBytes = append(em.eventBytes, float64(ev.GetDataSize()))
 
 	// An error here is effectively a parsing error, so return it up the stack.
 	if err := ev.Data.ExtractMetadata(); err != nil {
@@ -733,7 +790,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	if ev.Data.MetaTraceID == "" {
 		// not part of a trace. send along upstream
-		r.Metrics.Increment(r.metricsNames.routerNonspan)
+		em.nonspans++
 		debugLog.WithString("api_host", ev.APIHost).
 			WithString("dataset", ev.Dataset).
 			Logf("sending non-trace event from batch")
@@ -752,13 +809,13 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
 	if r.routerType.IsIncoming() && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
 		if span.Data.MetaSignalType == "log" {
-			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
+			em.logBytes += int64(span.GetDataSize())
 		} else {
-			r.Metrics.Count("bytes_received_traces", int64(span.GetDataSize()))
+			em.traceBytes += int64(span.GetDataSize())
 		}
 	}
 
-	r.Metrics.Increment(r.metricsNames.routerSpan)
+	em.spans++
 
 	// we know we're a span, but we need to check if we're in Stress Relief mode;
 	// if we are, then we want to make an immediate, deterministic trace decision
@@ -784,7 +841,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// Figure out if we should handle this span locally or pass on to a peer
 	targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
 	if !targetShard.Equals(r.Sharder.MyShard()) {
-		r.Metrics.Increment(r.metricsNames.routerPeer)
+		em.peers++
 		debugLog.
 			WithString("peer", targetShard.GetAddress()).
 			WithField("isprobe", isProbe).
@@ -821,7 +878,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
-		r.Metrics.Increment(r.metricsNames.routerDropped)
+		em.dropped++
 		debugLog.Logf("Dropping span from batch, channel full")
 		return err
 	}

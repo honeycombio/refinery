@@ -275,6 +275,17 @@ func (o *OTelMetrics) Histogram(name string, val float64) {
 	h.Record(context.Background(), val)
 }
 
+func (o *OTelMetrics) HistogramBatch(name string, obs []float64) {
+	h, err := o.getOrInitHistogram(Metadata{Name: name})
+	if err != nil {
+		return
+	}
+	ctx := context.Background()
+	for _, val := range obs {
+		h.Record(ctx, val)
+	}
+}
+
 func (o *OTelMetrics) Up(name string) {
 	ud, err := o.getOrInitUpDown(Metadata{Name: name})
 	if err != nil {
