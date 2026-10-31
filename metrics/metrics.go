@@ -45,8 +45,10 @@ type MetricsBackend interface {
 	Gauge(name string, val float64)     // for gauges
 	Count(name string, n int64)         // for counters
 	Histogram(name string, obs float64) // for histogram
-	Up(name string)                     // for updown
-	Down(name string)                   // for updown
+	// HistogramBatch records every observation in obs with one metric lookup.
+	HistogramBatch(name string, obs []float64)
+	Up(name string)   // for updown
+	Down(name string) // for updown
 }
 
 func GetMetricsImplementation(c config.Config) *MultiMetrics {
