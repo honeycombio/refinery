@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math/rand"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgryski/go-wyhash"
@@ -103,12 +104,20 @@ type RedisPubsubPeers struct {
 	callbacks []func()
 	sub       pubsub.Subscription
 	topic     string // formatted topic name
+
+	// lastSelfSeen is when this host's own Register message last came back
+	// through the subscription, in Unix nanoseconds. Zero means it never has.
+	lastSelfSeen atomic.Int64
 }
 
 var _ RegistrationAgeReporter = (*RedisPubsubPeers)(nil)
 
 func (p *RedisPubsubPeers) RegistrationAge() (time.Duration, bool) {
-	return 0, false
+	last := p.lastSelfSeen.Load()
+	if last == 0 {
+		return 0, false
+	}
+	return p.Clock.Since(time.Unix(0, last)), true
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
@@ -132,6 +141,9 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 		return
 	}
 	p.Metrics.Count("peer_messages", 1)
+	if cmd.action == Register && cmd.id == p.InstanceID {
+		p.lastSelfSeen.Store(p.Clock.Now().UnixNano())
+	}
 	switch cmd.action {
 	case Unregister:
 		p.peers.Delete(cmd.id)
