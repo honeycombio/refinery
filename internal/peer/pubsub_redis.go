@@ -105,6 +105,12 @@ type RedisPubsubPeers struct {
 	topic     string // formatted topic name
 }
 
+var _ RegistrationAgeReporter = (*RedisPubsubPeers)(nil)
+
+func (p *RedisPubsubPeers) RegistrationAge() (time.Duration, bool) {
+	return 0, false
+}
+
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
 // in a separate goroutine if the hash has changed.
 func (p *RedisPubsubPeers) checkHash() {
