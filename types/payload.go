@@ -267,7 +267,7 @@ type Payload struct {
 
 // extractCriticalFieldsFromBytes extracts metadata and sampling key fields from msgpack data.
 // If consumed is non-nil, it will be set to the number of bytes consumed from the data.
-func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames, parentIdFieldNames, samplingKeyFields []string) (int, error) {
+func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames, parentIdFieldNames, samplingKeyFields []string, filter *fieldKeyFilter) (int, error) {
 	if !p.MetaRefineryRoot.HasValue {
 		p.MetaRefineryRoot.Set(true)
 	}
@@ -322,8 +322,11 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 			}
 		}
 
+		// Only keys that could be a configured name are worth scanning for.
+		candidate := !handled && filter.mayMatch(keyBytes)
+
 		// Handle special trace ID and parent ID fields
-		if !handled && valueType == msgp.StrType {
+		if candidate && valueType == msgp.StrType {
 			_, ok := sliceContains(traceIdFieldNames, keyBytes)
 			if p.MetaTraceID == "" && ok {
 				p.MetaTraceID, remaining, err = msgp.ReadStringBytes(remaining)
@@ -344,7 +347,7 @@ func (p *Payload) extractCriticalFieldsFromBytes(data []byte, traceIdFieldNames,
 
 		// If not handled as metadata, check if this is a key field
 		// only check for key fields if we haven't found a match yet
-		if !handled && keysFound < len(samplingKeyFields) {
+		if candidate && !handled && keysFound < len(samplingKeyFields) {
 			// Check if the key matches any of the key fields
 			var val any
 			if idx, ok := sliceContains(samplingKeyFields, keyBytes); ok {
@@ -451,7 +454,7 @@ func (p *Payload) ExtractMetadata() error {
 
 	// For msgpMap fields, extract from the raw bytes
 	if len(p.msgpData) > 0 {
-		_, err := p.extractCriticalFieldsFromBytes(p.msgpData, traceIdFieldNames, parentIdFieldNames, nil)
+		_, err := p.extractCriticalFieldsFromBytes(p.msgpData, traceIdFieldNames, parentIdFieldNames, nil, nil)
 		if err != nil {
 			return err
 		}
@@ -484,6 +487,7 @@ type CoreFieldsUnmarshaler struct {
 	traceIdFieldNames  []string
 	parentIdFieldNames []string
 	samplingKeyFields  []string
+	keyFilter          *fieldKeyFilter
 }
 
 type CoreFieldsUnmarshalerOptions struct {
@@ -497,10 +501,14 @@ func NewCoreFieldsUnmarshaler(opt CoreFieldsUnmarshalerOptions) CoreFieldsUnmars
 	samplerKey := opt.Config.DetermineSamplerKey(opt.APIKey, opt.Env, opt.Dataset)
 	keyFields, _ := config.GetKeyFields(opt.Config.GetSamplingKeyFieldsForDestName(samplerKey))
 
+	traceIdFieldNames := opt.Config.GetTraceIdFieldNames()
+	parentIdFieldNames := opt.Config.GetParentIdFieldNames()
+
 	return CoreFieldsUnmarshaler{
-		traceIdFieldNames:  opt.Config.GetTraceIdFieldNames(),
-		parentIdFieldNames: opt.Config.GetParentIdFieldNames(),
+		traceIdFieldNames:  traceIdFieldNames,
+		parentIdFieldNames: parentIdFieldNames,
 		samplingKeyFields:  keyFields, // AllFields includes both root and non-root fields
+		keyFilter:          newFieldKeyFilter(traceIdFieldNames, parentIdFieldNames, keyFields),
 	}
 }
 
@@ -525,7 +533,7 @@ func (cu CoreFieldsUnmarshaler) UnmarshalMsgpEvent(bts []byte, payload *Payload)
 // unmarshalMsgpEvent is the common implementation for unmarshaling a complete payload.
 func (cu CoreFieldsUnmarshaler) unmarshalMsgpEvent(bts []byte, payload *Payload, samplingKeyFields []string) error {
 	_, err := payload.extractCriticalFieldsFromBytes(bts,
-		cu.traceIdFieldNames, cu.parentIdFieldNames, samplingKeyFields)
+		cu.traceIdFieldNames, cu.parentIdFieldNames, samplingKeyFields, cu.keyFilter)
 	if err != nil {
 		return err
 	}
@@ -540,7 +548,7 @@ func (cu CoreFieldsUnmarshaler) unmarshalMsgpEvent(bts []byte, payload *Payload,
 // unnecessary allocations.
 func (cu CoreFieldsUnmarshaler) UnmarshalMsgpFirstEvent(bts []byte, payload *Payload) ([]byte, error) {
 	consumed, err := payload.extractCriticalFieldsFromBytes(bts,
-		cu.traceIdFieldNames, cu.parentIdFieldNames, cu.samplingKeyFields)
+		cu.traceIdFieldNames, cu.parentIdFieldNames, cu.samplingKeyFields, cu.keyFilter)
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +572,7 @@ func (p *Payload) UnmarshalMsg(bts []byte) (o []byte, err error) {
 	// Extract metadata and get consumed bytes
 	traceIdFieldNames := p.config.GetTraceIdFieldNames()
 	parentIdFieldNames := p.config.GetParentIdFieldNames()
-	consumed, err := p.extractCriticalFieldsFromBytes(bts, traceIdFieldNames, parentIdFieldNames, nil)
+	consumed, err := p.extractCriticalFieldsFromBytes(bts, traceIdFieldNames, parentIdFieldNames, nil, nil)
 	if err != nil {
 		return nil, err
 	}
