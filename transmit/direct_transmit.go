@@ -537,7 +537,7 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 		dequeuedAt := d.Clock.Now()
 
 		if err != nil {
-			d.handleBatchFailure(subBatch, err.Error(), "")
+			d.handleBatchFailure(subBatch, err.Error(), "failed to send batch")
 			continue
 		}
 

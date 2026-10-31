@@ -179,6 +179,76 @@ groups:
           FORWARD_TO_URL. Both keys and values must be strings. Reserved
           Honeycomb header prefixes ("x-honeycomb-" and "x-hny-") cannot be set.
 
+      - name: UpstreamTLSCertFile
+        type: string
+        valuetype: nonemptystring
+        example: "/etc/refinery/tls/client.crt"
+        reload: false
+        firstversion: v3.5.0
+        validations:
+          - type: requiredWith
+            arg: UpstreamTLSKeyFile
+        summary: is the path to a PEM-encoded client certificate that Refinery presents to the upstream Honeycomb API for mutual TLS.
+        description: >
+          When set together with `UpstreamTLSKeyFile`, Refinery presents this
+          client certificate on HTTPS connections to `HoneycombAPI`, which
+          carry the trace data Refinery forwards and API key lookups
+          (`/1/auth`), and on logs sent by the `honeycomb` logger. This is
+          useful when Refinery sends through a proxy that requires mutual
+          TLS. Refinery's OTel metrics and traces, peer-to-peer traffic, and
+          fetching configuration over HTTP(S) do not use this certificate.
+
+          Refinery checks the certificate and key files for changes on each
+          new TLS connection and reloads them without a restart, so
+          short-lived certificates can be rotated in place. If the new files
+          cannot be loaded, Refinery logs a warning and keeps using the last
+          valid certificate. Changing the configured path requires a restart.
+
+      - name: UpstreamTLSKeyFile
+        type: string
+        valuetype: nonemptystring
+        example: "/etc/refinery/tls/client.key"
+        reload: false
+        firstversion: v3.5.0
+        validations:
+          - type: requiredWith
+            arg: UpstreamTLSCertFile
+        summary: is the path to the PEM-encoded private key for `UpstreamTLSCertFile`.
+        description: >
+          Must be set together with `UpstreamTLSCertFile`. The key file is
+          reloaded along with the certificate when either file changes.
+          Changing the configured path requires a restart.
+
+      - name: UpstreamTLSCAFile
+        type: string
+        valuetype: nonemptystring
+        example: "/etc/refinery/tls/ca.crt"
+        reload: false
+        firstversion: v3.5.0
+        summary: is the path to a PEM-encoded CA bundle used to verify the upstream Honeycomb API server certificate.
+        description: >
+          When set, Refinery trusts only the certificates in this bundle when
+          connecting to `HoneycombAPI` and sending `honeycomb` logger output,
+          instead of the system's
+          trusted root certificates. Use this when the upstream endpoint, such
+          as an mTLS proxy, presents a certificate from a private CA. This
+          setting can be used with or without a client certificate. Changes to
+          the file contents or path require a restart.
+
+      - name: UpstreamTLSInsecure
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: false
+        firstversion: v3.5.0
+        summary: disables verification of the upstream Honeycomb API server certificate.
+        description: >
+          If `true`, Refinery does not verify the certificate presented by the
+          upstream Honeycomb API, which makes connections vulnerable to
+          interception. This is intended only for testing and is not
+          recommended for production; use `UpstreamTLSCAFile` to trust a
+          private CA instead.
+
   - name: OpAMP
     title: "OpAMP Configuration"
     description: >

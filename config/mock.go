@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/honeycombio/refinery/internal/tlsconfig"
 )
 
 // MockConfig will respond with whatever config it's set to do during
@@ -58,6 +60,7 @@ type MockConfig struct {
 	StressRelief                       StressReliefConfig
 	AdditionalAttributes               map[string]string
 	AdditionalHeaders                  map[string]string
+	UpstreamTLS                        tlsconfig.Options
 	TraceIdFieldNames                  []string
 	ParentIdFieldNames                 []string
 	CfgMetadata                        []ConfigMetadata
@@ -477,6 +480,13 @@ func (f *MockConfig) GetAdditionalHeaders() map[string]string {
 		return make(map[string]string)
 	}
 	return f.AdditionalHeaders
+}
+
+func (f *MockConfig) GetUpstreamTLSConfig() tlsconfig.Options {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.UpstreamTLS
 }
 
 func (f *MockConfig) GetOpAMPConfig() OpAMPConfig {
