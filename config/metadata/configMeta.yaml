@@ -1428,7 +1428,7 @@ groups:
           A useful value for this setting will leave 1-2GB of pod memory for overages.
           For typical configurations this may be about 85%-90% of the pod's total memory.
 
-          **Garbage collection pacing (new behavior).** When this
+          **Garbage collection pacing (new behavior in v3.5).** When this
           is set, Refinery sets the Go memory limit (`GOMEMLIMIT`) to 95% of this
           value and, unless `GOGC` is set in the environment, turns off
           percentage-based garbage collection. Garbage is then collected as the

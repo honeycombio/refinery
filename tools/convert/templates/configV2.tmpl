@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created {{ now }} from {{ .Input }} using a template generated on 2026-10-30 at 21:47:01 UTC
+# created {{ now }} from {{ .Input }} using a template generated on 2026-11-01 at 21:41:11 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -1013,9 +1013,9 @@ Collection:
     ## A useful value for this setting will leave 1-2GB of pod memory for
     ## overages. For typical configurations this may be about 85%-90% of the
     ## pod's total memory.
-    ## **Garbage collection pacing (new behavior).** When this is set,
-    ## Refinery sets the Go memory limit (`GOMEMLIMIT`) to 95% of this value
-    ## and, unless `GOGC` is set in the environment, turns off
+    ## **Garbage collection pacing (new behavior in v3.5).** When this is
+    ## set, Refinery sets the Go memory limit (`GOMEMLIMIT`) to 95% of this
+    ## value and, unless `GOGC` is set in the environment, turns off
     ## percentage-based garbage collection. Garbage is then collected as the
     ## heap nears the limit, and the live heap, rather than all allocated
     ## memory, is what `MaxMemoryPercentage` is compared to. This stops
