@@ -959,6 +959,9 @@ func makeDecoders(concurrency int) (*zstd.Decoder, error) {
 		// By default this will be set to 4 or GOMAXPROCS, whatever is lower.
 		zstd.WithDecoderConcurrency(concurrency),
 		zstd.WithDecoderLowmem(true),
+		// This bounds both the window and the output of DecodeAll. The gzip and
+		// uncompressed body readers already stop at HTTPMessageSizeMax, so
+		// anything larger than this could not be decoded by those paths either.
 		zstd.WithDecoderMaxMemory(8*1024*1024),
 	)
 	if err != nil {
