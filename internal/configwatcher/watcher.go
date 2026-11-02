@@ -62,7 +62,11 @@ func (cw *ConfigWatcher) ReloadCallback(cfgHash, rulesHash string) {
 
 	message := now.Format(time.RFC3339)
 	otelutil.AddSpanFields(span, map[string]any{"sending": true, "message": message})
-	cw.PubSub.Publish(ctx, cw.topic, message)
+	ctx, cancel := context.WithTimeout(ctx, cw.Config.GetPeerTimeout())
+	defer cancel()
+	if err := cw.PubSub.Publish(ctx, cw.topic, message); err != nil {
+		cw.Logger.Warn().Logf("unable to publish new config reload message: %s; other hosts will pick up change on their next timed check", err)
+	}
 }
 
 // SubscriptionListener listens for messages on the config pubsub topic and reloads the config
