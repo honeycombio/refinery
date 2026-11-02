@@ -159,6 +159,8 @@ func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) err
 
 // Subscribe creates a new Subscription to the given topic, and calls the provided callback
 // whenever a message is received on that topic.
+// Subscribe returns before the connection to Redis exists, so messages published
+// right after it returns can be missed (see PubSub.Subscribe).
 // Note that the same topic is Subscribed to multiple times, this will incur a separate
 // connection to Redis for each Subscription.
 func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback SubscriptionCallback) Subscription {
@@ -167,7 +169,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 
 	sub := &GoRedisSubscription{
 		topic:  topic,
-		pubsub: ps.client.Subscribe(ctx, topic),
+		pubsub: ps.client.Subscribe(ctx), // build PubSub object, omit topic to avoid dialing redis
 		cb:     callback,
 		done:   make(chan struct{}),
 	}
@@ -176,6 +178,8 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 	ps.mut.Unlock()
 	go func() {
 		receiveRootCtx := context.Background()
+		// subscribe here, off the caller's goroutine; go-redis keeps the topic and resubscribes it after a failed dial
+		_ = sub.pubsub.Subscribe(receiveRootCtx, topic)
 		redisch := sub.pubsub.Channel()
 		for {
 			select {
