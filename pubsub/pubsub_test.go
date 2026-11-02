@@ -3,8 +3,11 @@ package pubsub_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -279,4 +282,116 @@ func BenchmarkPubSub(b *testing.B) {
 			require.Len(b, li.Messages(), b.N)
 		})
 	}
+}
+
+// hungRedis stands in for a Redis that stops answering. While hung it accepts
+// connections and says nothing, so a client waits until it gives up. Once it
+// is told to forward, it connects clients to the Redis at target.
+type hungRedis struct {
+	ln      net.Listener
+	target  string
+	forward atomic.Bool
+	mut     sync.Mutex
+	conns   []net.Conn
+}
+
+func newHungRedis(t *testing.T, target string) *hungRedis {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	h := &hungRedis{ln: ln, target: target}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			h.mut.Lock()
+			h.conns = append(h.conns, c)
+			h.mut.Unlock()
+			if h.forward.Load() {
+				go h.pipe(c)
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		ln.Close()
+		h.mut.Lock()
+		defer h.mut.Unlock()
+		for _, c := range h.conns {
+			c.Close()
+		}
+	})
+	return h
+}
+
+func (h *hungRedis) addr() string { return h.ln.Addr().String() }
+
+func (h *hungRedis) accepted() int {
+	h.mut.Lock()
+	defer h.mut.Unlock()
+	return len(h.conns)
+}
+
+func (h *hungRedis) pipe(client net.Conn) {
+	upstream, err := net.Dial("tcp", h.target)
+	if err != nil {
+		client.Close()
+		return
+	}
+	h.mut.Lock()
+	h.conns = append(h.conns, upstream)
+	h.mut.Unlock()
+	go io.Copy(upstream, client)
+	io.Copy(client, upstream)
+}
+
+// TestGoRedisPubSubSubscribeDoesNotWaitForRedis tests that Subscribe returns
+// while Redis does not answer, and that the subscription delivers messages
+// once Redis does. A host must be able to start while Redis is down.
+func TestGoRedisPubSubSubscribeDoesNotWaitForRedis(t *testing.T) {
+	redis := newHungRedis(t, "localhost:6379")
+
+	m := &metrics.NullMetrics{}
+	m.Start()
+	ps := &pubsub.GoRedisPubSub{
+		Config: &config.MockConfig{
+			GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
+				Host:        redis.addr(),
+				ClusterName: "hung-test",
+			},
+		},
+		Metrics: m,
+		Tracer:  noop.NewTracerProvider().Tracer("test"),
+		Logger:  &logger.NullLogger{},
+	}
+	require.NoError(t, ps.Start())
+	t.Cleanup(ps.Close)
+
+	// go-redis waits 5 seconds for a connection that never answers. Subscribe
+	// must not wait for it.
+	listener := &pubsubListener{}
+	topic := ps.FormatTopic("topic")
+	returned := make(chan struct{})
+	go func() {
+		ps.Subscribe(context.Background(), topic, listener.Listen)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("Subscribe waited for a Redis that does not answer")
+	}
+
+	// Keep Redis silent until go-redis has given up on its first attempt, so
+	// the subscription has to recover from a failed SUBSCRIBE.
+	require.Eventually(t, func() bool { return redis.accepted() > 0 },
+		time.Second, 10*time.Millisecond, "go-redis never tried to connect")
+	time.Sleep(6 * time.Second)
+
+	// Redis answers again. The subscription must receive what is published.
+	redis.forward.Store(true)
+	require.Eventually(t, func() bool {
+		_ = ps.Publish(context.Background(), topic, "hello")
+		return len(listener.Messages()) > 0
+	}, 20*time.Second, 200*time.Millisecond, "the subscription never recovered")
 }
