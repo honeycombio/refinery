@@ -2,6 +2,8 @@ package peer
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
@@ -197,4 +199,44 @@ func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 		assert.True(t, healthRecorder.IsAlive(), "a publish that hangs must not fail liveness")
 		assert.True(t, healthRecorder.IsReady(), "a host that has been ready stays ready when Redis stops answering")
 	})
+}
+
+// TestRedisPubsubPeers_ConcurrentRegistrations tests that registrations can
+// arrive on several goroutines at once, as they do from a pubsub that runs
+// each callback on its own goroutine. Run it with the race detector.
+func TestRedisPubsubPeers_ConcurrentRegistrations(t *testing.T) {
+	ps := &pubsub.LocalPubSub{Config: &config.MockConfig{}}
+	require.NoError(t, ps.Start())
+	defer ps.Stop()
+
+	peers := &RedisPubsubPeers{
+		Config: &config.MockConfig{
+			GetPeerListenAddrVal: "127.0.0.1:3443",
+			RedisIdentifier:      "somehostname",
+		},
+		PubSub:     ps,
+		Clock:      clockwork.NewFakeClock(),
+		InstanceID: "me",
+		Done:       make(chan struct{}),
+	}
+	require.NoError(t, peers.Start())
+
+	// A registered callback makes the list-change path run for every change.
+	peers.RegisterUpdatedPeersCallback(func() {})
+
+	const registrations = 20
+	var wg sync.WaitGroup
+	for i := range registrations {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			id := fmt.Sprintf("host-%d", i)
+			peers.listen(context.Background(), newPeerCommand(Register, "http://"+id+":3443", id).marshal())
+		}()
+	}
+	wg.Wait()
+
+	got, err := peers.GetPeers()
+	require.NoError(t, err)
+	assert.Len(t, got, registrations+1, "every registration is in the list, plus this host")
 }
