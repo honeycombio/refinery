@@ -31,6 +31,19 @@ const (
 	// timeout phase in order to allow multiple timeouts to fail and yet still
 	// keep the host in the mix.
 	refreshCacheInterval = 3 * time.Second
+
+	// peerManagementHealthKey is the health key that peer management reports
+	// under. It is ready once this host has seen its own registration.
+	peerManagementHealthKey = "peer_management"
+
+	// peerManagementHealthCheckInInterval is how often peer management reports
+	// that key. The report does not depend on Redis, so a hung publish cannot
+	// delay it.
+	peerManagementHealthCheckInInterval = time.Second
+
+	// peerManagementHealthCheckInTimeout is how long the key can go without a
+	// report before the host counts as not alive.
+	peerManagementHealthCheckInTimeout = 15 * time.Second
 )
 
 type peerAction string
@@ -203,6 +216,8 @@ func (p *RedisPubsubPeers) Start() error {
 		return err
 	}
 	p.peers.Set(p.InstanceID, myaddr)
+
+	p.Health.Register(peerManagementHealthKey, peerManagementHealthCheckInTimeout)
 	return nil
 }
 
@@ -211,6 +226,24 @@ func (p *RedisPubsubPeers) Ready() error {
 	if err != nil {
 		return err
 	}
+
+	// Report readiness from a goroutine of its own, so that a publish that
+	// hangs below cannot stop the reports and fail the liveness check.
+	go func() {
+		ticker := p.Clock.NewTicker(peerManagementHealthCheckInInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.Chan():
+				_, seen := p.RegistrationAge()
+				p.Health.Ready(peerManagementHealthKey, seen)
+			case <-p.Done:
+				p.Health.Unregister(peerManagementHealthKey)
+				return
+			}
+		}
+	}()
+
 	// periodically refresh our presence in the list of peers, and update peers as they come in
 	go func() {
 		// we want our refresh cache interval to vary from peer to peer so they

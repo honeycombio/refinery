@@ -79,6 +79,10 @@ func TestRedisPubsubPeers_RegistrationAge(t *testing.T) {
 	require.NoError(t, ps.Start())
 	defer ps.Stop()
 
+	healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
+	require.NoError(t, healthRecorder.Start())
+	defer healthRecorder.Stop()
+
 	peers := &RedisPubsubPeers{
 		Config: &config.MockConfig{
 			GetPeerListenAddrVal: "127.0.0.1:3443",
@@ -86,6 +90,7 @@ func TestRedisPubsubPeers_RegistrationAge(t *testing.T) {
 		},
 		PubSub:     ps,
 		Clock:      clock,
+		Health:     healthRecorder,
 		InstanceID: "me",
 		Done:       make(chan struct{}),
 	}
@@ -209,13 +214,19 @@ func TestRedisPubsubPeers_ConcurrentRegistrations(t *testing.T) {
 	require.NoError(t, ps.Start())
 	defer ps.Stop()
 
+	clock := clockwork.NewFakeClock()
+	healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
+	require.NoError(t, healthRecorder.Start())
+	defer healthRecorder.Stop()
+
 	peers := &RedisPubsubPeers{
 		Config: &config.MockConfig{
 			GetPeerListenAddrVal: "127.0.0.1:3443",
 			RedisIdentifier:      "somehostname",
 		},
 		PubSub:     ps,
-		Clock:      clockwork.NewFakeClock(),
+		Clock:      clock,
+		Health:     healthRecorder,
 		InstanceID: "me",
 		Done:       make(chan struct{}),
 	}
