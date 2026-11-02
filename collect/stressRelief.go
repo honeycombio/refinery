@@ -29,6 +29,12 @@ const (
 	NUMERATOR_INCOMING_QUEUE     = "collector_incoming_queue_length"
 	NUMERATOR_MEMORY_HEAP_ALLOC  = "memory_heap_allocation"
 	stressReliefTopic            = "refinery-stress-relief"
+
+	// peerRegistrationMaxAge is how long a host can go without seeing its own
+	// peer registration come back through Redis before stress relief treats
+	// the host as unable to keep its peer list up to date. It is longer than
+	// the time a managed Redis typically takes to fail over.
+	peerRegistrationMaxAge = 30 * time.Second
 )
 
 // All of the numerator metrics are gauges. The denominator metrics are constants.

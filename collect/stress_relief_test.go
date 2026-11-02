@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -277,6 +279,129 @@ func TestStressRelief_StaysAliveWhenPublishStalls(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	assert.True(t, healthReporter.IsAlive(), "a stalled publish should not fail liveness")
+}
+
+// registrationAgePeers is a peer.Peers whose registration age the test sets.
+type registrationAgePeers struct {
+	peer.MockPeers
+	age  atomic.Int64 // nanoseconds
+	seen atomic.Bool
+}
+
+func (p *registrationAgePeers) RegistrationAge() (time.Duration, bool) {
+	return time.Duration(p.age.Load()), p.seen.Load()
+}
+
+// TestStressRelief_StalePeerRegistration tests what stress relief does when
+// the host has not seen its own peer registration for too long: it activates
+// in monitor and always modes, labels its sampling decisions with the reason,
+// logs when the state changes, and leaves never mode alone.
+func TestStressRelief_StalePeerRegistration(t *testing.T) {
+	for _, tc := range []struct {
+		mode       string
+		wantStress bool
+		wantReason string
+	}{
+		{mode: "monitor", wantStress: true, wantReason: "stress_relief/deterministic/RedisUnreachable"},
+		{mode: "always", wantStress: true, wantReason: "stress_relief/deterministic/RedisUnreachable"},
+		{mode: "never", wantStress: false},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			clock := clockwork.NewFakeClock()
+			sr, stop := newStressRelief(t, clock, nil)
+			defer stop()
+			logs := &logger.MockLogger{}
+			sr.Logger = logs
+			peers := &registrationAgePeers{}
+			sr.Peer = peers
+			// Call Recalc from the test only, not also from the monitor loop.
+			sr.disableStressLevelReport = true
+			sr.Config = &config.MockConfig{
+				StressRelief: config.StressReliefConfig{
+					Mode:                      tc.mode,
+					ActivationLevel:           80,
+					DeactivationLevel:         50,
+					SamplingRate:              2,
+					MinimumActivationDuration: config.Duration(5 * time.Second),
+				},
+			}
+			sr.UpdateFromConfig()
+			require.NoError(t, sr.Start())
+
+			// A fresh registration is not stress.
+			peers.seen.Store(true)
+			peers.age.Store(int64(time.Second))
+			sr.Recalc()
+			assert.Equal(t, tc.mode == "always", sr.Stressed())
+
+			// A registration older than the limit is.
+			peers.age.Store(int64(peerRegistrationMaxAge + time.Second))
+			sr.Recalc()
+			assert.Equal(t, tc.wantStress, sr.Stressed())
+			if tc.wantStress {
+				_, _, reason := sr.GetSampleRate("a-trace")
+				assert.Equal(t, tc.wantReason, reason)
+			}
+			assert.True(t, hasWarning(logs, "peer registration is stale"), "every mode logs the state change")
+
+			// The same state is not logged again on every tick.
+			before := len(warnings(logs))
+			sr.Recalc()
+			assert.Len(t, warnings(logs), before)
+
+			// A fresh registration ends it, after the minimum activation time.
+			peers.age.Store(0)
+			clock.Advance(6 * time.Second)
+			sr.Recalc()
+			assert.Equal(t, tc.mode == "always", sr.Stressed())
+			assert.True(t, hasWarning(logs, "peer registration is fresh again"))
+		})
+	}
+}
+
+// TestStressRelief_NoRegistrationIsNotStale tests that a host that has not
+// yet seen its own registration, and peers that cannot report one, are never
+// treated as stale: such a host has no peer list to lose.
+func TestStressRelief_NoRegistrationIsNotStale(t *testing.T) {
+	for name, peers := range map[string]peer.Peers{
+		"not seen yet":   &registrationAgePeers{},
+		"no age to give": &peer.MockPeers{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			sr, stop := newStressRelief(t, clockwork.NewFakeClock(), nil)
+			defer stop()
+			sr.Peer = peers
+			sr.disableStressLevelReport = true
+			sr.Config = &config.MockConfig{
+				StressRelief: config.StressReliefConfig{Mode: "monitor", ActivationLevel: 80, DeactivationLevel: 50, SamplingRate: 2},
+			}
+			sr.UpdateFromConfig()
+			require.NoError(t, sr.Start())
+			sr.Recalc()
+			assert.False(t, sr.Stressed())
+		})
+	}
+}
+
+// hasWarning reports whether any warning message starts with prefix.
+func hasWarning(l *logger.MockLogger, prefix string) bool {
+	for _, w := range warnings(l) {
+		if strings.HasPrefix(w, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// warnings returns the warning messages that the logger has seen.
+func warnings(l *logger.MockLogger) []string {
+	var out []string
+	for _, e := range l.Events {
+		if w, ok := e.Fields["warn"].(string); ok {
+			out = append(out, w)
+		}
+	}
+	return out
 }
 
 func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub) (*StressRelief, func()) {
