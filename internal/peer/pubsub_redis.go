@@ -11,6 +11,7 @@ import (
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -90,6 +91,7 @@ type RedisPubsubPeers struct {
 	Logger     logger.Logger   `inject:""`
 	PubSub     pubsub.PubSub   `inject:""`
 	Clock      clockwork.Clock `inject:""`
+	Health     health.Recorder `inject:""`
 	InstanceID string          `inject:"instanceID"`
 
 	// Done is a channel that will be closed when the service should stop.
