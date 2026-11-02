@@ -23,6 +23,8 @@ type PubSub interface {
 	Publish(ctx context.Context, topic, message string) error
 	// Subscribe returns a Subscription to the specified topic.
 	// The callback will be called for each message published to the topic.
+	// Calls for different messages can run at the same time, so a callback
+	// must protect any state that it shares.
 	// There is no unsubscribe method; close the subscription to stop receiving messages.
 	// The subscription only exists to provide a way to stop receiving messages; if you don't need to stop,
 	// you can ignore the return value.
