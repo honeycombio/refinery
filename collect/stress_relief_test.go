@@ -359,6 +359,59 @@ func TestStressRelief_StalePeerRegistration(t *testing.T) {
 	}
 }
 
+// TestStressRelief_StaysOnAfterPeersAreFresh tests that in monitor mode stress
+// relief stays on for MinimumActivationDuration after the last tick that found
+// the peers stale. The peers can be stale for only the tick that activates it,
+// or for a long time. Either way, the peer list may still be filling again when
+// the registration is fresh, so it must not turn off at once.
+func TestStressRelief_StaysOnAfterPeersAreFresh(t *testing.T) {
+	for name, staleFor := range map[string]time.Duration{
+		"stale for one tick": 0,
+		"stale for a while":  10 * time.Second,
+	} {
+		t.Run(name, func(t *testing.T) {
+			clock := clockwork.NewFakeClock()
+			sr, stop := newStressRelief(t, clock, nil)
+			defer stop()
+			peers := &registrationAgePeers{}
+			sr.Peer = peers
+			sr.disableStressLevelReport = true
+			sr.Config = &config.MockConfig{
+				StressRelief: config.StressReliefConfig{
+					Mode:                      "monitor",
+					ActivationLevel:           80,
+					DeactivationLevel:         50,
+					SamplingRate:              2,
+					MinimumActivationDuration: config.Duration(5 * time.Second),
+				},
+			}
+			sr.UpdateFromConfig()
+			require.NoError(t, sr.Start())
+
+			peers.seen.Store(true)
+			peers.age.Store(int64(peerRegistrationMaxAge + time.Second))
+			sr.Recalc()
+			require.True(t, sr.Stressed())
+			if staleFor > 0 {
+				clock.Advance(staleFor)
+				sr.Recalc()
+				require.True(t, sr.Stressed())
+			}
+
+			// The last tick that found the peers stale was just now.
+			peers.age.Store(0)
+			sr.Recalc()
+			assert.True(t, sr.Stressed(), "fresh peers do not end stress relief at once")
+			clock.Advance(4 * time.Second)
+			sr.Recalc()
+			assert.True(t, sr.Stressed(), "still within the minimum activation time")
+			clock.Advance(2 * time.Second)
+			sr.Recalc()
+			assert.False(t, sr.Stressed(), "the minimum activation time has passed")
+		})
+	}
+}
+
 // TestStressRelief_NoRegistrationIsNotStale tests that a host that has not
 // yet seen its own registration, and peers that cannot report one, are never
 // treated as stale: such a host has no peer list to lose.
