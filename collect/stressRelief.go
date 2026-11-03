@@ -130,9 +130,9 @@ type StressRelief struct {
 	minDuration        time.Duration
 	topic              string // formatted topic name
 
-	// peerRegistrationStale is whether the last Recalc found the peer
-	// registration too old. It lets Recalc log only when that changes.
-	peerRegistrationStale bool
+	// peersWereStale is whether the last Recalc found the peers stale. It lets
+	// Recalc log only when that changes.
+	peersWereStale bool
 
 	algorithms map[string]func(string, string) float64
 
@@ -494,16 +494,16 @@ func (s *StressRelief) Recalc() uint {
 	// can no longer keep its list of peers up to date. In monitor and always
 	// modes that counts as stress, so every host samples deterministically
 	// whatever peer list it holds. In never mode it is only logged.
-	stale := s.peerRegistrationIsStale()
-	if stale != s.peerRegistrationStale {
-		s.peerRegistrationStale = stale
-		if stale {
-			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peer registration is stale; this host has not seen its own registration come back through Redis")
+	peersAreStale := s.isPeerRegistrationStale()
+	if peersAreStale != s.peersWereStale {
+		s.peersWereStale = peersAreStale
+		if peersAreStale {
+			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peers are stale; this host has not seen its own registration come back through Redis")
 		} else {
-			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peer registration is fresh again; this host saw its own registration come back through Redis")
+			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peers are fresh again; this host saw its own registration come back through Redis")
 		}
 	}
-	if stale {
+	if peersAreStale {
 		reason = "RedisUnreachable"
 		formula = ""
 	}
@@ -518,7 +518,7 @@ func (s *StressRelief) Recalc() uint {
 		s.stressed = true
 	case Monitor:
 		// If it's off, should we activate it?
-		if !s.stressed && (s.overallStressLevel >= s.activateLevel || stale) {
+		if !s.stressed && (s.overallStressLevel >= s.activateLevel || peersAreStale) {
 			s.stressed = true
 			s.Logger.Warn().WithFields(map[string]interface{}{
 				"individual_stress_level": localLevel,
@@ -531,11 +531,11 @@ func (s *StressRelief) Recalc() uint {
 		// We want make sure that stress relief is below the deactivate level
 		// for a minimum time after the last time we said it should be, so
 		// whenever it's above that value we push the time out.
-		if s.stressed && (s.overallStressLevel >= s.deactivateLevel || stale) {
+		if s.stressed && (s.overallStressLevel >= s.deactivateLevel || peersAreStale) {
 			s.stayOnUntil = s.Clock.Now().Add(s.minDuration)
 		}
 		// If it's on, should we deactivate it?
-		if s.stressed && !stale && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
+		if s.stressed && !peersAreStale && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
 			s.stressed = false
 			s.Logger.Warn().WithFields(map[string]interface{}{
 				"individual_stress_level": localLevel,
@@ -554,18 +554,17 @@ func (s *StressRelief) Recalc() uint {
 	return localLevel
 }
 
-// peerRegistrationIsStale reports whether the host has gone longer than
+// isPeerRegistrationStale reports whether the host has gone longer than
 // peerRegistrationMaxAge without seeing its own peer registration come back
 // through Redis. A host that has not seen one yet is not stale, and neither
 // are peers that cannot report an age, such as file peers: they have no peer
 // list to lose.
-func (s *StressRelief) peerRegistrationIsStale() bool {
-	reporter, ok := s.Peer.(peer.RegistrationAgeReporter)
-	if !ok {
-		return false
+func (s *StressRelief) isPeerRegistrationStale() bool {
+	if reporter, ok := s.Peer.(peer.RegistrationAgeReporter); ok {
+		age, seen := reporter.RegistrationAge()
+		return seen && age > peerRegistrationMaxAge
 	}
-	age, seen := reporter.RegistrationAge()
-	return seen && age > peerRegistrationMaxAge
+	return false
 }
 
 // clusterStressLevel calculates the overall stress level for the cluster

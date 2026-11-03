@@ -342,7 +342,7 @@ func TestStressRelief_StalePeerRegistration(t *testing.T) {
 				_, _, reason := sr.GetSampleRate("a-trace")
 				assert.Equal(t, tc.wantReason, reason)
 			}
-			assert.True(t, hasWarning(logs, "peer registration is stale"), "every mode logs the state change")
+			assert.True(t, hasWarning(logs, "peers are stale"), "every mode logs the state change")
 
 			// The same state is not logged again on every tick.
 			before := len(warnings(logs))
@@ -354,7 +354,7 @@ func TestStressRelief_StalePeerRegistration(t *testing.T) {
 			clock.Advance(6 * time.Second)
 			sr.Recalc()
 			assert.Equal(t, tc.mode == "always", sr.Stressed())
-			assert.True(t, hasWarning(logs, "peer registration is fresh again"))
+			assert.True(t, hasWarning(logs, "peers are fresh again"))
 		})
 	}
 }
