@@ -122,46 +122,56 @@ func TestRedisPubsubPeers_RegistrationAge(t *testing.T) {
 	assert.Equal(t, time.Duration(0), age)
 }
 
+// newHungPeers returns started, ready peers on a pubsub whose Publish hangs
+// until the test calls Up on it. It also returns the health recorder the peers
+// report to. A nil metric or log gets the default of the peers. Call it inside
+// a synctest bubble: its cleanup waits for the peers to stop there.
+func newHungPeers(t *testing.T, metric metrics.Metrics, log logger.Logger) (*RedisPubsubPeers, *health.Health, *pubsubtest.OutagePubSub) {
+	clock := clockwork.NewRealClock()
+	healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
+	require.NoError(t, healthRecorder.Start())
+	t.Cleanup(func() { require.NoError(t, healthRecorder.Stop()) })
+
+	sadPubSub := &pubsubtest.OutagePubSub{HangsPastDeadline: true}
+	require.NoError(t, sadPubSub.Start())
+	t.Cleanup(sadPubSub.Close)
+	sadPubSub.Down()
+
+	peers := &RedisPubsubPeers{
+		Config: &config.MockConfig{
+			GetPeerListenAddrVal: "127.0.0.1:3443",
+			RedisIdentifier:      "somehostname",
+			PeerTimeout:          5 * time.Second,
+		},
+		PubSub:     sadPubSub,
+		Metrics:    metric,
+		Logger:     log,
+		Clock:      clock,
+		Health:     healthRecorder,
+		InstanceID: "me",
+		Done:       make(chan struct{}),
+	}
+	require.NoError(t, peers.Start())
+	require.NoError(t, peers.Ready())
+	// The peers' publishes must end before the pubsub closes.
+	t.Cleanup(func() {
+		sadPubSub.Up()
+		close(peers.Done)
+		synctest.Wait()
+	})
+	return peers, healthRecorder, sadPubSub
+}
+
 // TestRedisPubsubPeers_ReadyAfterFirstRegistration tests that a host is not
 // ready until its own registration has come back through the peers channel,
 // and that it then stays ready and alive when Redis stops answering.
 func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		clock := clockwork.NewRealClock()
-		healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
-		require.NoError(t, healthRecorder.Start())
-		t.Cleanup(func() { require.NoError(t, healthRecorder.Stop()) })
+		_, healthRecorder, sadPubSub := newHungPeers(t, nil, nil)
 
 		// Add an always-ready component to health to show the awaited readiness later is dependent on peers.
 		healthRecorder.Register("im-always-ready", time.Hour)
 		healthRecorder.Ready("im-always-ready", true)
-
-		cfg := &config.MockConfig{
-			GetPeerListenAddrVal: "127.0.0.1:3443",
-			RedisIdentifier:      "somehostname",
-			PeerTimeout:          5 * time.Second,
-		}
-		sadPubSub := &pubsubtest.OutagePubSub{HangsPastDeadline: true}
-		require.NoError(t, sadPubSub.Start())
-		t.Cleanup(sadPubSub.Close)
-		sadPubSub.Down()
-
-		peers := &RedisPubsubPeers{
-			Config:     cfg,
-			PubSub:     sadPubSub,
-			Clock:      clock,
-			Health:     healthRecorder,
-			InstanceID: "me",
-			Done:       make(chan struct{}),
-		}
-		require.NoError(t, peers.Start())
-		require.NoError(t, peers.Ready())
-		// The peers' publishes must end before the pubsub closes.
-		t.Cleanup(func() {
-			sadPubSub.Up()
-			close(peers.Done)
-			synctest.Wait()
-		})
 
 		time.Sleep(10 * time.Second)
 		synctest.Wait()
@@ -188,37 +198,8 @@ func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 // to subscribe and a server without pub/sub all look the same from here.
 func TestRedisPubsubPeers_WarnsWhenNoRegistrationReturns(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		clock := clockwork.NewRealClock()
 		logs := &logger.MockLogger{}
-		healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
-		require.NoError(t, healthRecorder.Start())
-		t.Cleanup(func() { require.NoError(t, healthRecorder.Stop()) })
-
-		sadPubSub := &pubsubtest.OutagePubSub{HangsPastDeadline: true}
-		require.NoError(t, sadPubSub.Start())
-		t.Cleanup(sadPubSub.Close)
-		sadPubSub.Down()
-
-		peers := &RedisPubsubPeers{
-			Config: &config.MockConfig{
-				GetPeerListenAddrVal: "127.0.0.1:3443",
-				RedisIdentifier:      "somehostname",
-				PeerTimeout:          5 * time.Second,
-			},
-			PubSub:     sadPubSub,
-			Logger:     logs,
-			Clock:      clock,
-			Health:     healthRecorder,
-			InstanceID: "me",
-			Done:       make(chan struct{}),
-		}
-		require.NoError(t, peers.Start())
-		require.NoError(t, peers.Ready())
-		t.Cleanup(func() {
-			sadPubSub.Up()
-			close(peers.Done)
-			synctest.Wait()
-		})
+		newHungPeers(t, nil, logs)
 
 		time.Sleep(29 * time.Second)
 		synctest.Wait()
@@ -254,39 +235,9 @@ func warnMessages(l *logger.MockLogger) []string {
 // does not look like a fresh registration.
 func TestRedisPubsubPeers_RegistrationAgeGauge(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		clock := clockwork.NewRealClock()
 		metric := &metrics.MockMetrics{}
 		metric.Start()
-		healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
-		require.NoError(t, healthRecorder.Start())
-		t.Cleanup(func() { require.NoError(t, healthRecorder.Stop()) })
-
-		cfg := &config.MockConfig{
-			GetPeerListenAddrVal: "127.0.0.1:3443",
-			RedisIdentifier:      "somehostname",
-			PeerTimeout:          5 * time.Second,
-		}
-		sadPubSub := &pubsubtest.OutagePubSub{HangsPastDeadline: true}
-		require.NoError(t, sadPubSub.Start())
-		t.Cleanup(sadPubSub.Close)
-		sadPubSub.Down()
-
-		peers := &RedisPubsubPeers{
-			Config:     cfg,
-			PubSub:     sadPubSub,
-			Metrics:    metric,
-			Clock:      clock,
-			Health:     healthRecorder,
-			InstanceID: "me",
-			Done:       make(chan struct{}),
-		}
-		require.NoError(t, peers.Start())
-		require.NoError(t, peers.Ready())
-		t.Cleanup(func() {
-			sadPubSub.Up()
-			close(peers.Done)
-			synctest.Wait()
-		})
+		peers, _, _ := newHungPeers(t, metric, nil)
 
 		time.Sleep(10 * time.Second)
 		synctest.Wait()
