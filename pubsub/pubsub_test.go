@@ -345,27 +345,34 @@ func (h *hungRedis) pipe(client net.Conn) {
 	io.Copy(client, upstream)
 }
 
-// TestGoRedisPubSubSubscribeDoesNotWaitForRedis tests that Subscribe returns
-// while Redis does not answer, and that the subscription delivers messages
-// once Redis does. A host must be able to start while Redis is down.
-func TestGoRedisPubSubSubscribeDoesNotWaitForRedis(t *testing.T) {
+// newHungGoRedisPubSub returns a GoRedisPubSub that is configured with redisCfg
+// and connects to a hungRedis, which forwards to the local Redis once told to.
+// The GoRedisPubSub is started and closed with the test.
+func newHungGoRedisPubSub(t *testing.T, redisCfg config.RedisPeerManagementConfig) (*pubsub.GoRedisPubSub, *hungRedis) {
 	redis := newHungRedis(t, "localhost:6379")
+	redisCfg.Host = redis.addr()
+	ps := newGoRedisPubSub(redisCfg)
+	require.NoError(t, ps.Start())
+	t.Cleanup(ps.Close)
+	return ps, redis
+}
 
+func newGoRedisPubSub(redisCfg config.RedisPeerManagementConfig) *pubsub.GoRedisPubSub {
 	m := &metrics.NullMetrics{}
 	m.Start()
-	ps := &pubsub.GoRedisPubSub{
-		Config: &config.MockConfig{
-			GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
-				Host:        redis.addr(),
-				ClusterName: "hung-test",
-			},
-		},
+	return &pubsub.GoRedisPubSub{
+		Config:  &config.MockConfig{GetRedisPeerManagementVal: redisCfg},
 		Metrics: m,
 		Tracer:  noop.NewTracerProvider().Tracer("test"),
 		Logger:  &logger.NullLogger{},
 	}
-	require.NoError(t, ps.Start())
-	t.Cleanup(ps.Close)
+}
+
+// TestGoRedisPubSubSubscribeDoesNotWaitForRedis tests that Subscribe returns
+// while Redis does not answer, and that the subscription delivers messages
+// once Redis does. A host must be able to start while Redis is down.
+func TestGoRedisPubSubSubscribeDoesNotWaitForRedis(t *testing.T) {
+	ps, redis := newHungGoRedisPubSub(t, config.RedisPeerManagementConfig{ClusterName: "hung-test"})
 
 	// go-redis waits 5 seconds for a connection that never answers. Subscribe
 	// must not wait for it.
@@ -400,23 +407,7 @@ func TestGoRedisPubSubSubscribeDoesNotWaitForRedis(t *testing.T) {
 // context ends, while Redis accepts the connection and does not answer. The
 // peer timeout that callers pass to Publish is only useful if this holds.
 func TestGoRedisPubSubPublishHonorsDeadline(t *testing.T) {
-	redis := newHungRedis(t, "localhost:6379")
-
-	m := &metrics.NullMetrics{}
-	m.Start()
-	ps := &pubsub.GoRedisPubSub{
-		Config: &config.MockConfig{
-			GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
-				Host:        redis.addr(),
-				ClusterName: "deadline-test",
-			},
-		},
-		Metrics: m,
-		Tracer:  noop.NewTracerProvider().Tracer("test"),
-		Logger:  &logger.NullLogger{},
-	}
-	require.NoError(t, ps.Start())
-	t.Cleanup(ps.Close)
+	ps, _ := newHungGoRedisPubSub(t, config.RedisPeerManagementConfig{ClusterName: "deadline-test"})
 
 	const deadline = 200 * time.Millisecond
 	ctx, cancel := context.WithTimeout(context.Background(), deadline)
@@ -436,20 +427,7 @@ func TestGoRedisPubSubPublishHonorsDeadline(t *testing.T) {
 // ready. It must not exit, as the process manager would restart it in a loop.
 func TestGoRedisPubSubStartDoesNotWaitForRedisWithAuthCode(t *testing.T) {
 	redis := newHungRedis(t, "localhost:6379")
-
-	m := &metrics.NullMetrics{}
-	m.Start()
-	ps := &pubsub.GoRedisPubSub{
-		Config: &config.MockConfig{
-			GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
-				Host:     redis.addr(),
-				AuthCode: "secret",
-			},
-		},
-		Metrics: m,
-		Tracer:  noop.NewTracerProvider().Tracer("test"),
-		Logger:  &logger.NullLogger{},
-	}
+	ps := newGoRedisPubSub(config.RedisPeerManagementConfig{Host: redis.addr(), AuthCode: "secret"})
 
 	started := make(chan error, 1)
 	go func() { started <- ps.Start() }()
