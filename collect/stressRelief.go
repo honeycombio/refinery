@@ -517,25 +517,26 @@ func (s *StressRelief) Recalc() uint {
 	case Always:
 		s.stressed = true
 	case Monitor:
-		// If it's off, should we activate it?
-		if !s.stressed && (s.overallStressLevel >= s.activateLevel || peersAreStale) {
-			s.stressed = true
-			s.Logger.Warn().WithFields(map[string]interface{}{
-				"individual_stress_level": localLevel,
-				"cluster_stress_level":    clusterStressLevel,
-				"stress_level":            s.overallStressLevel,
-				"stress_formula":          s.formula,
-				"reason":                  s.reason,
-			}).Logf("StressRelief has been activated")
-		}
-		// We want make sure that stress relief is below the deactivate level
-		// for a minimum time after the last time we said it should be, so
-		// whenever it's above that value we push the time out.
-		if s.stressed && (s.overallStressLevel >= s.deactivateLevel || peersAreStale) {
+		if !s.stressed {
+			// It's off, so should we activate it?
+			if s.overallStressLevel >= s.activateLevel || peersAreStale {
+				s.stressed = true
+				s.stayOnUntil = s.Clock.Now().Add(s.minDuration)
+				s.Logger.Warn().WithFields(map[string]interface{}{
+					"individual_stress_level": localLevel,
+					"cluster_stress_level":    clusterStressLevel,
+					"stress_level":            s.overallStressLevel,
+					"stress_formula":          s.formula,
+					"reason":                  s.reason,
+				}).Logf("StressRelief has been activated")
+			}
+		} else if s.overallStressLevel >= s.deactivateLevel || peersAreStale {
+			// We want make sure that stress relief is below the deactivate level
+			// for a minimum time after the last time we said it should be, so
+			// whenever it's above that value we push the time out.
 			s.stayOnUntil = s.Clock.Now().Add(s.minDuration)
-		}
-		// If it's on, should we deactivate it?
-		if s.stressed && !peersAreStale && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
+		} else if s.Clock.Now().After(s.stayOnUntil) {
+			// It's on and nothing keeps it on, so deactivate it.
 			s.stressed = false
 			s.Logger.Warn().WithFields(map[string]interface{}{
 				"individual_stress_level": localLevel,
