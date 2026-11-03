@@ -141,7 +141,7 @@ func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 			RedisIdentifier:      "somehostname",
 			PeerTimeout:          5 * time.Second,
 		}
-		sadPubSub := &pubsubtest.OutagePubSub{}
+		sadPubSub := &pubsubtest.OutagePubSub{HangsPastDeadline: true}
 		require.NoError(t, sadPubSub.Start())
 		t.Cleanup(sadPubSub.Close)
 		sadPubSub.Down()
