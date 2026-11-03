@@ -181,6 +181,73 @@ func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 	})
 }
 
+// TestRedisPubsubPeers_WarnsWhenNoRegistrationReturns tests that a host that
+// has not seen its own registration 30 seconds after it started says so once,
+// and names what can cause it. Such a host stays not ready, and the only other
+// sign is the readiness check. Redis that is down, a user that is not allowed
+// to subscribe and a server without pub/sub all look the same from here.
+func TestRedisPubsubPeers_WarnsWhenNoRegistrationReturns(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		clock := clockwork.NewRealClock()
+		logs := &logger.MockLogger{}
+		healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
+		require.NoError(t, healthRecorder.Start())
+		t.Cleanup(func() { require.NoError(t, healthRecorder.Stop()) })
+
+		sadPubSub := &pubsubtest.OutagePubSub{HangsPastDeadline: true}
+		require.NoError(t, sadPubSub.Start())
+		t.Cleanup(sadPubSub.Close)
+		sadPubSub.Down()
+
+		peers := &RedisPubsubPeers{
+			Config: &config.MockConfig{
+				GetPeerListenAddrVal: "127.0.0.1:3443",
+				RedisIdentifier:      "somehostname",
+				PeerTimeout:          5 * time.Second,
+			},
+			PubSub:     sadPubSub,
+			Logger:     logs,
+			Clock:      clock,
+			Health:     healthRecorder,
+			InstanceID: "me",
+			Done:       make(chan struct{}),
+		}
+		require.NoError(t, peers.Start())
+		require.NoError(t, peers.Ready())
+		t.Cleanup(func() {
+			sadPubSub.Up()
+			close(peers.Done)
+			synctest.Wait()
+		})
+
+		time.Sleep(29 * time.Second)
+		synctest.Wait()
+		assert.Empty(t, warnMessages(logs), "no warning before 30 seconds")
+
+		time.Sleep(2 * time.Second)
+		synctest.Wait()
+		warns := warnMessages(logs)
+		require.Len(t, warns, 1)
+		assert.Contains(t, warns[0], "has not seen its own registration")
+		assert.Contains(t, warns[0], "PUBLISH and SUBSCRIBE", "the message names what to check")
+
+		time.Sleep(time.Minute)
+		synctest.Wait()
+		assert.Len(t, warnMessages(logs), 1, "the warning is not repeated")
+	})
+}
+
+// warnMessages returns the warning messages that the logger has seen.
+func warnMessages(l *logger.MockLogger) []string {
+	var out []string
+	for _, e := range l.GetEvents() {
+		if w, ok := e.Fields["warn"].(string); ok {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
 // TestRedisPubsubPeers_RegistrationAgeGauge tests that peers report how long
 // ago the host saw its own registration, in milliseconds, once a second. The
 // gauge is absent until the host has seen one registration: a missing value
