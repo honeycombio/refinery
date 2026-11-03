@@ -44,6 +44,10 @@ const (
 	// peerManagementHealthCheckInTimeout is how long the key can go without a
 	// report before the host counts as not alive.
 	peerManagementHealthCheckInTimeout = 15 * time.Second
+
+	// noRegistrationWarnAfter is how long a host waits for its own first
+	// registration before it logs a warning.
+	noRegistrationWarnAfter = 30 * time.Second
 )
 
 type peerAction string
@@ -238,6 +242,8 @@ func (p *RedisPubsubPeers) Ready() error {
 	go func() {
 		ticker := p.Clock.NewTicker(peerManagementHealthCheckInInterval)
 		defer ticker.Stop()
+		started := p.Clock.Now()
+		warned := false
 		for {
 			select {
 			case <-ticker.Chan():
@@ -245,6 +251,9 @@ func (p *RedisPubsubPeers) Ready() error {
 				p.Health.Ready(peerManagementHealthKey, seen)
 				if seen {
 					p.Metrics.Gauge("peer_registration_age_ms", float64(age.Milliseconds()))
+				} else if !warned && p.Clock.Since(started) >= noRegistrationWarnAfter {
+					warned = true
+					p.Logger.Warn().Logf("this host has not seen its own registration come back through Redis, so it is not ready; check that Redis is reachable and that the user may use both PUBLISH and SUBSCRIBE")
 				}
 			case <-p.Done:
 				p.Health.Unregister(peerManagementHealthKey)
