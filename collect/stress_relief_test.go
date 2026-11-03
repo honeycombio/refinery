@@ -292,25 +292,11 @@ func TestStressRelief_StalePeerRegistration(t *testing.T) {
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			clock := clockwork.NewFakeClock()
-			sr, stop := newStressRelief(t, clock, nil)
+			peers := &registrationAgePeers{}
+			sr, stop := newPeerStressRelief(t, clock, tc.mode, peers)
 			defer stop()
 			logs := &logger.MockLogger{}
 			sr.Logger = logs
-			peers := &registrationAgePeers{}
-			sr.Peer = peers
-			// Call Recalc from the test only, not also from the monitor loop.
-			sr.disableStressLevelReport = true
-			sr.Config = &config.MockConfig{
-				StressRelief: config.StressReliefConfig{
-					Mode:                      tc.mode,
-					ActivationLevel:           80,
-					DeactivationLevel:         50,
-					SamplingRate:              2,
-					MinimumActivationDuration: config.Duration(5 * time.Second),
-				},
-			}
-			sr.UpdateFromConfig()
-			require.NoError(t, sr.Start())
 
 			// A fresh registration is not stress.
 			peers.seen.Store(true)
@@ -355,22 +341,9 @@ func TestStressRelief_StaysOnAfterPeersAreFresh(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			clock := clockwork.NewFakeClock()
-			sr, stop := newStressRelief(t, clock, nil)
-			defer stop()
 			peers := &registrationAgePeers{}
-			sr.Peer = peers
-			sr.disableStressLevelReport = true
-			sr.Config = &config.MockConfig{
-				StressRelief: config.StressReliefConfig{
-					Mode:                      "monitor",
-					ActivationLevel:           80,
-					DeactivationLevel:         50,
-					SamplingRate:              2,
-					MinimumActivationDuration: config.Duration(5 * time.Second),
-				},
-			}
-			sr.UpdateFromConfig()
-			require.NoError(t, sr.Start())
+			sr, stop := newPeerStressRelief(t, clock, "monitor", peers)
+			defer stop()
 
 			peers.seen.Store(true)
 			peers.age.Store(int64(peerRegistrationMaxAge + time.Second))
@@ -405,15 +378,8 @@ func TestStressRelief_NoRegistrationIsNotStale(t *testing.T) {
 		"no age to give": &peer.MockPeers{},
 	} {
 		t.Run(name, func(t *testing.T) {
-			sr, stop := newStressRelief(t, clockwork.NewFakeClock(), nil)
+			sr, stop := newPeerStressRelief(t, clockwork.NewFakeClock(), "monitor", peers)
 			defer stop()
-			sr.Peer = peers
-			sr.disableStressLevelReport = true
-			sr.Config = &config.MockConfig{
-				StressRelief: config.StressReliefConfig{Mode: "monitor", ActivationLevel: 80, DeactivationLevel: 50, SamplingRate: 2},
-			}
-			sr.UpdateFromConfig()
-			require.NoError(t, sr.Start())
 			sr.Recalc()
 			assert.False(t, sr.Stressed())
 		})
@@ -439,6 +405,29 @@ func warnings(l *logger.MockLogger) []string {
 		}
 	}
 	return out
+}
+
+// newPeerStressRelief returns a started StressRelief in the given mode that
+// reads its registration age from peers, and that the test drives with Recalc
+// alone. It activates at 80, deactivates at 50 and stays on for at least 5
+// seconds of the fake clock. The returned function stops it.
+func newPeerStressRelief(t *testing.T, clock clockwork.Clock, mode string, peers peer.Peers) (*StressRelief, func()) {
+	sr, stop := newStressRelief(t, clock, nil)
+	sr.Peer = peers
+	// Call Recalc from the test only, not also from the monitor loop.
+	sr.disableStressLevelReport = true
+	sr.Config = &config.MockConfig{
+		StressRelief: config.StressReliefConfig{
+			Mode:                      mode,
+			ActivationLevel:           80,
+			DeactivationLevel:         50,
+			SamplingRate:              2,
+			MinimumActivationDuration: config.Duration(5 * time.Second),
+		},
+	}
+	sr.UpdateFromConfig()
+	require.NoError(t, sr.Start())
+	return sr, stop
 }
 
 func newStressRelief(t *testing.T, clock clockwork.Clock, channel pubsub.PubSub) (*StressRelief, func()) {
