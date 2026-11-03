@@ -2,7 +2,6 @@ package collect
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"sync/atomic"
@@ -19,6 +18,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
+	"github.com/honeycombio/refinery/pubsub/pubsubtest"
 )
 
 // TestStressRelief_Monitor tests that the Stressed method returns the correct value
@@ -223,23 +223,6 @@ func TestStressRelief_OverallStressLevel(t *testing.T) {
 	assert.False(t, sr.stressed)
 }
 
-// snoozyPubSub's Publish blocks until woken up and ignores its context, as a
-// go-redis read on a hung connection does.
-type snoozyPubSub struct {
-	pubsub.LocalPubSub
-	published chan struct{}
-	wakeup    chan struct{}
-}
-
-func (s *snoozyPubSub) Publish(ctx context.Context, topic, message string) error {
-	select {
-	case s.published <- struct{}{}:
-	default:
-	}
-	<-s.wakeup
-	return errors.New("snoozy publish woke up")
-}
-
 // TestStressRelief_StaysAliveWhenPublishStalls covers a Redis outage: a stress
 // level publish that never returns must not mark stress relief dead and fail
 // the liveness check.
@@ -247,14 +230,15 @@ func TestStressRelief_StaysAliveWhenPublishStalls(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	metric := &metrics.MockMetrics{}
 	metric.Start()
-	channel := &snoozyPubSub{
-		LocalPubSub: pubsub.LocalPubSub{Metrics: metric},
-		published:   make(chan struct{}, 1),
-		wakeup:      make(chan struct{}),
+	channel := &pubsubtest.OutagePubSub{
+		LocalPubSub:       pubsub.LocalPubSub{Metrics: metric},
+		HangsPastDeadline: true,
+		Blocked:           make(chan struct{}, 1),
 	}
+	channel.Down()
 	sr, stop := newStressRelief(t, clock, channel)
 	defer stop()
-	defer close(channel.wakeup)
+	defer channel.Up()
 	sr.Config = &config.MockConfig{
 		StressRelief: config.StressReliefConfig{Mode: "never"}, // never is default, we still publish stress even if there is no action
 	}
@@ -265,7 +249,7 @@ func TestStressRelief_StaysAliveWhenPublishStalls(t *testing.T) {
 	require.Eventually(t, func() bool {
 		clock.Advance(100 * time.Millisecond)
 		select {
-		case <-channel.published:
+		case <-channel.Blocked:
 			return true
 		default:
 			return false

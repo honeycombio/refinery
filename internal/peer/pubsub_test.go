@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
+	"github.com/honeycombio/refinery/pubsub/pubsubtest"
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -122,32 +122,6 @@ func TestRedisPubsubPeers_RegistrationAge(t *testing.T) {
 	assert.Equal(t, time.Duration(0), age)
 }
 
-// outagePubSub is a simulator for a PubSub whose Publish can hang,
-// as a publish does when Redis stops answering.
-// Toggle the hang with the available field, which defaults to false
-// (unavailable, therefore it hangs).
-type outagePubSub struct {
-	pubsub.LocalPubSub
-	available atomic.Bool
-}
-
-func (o *outagePubSub) Publish(ctx context.Context, topic, message string) error {
-	if !o.available.Load() {
-		<-ctx.Done()
-		return ctx.Err()
-	}
-	return o.LocalPubSub.Publish(ctx, topic, message)
-}
-
-// recover lets publishes succeed again, then waits for a given time to allow blocked publishes
-// to complete or give up.
-// wait must exceed the deadline of any publish that may be in progress or risk a panic with
-// blocked goroutines when a synctest time bubble ends.
-func (o *outagePubSub) recover(wait time.Duration) {
-	o.available.Store(true)
-	time.Sleep(wait)
-}
-
 // TestRedisPubsubPeers_ReadyAfterFirstRegistration tests that a host is not
 // ready until its own registration has come back through the peers channel,
 // and that it then stays ready and alive when Redis stops answering.
@@ -167,9 +141,10 @@ func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 			RedisIdentifier:      "somehostname",
 			PeerTimeout:          5 * time.Second,
 		}
-		sadPubSub := &outagePubSub{}
+		sadPubSub := &pubsubtest.OutagePubSub{}
 		require.NoError(t, sadPubSub.Start())
 		t.Cleanup(sadPubSub.Close)
+		sadPubSub.Down()
 
 		peers := &RedisPubsubPeers{
 			Config:     cfg,
@@ -183,7 +158,7 @@ func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 		require.NoError(t, peers.Ready())
 		// The peers' publishes must end before the pubsub closes.
 		t.Cleanup(func() {
-			sadPubSub.recover(2 * cfg.GetPeerTimeout()) // 2 publish timeouts
+			sadPubSub.Up()
 			close(peers.Done)
 			synctest.Wait()
 		})
@@ -193,12 +168,12 @@ func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 		assert.True(t, healthRecorder.IsAlive(), "a host without a registration is alive")
 		assert.False(t, healthRecorder.IsReady(), "a host that has not seen its registration is not ready")
 
-		sadPubSub.available.Store(true)
+		sadPubSub.Up()
 		time.Sleep(10 * time.Second)
 		synctest.Wait()
 		assert.True(t, healthRecorder.IsReady(), "a host that has seen its registration is ready")
 
-		sadPubSub.available.Store(false)
+		sadPubSub.Down()
 		time.Sleep(time.Minute)
 		synctest.Wait()
 		assert.True(t, healthRecorder.IsAlive(), "a publish that hangs must not fail liveness")
