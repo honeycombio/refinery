@@ -65,7 +65,7 @@ func (cw *ConfigWatcher) ReloadCallback(cfgHash, rulesHash string) {
 	ctx, cancel := context.WithTimeout(ctx, cw.Config.GetPeerTimeout())
 	defer cancel()
 	if err := cw.PubSub.Publish(ctx, cw.topic, message); err != nil {
-		cw.Logger.Warn().Logf("unable to publish new config reload message: %s; other hosts will pick up change on their next timed check", err)
+		cw.Logger.Warn().Logf("unable to publish new config reload message: %s", err)
 	}
 }
 
