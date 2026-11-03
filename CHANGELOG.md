@@ -4,7 +4,7 @@
 
 ### ⚠️ Behavior change: garbage collection is now paced by a memory limit
 
-If `AvailableMemory` is set, Refinery now sets the Go memory limit to 95% of it and turns off percentage-based garbage collection (`GOGC`). Memory checks compare the live heap, not all allocated memory, to `MaxAlloc`. Process memory will sit higher between collections, and `memory_inuse` will rise and become sawtooth-shaped. Set `GOMEMLIMIT=off` to keep the previous behavior. See the [release notes](./RELEASE_NOTES.md) for details.
+If `AvailableMemory` is set, Refinery now sets the Go memory limit to 95% of it and turns off percentage-based garbage collection (`GOGC`). Memory checks compare the live heap, not all allocated memory, to `MaxAlloc`. Process memory will sit higher between collections, and `memory_inuse` will rise and become sawtooth-shaped, so boards and alerts on memory, including the standard Refinery ones, need updating when you upgrade. Set `GOMEMLIMIT=off` to keep the previous behavior. See the [release notes](./RELEASE_NOTES.md) for details.
 
 ### 💡 Enhancements
 
