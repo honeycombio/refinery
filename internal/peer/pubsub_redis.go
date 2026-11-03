@@ -127,18 +127,22 @@ type RedisPubsubPeers struct {
 	callbacks []func()
 
 	// lastSelfSeen is when this host's own Register message last came back
-	// through the subscription, in Unix nanoseconds. Zero means it never has.
-	lastSelfSeen atomic.Int64
+	// through the subscription. Nil means that none has come back.
+	// The field holds the time from Clock.Now without change. That time has a
+	// monotonic reading, so a step of the wall clock does not change the age.
+	// The methods UTC, Local, In, Round and Truncate remove this reading, and
+	// so do the time encodings.
+	lastSelfSeen atomic.Pointer[time.Time]
 }
 
 var _ RegistrationAgeReporter = (*RedisPubsubPeers)(nil)
 
 func (p *RedisPubsubPeers) RegistrationAge() (time.Duration, bool) {
 	last := p.lastSelfSeen.Load()
-	if last == 0 {
+	if last == nil {
 		return 0, false
 	}
-	return p.Clock.Since(time.Unix(0, last)), true
+	return p.Clock.Since(*last), true
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
@@ -170,7 +174,8 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 	}
 	p.Metrics.Count("peer_messages", 1)
 	if cmd.action == Register && cmd.id == p.InstanceID {
-		p.lastSelfSeen.Store(p.Clock.Now().UnixNano())
+		now := p.Clock.Now()
+		p.lastSelfSeen.Store(&now)
 	}
 	switch cmd.action {
 	case Unregister:
