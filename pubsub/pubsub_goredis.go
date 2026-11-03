@@ -77,6 +77,11 @@ func (ps *GoRedisPubSub) Start() error {
 		options.Password = redisCfg.Password
 		options.DB = redisCfg.Database
 
+		// Without this, go-redis ignores the deadline of the context when it
+		// dials or reads, so a Publish to a Redis that does not answer waits
+		// for the dial or read timeout of go-redis, 5 seconds.
+		options.ContextTimeoutEnabled = true
+
 		if redisCfg.UseTLS {
 			ps.Logger.Info().WithField("TLSInsecure", redisCfg.UseTLSInsecure).Logf("Using TLS with Redis")
 			options.TLSConfig = &tls.Config{
