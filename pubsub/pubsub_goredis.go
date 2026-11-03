@@ -108,14 +108,6 @@ func (ps *GoRedisPubSub) Start() error {
 		client = redis.NewUniversalClient(options)
 	}
 
-	// If authcode was provided, ping once to check the credentials.
-	if authcode != "" {
-		if err := client.Ping(context.Background()).Err(); err != nil {
-			client.Close()
-			return err
-		}
-	}
-
 	for _, metric := range goredisPubSubMetrics {
 		ps.Metrics.Register(metric)
 	}
