@@ -395,3 +395,37 @@ func TestGoRedisPubSubSubscribeDoesNotWaitForRedis(t *testing.T) {
 		return len(listener.Messages()) > 0
 	}, 20*time.Second, 200*time.Millisecond, "the subscription never recovered")
 }
+
+// TestGoRedisPubSubPublishHonorsDeadline tests that a Publish ends when its
+// context ends, while Redis accepts the connection and does not answer. The
+// peer timeout that callers pass to Publish is only useful if this holds.
+func TestGoRedisPubSubPublishHonorsDeadline(t *testing.T) {
+	redis := newHungRedis(t, "localhost:6379")
+
+	m := &metrics.NullMetrics{}
+	m.Start()
+	ps := &pubsub.GoRedisPubSub{
+		Config: &config.MockConfig{
+			GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
+				Host:        redis.addr(),
+				ClusterName: "deadline-test",
+			},
+		},
+		Metrics: m,
+		Tracer:  noop.NewTracerProvider().Tracer("test"),
+		Logger:  &logger.NullLogger{},
+	}
+	require.NoError(t, ps.Start())
+	t.Cleanup(ps.Close)
+
+	const deadline = 200 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	defer cancel()
+	start := time.Now()
+	err := ps.Publish(ctx, ps.FormatTopic("topic"), "hello")
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.Less(t, elapsed, 2*time.Second,
+		"Publish took %s with a deadline of %s", elapsed, deadline)
+}
