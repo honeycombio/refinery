@@ -190,6 +190,7 @@ var redisPubSubPeersMetrics = []metrics.Metadata{
 	{Name: "num_peers", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the active number of peers in the cluster"},
 	{Name: "peer_hash", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the hash of the current list of peers"},
 	{Name: "peer_messages", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of messages received by the peers service"},
+	{Name: "peer_registration_age_ms", Type: metrics.Gauge, Unit: metrics.Milliseconds, Description: "milliseconds since this host last saw its own registration come back through Redis; absent until the first one"},
 }
 
 func (p *RedisPubsubPeers) Start() error {
@@ -240,8 +241,11 @@ func (p *RedisPubsubPeers) Ready() error {
 		for {
 			select {
 			case <-ticker.Chan():
-				_, seen := p.RegistrationAge()
+				age, seen := p.RegistrationAge()
 				p.Health.Ready(peerManagementHealthKey, seen)
+				if seen {
+					p.Metrics.Gauge("peer_registration_age_ms", float64(age.Milliseconds()))
+				}
 			case <-p.Done:
 				p.Health.Unregister(peerManagementHealthKey)
 				return
