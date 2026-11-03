@@ -181,6 +181,71 @@ func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 	})
 }
 
+// TestRedisPubsubPeers_RegistrationAgeGauge tests that peers report how long
+// ago the host saw its own registration, in milliseconds, once a second. The
+// gauge is absent until the host has seen one registration: a missing value
+// does not look like a fresh registration.
+func TestRedisPubsubPeers_RegistrationAgeGauge(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		clock := clockwork.NewRealClock()
+		metric := &metrics.MockMetrics{}
+		metric.Start()
+		healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
+		require.NoError(t, healthRecorder.Start())
+		t.Cleanup(func() { require.NoError(t, healthRecorder.Stop()) })
+
+		cfg := &config.MockConfig{
+			GetPeerListenAddrVal: "127.0.0.1:3443",
+			RedisIdentifier:      "somehostname",
+			PeerTimeout:          5 * time.Second,
+		}
+		sadPubSub := &pubsubtest.OutagePubSub{HangsPastDeadline: true}
+		require.NoError(t, sadPubSub.Start())
+		t.Cleanup(sadPubSub.Close)
+		sadPubSub.Down()
+
+		peers := &RedisPubsubPeers{
+			Config:     cfg,
+			PubSub:     sadPubSub,
+			Metrics:    metric,
+			Clock:      clock,
+			Health:     healthRecorder,
+			InstanceID: "me",
+			Done:       make(chan struct{}),
+		}
+		require.NoError(t, peers.Start())
+		require.NoError(t, peers.Ready())
+		t.Cleanup(func() {
+			sadPubSub.Up()
+			close(peers.Done)
+			synctest.Wait()
+		})
+
+		time.Sleep(10 * time.Second)
+		synctest.Wait()
+		_, found := metric.Get("peer_registration_age_ms")
+		assert.False(t, found, "no gauge until the host has seen its registration")
+
+		peers.listen(context.Background(), newPeerCommand(Register, "http://somehostname:3443", "me").marshal())
+		time.Sleep(1500 * time.Millisecond)
+		synctest.Wait()
+		age, found := metric.Get("peer_registration_age_ms")
+		require.True(t, found)
+		assert.Equal(t, float64(1000), age, "the last report was one second after the registration")
+
+		time.Sleep(4 * time.Second)
+		synctest.Wait()
+		age, _ = metric.Get("peer_registration_age_ms")
+		assert.Equal(t, float64(5000), age, "the age grows while the registration does not come back")
+
+		peers.listen(context.Background(), newPeerCommand(Register, "http://somehostname:3443", "me").marshal())
+		time.Sleep(time.Second)
+		synctest.Wait()
+		age, _ = metric.Get("peer_registration_age_ms")
+		assert.Equal(t, float64(500), age, "a new registration resets the age; the next report is half a second after it")
+	})
+}
+
 // TestRedisPubsubPeers_ConcurrentRegistrations tests that registrations can
 // arrive on several goroutines at once, as they do from a pubsub that runs
 // each callback on its own goroutine. Run it with the race detector.
