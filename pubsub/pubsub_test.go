@@ -429,3 +429,35 @@ func TestGoRedisPubSubPublishHonorsDeadline(t *testing.T) {
 	assert.Less(t, elapsed, 2*time.Second,
 		"Publish took %s with a deadline of %s", elapsed, deadline)
 }
+
+// TestGoRedisPubSubStartDoesNotWaitForRedisWithAuthCode tests that Start
+// returns while Redis does not answer, also when an AuthCode is set. A host
+// that cannot reach Redis, or cannot log in to it, must start and stay not
+// ready. It must not exit, as the process manager would restart it in a loop.
+func TestGoRedisPubSubStartDoesNotWaitForRedisWithAuthCode(t *testing.T) {
+	redis := newHungRedis(t, "localhost:6379")
+
+	m := &metrics.NullMetrics{}
+	m.Start()
+	ps := &pubsub.GoRedisPubSub{
+		Config: &config.MockConfig{
+			GetRedisPeerManagementVal: config.RedisPeerManagementConfig{
+				Host:     redis.addr(),
+				AuthCode: "secret",
+			},
+		},
+		Metrics: m,
+		Tracer:  noop.NewTracerProvider().Tracer("test"),
+		Logger:  &logger.NullLogger{},
+	}
+
+	started := make(chan error, 1)
+	go func() { started <- ps.Start() }()
+	select {
+	case err := <-started:
+		require.NoError(t, err)
+		t.Cleanup(ps.Close)
+	case <-time.After(time.Second):
+		t.Fatal("Start waited for a Redis that does not answer")
+	}
+}
