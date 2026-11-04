@@ -194,7 +194,7 @@ var redisPubSubPeersMetrics = []metrics.Metadata{
 	{Name: "num_peers", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the active number of peers in the cluster"},
 	{Name: "peer_hash", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the hash of the current list of peers"},
 	{Name: "peer_messages", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of messages received by the peers service"},
-	{Name: "peer_registration_age_ms", Type: metrics.Gauge, Unit: metrics.Milliseconds, Description: "milliseconds since this host last saw its own registration come back through Redis; absent until the first one"},
+	{Name: "peer_registration_age_ms", Type: metrics.Gauge, Unit: metrics.Milliseconds, Description: "milliseconds since this host last saw its own registration come back through Redis, or since it started if it has not seen one"},
 }
 
 func (p *RedisPubsubPeers) Start() error {
@@ -249,9 +249,12 @@ func (p *RedisPubsubPeers) Ready() error {
 			case <-ticker.Chan():
 				age, seen := p.RegistrationAge()
 				p.Health.Ready(peerManagementHealthKey, seen)
-				if seen {
-					p.Metrics.Gauge("peer_registration_age_ms", float64(age.Milliseconds()))
-				} else if !warned && p.Clock.Since(started) >= noRegistrationWarnAfter {
+				if !seen {
+					// Until the first registration, the host has waited since it started.
+					age = p.Clock.Since(started)
+				}
+				p.Metrics.Gauge("peer_registration_age_ms", float64(age.Milliseconds()))
+				if !seen && !warned && p.Clock.Since(started) >= noRegistrationWarnAfter {
 					warned = true
 					p.Logger.Warn().Logf("this host has not seen its own registration come back through Redis, so it is not ready; check that Redis is reachable and that the user may use both PUBLISH and SUBSCRIBE")
 				}
