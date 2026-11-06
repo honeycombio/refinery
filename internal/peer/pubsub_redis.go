@@ -32,21 +32,13 @@ const (
 	// keep the host in the mix.
 	refreshCacheInterval = 3 * time.Second
 
-	// peerManagementHealthKey is the health key that peer management reports
-	// under. It is ready once this host has seen its own registration.
+	// peerManagementHealthKey is ready once this host has seen its own registration.
 	peerManagementHealthKey = "peer_management"
 
-	// peerManagementHealthCheckInInterval is how often peer management reports
-	// that key. The report does not depend on Redis, so a hung publish cannot
-	// delay it.
 	peerManagementHealthCheckInInterval = time.Second
 
-	// peerManagementHealthCheckInTimeout is how long the key can go without a
-	// report before the host counts as not alive.
 	peerManagementHealthCheckInTimeout = 15 * time.Second
 
-	// noRegistrationWarnAfter is how long a host waits for its own first
-	// registration before it logs a warning.
 	noRegistrationWarnAfter = 30 * time.Second
 )
 
@@ -124,18 +116,14 @@ type RedisPubsubPeers struct {
 	sub   pubsub.Subscription
 	topic string // formatted topic name
 
-	// mut guards hash and callbacks. A pubsub runs each subscription callback
-	// on its own goroutine, so listen can run on several at once.
+	// mut guards hash and callbacks: a pubsub runs subscription callbacks concurrently.
 	mut       sync.Mutex
 	hash      uint64
 	callbacks []func()
 
 	// lastSelfSeen is when this host's own Register message last came back
-	// through the subscription. Nil means that none has come back.
-	// The field holds the time from Clock.Now without change. That time has a
-	// monotonic reading, so a step of the wall clock does not change the age.
-	// The methods UTC, Local, In, Round and Truncate remove this reading, and
-	// so do the time encodings.
+	// through the subscription; nil if none has. Store Clock.Now unchanged:
+	// UTC, Local, In, Round, Truncate and encoding strip the monotonic reading.
 	lastSelfSeen atomic.Pointer[time.Time]
 }
 
@@ -237,8 +225,8 @@ func (p *RedisPubsubPeers) Ready() error {
 		return err
 	}
 
-	// Report readiness from a goroutine of its own, so that a publish that
-	// hangs below cannot stop the reports and fail the liveness check.
+	// Report readiness from its own goroutine so a hung publish cannot stall
+	// the reports and fail the liveness check.
 	go func() {
 		ticker := p.Clock.NewTicker(peerManagementHealthCheckInInterval)
 		defer ticker.Stop()
@@ -250,7 +238,6 @@ func (p *RedisPubsubPeers) Ready() error {
 				age, seen := p.RegistrationAge()
 				p.Health.Ready(peerManagementHealthKey, seen)
 				if !seen {
-					// Until the first registration, the host has waited since it started.
 					age = p.Clock.Since(started)
 				}
 				p.Metrics.Gauge("peer_registration_age_ms", float64(age.Milliseconds()))

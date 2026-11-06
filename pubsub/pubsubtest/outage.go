@@ -19,13 +19,12 @@ var ErrOutageEnded = errors.New("pubsubtest: the outage ended before the publish
 type OutagePubSub struct {
 	pubsub.LocalPubSub
 
-	// HangsPastDeadline makes a blocked Publish wait for Up even after its context
-	// ends, as a go-redis read on a connection that does not answer can.
-	// Otherwise a blocked Publish returns the error of its context.
+	// HangsPastDeadline makes a blocked Publish ignore its context and wait
+	// for Up. Otherwise it returns the context's error.
 	HangsPastDeadline bool
 
 	// Blocked, if set, receives a value when a Publish starts to block.
-	// The send does not wait for a receiver.
+	// The send is non-blocking.
 	Blocked chan struct{}
 
 	mut    sync.Mutex

@@ -77,9 +77,9 @@ func (ps *GoRedisPubSub) Start() error {
 		options.Password = redisCfg.Password
 		options.DB = redisCfg.Database
 
-		// Without this, go-redis ignores the deadline of the context when it
-		// dials or reads, so a Publish to a Redis that does not answer waits
-		// for the dial or read timeout of go-redis, 5 seconds.
+		// Without this, go-redis ignores the context deadline when it dials or
+		// reads, so a Publish to an unresponsive Redis waits for the 5 second
+		// go-redis timeout.
 		options.ContextTimeoutEnabled = true
 
 		if redisCfg.UseTLS {
@@ -156,8 +156,6 @@ func (ps *GoRedisPubSub) Publish(ctx context.Context, topic, message string) err
 
 // Subscribe creates a new Subscription to the given topic, and calls the provided callback
 // whenever a message is received on that topic.
-// Subscribe returns before the connection to Redis exists, so messages published
-// right after it returns can be missed (see PubSub.Subscribe).
 // Note that the same topic is Subscribed to multiple times, this will incur a separate
 // connection to Redis for each Subscription.
 func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback SubscriptionCallback) Subscription {
@@ -166,7 +164,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 
 	sub := &GoRedisSubscription{
 		topic:  topic,
-		pubsub: ps.client.Subscribe(ctx), // build PubSub object, omit topic to avoid dialing redis
+		pubsub: ps.client.Subscribe(ctx), // no topic here, so this does not dial Redis
 		cb:     callback,
 		done:   make(chan struct{}),
 	}
@@ -175,7 +173,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 	ps.mut.Unlock()
 	go func() {
 		receiveRootCtx := context.Background()
-		// subscribe here, off the caller's goroutine; go-redis keeps the topic and resubscribes it after a failed dial
+		// Subscribe off the caller's goroutine. go-redis keeps the topic after a failed dial and resubscribes.
 		_ = sub.pubsub.Subscribe(receiveRootCtx, topic)
 		redisch := sub.pubsub.Channel()
 		for {

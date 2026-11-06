@@ -31,9 +31,7 @@ const (
 	stressReliefTopic            = "refinery-stress-relief"
 
 	// peerRegistrationMaxAge is how long a host can go without seeing its own
-	// peer registration come back through Redis before stress relief treats
-	// the host as unable to keep its peer list up to date. It is longer than
-	// the time a managed Redis typically takes to fail over.
+	// peer registration before stress relief treats its peer list as stale.
 	peerRegistrationMaxAge = 30 * time.Second
 )
 
@@ -130,8 +128,6 @@ type StressRelief struct {
 	minDuration        time.Duration
 	topic              string // formatted topic name
 
-	// peersWereStale is whether the last Recalc found the peers stale. It lets
-	// Recalc log only when that changes.
 	peersWereStale bool
 
 	algorithms map[string]func(string, string) float64
@@ -206,7 +202,8 @@ func (s *StressRelief) Start() error {
 			tickCounter      = 0
 		)
 
-		// the hand off for calculated stress level to the publisher
+		// Publish from a separate goroutine so a slow Redis cannot stall this loop.
+		// The channel holds only the newest level.
 		levels := make(chan uint, 1)
 		go s.publishStressLevels(levels)
 
@@ -219,13 +216,14 @@ func (s *StressRelief) Start() error {
 
 				if lastLevel != currentLevel || tickCounter == maxTicksBetweenReports {
 					select {
-					case levels <- currentLevel: // queue for publish
-					default: // ope, can't because publisher is busy
+					case levels <- currentLevel:
+					default:
+						// The publisher is busy: replace the queued level with this one.
 						select {
-						case <-levels: // throw away an old level waiting for publish
-						default: // but it's OK if publish cleared the channel in the meantime
+						case <-levels:
+						default:
 						}
-						levels <- currentLevel // queue updated level for publish
+						levels <- currentLevel
 					}
 
 					lastLevel = currentLevel
@@ -245,8 +243,8 @@ func (s *StressRelief) Start() error {
 	return nil
 }
 
-// publishStressLevels publishes each level it receives to the cluster's PubSub system
-// while the stress relief system is running.
+// publishStressLevels publishes each level it receives, each within the peer
+// timeout, until s.Done closes.
 func (s *StressRelief) publishStressLevels(levels <-chan uint) {
 	for {
 		select {
@@ -490,10 +488,9 @@ func (s *StressRelief) Recalc() uint {
 	s.overallStressLevel = overallStressLevel
 	s.RefineryMetrics.Gauge("stress_level", float64(s.overallStressLevel))
 
-	// A host whose own peer registration has stopped coming back through Redis
-	// can no longer keep its list of peers up to date. In monitor and always
-	// modes that counts as stress, so every host samples deterministically
-	// whatever peer list it holds. In never mode it is only logged.
+	// A host that no longer sees its own peer registration has a stale peer
+	// list. In monitor and always modes that counts as stress, so every host
+	// samples deterministically. In never mode it is only logged.
 	peersAreStale := s.isPeerRegistrationStale()
 	if peersAreStale != s.peersWereStale {
 		s.peersWereStale = peersAreStale
@@ -536,7 +533,6 @@ func (s *StressRelief) Recalc() uint {
 			// whenever it's above that value we push the time out.
 			s.stayOnUntil = s.Clock.Now().Add(s.minDuration)
 		} else if s.Clock.Now().After(s.stayOnUntil) {
-			// It's on and nothing keeps it on, so deactivate it.
 			s.stressed = false
 			s.Logger.Warn().WithFields(map[string]interface{}{
 				"individual_stress_level": localLevel,
@@ -556,10 +552,9 @@ func (s *StressRelief) Recalc() uint {
 }
 
 // isPeerRegistrationStale reports whether the host has gone longer than
-// peerRegistrationMaxAge without seeing its own peer registration come back
-// through Redis. A host that has not seen one yet is not stale, and neither
-// are peers that cannot report an age, such as file peers: they have no peer
-// list to lose.
+// peerRegistrationMaxAge without seeing its own peer registration. A host that
+// has not seen one yet, and peers that report no age such as file peers, are
+// not stale.
 func (s *StressRelief) isPeerRegistrationStale() bool {
 	if reporter, ok := s.Peer.(peer.RegistrationAgeReporter); ok {
 		age, seen := reporter.RegistrationAge()
