@@ -32,7 +32,10 @@ const (
 
 	// peerRegistrationMaxAge is how long a host can go without seeing its own
 	// peer registration before stress relief treats its peer list as stale.
-	peerRegistrationMaxAge = 30 * time.Second
+	// Peers expire peer.PeerEntryTimeout after their last message, and hosts
+	// re-register about every 3.6 seconds at most, so the list can start to
+	// shrink 6.4 seconds into an outage. Stress relief must be on by then.
+	peerRegistrationMaxAge = peer.PeerEntryTimeout / 2
 )
 
 // All of the numerator metrics are gauges. The denominator metrics are constants.
