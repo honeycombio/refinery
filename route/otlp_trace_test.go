@@ -59,7 +59,11 @@ const (
 
 	// lookupFailsAPIKey is a key whose environment lookup returns an error.
 	lookupFailsAPIKey = "key-whose-lookup-fails"
-	esEnvName         = "es-env"
+
+	// lookupUnavailableAPIKey is a key whose environment lookup fails in a way
+	// that may succeed if tried again.
+	lookupUnavailableAPIKey = "key-whose-lookup-is-unavailable"
+	esEnvName               = "es-env"
 
 	testServiceName   = "my-service"
 	testDatasetHeader = "my-dataset"
@@ -154,7 +158,9 @@ func TestOTLPHandler(t *testing.T) {
 			case esAPIKey:
 				return authData{environment: esEnvName}, nil
 			case lookupFailsAPIKey:
-				return authData{}, errors.New("auth is down")
+				return authData{}, errors.New("key rejected")
+			case lookupUnavailableAPIKey:
+				return authData{}, retryableLookupError{errors.New("auth is down")}
 			default:
 				return authData{}, nil
 			}
@@ -629,7 +635,7 @@ func TestOTLPHandler(t *testing.T) {
 		respBody, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Contains(t, string(respBody), ErrEnvironmentLookup.Error())
-		assert.NotContains(t, string(respBody), "auth is down", "the lookup's own error stays in the log")
+		assert.NotContains(t, string(respBody), "key rejected", "the lookup's own error stays in the log")
 
 		assert.Equal(t, 0, len(mockTransmission.GetBlock(0)))
 	})
@@ -648,6 +654,62 @@ func TestOTLPHandler(t *testing.T) {
 		})
 		_, err := grpcClient.Export(ctx, req)
 		assert.Equal(t, codes.Internal, status.Code(err))
+
+		assert.Equal(t, 0, len(mockTransmission.GetBlock(0)))
+	})
+
+	// When the lookup got no answer, the same request may succeed later, so the
+	// sender is told to retry.
+	t.Run("asks the sender to retry when the environment lookup is unavailable - HTTP", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		body, err := protojson.Marshal(req)
+		require.NoError(t, err)
+
+		muxxer := mux.NewRouter()
+		muxxer.Use(router.apiKeyProcessor)
+		router.AddOTLPMuxxer(muxxer)
+		server := httptest.NewServer(muxxer)
+		defer server.Close()
+
+		request, _ := http.NewRequest("POST", server.URL+"/v1/traces", bytes.NewReader(body))
+		request.Header = http.Header{}
+		request.Header.Set("content-type", "application/json")
+		request.Header.Set("x-honeycomb-team", lookupUnavailableAPIKey)
+		request.Header.Set("x-honeycomb-dataset", "dataset")
+
+		resp, err := http.DefaultClient.Do(request)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Contains(t, string(respBody), "try again later")
+		assert.NotContains(t, string(respBody), "auth is down")
+
+		assert.Equal(t, 0, len(mockTransmission.GetBlock(0)))
+	})
+
+	t.Run("asks the sender to retry when the environment lookup is unavailable - gRPC", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    lookupUnavailableAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
+		assert.Equal(t, codes.Unavailable, status.Code(err))
 
 		assert.Equal(t, 0, len(mockTransmission.GetBlock(0)))
 	})

@@ -896,6 +896,51 @@ func TestGetEnvironmentName(t *testing.T) {
 	})
 }
 
+// Whether a failed environment lookup may succeed on a retry decides whether the
+// sender is told to retry, so check how each outcome is classified.
+func TestLookupEnvironmentFailureIsRetryable(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    int
+		closeConn bool
+		retryable bool
+	}{
+		{name: "key rejected", status: http.StatusUnauthorized},
+		{name: "forbidden", status: http.StatusForbidden},
+		{name: "rate limited", status: http.StatusTooManyRequests, retryable: true},
+		{name: "server error", status: http.StatusInternalServerError, retryable: true},
+		{name: "bad gateway", status: http.StatusBadGateway, retryable: true},
+		{name: "no response", closeConn: true, retryable: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.closeConn {
+					conn, _, _ := w.(http.Hijacker).Hijack()
+					conn.Close()
+					return
+				}
+				w.WriteHeader(tt.status)
+			}))
+			defer server.Close()
+
+			router := &Router{
+				Config:      &config.MockConfig{GetHoneycombAPIVal: server.URL},
+				Logger:      &logger.MockLogger{},
+				proxyClient: server.Client(),
+			}
+			_, err := router.lookupEnvironment(esAPIKey)
+			require.Error(t, err)
+
+			if tt.retryable {
+				assert.Equal(t, ErrEnvironmentUnavailable, environmentLookupFailure(err))
+			} else {
+				assert.Equal(t, ErrEnvironmentLookup, environmentLookupFailure(err))
+			}
+		})
+	}
+}
+
 func TestSetOTLPEnvironmentNameLogsLookupFailure(t *testing.T) {
 	l := &logger.MockLogger{}
 	router := &Router{

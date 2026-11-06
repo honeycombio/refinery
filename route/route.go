@@ -25,6 +25,7 @@ import (
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	healthserver "google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
@@ -625,7 +626,7 @@ func (router *Router) processOTLPRequest(
 	if err != nil {
 		// setOTLPEnvironmentName has already logged the cause. Failing the
 		// request lets the sender see that it was not accepted.
-		return ErrEnvironmentLookup
+		return environmentLookupFailure(err)
 	}
 	totalEvents := 0
 	for _, batch := range batches {
@@ -667,7 +668,7 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	if err != nil {
 		// setOTLPEnvironmentName has already logged the cause. Failing the
 		// request lets the sender see that it was not accepted.
-		return ErrEnvironmentLookup
+		return environmentLookupFailure(err)
 	}
 	totalEvents := 0
 	for _, batch := range batches {
@@ -1121,9 +1122,34 @@ type AuthInfo struct {
 }
 
 // ErrEnvironmentLookup is returned for an OTLP request whose API key's
-// environment could not be looked up. Its events cannot be addressed, so the
-// request is rejected instead of being dropped after a success response.
+// environment could not be looked up, for example because the key was
+// rejected. Its events cannot be addressed, so the request is rejected instead
+// of being dropped after a success response. Retrying would not help.
 var ErrEnvironmentLookup = errors.New("failed to look up environment for API key")
+
+// ErrEnvironmentUnavailable is the retryable form of ErrEnvironmentLookup, for
+// when the lookup failed to get an answer at all and may succeed later.
+var ErrEnvironmentUnavailable = huskyotlp.OTLPError{
+	Message:        "failed to look up environment for API key, try again later",
+	HTTPStatusCode: http.StatusServiceUnavailable,
+	GRPCStatusCode: codes.Unavailable,
+}
+
+// retryableLookupError marks a lookupEnvironment failure that may succeed if
+// tried again: no response, a 429, or a 5xx.
+type retryableLookupError struct{ error }
+
+func (e retryableLookupError) Unwrap() error { return e.error }
+
+// environmentLookupFailure picks the error to return to the sender of a request
+// whose environment lookup failed with err.
+func environmentLookupFailure(err error) error {
+	var retryable retryableLookupError
+	if errors.As(err, &retryable) {
+		return ErrEnvironmentUnavailable
+	}
+	return ErrEnvironmentLookup
+}
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 	if apiKey == "" {
@@ -1201,13 +1227,15 @@ func (r *Router) lookupEnvironment(apiKey string) (authData, error) {
 	r.Logger.Debug().WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
 	resp, err := r.proxyClient.Do(req)
 	if err != nil {
-		return authData{}, fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)
+		return authData{}, retryableLookupError{fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)}
 	}
 	defer resp.Body.Close()
 
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized:
 		return authData{}, fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+		return authData{}, retryableLookupError{fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)}
 	case resp.StatusCode > 299:
 		return authData{}, fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
 	}
