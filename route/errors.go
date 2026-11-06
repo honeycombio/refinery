@@ -80,8 +80,22 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 // otlpErr is a canonical husky error, which replaces the error husky returned
 // and would otherwise leave the log with no reason. The response stays canonical
 // either way, keeping parser internals out of it.
+//
+// The log also carries who sent the request (user agent, dataset header) and its
+// shape (content type, encoding, length), so that failures can be traced back to
+// a sender.
 func (r *Router) handleOTLPFailureResponse(w http.ResponseWriter, req *http.Request, otlpErr husky.OTLPError, cause ...error) {
-	entry := r.Logger.Error()
+	entry := r.Logger.Error().WithField("content_length", req.ContentLength)
+	for field, header := range map[string]string{
+		"user_agent":       "User-Agent",
+		"content_type":     "Content-Type",
+		"content_encoding": "Content-Encoding",
+		"dataset":          "X-Honeycomb-Dataset",
+	} {
+		if v := req.Header.Get(header); v != "" {
+			entry = entry.WithString(field, v)
+		}
+	}
 	if len(cause) > 0 && cause[0] != nil {
 		entry = entry.WithString("cause", cause[0].Error())
 	}
