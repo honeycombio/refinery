@@ -211,6 +211,7 @@ func TestRedisPubsubPeers_WarnsWhenNoRegistrationReturns(t *testing.T) {
 		require.Len(t, warns, 1)
 		assert.Contains(t, warns[0], "has not seen its own registration")
 		assert.Contains(t, warns[0], "PUBLISH and SUBSCRIBE", "the message names what to check")
+		assert.Contains(t, warns[0], "credentials", "a wrong AuthCode no longer stops Start, so the message names it")
 
 		time.Sleep(time.Minute)
 		synctest.Wait()

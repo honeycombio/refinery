@@ -243,7 +243,7 @@ func (p *RedisPubsubPeers) Ready() error {
 				p.Metrics.Gauge("peer_registration_age_ms", float64(age.Milliseconds()))
 				if !seen && !warned && p.Clock.Since(started) >= noRegistrationWarnAfter {
 					warned = true
-					p.Logger.Warn().Logf("this host has not seen its own registration come back through Redis, so it is not ready; check that Redis is reachable and that the user may use both PUBLISH and SUBSCRIBE")
+					p.Logger.Warn().Logf("this host has not seen its own registration come back through Redis, so it is not ready; check that Redis is reachable, that the credentials are valid, and that the user may use both PUBLISH and SUBSCRIBE")
 				}
 			case <-p.Done:
 				p.Health.Unregister(peerManagementHealthKey)
