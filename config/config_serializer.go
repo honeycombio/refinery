@@ -37,11 +37,9 @@ func populateConfigContents(cfg Config) configContents {
 			PeerListenAddr:      cfg.GetPeerListenAddr(),
 			HoneycombAPI:        cfg.GetHoneycombAPI(),
 			HTTPIdleTimeout:     Duration(cfg.GetHTTPIdleTimeout()),
-			AdditionalHeaders:   cfg.GetAdditionalHeaders(),
 			UpstreamTLSCertFile: upstreamTLS.CertFile,
 			UpstreamTLSKeyFile:  upstreamTLS.KeyFile,
 			UpstreamTLSCAFile:   upstreamTLS.CAFile,
-			UpstreamTLSInsecure: upstreamTLS.InsecureSkipVerify,
 		},
 		OpAMP: OpAMPConfig{
 			Endpoint:    opAMPConfig.Endpoint,

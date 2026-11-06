@@ -100,17 +100,6 @@ func TestNewMutualTLS(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestNewInsecureSkipVerify(t *testing.T) {
-	pki := tlsconfigtest.New(t)
-	srv := startServer(t, pki.ServerTLSConfig())
-
-	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile, InsecureSkipVerify: true}, nil)
-	require.NoError(t, err)
-	body, err := get(t, cfg, srv.URL)
-	require.NoError(t, err)
-	assert.Equal(t, "client", body)
-}
-
 func TestNewErrors(t *testing.T) {
 	pki := tlsconfigtest.New(t)
 	dir := t.TempDir()
@@ -152,21 +141,38 @@ func TestClientCertificateRotation(t *testing.T) {
 	assert.Equal(t, "rotated", clientCN(t, cfg))
 
 	srv := startServer(t, pki.ServerTLSConfig())
-	cfg.InsecureSkipVerify = true
+	cfg.RootCAs = x509.NewCertPool()
+	cfg.RootCAs.AppendCertsFromPEM(mustRead(t, pki.CAFile))
 	body, err := get(t, cfg, srv.URL)
 	require.NoError(t, err)
 	assert.Equal(t, "rotated", body)
 }
 
+type warning struct {
+	msg    string
+	fields map[string]any
+}
+
+func recordWarnings() (*[]warning, Warner) {
+	var warnings []warning
+	return &warnings, func(msg string, fields map[string]any) {
+		warnings = append(warnings, warning{msg, fields})
+	}
+}
+
+func mustRead(t *testing.T, path string) []byte {
+	b, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return b
+}
+
 func TestClientCertificateReloadFailureKeepsLastGood(t *testing.T) {
 	pki := tlsconfigtest.New(t)
-	var reloadErrs []error
-	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile}, func(err error) {
-		reloadErrs = append(reloadErrs, err)
-	})
+	warnings, warn := recordWarnings()
+	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile}, warn)
 	require.NoError(t, err)
 	assert.Equal(t, "client", clientCN(t, cfg))
-	assert.Empty(t, reloadErrs)
+	assert.Empty(t, *warnings)
 
 	// cert rotated but key corrupt
 	pki.WriteClientCert(t, "rotated")
@@ -174,13 +180,14 @@ func TestClientCertificateReloadFailureKeepsLastGood(t *testing.T) {
 	touch(t, time.Minute, pki.ClientCertFile, pki.ClientKeyFile)
 	assert.Equal(t, "client", clientCN(t, cfg))
 	assert.Equal(t, "client", clientCN(t, cfg))
-	require.Len(t, reloadErrs, 1)
-	assert.ErrorContains(t, reloadErrs[0], "client certificate")
+	require.Len(t, *warnings, 1)
+	assert.Contains(t, (*warnings)[0].msg, "failed to reload")
+	assert.Contains(t, (*warnings)[0].fields["error"], "client certificate")
 
 	require.NoError(t, os.Remove(pki.ClientKeyFile))
 	assert.Equal(t, "client", clientCN(t, cfg))
-	require.Len(t, reloadErrs, 2)
-	assert.ErrorContains(t, reloadErrs[1], "key file")
+	require.Len(t, *warnings, 2)
+	assert.Contains(t, (*warnings)[1].fields["error"], "key file")
 
 	pki.WriteClientCert(t, "recovered")
 	touch(t, 2*time.Minute, pki.ClientCertFile, pki.ClientKeyFile)
@@ -188,5 +195,62 @@ func TestClientCertificateReloadFailureKeepsLastGood(t *testing.T) {
 
 	require.NoError(t, os.Remove(pki.ClientKeyFile))
 	assert.Equal(t, "recovered", clientCN(t, cfg))
-	assert.Len(t, reloadErrs, 3)
+	assert.Len(t, *warnings, 3)
+}
+
+func TestClientCertificateExpiryWarnings(t *testing.T) {
+	now := time.Now()
+	testCases := []struct {
+		name      string
+		notBefore time.Time
+		notAfter  time.Time
+		wantMsg   string
+	}{
+		{"healthy", now.Add(-time.Hour), now.Add(time.Hour), ""},
+		{"long-lived with a day left", now.Add(-90 * 24 * time.Hour), now.Add(24 * time.Hour), "expires soon"},
+		{"short-lived with a third left", now.Add(-100 * time.Second), now.Add(50 * time.Second), ""},
+		{"short-lived with a twentieth left", now.Add(-190 * time.Second), now.Add(10 * time.Second), "expires soon"},
+		{"expired", now.Add(-2 * time.Hour), now.Add(-time.Hour), "has expired"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pki := tlsconfigtest.New(t)
+			pki.WriteClientCertValidity(t, "client", tc.notBefore, tc.notAfter)
+			warnings, warn := recordWarnings()
+			cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile}, warn)
+			require.NoError(t, err)
+			clientCN(t, cfg)
+			clientCN(t, cfg)
+
+			if tc.wantMsg == "" {
+				assert.Empty(t, *warnings)
+				return
+			}
+			require.Len(t, *warnings, 1, "warned once, not on each handshake")
+			assert.Contains(t, (*warnings)[0].msg, tc.wantMsg)
+			assert.Equal(t, tc.notAfter.UTC().Format(time.RFC3339), (*warnings)[0].fields["not_after"])
+		})
+	}
+}
+
+func TestClientCertificateExpiryWarningClearsAfterRenewal(t *testing.T) {
+	pki := tlsconfigtest.New(t)
+	pki.WriteClientCertValidity(t, "old", time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour))
+	warnings, warn := recordWarnings()
+	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile}, warn)
+	require.NoError(t, err)
+	assert.Empty(t, *warnings, "New must not warn; Refinery's logger isn't started yet")
+	assert.Equal(t, "old", clientCN(t, cfg))
+	require.Len(t, *warnings, 1)
+
+	pki.WriteClientCert(t, "renewed")
+	touch(t, time.Minute, pki.ClientCertFile, pki.ClientKeyFile)
+	assert.Equal(t, "renewed", clientCN(t, cfg))
+	assert.Len(t, *warnings, 1)
+
+	pki.WriteClientCertValidity(t, "expired-again", time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour))
+	touch(t, 2*time.Minute, pki.ClientCertFile, pki.ClientKeyFile)
+	assert.Equal(t, "expired-again", clientCN(t, cfg))
+	require.Len(t, *warnings, 2)
+	assert.Contains(t, (*warnings)[1].msg, "has expired")
 }

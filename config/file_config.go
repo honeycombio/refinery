@@ -95,7 +95,6 @@ type NetworkConfig struct {
 	UpstreamTLSCertFile string `yaml:"UpstreamTLSCertFile"`
 	UpstreamTLSKeyFile  string `yaml:"UpstreamTLSKeyFile"`
 	UpstreamTLSCAFile   string `yaml:"UpstreamTLSCAFile"`
-	UpstreamTLSInsecure bool   `yaml:"UpstreamTLSInsecure" default:"false"`
 }
 
 type AccessKeyConfig struct {
@@ -925,10 +924,9 @@ func (f *fileConfig) GetUpstreamTLSConfig() tlsconfig.Options {
 
 	n := f.mainConfig.Network
 	return tlsconfig.Options{
-		CertFile:           n.UpstreamTLSCertFile,
-		KeyFile:            n.UpstreamTLSKeyFile,
-		CAFile:             n.UpstreamTLSCAFile,
-		InsecureSkipVerify: n.UpstreamTLSInsecure,
+		CertFile: n.UpstreamTLSCertFile,
+		KeyFile:  n.UpstreamTLSKeyFile,
+		CAFile:   n.UpstreamTLSCAFile,
 	}
 }
 

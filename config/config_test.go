@@ -1519,7 +1519,6 @@ func TestUpstreamTLS(t *testing.T) {
 		"Network.UpstreamTLSCertFile", pki.ClientCertFile,
 		"Network.UpstreamTLSKeyFile", pki.ClientKeyFile,
 		"Network.UpstreamTLSCAFile", pki.CAFile,
-		"Network.UpstreamTLSInsecure", true,
 	)
 	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
 	cfgFile, rulesFile := createTempConfigs(t, cm, rm)
@@ -1527,10 +1526,9 @@ func TestUpstreamTLS(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, tlsconfig.Options{
-		CertFile:           pki.ClientCertFile,
-		KeyFile:            pki.ClientKeyFile,
-		CAFile:             pki.CAFile,
-		InsecureSkipVerify: true,
+		CertFile: pki.ClientCertFile,
+		KeyFile:  pki.ClientKeyFile,
+		CAFile:   pki.CAFile,
 	}, c.GetUpstreamTLSConfig())
 }
 

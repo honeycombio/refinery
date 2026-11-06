@@ -68,10 +68,19 @@ func New(t testing.TB) *PKI {
 // WriteClientCert replaces the client certificate and key files.
 func (p *PKI) WriteClientCert(t testing.TB, commonName string) {
 	t.Helper()
+	p.WriteClientCertValidity(t, commonName, time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+}
+
+// WriteClientCertValidity replaces the client certificate and key files with
+// a certificate valid between notBefore and notAfter.
+func (p *PKI) WriteClientCertValidity(t testing.TB, commonName string, notBefore, notAfter time.Time) {
+	t.Helper()
 	key := newKey(t)
 	der := p.sign(t, &x509.Certificate{
 		Subject:     pkix.Name{CommonName: commonName},
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		NotBefore:   notBefore,
+		NotAfter:    notAfter,
 	}, &key.PublicKey)
 	keyDER, err := x509.MarshalECPrivateKey(key)
 	if err != nil {
@@ -94,8 +103,10 @@ func (p *PKI) sign(t testing.TB, tmpl *x509.Certificate, pub *ecdsa.PublicKey) [
 	t.Helper()
 	p.serial++
 	tmpl.SerialNumber = big.NewInt(p.serial)
-	tmpl.NotBefore = time.Now().Add(-time.Hour)
-	tmpl.NotAfter = time.Now().Add(time.Hour)
+	if tmpl.NotAfter.IsZero() {
+		tmpl.NotBefore = time.Now().Add(-time.Hour)
+		tmpl.NotAfter = time.Now().Add(time.Hour)
+	}
 	parent := p.ca
 	if parent == nil {
 		parent = tmpl

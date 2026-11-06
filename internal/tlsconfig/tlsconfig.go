@@ -11,24 +11,24 @@ import (
 )
 
 type Options struct {
-	CertFile           string
-	KeyFile            string
-	CAFile             string
-	InsecureSkipVerify bool
+	CertFile string
+	KeyFile  string
+	CAFile   string
 }
 
+// Warner reports a problem with the client certificate that doesn't stop
+// Refinery from sending, such as a failed reload or an upcoming expiry.
+type Warner func(msg string, fields map[string]any)
+
 // New returns a new *tls.Config built from opts, or nil if opts is empty.
-// onReloadError, if non-nil, is called when the client certificate changes on
-// disk but can't be reloaded; repeats of the same error are not reported.
-func New(opts Options, onReloadError func(error)) (*tls.Config, error) {
+// warn, if non-nil, is called during TLS handshakes, once for each new client
+// certificate problem.
+func New(opts Options, warn Warner) (*tls.Config, error) {
 	if opts == (Options{}) {
 		return nil, nil
 	}
 
-	cfg := &tls.Config{
-		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: opts.InsecureSkipVerify,
-	}
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
 
 	if opts.CAFile != "" {
 		pem, err := os.ReadFile(opts.CAFile)
@@ -46,7 +46,7 @@ func New(opts Options, onReloadError func(error)) (*tls.Config, error) {
 		if opts.CertFile == "" || opts.KeyFile == "" {
 			return nil, errors.New("upstream TLS cert file and key file must be set together")
 		}
-		r := &certReloader{certFile: opts.CertFile, keyFile: opts.KeyFile, onReloadError: onReloadError}
+		r := &certReloader{certFile: opts.CertFile, keyFile: opts.KeyFile, warn: warn}
 		if err := r.load(); err != nil {
 			return nil, err
 		}
@@ -60,12 +60,13 @@ func New(opts Options, onReloadError func(error)) (*tls.Config, error) {
 // serving the last good certificate if a reload fails.
 type certReloader struct {
 	certFile, keyFile string
-	onReloadError     func(error)
+	warn              Warner
 
 	mu              sync.Mutex
 	cert            *tls.Certificate
 	certMod, keyMod time.Time
-	lastErr         string
+	lastReloadErr   string
+	lastExpiryWarn  string
 }
 
 func (r *certReloader) load() error {
@@ -90,16 +91,46 @@ func (r *certReloader) load() error {
 	return nil
 }
 
+// checkExpiry warns when the current certificate has expired or has less than
+// a tenth of its lifetime left, which is well past when renewal tools such as
+// cert-manager replace it.
+func (r *certReloader) checkExpiry() {
+	leaf := r.cert.Leaf
+	if leaf == nil {
+		return
+	}
+	now := time.Now()
+	var msg string
+	switch {
+	case now.After(leaf.NotAfter):
+		msg = "upstream TLS client certificate has expired"
+	case leaf.NotAfter.Sub(now) < leaf.NotAfter.Sub(leaf.NotBefore)/10:
+		msg = "upstream TLS client certificate expires soon"
+	}
+	key := msg + leaf.NotAfter.String()
+	if msg != "" && key != r.lastExpiryWarn && r.warn != nil {
+		r.warn(msg, map[string]any{
+			"cert_file": r.certFile,
+			"subject":   leaf.Subject.String(),
+			"not_after": leaf.NotAfter.UTC().Format(time.RFC3339),
+		})
+	}
+	r.lastExpiryWarn = key
+}
+
 func (r *certReloader) getClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.load(); err != nil {
-		if err.Error() != r.lastErr && r.onReloadError != nil {
-			r.onReloadError(err)
+		if err.Error() != r.lastReloadErr && r.warn != nil {
+			r.warn("failed to reload upstream TLS client certificate; continuing with the previous certificate", map[string]any{
+				"error": err.Error(),
+			})
 		}
-		r.lastErr = err.Error()
+		r.lastReloadErr = err.Error()
 	} else {
-		r.lastErr = ""
+		r.lastReloadErr = ""
 	}
+	r.checkExpiry()
 	return r.cert, nil
 }
