@@ -34,6 +34,7 @@ import (
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/internal/tlsconfig"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -2250,6 +2251,67 @@ func BenchmarkDistributedTraces(b *testing.B) {
 				}
 				sender.waitForCount(b, b.N)
 			})
+		})
+	}
+}
+
+func TestLogUpstreamTLS(t *testing.T) {
+	const api = "https://proxy.internal:8443"
+	testCases := []struct {
+		name       string
+		tls        tlsconfig.Options
+		loggerType string
+		loggerHost string
+		wantLogs   []string
+	}{
+		{name: "not configured", loggerType: "honeycomb", loggerHost: "https://api.honeycomb.io"},
+		{
+			name:       "client cert with logger elsewhere",
+			tls:        tlsconfig.Options{CertFile: "c.pem", KeyFile: "k.pem"},
+			loggerType: "honeycomb", loggerHost: "https://api.honeycomb.io",
+			wantLogs: []string{"loaded upstream TLS configuration at startup"},
+		},
+		{
+			name:       "CA file with logger elsewhere",
+			tls:        tlsconfig.Options{CAFile: "ca.pem"},
+			loggerType: "honeycomb", loggerHost: "https://api.honeycomb.io",
+			wantLogs: []string{"loaded upstream TLS configuration at startup", "HoneycombLogger.APIHost is not Network.HoneycombAPI"},
+		},
+		{
+			name:       "CA file with logger on the proxy",
+			tls:        tlsconfig.Options{CAFile: "ca.pem"},
+			loggerType: "honeycomb", loggerHost: api + "/",
+			wantLogs: []string{"loaded upstream TLS configuration at startup"},
+		},
+		{
+			name:       "CA file with stdout logger",
+			tls:        tlsconfig.Options{CAFile: "ca.pem"},
+			loggerType: "stdout", loggerHost: "https://api.honeycomb.io",
+			wantLogs: []string{"loaded upstream TLS configuration at startup"},
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			lgr := &logger.MockLogger{}
+			a := &App{
+				Logger: lgr,
+				Config: &config.MockConfig{
+					UpstreamTLS:                 tc.tls,
+					GetHoneycombAPIVal:          api,
+					GetLoggerTypeVal:            tc.loggerType,
+					GetHoneycombLoggerConfigVal: config.HoneycombLoggerConfig{APIHost: tc.loggerHost},
+				},
+			}
+			a.logUpstreamTLS()
+
+			var got []string
+			for _, ev := range lgr.Events {
+				got = append(got, ev.Fields["warn"].(string))
+			}
+			require.Len(t, got, len(tc.wantLogs))
+			for i, want := range tc.wantLogs {
+				assert.Contains(t, got[i], want)
+			}
 		})
 	}
 }

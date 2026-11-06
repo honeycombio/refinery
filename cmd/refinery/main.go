@@ -31,6 +31,7 @@ import (
 	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/internal/otelutil"
 	"github.com/honeycombio/refinery/internal/peer"
+	"github.com/honeycombio/refinery/internal/tlsconfig"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -155,6 +156,14 @@ func main() {
 		TLSHandshakeTimeout: 15 * time.Second,
 		ForceAttemptHTTP2:   true,
 	}
+	upstreamTLS, err := tlsconfig.New(c.GetUpstreamTLSConfig(), func(msg string, fields map[string]any) {
+		lgr.Warn().WithFields(fields).Logf("%s", msg)
+	})
+	if err != nil {
+		fmt.Printf("unable to configure upstream TLS: %v\n", err)
+		os.Exit(1)
+	}
+	upstreamTransport.TLSClientConfig = upstreamTLS
 
 	// peerTransport is the http transport used to send things to a local peer
 	peerTransport := &http.Transport{
