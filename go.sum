@@ -121,8 +121,8 @@ github.com/honeycombio/dynsampler-go v0.6.4 h1:EM3FXN2Lfmso41MRMmSvRynMrz+AHiRff
 github.com/honeycombio/dynsampler-go v0.6.4/go.mod h1:M5YYNOfxRrBlEWDatTlHMYo5F7GjwVnptx5z+uXIVMo=
 github.com/honeycombio/hpsf v0.14.0 h1:LeQbDuT+aVmiJnWp9Kqb9Qqz5OZcjDk85RMzzwKtCKI=
 github.com/honeycombio/hpsf v0.14.0/go.mod h1:VyPjyn1GViOiCrpBbPZCkEJnuDuSTUpU8LV5CWVTQm4=
-github.com/honeycombio/husky v0.45.0 h1:x77FDe+zAo+WQ4oROd90aK1n4hBeUb1BYKABP9CH3Ys=
-github.com/honeycombio/husky v0.45.0/go.mod h1:lQ1VzGZxeYPCr4zxmak1lVe29HJFqJ6bQXWCl0ZqlNg=
+github.com/honeycombio/husky v0.46.0 h1:cXALENxeghsbCxtFCLCQGGEGRSu/0+oi7SZ7xuxdzc4=
+github.com/honeycombio/husky v0.46.0/go.mod h1:cvMH9DCaEWwqMlYPtOHpU8lwGfJw2Zh4U1mj0P5N3mc=
 github.com/honeycombio/libhoney-go v1.27.1 h1:79FR19fVpaeDMqTDfpXtMxd90vzsxhZnIOSysMrUSQQ=
 github.com/honeycombio/libhoney-go v1.27.1/go.mod h1:qLZO8Q3ep/hISEoVC7m8N9ZOvn2eqaGdoJg9XXXasqM=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
@@ -141,9 +141,8 @@ github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORN
 github.com/kr/pretty v0.3.1 h1:flRD4NNwYAUpkphVc1HcthR4KEIFJ65n8Mw5qdRn3LE=
 github.com/kr/pretty v0.3.1/go.mod h1:hoEshYVHaxMs3cyo3Yncou5ZscifuDolrwPKZanG3xk=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
+github.com/kr/text v0.1.0 h1:45sCR5RtlFHMR4UwH9sdQ5TC8v0qDQCHnXt+kaKSTVE=
 github.com/kr/text v0.1.0/go.mod h1:4Jbv+DJW3UT/LiOwJeYQe1efqtUx/iVham/4vfdArNI=
-github.com/kr/text v0.2.0 h1:5Nx0Ya0ZqY2ygV366QzturHI13Jq95ApcVaJBhpS+AY=
-github.com/kr/text v0.2.0/go.mod h1:eLer722TekiGuMkidMxC/pM04lWEeraHUUmBw8l2grE=
 github.com/kylelemons/godebug v1.1.0 h1:RPNrshWIDI6G2gRW9EHilWtl7Z6Sb1BR0xunSBf0SNc=
 github.com/kylelemons/godebug v1.1.0/go.mod h1:9/0rRGxNHcop5bhtWyNeEfOS8JIWk580+fNqagV/RAw=
 github.com/michel-laterman/proxy-connect-dialer-go v0.1.0 h1:Q8asukpmyrEheocd+R+6YEI4jcm62sHHalgTMG+LoLw=
@@ -162,8 +161,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/pkg/golden v0.164.1 h1
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/golden v0.164.1/go.mod h1:11XcOuV36UyWWNUogbeLulQ86MkmzAEo3u0v7Fo9AAY=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.164.1 h1:Xmj/ptkrKnMGPaaWcLplVw0czXI1txV0VQW4LvIP+z0=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.164.1/go.mod h1:m35oPRTuzmdit0lfy0EzfAUlvnqpIZIyLBqm4rGQMPY=
-github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.142.0 h1:lFowWhr/qx5Gm2X8H0BbG87xZh/e+4S0PQw8HQO5D4Y=
-github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.142.0/go.mod h1:JybcaNLHHzJQh690eSp+KDbLrxB1+AhKNLlibqrogt4=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.164.1 h1:yR01L83iH6OmWjHLIlkiLjV+wmWD2uykJdvq+aKa+x0=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling v0.164.1/go.mod h1:zoJ7QhG2bQSgxLIpH0KlbmVGIQKl1WeH5ybUU+JCCVs=
 github.com/otiai10/copy v1.10.0 h1:znyI7l134wNg/wDktoVQPxPkgvhDfGCYUasey+h0rDQ=
 github.com/otiai10/copy v1.10.0/go.mod h1:rSaLseMUsZFFbsFGc7wCJnnkTAvdc5L6VWxPE4308Ww=
 github.com/otiai10/mint v1.5.1 h1:XaPLeE+9vGbuyEHem1JNk3bYc7KKqyI/na0/mLd/Kks=
@@ -274,10 +273,10 @@ go.opentelemetry.io/otel/trace v1.47.0 h1:JOjX/Oci8K94QHddo+bbfya/Ai/nf6/dt9ZfrF
 go.opentelemetry.io/otel/trace v1.47.0/go.mod h1:jNaSLa2PZEYFG6fRjJABAu+bw4FS08uDmPg28lTghu0=
 go.opentelemetry.io/proto/otlp v1.11.1 h1:SCrPqH9NE5CmBrOqpjNCiT0X5mGwMyGERXdogfR7Yjw=
 go.opentelemetry.io/proto/otlp v1.11.1/go.mod h1:wq8W4aSf6bOy8RZyESOeQFr9Pu7wydWX/TY4sgvrTPg=
-go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.2.0 h1:40vBjolEOioNBl8zPj1wxqlA7kJ82RxR4HnUv7W8zRI=
-go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.2.0/go.mod h1:4wAsc1dEVb4D1ZykBNC9AriTU9uLYtmziLrB+7G4lb4=
-go.opentelemetry.io/proto/otlp/profiles/v1development v0.2.0 h1:yXinc284C6bmzA1r9jk7MxAhrBIIOH3qwmqwBmylZrA=
-go.opentelemetry.io/proto/otlp/profiles/v1development v0.2.0/go.mod h1:ygxocDWPB6Y6bySAjxmHyTebjAJ8jcEUAZc03gu1pxk=
+go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.4.1 h1:buJojifhJDy1KxIGqMTJZi2ofe4ePWmrMAvP/XwbD+Y=
+go.opentelemetry.io/proto/otlp/collector/profiles/v1development v0.4.1/go.mod h1:GQ77lWay7cMMRLKiZQV1ZKTERQWI+Lub4yoeD55yOE0=
+go.opentelemetry.io/proto/otlp/profiles/v1development v0.4.1 h1:/r6OKUO8PmUMAfAG0lIIZEWQZHa3o56LHMulrusszYo=
+go.opentelemetry.io/proto/otlp/profiles/v1development v0.4.1/go.mod h1:iXB90dhIyHY9OFlaMA3a4pCftOIs6gxbN4kXoLQEtmU=
 go.opentelemetry.io/proto/slim/otlp v1.11.1 h1:qf2OA3kQcIDXh3q7b6kc0IzRe8BFXlVIlH5uaOACrVQ=
 go.opentelemetry.io/proto/slim/otlp v1.11.1/go.mod h1:15pWfj6/rYjQzyrC3ZGQoZ0rNgLqI/Lk+jFgYgV4UIE=
 go.opentelemetry.io/proto/slim/otlp/collector/profiles/v1development v0.4.1 h1:pgPIbi29ViNY/gE//bHlHuLyqHE+PDhhw7jAhItWIaM=
