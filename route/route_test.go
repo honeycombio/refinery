@@ -1259,6 +1259,51 @@ func TestProcessEventMetrics(t *testing.T) {
 	}
 }
 
+func TestEventMetricsFlushedOncePerRequest(t *testing.T) {
+	t.Parallel()
+
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+	router := &Router{
+		Config:               &config.MockConfig{TraceIdFieldNames: []string{"trace.trace_id"}},
+		Logger:               &logger.NullLogger{},
+		Metrics:              mockMetrics,
+		UpstreamTransmission: &transmit.MockTransmission{},
+		PeerTransmission:     &transmit.MockTransmission{},
+		Collector:            collect.NewMockCollector(),
+		Sharder:              &sharder.MockSharder{Self: &sharder.TestShard{Addr: "http://localhost:12345"}},
+		routerType:           types.RouterTypeIncoming,
+		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: types.RouterTypeIncoming.String()},
+	}
+	router.registerMetricNames()
+	router.UpstreamTransmission.(*transmit.MockTransmission).Start()
+
+	newEvent := func(data map[string]interface{}) *types.Event {
+		return &types.Event{
+			Context:   context.Background(),
+			APIHost:   "test.honeycomb.io",
+			Dataset:   "test-dataset",
+			Timestamp: time.Now(),
+			Data:      types.NewPayload(router.Config, data),
+		}
+	}
+
+	em := &eventMetrics{}
+	require.NoError(t, router.processEventInto(newEvent(map[string]interface{}{"trace.trace_id": "t1"}), "req", em))
+	require.NoError(t, router.processEventInto(newEvent(map[string]interface{}{"trace.trace_id": "t2"}), "req", em))
+	require.NoError(t, router.processEventInto(newEvent(map[string]interface{}{"no_trace": "x"}), "req", em))
+
+	assert.Empty(t, mockMetrics.CounterIncrements, "nothing is recorded before the flush")
+	assert.Empty(t, mockMetrics.Histograms)
+
+	router.flushEventMetrics(em)
+
+	assert.Len(t, mockMetrics.Histograms[router.metricsNames.routerEventBytes], 3, "one size observation per event")
+	assert.EqualValues(t, 2, mockMetrics.CounterIncrements[router.metricsNames.routerSpan])
+	assert.EqualValues(t, 1, mockMetrics.CounterIncrements[router.metricsNames.routerNonspan])
+	assert.NotContains(t, mockMetrics.CounterIncrements, router.metricsNames.routerDropped, "zero counters are not recorded")
+}
+
 // TestBatchStopsOnDatasetError covers the missing return after
 // handlerReturnWithError. Without it the handler kept running past the error and
 // wrote a second response body on top of the first.

@@ -127,6 +127,21 @@ func (p *PromMetrics) Histogram(name string, obs float64) {
 		}
 	}
 }
+
+func (p *PromMetrics) HistogramBatch(name string, obs []float64) {
+	p.lock.RLock()
+	histIface, ok := p.metrics[name]
+	p.lock.RUnlock()
+
+	if ok {
+		if hist, ok := histIface.(prometheus.Histogram); ok {
+			for _, val := range obs {
+				hist.Observe(val)
+			}
+		}
+	}
+}
+
 func (p *PromMetrics) Up(name string) {
 	p.lock.RLock()
 	gaugeIface, ok := p.metrics[name]
