@@ -623,7 +623,9 @@ func (router *Router) processOTLPRequest(
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
 	if err != nil {
-		return nil
+		// setOTLPEnvironmentName has already logged the cause. Failing the
+		// request lets the sender see that it was not accepted.
+		return ErrEnvironmentLookup
 	}
 	totalEvents := 0
 	for _, batch := range batches {
@@ -663,7 +665,9 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
 	if err != nil {
-		return nil
+		// setOTLPEnvironmentName has already logged the cause. Failing the
+		// request lets the sender see that it was not accepted.
+		return ErrEnvironmentLookup
 	}
 	totalEvents := 0
 	for _, batch := range batches {
@@ -1116,6 +1120,11 @@ type AuthInfo struct {
 	ID           string          `json:"id"`
 }
 
+// ErrEnvironmentLookup is returned for an OTLP request whose API key's
+// environment could not be looked up. Its events cannot be addressed, so the
+// request is rejected instead of being dropped after a success response.
+var ErrEnvironmentLookup = errors.New("failed to look up environment for API key")
+
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 	if apiKey == "" {
 		return "", nil
@@ -1152,7 +1161,7 @@ func (r *Router) setOTLPEnvironmentName(
 ) {
 	envName, err := r.getEnvironmentName(apiKey)
 	if err != nil {
-		r.Logger.Error().WithField("error", err).WithField("signal", string(signal)).Logf("failed to look up environment name for OTLP request")
+		r.Logger.Error().WithString("cause", err.Error()).WithField("signal", string(signal)).Logf("failed to look up environment name for OTLP request")
 	}
 	ri.EnvironmentName = envName
 

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/facebookgo/inject"
+	huskyotlp "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
@@ -893,6 +894,24 @@ func TestGetEnvironmentName(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, "es-env", env, "returns the E&S key's environment name from the cache")
 	})
+}
+
+func TestSetOTLPEnvironmentNameLogsLookupFailure(t *testing.T) {
+	l := &logger.MockLogger{}
+	router := &Router{
+		Config: &config.MockConfig{},
+		Logger: l,
+		environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+			return authData{}, errors.New("auth is down")
+		}),
+	}
+
+	ri := huskyotlp.RequestInfo{Dataset: "ds"}
+	router.setOTLPEnvironmentName(&ri, esAPIKey, otlpSignalTrace)
+
+	require.Len(t, l.Events, 1)
+	assert.Equal(t, "auth is down", l.Events[0].Fields["cause"], "the log carries the reason")
+	assert.Equal(t, "", ri.EnvironmentName)
 }
 
 func TestGRPCHealthProbeCheck(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -54,8 +55,11 @@ const (
 	migratedClassicAPIKey = "aaaabbbbccccddddeeeeffff00001111"
 	migratedEnvName       = "migrated-env"
 
-	esAPIKey  = "abc123DEF456ghi789jklm"
-	esEnvName = "es-env"
+	esAPIKey = "abc123DEF456ghi789jklm"
+
+	// lookupFailsAPIKey is a key whose environment lookup returns an error.
+	lookupFailsAPIKey = "key-whose-lookup-fails"
+	esEnvName         = "es-env"
 
 	testServiceName   = "my-service"
 	testDatasetHeader = "my-dataset"
@@ -149,6 +153,8 @@ func TestOTLPHandler(t *testing.T) {
 				return authData{environment: migratedEnvName}, nil
 			case esAPIKey:
 				return authData{environment: esEnvName}, nil
+			case lookupFailsAPIKey:
+				return authData{}, errors.New("auth is down")
 			default:
 				return authData{}, nil
 			}
@@ -588,6 +594,62 @@ func TestOTLPHandler(t *testing.T) {
 		event := events[0]
 		assert.Equal(t, "my-service", event.Dataset)
 		assert.Equal(t, "local", event.Environment)
+	})
+
+	// A request whose environment cannot be looked up cannot be addressed. It
+	// used to be dropped after a success response, so the sender never knew.
+	t.Run("fails the request when the environment lookup fails - HTTP", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		body, err := protojson.Marshal(req)
+		require.NoError(t, err)
+
+		muxxer := mux.NewRouter()
+		muxxer.Use(router.apiKeyProcessor)
+		router.AddOTLPMuxxer(muxxer)
+		server := httptest.NewServer(muxxer)
+		defer server.Close()
+
+		request, _ := http.NewRequest("POST", server.URL+"/v1/traces", bytes.NewReader(body))
+		request.Header = http.Header{}
+		request.Header.Set("content-type", "application/json")
+		request.Header.Set("x-honeycomb-team", lookupFailsAPIKey)
+		request.Header.Set("x-honeycomb-dataset", "dataset")
+
+		resp, err := http.DefaultClient.Do(request)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		respBody, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Contains(t, string(respBody), ErrEnvironmentLookup.Error())
+		assert.NotContains(t, string(respBody), "auth is down", "the lookup's own error stays in the log")
+
+		assert.Equal(t, 0, len(mockTransmission.GetBlock(0)))
+	})
+
+	t.Run("fails the request when the environment lookup fails - gRPC", func(t *testing.T) {
+		req := &collectortrace.ExportTraceServiceRequest{
+			ResourceSpans: []*trace.ResourceSpans{{
+				ScopeSpans: []*trace.ScopeSpans{{
+					Spans: helperOTLPRequestSpansWithStatus(),
+				}},
+			}},
+		}
+		ctx := createGRPCContext(map[string]string{
+			"x-honeycomb-team":    lookupFailsAPIKey,
+			"x-honeycomb-dataset": "ds",
+		})
+		_, err := grpcClient.Export(ctx, req)
+		assert.Equal(t, codes.Internal, status.Code(err))
+
+		assert.Equal(t, 0, len(mockTransmission.GetBlock(0)))
 	})
 
 	t.Run("rejects bad API keys - HTTP", func(t *testing.T) {
