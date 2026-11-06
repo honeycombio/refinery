@@ -85,6 +85,8 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 			r.handleOTLPFailureResponse(w, req, huskyotlp.ErrInvalidContentType)
 		case errors.Is(err, huskyotlp.ErrMissingAPIKeyHeader), errors.Is(err, huskyotlp.ErrMissingDatasetHeader):
 			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
+		case errors.Is(err, ErrEnvironmentUnavailable):
+			r.handleOTLPFailureResponse(w, req, ErrEnvironmentUnavailable)
 		default:
 			r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		}
