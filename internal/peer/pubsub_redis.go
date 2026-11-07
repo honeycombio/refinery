@@ -4,12 +4,16 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -27,6 +31,15 @@ const (
 	// timeout phase in order to allow multiple timeouts to fail and yet still
 	// keep the host in the mix.
 	refreshCacheInterval = 3 * time.Second
+
+	// peerManagementHealthKey is ready once this host has seen its own registration.
+	peerManagementHealthKey = "peer_management"
+
+	peerManagementHealthCheckInInterval = time.Second
+
+	peerManagementHealthCheckInTimeout = 15 * time.Second
+
+	noRegistrationWarnAfter = 30 * time.Second
 )
 
 type peerAction string
@@ -89,6 +102,7 @@ type RedisPubsubPeers struct {
 	Logger     logger.Logger   `inject:""`
 	PubSub     pubsub.PubSub   `inject:""`
 	Clock      clockwork.Clock `inject:""`
+	Health     health.Recorder `inject:""`
 	InstanceID string          `inject:"instanceID"`
 
 	// Done is a channel that will be closed when the service should stop.
@@ -98,11 +112,29 @@ type RedisPubsubPeers struct {
 	// since the pubsub subscription is still active.
 	Done chan struct{}
 
-	peers     *generics.MapWithTTL[string, string]
+	peers *generics.MapWithTTL[string, string]
+	sub   pubsub.Subscription
+	topic string // formatted topic name
+
+	// mut guards hash and callbacks: a pubsub runs subscription callbacks concurrently.
+	mut       sync.Mutex
 	hash      uint64
 	callbacks []func()
-	sub       pubsub.Subscription
-	topic     string // formatted topic name
+
+	// lastSelfSeen is when this host's own Register message last came back
+	// through the subscription; nil if none has. Store Clock.Now unchanged:
+	// UTC, Local, In, Round, Truncate and encoding strip the monotonic reading.
+	lastSelfSeen atomic.Pointer[time.Time]
+}
+
+var _ RegistrationAgeReporter = (*RedisPubsubPeers)(nil)
+
+func (p *RedisPubsubPeers) RegistrationAge() (time.Duration, bool) {
+	last := p.lastSelfSeen.Load()
+	if last == nil {
+		return 0, false
+	}
+	return p.Clock.Since(*last), true
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
@@ -110,14 +142,21 @@ type RedisPubsubPeers struct {
 func (p *RedisPubsubPeers) checkHash() {
 	peers := p.peers.SortedKeys()
 	newhash := hashList(peers)
-	if newhash != p.hash {
+
+	p.mut.Lock()
+	changed := newhash != p.hash
+	var callbacks []func()
+	if changed {
 		p.hash = newhash
-		for _, cb := range p.callbacks {
-			go cb()
-		}
+		callbacks = slices.Clone(p.callbacks)
+	}
+	p.mut.Unlock()
+
+	for _, cb := range callbacks {
+		go cb()
 	}
 	p.Metrics.Gauge("num_peers", float64(len(peers)))
-	p.Metrics.Gauge("peer_hash", float64(p.hash))
+	p.Metrics.Gauge("peer_hash", float64(newhash))
 }
 
 func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
@@ -126,6 +165,10 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 		return
 	}
 	p.Metrics.Count("peer_messages", 1)
+	if cmd.action == Register && cmd.id == p.InstanceID {
+		now := p.Clock.Now()
+		p.lastSelfSeen.Store(&now)
+	}
 	switch cmd.action {
 	case Unregister:
 		p.peers.Delete(cmd.id)
@@ -139,6 +182,7 @@ var redisPubSubPeersMetrics = []metrics.Metadata{
 	{Name: "num_peers", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the active number of peers in the cluster"},
 	{Name: "peer_hash", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the hash of the current list of peers"},
 	{Name: "peer_messages", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of messages received by the peers service"},
+	{Name: "peer_registration_age_ms", Type: metrics.Gauge, Unit: metrics.Milliseconds, Description: "milliseconds since this host last saw its own registration come back through Redis, or since it started if it has not seen one"},
 }
 
 func (p *RedisPubsubPeers) Start() error {
@@ -170,6 +214,8 @@ func (p *RedisPubsubPeers) Start() error {
 		return err
 	}
 	p.peers.Set(p.InstanceID, myaddr)
+
+	p.Health.Register(peerManagementHealthKey, peerManagementHealthCheckInTimeout)
 	return nil
 }
 
@@ -178,6 +224,34 @@ func (p *RedisPubsubPeers) Ready() error {
 	if err != nil {
 		return err
 	}
+
+	// Report readiness from its own goroutine so a hung publish cannot stall
+	// the reports and fail the liveness check.
+	go func() {
+		ticker := p.Clock.NewTicker(peerManagementHealthCheckInInterval)
+		defer ticker.Stop()
+		started := p.Clock.Now()
+		warned := false
+		for {
+			select {
+			case <-ticker.Chan():
+				age, seen := p.RegistrationAge()
+				p.Health.Ready(peerManagementHealthKey, seen)
+				if !seen {
+					age = p.Clock.Since(started)
+				}
+				p.Metrics.Gauge("peer_registration_age_ms", float64(age.Milliseconds()))
+				if !seen && !warned && p.Clock.Since(started) >= noRegistrationWarnAfter {
+					warned = true
+					p.Logger.Warn().Logf("this host has not seen its own registration come back through Redis, so it is not ready; check that Redis is reachable, that the credentials are valid, and that the user may use both PUBLISH and SUBSCRIBE")
+				}
+			case <-p.Done:
+				p.Health.Unregister(peerManagementHealthKey)
+				return
+			}
+		}
+	}()
+
 	// periodically refresh our presence in the list of peers, and update peers as they come in
 	go func() {
 		// we want our refresh cache interval to vary from peer to peer so they
@@ -209,10 +283,13 @@ func (p *RedisPubsubPeers) Ready() error {
 				}
 				cancel()
 			case <-logTicker.Chan():
+				p.mut.Lock()
+				hash := p.hash
+				p.mut.Unlock()
 				p.Logger.Debug().WithFields(map[string]any{
 					"ids":       p.peers.SortedKeys(),
 					"peers":     p.peers.SortedValues(),
-					"hash":      p.hash,
+					"hash":      hash,
 					"num_peers": p.peers.Length(),
 					"self":      myaddr,
 				}).Logf("peer report")
@@ -262,6 +339,8 @@ func (p *RedisPubsubPeers) GetInstanceID() (string, error) {
 }
 
 func (p *RedisPubsubPeers) RegisterUpdatedPeersCallback(callback func()) {
+	p.mut.Lock()
+	defer p.mut.Unlock()
 	p.callbacks = append(p.callbacks, callback)
 }
 

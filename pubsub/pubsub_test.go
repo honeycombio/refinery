@@ -3,8 +3,11 @@ package pubsub_test
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -278,5 +281,161 @@ func BenchmarkPubSub(b *testing.B) {
 			wg.Wait()
 			require.Len(b, li.Messages(), b.N)
 		})
+	}
+}
+
+// hungRedis stands in for a Redis that stops answering. While hung it accepts
+// connections and says nothing, so a client waits until it gives up. Once it
+// is told to forward, it connects clients to the Redis at target.
+type hungRedis struct {
+	ln      net.Listener
+	target  string
+	forward atomic.Bool
+	mut     sync.Mutex
+	conns   []net.Conn
+}
+
+func newHungRedis(t *testing.T, target string) *hungRedis {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	h := &hungRedis{ln: ln, target: target}
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			h.mut.Lock()
+			h.conns = append(h.conns, c)
+			h.mut.Unlock()
+			if h.forward.Load() {
+				go h.pipe(c)
+			}
+		}
+	}()
+	t.Cleanup(func() {
+		ln.Close()
+		h.mut.Lock()
+		defer h.mut.Unlock()
+		for _, c := range h.conns {
+			c.Close()
+		}
+	})
+	return h
+}
+
+func (h *hungRedis) addr() string { return h.ln.Addr().String() }
+
+func (h *hungRedis) accepted() int {
+	h.mut.Lock()
+	defer h.mut.Unlock()
+	return len(h.conns)
+}
+
+func (h *hungRedis) pipe(client net.Conn) {
+	upstream, err := net.Dial("tcp", h.target)
+	if err != nil {
+		client.Close()
+		return
+	}
+	h.mut.Lock()
+	h.conns = append(h.conns, upstream)
+	h.mut.Unlock()
+	go io.Copy(upstream, client)
+	io.Copy(client, upstream)
+}
+
+// newHungGoRedisPubSub returns a GoRedisPubSub that is configured with redisCfg
+// and connects to a hungRedis, which forwards to the local Redis once told to.
+// The GoRedisPubSub is started and closed with the test.
+func newHungGoRedisPubSub(t *testing.T, redisCfg config.RedisPeerManagementConfig) (*pubsub.GoRedisPubSub, *hungRedis) {
+	redis := newHungRedis(t, "localhost:6379")
+	redisCfg.Host = redis.addr()
+	ps := newGoRedisPubSub(redisCfg)
+	require.NoError(t, ps.Start())
+	t.Cleanup(ps.Close)
+	return ps, redis
+}
+
+func newGoRedisPubSub(redisCfg config.RedisPeerManagementConfig) *pubsub.GoRedisPubSub {
+	m := &metrics.NullMetrics{}
+	m.Start()
+	return &pubsub.GoRedisPubSub{
+		Config:  &config.MockConfig{GetRedisPeerManagementVal: redisCfg},
+		Metrics: m,
+		Tracer:  noop.NewTracerProvider().Tracer("test"),
+		Logger:  &logger.NullLogger{},
+	}
+}
+
+// TestGoRedisPubSubSubscribeDoesNotWaitForRedis tests that Subscribe returns
+// while Redis does not answer, and that the subscription delivers messages
+// once Redis does. A host must be able to start while Redis is down.
+func TestGoRedisPubSubSubscribeDoesNotWaitForRedis(t *testing.T) {
+	ps, redis := newHungGoRedisPubSub(t, config.RedisPeerManagementConfig{ClusterName: "hung-test"})
+
+	// go-redis waits 5 seconds for a connection that never answers. Subscribe
+	// must not wait for it.
+	listener := &pubsubListener{}
+	topic := ps.FormatTopic("topic")
+	returned := make(chan struct{})
+	go func() {
+		ps.Subscribe(context.Background(), topic, listener.Listen)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("Subscribe waited for a Redis that does not answer")
+	}
+
+	// Keep Redis silent until go-redis has given up on its first attempt, so
+	// the subscription has to recover from a failed SUBSCRIBE.
+	require.Eventually(t, func() bool { return redis.accepted() > 0 },
+		time.Second, 10*time.Millisecond, "go-redis never tried to connect")
+	time.Sleep(6 * time.Second)
+
+	// Redis answers again. The subscription must receive what is published.
+	redis.forward.Store(true)
+	require.Eventually(t, func() bool {
+		_ = ps.Publish(context.Background(), topic, "hello")
+		return len(listener.Messages()) > 0
+	}, 20*time.Second, 200*time.Millisecond, "the subscription never recovered")
+}
+
+// TestGoRedisPubSubPublishHonorsDeadline tests that a Publish ends when its
+// context ends, while Redis accepts the connection and does not answer. The
+// peer timeout that callers pass to Publish is only useful if this holds.
+func TestGoRedisPubSubPublishHonorsDeadline(t *testing.T) {
+	ps, _ := newHungGoRedisPubSub(t, config.RedisPeerManagementConfig{ClusterName: "deadline-test"})
+
+	const deadline = 200 * time.Millisecond
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
+	defer cancel()
+	start := time.Now()
+	err := ps.Publish(ctx, ps.FormatTopic("topic"), "hello")
+	elapsed := time.Since(start)
+
+	require.Error(t, err)
+	assert.Less(t, elapsed, 2*time.Second,
+		"Publish took %s with a deadline of %s", elapsed, deadline)
+}
+
+// TestGoRedisPubSubStartDoesNotWaitForRedisWithAuthCode tests that Start
+// returns while Redis does not answer, also when an AuthCode is set. A host
+// that cannot reach Redis, or cannot log in to it, must start and stay not
+// ready. It must not exit, as the process manager would restart it in a loop.
+func TestGoRedisPubSubStartDoesNotWaitForRedisWithAuthCode(t *testing.T) {
+	redis := newHungRedis(t, "localhost:6379")
+	ps := newGoRedisPubSub(config.RedisPeerManagementConfig{Host: redis.addr(), AuthCode: "secret"})
+
+	started := make(chan error, 1)
+	go func() { started <- ps.Start() }()
+	select {
+	case err := <-started:
+		require.NoError(t, err)
+		t.Cleanup(ps.Close)
+	case <-time.After(time.Second):
+		t.Fatal("Start waited for a Redis that does not answer")
 	}
 }
