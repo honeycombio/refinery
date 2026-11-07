@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -327,6 +328,74 @@ func TestStressRelief_StalePeerRegistration(t *testing.T) {
 			assert.True(t, hasWarning(logs, "peers are fresh again"))
 		})
 	}
+}
+
+// TestStressRelief_ActivatesBeforePeerListShrinks tests that during a Redis
+// outage a host activates stress relief no later than the first time its peer
+// list loses a peer. Peers expire PeerEntryTimeout after their last message, so
+// until stress relief is on, the host decides traces as if it had fewer shards
+// than the cluster.
+func TestStressRelief_ActivatesBeforePeerListShrinks(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		clock := clockwork.NewRealClock()
+		ps := &pubsubtest.OutagePubSub{}
+		require.NoError(t, ps.Start())
+		t.Cleanup(ps.Close)
+
+		hosts := make([]*peer.RedisPubsubPeers, 3)
+		for i := range hosts {
+			h := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
+			require.NoError(t, h.Start())
+			hosts[i] = &peer.RedisPubsubPeers{
+				Config: &config.MockConfig{
+					GetPeerListenAddrVal: "127.0.0.1:3443",
+					RedisIdentifier:      fmt.Sprintf("host%d", i),
+					PeerTimeout:          5 * time.Second,
+				},
+				PubSub:     ps,
+				Metrics:    &metrics.NullMetrics{},
+				Logger:     &logger.NullLogger{},
+				Clock:      clock,
+				Health:     h,
+				InstanceID: fmt.Sprintf("host%d", i),
+				Done:       make(chan struct{}),
+			}
+			require.NoError(t, hosts[i].Start())
+			require.NoError(t, hosts[i].Ready())
+			t.Cleanup(func() {
+				close(hosts[i].Done)
+				require.NoError(t, h.Stop())
+			})
+		}
+		host := hosts[0]
+
+		sr, stop := newPeerStressRelief(t, clockwork.NewFakeClock(), "monitor", host)
+		t.Cleanup(stop)
+
+		time.Sleep(10 * time.Second)
+		synctest.Wait()
+		healthy, err := host.GetPeers()
+		require.NoError(t, err)
+		require.Len(t, healthy, len(hosts))
+		sr.Recalc()
+		require.False(t, sr.Stressed(), "a cluster that can reach Redis is not stressed")
+
+		ps.Down()
+		t.Cleanup(ps.Up)
+		for elapsed := time.Second; elapsed <= 2*peer.PeerEntryTimeout; elapsed += time.Second {
+			time.Sleep(time.Second)
+			synctest.Wait()
+			sr.Recalc()
+			current, err := host.GetPeers()
+			require.NoError(t, err)
+			if len(current) < len(healthy) {
+				assert.True(t, sr.Stressed(),
+					"the peer list shrank to %d after %s without Redis, before stress relief activated", len(current), elapsed)
+				return
+			}
+		}
+		t.Fatal("the peer list never shrank, so this test does not exercise an outage")
+	})
 }
 
 // TestStressRelief_StaysOnAfterPeersAreFresh tests that in monitor mode stress
