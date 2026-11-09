@@ -218,10 +218,10 @@ func newHungPeers(t *testing.T, metric metrics.Metrics, log logger.Logger) (*Red
 	return peers, healthRecorder, sadPubSub
 }
 
-// TestRedisPubsubPeers_ReadyAfterFirstRegistration tests that a host is not
-// ready until its own registration has come back through the peers channel,
-// and that it then stays ready and alive when Redis stops answering.
-func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
+// TestRedisPubsubPeers_ReadyOncePeersAreFresh tests that a host is not ready
+// until its peer list has been fresh, and that it then stays ready and alive
+// when Redis stops answering.
+func TestRedisPubsubPeers_ReadyOncePeersAreFresh(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		_, healthRecorder, sadPubSub := newHungPeers(t, nil, nil)
 
@@ -235,9 +235,13 @@ func TestRedisPubsubPeers_ReadyAfterFirstRegistration(t *testing.T) {
 		assert.False(t, healthRecorder.IsReady(), "a host that has not seen its registration is not ready")
 
 		sadPubSub.Up()
+		time.Sleep(5 * time.Second)
+		synctest.Wait()
+		assert.False(t, healthRecorder.IsReady(), "a host that has seen its registration is not ready before its peers had time to register")
+
 		time.Sleep(10 * time.Second)
 		synctest.Wait()
-		assert.True(t, healthRecorder.IsReady(), "a host that has seen its registration is ready")
+		assert.True(t, healthRecorder.IsReady(), "a host whose peer list is fresh is ready")
 
 		sadPubSub.Down()
 		time.Sleep(time.Minute)
@@ -476,6 +480,59 @@ func TestRedisPubsubPeers_OutageKeepsLivePeers(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestRedisPubsubPeers_StartingHostChangesPeersOnce tests that a starting host
+// tells the sharder about its peers once, with every peer, when the list is
+// first fresh.
+func TestRedisPubsubPeers_StartingHostChangesPeersOnce(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// The pubsub is down, so the only peer messages are the ones the test sends.
+		peers, _, _ := newHungPeers(t, nil, nil)
+		lists := recordPeerLists(t, peers)
+
+		registerSelf(t, peers)
+		register(peers, "a")
+		time.Sleep(time.Second)
+		register(peers, "b")
+		for range 3 {
+			time.Sleep(3 * time.Second)
+			registerSelf(t, peers)
+			register(peers, "a")
+			register(peers, "b")
+		}
+		synctest.Wait()
+		assert.Equal(t, [][]string{{"http://a:3443", "http://b:3443", "http://somehostname:3443"}}, lists())
+	})
+}
+
+// TestRedisPubsubPeers_GetPeersIsOnlySelfUntilFresh tests that until the peer
+// list has been fresh, GetPeers returns only this host, so that the sharder of
+// a starting host keeps every trace until the first callback gives it the full
+// list.
+func TestRedisPubsubPeers_GetPeersIsOnlySelfUntilFresh(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// The pubsub is down, so the only peer messages are the ones the test sends.
+		peers, _, _ := newHungPeers(t, nil, nil)
+		self := "http://somehostname:3443"
+
+		registerSelf(t, peers)
+		register(peers, "a")
+		got, err := peers.GetPeers()
+		require.NoError(t, err)
+		assert.Equal(t, []string{self}, got, "a starting host")
+
+		for range 3 {
+			time.Sleep(maxRefreshCacheInterval)
+			registerSelf(t, peers)
+			register(peers, "a")
+		}
+		_, everFresh := peers.PeersAreFresh()
+		require.True(t, everFresh)
+		got, err = peers.GetPeers()
+		require.NoError(t, err)
+		assert.Equal(t, []string{"http://a:3443", self}, got, "the list has been fresh")
+	})
 }
 
 // TestRedisPubsubPeers_LongGapsDoNotExpirePeers tests that a gap between peer
