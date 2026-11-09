@@ -30,9 +30,10 @@ const (
 	NUMERATOR_MEMORY_HEAP_ALLOC  = "memory_heap_allocation"
 	stressReliefTopic            = "refinery-stress-relief"
 
-	// peerRegistrationMaxAge is how long a host can go without seeing its own
-	// peer registration before stress relief treats its peer list as stale.
-	peerRegistrationMaxAge = 30 * time.Second
+	// peersStaleAfter is how long the peer list can stay not fresh before
+	// stress relief treats the peers as stale. The list stops being fresh about 5 seconds into
+	// a Redis outage, so stress relief acts about 30 seconds in.
+	peersStaleAfter = 25 * time.Second
 )
 
 // All of the numerator metrics are gauges. The denominator metrics are constants.
@@ -128,6 +129,9 @@ type StressRelief struct {
 	minDuration        time.Duration
 	topic              string // formatted topic name
 
+	// peersLastFresh is when Recalc first saw the peer list not fresh; zero
+	// while it is fresh.
+	peersLastFresh time.Time
 	peersWereStale bool
 
 	algorithms map[string]func(string, string) float64
@@ -488,16 +492,16 @@ func (s *StressRelief) Recalc() uint {
 	s.overallStressLevel = overallStressLevel
 	s.RefineryMetrics.Gauge("stress_level", float64(s.overallStressLevel))
 
-	// A host that no longer sees its own peer registration has a stale peer
-	// list. In monitor and always modes that counts as stress, so every host
-	// samples deterministically. In never mode it is only logged.
-	peersAreStale := s.isPeerRegistrationStale()
+	// A stale peer list can disagree with the lists of other hosts. In monitor
+	// and always modes that counts as stress, so every host samples
+	// deterministically. In never mode it is only logged.
+	peersAreStale := s.peersAreStale()
 	if peersAreStale != s.peersWereStale {
 		s.peersWereStale = peersAreStale
 		if peersAreStale {
-			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peers are stale; this host has not seen its own registration come back through Redis")
+			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peers are stale; this host has not heard its peers through Redis")
 		} else {
-			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peers are fresh again; this host saw its own registration come back through Redis")
+			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peers are fresh again")
 		}
 	}
 	if peersAreStale {
@@ -551,16 +555,29 @@ func (s *StressRelief) Recalc() uint {
 	return localLevel
 }
 
-// isPeerRegistrationStale reports whether the host has gone longer than
-// peerRegistrationMaxAge without seeing its own peer registration. A host that
-// has not seen one yet, and peers that report no age such as file peers, are
-// not stale.
-func (s *StressRelief) isPeerRegistrationStale() bool {
-	if reporter, ok := s.Peer.(peer.RegistrationAgeReporter); ok {
-		age, seen := reporter.RegistrationAge()
-		return seen && age > peerRegistrationMaxAge
+// peersAreStale reports whether the peer list has not been fresh for longer
+// than peersStaleAfter. A list that has never been fresh, and peers that
+// cannot tell, such as file peers, are never stale. s.lock must be held.
+//
+// After an outage, peers that stopped during it stay in the list for up to
+// PeerEntryTimeout. Monitor mode stays on for MinimumActivationDuration after
+// this turns false, so it covers that time only if MinimumActivationDuration
+// is at least PeerEntryTimeout; the default of 10s is.
+func (s *StressRelief) peersAreStale() bool {
+	reporter, ok := s.Peer.(peer.FreshnessReporter)
+	if !ok {
+		return false
 	}
-	return false
+	fresh, everFresh := reporter.PeersAreFresh()
+	if fresh || !everFresh {
+		s.peersLastFresh = time.Time{}
+		return false
+	}
+	now := s.Clock.Now()
+	if s.peersLastFresh.IsZero() {
+		s.peersLastFresh = now
+	}
+	return now.Sub(s.peersLastFresh) > peersStaleAfter
 }
 
 // clusterStressLevel calculates the overall stress level for the cluster

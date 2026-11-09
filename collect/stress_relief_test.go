@@ -282,7 +282,7 @@ func makeStale(sr *StressRelief, clock *clockwork.FakeClock, peers *freshnessPee
 	peers.everFresh.Store(true)
 	peers.fresh.Store(false)
 	sr.Recalc()
-	clock.Advance(26 * time.Second)
+	clock.Advance(peersStaleAfter + time.Second)
 	sr.Recalc()
 }
 
@@ -397,7 +397,7 @@ func TestStressRelief_NeverFreshIsNotStress(t *testing.T) {
 			sr, stop := newPeerStressRelief(t, clock, "monitor", peers)
 			defer stop()
 			sr.Recalc()
-			clock.Advance(50 * time.Second)
+			clock.Advance(2 * peersStaleAfter)
 			sr.Recalc()
 			assert.False(t, sr.Stressed())
 		})
