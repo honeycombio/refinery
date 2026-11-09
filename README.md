@@ -204,11 +204,12 @@ Network:
 
 If the proxy only needs Refinery to trust its private CA, and not to present a client certificate, set `UpstreamTLSCAFile` on its own.
 
-* These settings apply to the data Refinery forwards, to API key lookups, and to logs from the `honeycomb` logger.
-  They don't apply to Refinery's OTel metrics and traces, peer-to-peer traffic, or OpAMP.
+* These settings apply to the data Refinery forwards, to API key lookups, to other API requests Refinery passes through such as markers, and to logs from the `honeycomb` logger.
+  They don't apply to Refinery's OTel metrics and traces, peer-to-peer traffic, OpAMP, or fetching configuration over HTTP(S).
   Send OTel telemetry through an OpenTelemetry Collector if it needs mutual TLS.
 * `UpstreamTLSCAFile` replaces the system's trusted roots.
   When using it with the `honeycomb` logger, set `HoneycombLogger.APIHost` to the same proxy, or logs will fail to send.
+  If Refinery reaches the upstream through an `https://` forward proxy set in `HTTPS_PROXY`, the connection to that forward proxy uses these settings too, so the bundle must also include the CA that signed the forward proxy's certificate.
 * The certificate file must include any intermediate certificates.
   The key must be unencrypted PEM.
 * Refinery reloads the certificate and key when their modification times change, without a restart.
@@ -237,6 +238,9 @@ extraVolumeMounts:
     mountPath: /etc/refinery/tls
     readOnly: true
 ```
+
+The `ca.crt` in a cert-manager Secret is the CA that issued Refinery's client certificate, and some issuers leave it empty.
+Use it for `UpstreamTLSCAFile` only if the same CA signed the proxy's server certificate; otherwise mount the proxy's CA from a separate Secret or ConfigMap.
 
 When the proxy rejects Refinery's certificate, Refinery logs an error for each failed send.
 If the proxy rejects the TLS handshake, the `error` field contains a TLS or connection error, such as `remote error: tls: certificate required` or `http2: client conn could not be established`.

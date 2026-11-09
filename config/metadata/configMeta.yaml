@@ -192,8 +192,9 @@ groups:
         description: >
           When set together with `UpstreamTLSKeyFile`, Refinery presents this
           client certificate on HTTPS connections to `HoneycombAPI`, which
-          carry the trace data Refinery forwards and API key lookups
-          (`/1/auth`), and on logs sent by the `honeycomb` logger. This is
+          carry the trace data Refinery forwards, API key lookups
+          (`/1/auth`), and other API requests Refinery passes through such as
+          markers, and on logs sent by the `honeycomb` logger. This is
           useful when Refinery sends through a proxy that requires mutual
           TLS. Refinery's OTel metrics and traces, peer-to-peer traffic,
           OpAMP, and fetching configuration over HTTP(S) do not use this
@@ -259,7 +260,11 @@ groups:
           Because this bundle replaces the system roots, set
           `HoneycombLogger.APIHost` to the same proxy as `HoneycombAPI`.
           Otherwise logs sent directly to Honeycomb fail TLS verification;
-          Refinery logs a warning at startup when it detects this.
+          Refinery logs a warning at startup when it detects this. If
+          Refinery reaches the upstream through an `https://` forward proxy
+          set in `HTTPS_PROXY`, the connection to that forward proxy is also
+          verified against this bundle, so include the CA that signed the
+          forward proxy's certificate.
 
   - name: OpAMP
     title: "OpAMP Configuration"
