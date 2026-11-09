@@ -23,6 +23,16 @@ type Peers interface {
 	startstop.Starter
 }
 
+// FreshnessReporter is implemented by Peers that learn about their peers
+// through a service, and so can lose contact with that service.
+type FreshnessReporter interface {
+	// PeersAreFresh reports whether this host hears its peers through the
+	// service now (fresh), and whether it has heard them long enough since it
+	// started for every peer to register (everFresh). everFresh does not go
+	// back to false, and fresh is never true without it.
+	PeersAreFresh() (fresh, everFresh bool)
+}
+
 // RegistrationAgeReporter is implemented by Peers that learn about their peers
 // through a service, and so can lose contact with that service.
 type RegistrationAgeReporter interface {

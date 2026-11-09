@@ -41,13 +41,18 @@ const (
 	maxRefreshCacheInterval = refreshCacheInterval + refreshCacheJitter
 )
 
-// Contact with peers.
+// Contact with peers and freshness of the peer list.
 const (
 	// peerMessageGapLimit is the longest gap between peer messages that still
 	// counts as contact. It must be longer than a healthy gap
 	// (maxRefreshCacheInterval) and short enough that a counted gap cannot
 	// expire a live peer (PeerEntryTimeout less maxRefreshCacheInterval).
 	peerMessageGapLimit = PeerEntryTimeout / 2
+
+	// peersFreshDelay is the contact time a starting host waits before its list
+	// is fresh: two registrations from each peer, so one lost registration does
+	// not leave a peer out.
+	peersFreshDelay = 2 * maxRefreshCacheInterval
 )
 
 // Health checks and warnings.
@@ -147,6 +152,14 @@ func (c *contactClock) messageArrived() {
 	c.lastMessage = now
 }
 
+// read returns when the last peer message arrived, and the contact time since
+// the first one.
+func (c *contactClock) read() (lastMessage time.Time, contactTime time.Duration) {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+	return c.lastMessage, c.contactTime
+}
+
 var _ Peers = (*RedisPubsubPeers)(nil)
 
 type RedisPubsubPeers struct {
@@ -189,6 +202,14 @@ func (p *RedisPubsubPeers) RegistrationAge() (time.Duration, bool) {
 		return 0, false
 	}
 	return p.Clock.Since(*last), true
+}
+
+var _ FreshnessReporter = (*RedisPubsubPeers)(nil)
+
+func (p *RedisPubsubPeers) PeersAreFresh() (fresh, everFresh bool) {
+	lastMessage, contactTime := p.contact.read()
+	everFresh = p.lastSelfSeen.Load() != nil && contactTime >= peersFreshDelay
+	return everFresh && p.Clock.Since(lastMessage) <= peerMessageGapLimit, everFresh
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks

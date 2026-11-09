@@ -83,6 +83,47 @@ func registerSelf(t *testing.T, peers *RedisPubsubPeers) {
 	peers.listen(context.Background(), newPeerCommand(Register, addr, peers.InstanceID).marshal())
 }
 
+// assertFresh asserts what peers report from PeersAreFresh.
+func assertFresh(t *testing.T, peers *RedisPubsubPeers, wantFresh, wantEverFresh bool, msg string) {
+	t.Helper()
+	fresh, everFresh := peers.PeersAreFresh()
+	assert.Equal(t, wantFresh, fresh, "fresh: "+msg)
+	assert.Equal(t, wantEverFresh, everFresh, "ever fresh: "+msg)
+}
+
+// TestRedisPubsubPeers_PeersAreFresh tests that a host reports its peer list as
+// fresh only after it has seen its own registration and peer messages have
+// arrived for peersFreshDelay, and that after a long gap the list is fresh
+// again at the first peer message.
+func TestRedisPubsubPeers_PeersAreFresh(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// The pubsub is down, so the only peer messages are the ones the test sends.
+		peers, _, _ := newHungPeers(t, nil, nil)
+		assertFresh(t, peers, false, false, "before any peer message")
+
+		register(peers, "a")
+		for range 3 {
+			time.Sleep(3 * time.Second)
+			register(peers, "a")
+		}
+		assertFresh(t, peers, false, false, "past the delay, but without its own registration")
+
+		time.Sleep(time.Second)
+		registerSelf(t, peers)
+		assertFresh(t, peers, true, true, "its own registration, past the delay")
+
+		time.Sleep(peerMessageGapLimit)
+		assertFresh(t, peers, true, true, "a gap as long as the limit")
+
+		time.Sleep(time.Second)
+		assertFresh(t, peers, false, true, "a gap longer than the limit")
+
+		// No entry expired during the gap, so there is nothing to wait for.
+		register(peers, "a")
+		assertFresh(t, peers, true, true, "the first message after a long gap")
+	})
+}
+
 // TestRedisPubsubPeers_RegistrationAge tests that a host reports no age until
 // it has seen its own registration come back through the peers channel, and
 // that only its own registration resets the age afterwards.
@@ -411,6 +452,8 @@ func TestRedisPubsubPeers_OutageKeepsLivePeers(t *testing.T) {
 				lists := recordPeerLists(t, host0)
 
 				time.Sleep(15 * time.Second)
+				fresh, _ := host0.PeersAreFresh()
+				require.True(t, fresh, "the cluster has formed")
 				if tc.stops {
 					// Only host0 hears this host, so only host0 has to drop it.
 					host0.listen(context.Background(), newPeerCommand(Register, "http://stopped:3443", "a-stopped-host").marshal())
@@ -506,5 +549,31 @@ func TestRedisPubsubPeers_PeerSurvivesALostRegistration(t *testing.T) {
 		got, err := peers.GetPeers()
 		require.NoError(t, err)
 		assert.Equal(t, []string{"http://a:3443", "http://somehostname:3443"}, got)
+	})
+}
+
+// TestRedisPubsubPeers_DropsItselfWhenItCannotPublish tests that a host whose
+// publishes fail while it still hears its peers drops itself from its list,
+// as its peers drop it.
+func TestRedisPubsubPeers_DropsItselfWhenItCannotPublish(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		peers, _, sadPubSub := newHungPeers(t, nil, nil)
+		lists := recordPeerLists(t, peers)
+
+		sadPubSub.Up()
+		time.Sleep(4 * time.Second)
+		synctest.Wait()
+
+		sadPubSub.Down()
+		for range 9 {
+			register(peers, "a")
+			register(peers, "b")
+			time.Sleep(refreshCacheInterval)
+		}
+		synctest.Wait()
+		got := lists()
+		require.NotEmpty(t, got)
+		assert.Equal(t, []string{"http://a:3443", "http://b:3443"}, got[len(got)-1], "the host is no longer in its own list")
+		assertFresh(t, peers, true, true, "the list matches what its peers have")
 	})
 }
