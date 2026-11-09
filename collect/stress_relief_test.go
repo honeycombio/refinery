@@ -265,22 +265,32 @@ func TestStressRelief_StaysAliveWhenPublishStalls(t *testing.T) {
 	assert.True(t, healthReporter.IsAlive(), "a stalled publish should not fail liveness")
 }
 
-// registrationAgePeers is a peer.Peers whose registration age the test sets.
-type registrationAgePeers struct {
+// freshnessPeers is a peer.Peers whose freshness the test sets.
+type freshnessPeers struct {
 	peer.MockPeers
-	age  atomic.Int64 // nanoseconds
-	seen atomic.Bool
+	fresh     atomic.Bool
+	everFresh atomic.Bool
 }
 
-func (p *registrationAgePeers) RegistrationAge() (time.Duration, bool) {
-	return time.Duration(p.age.Load()), p.seen.Load()
+func (p *freshnessPeers) PeersAreFresh() (bool, bool) {
+	return p.fresh.Load(), p.everFresh.Load()
 }
 
-// TestStressRelief_StalePeerRegistration tests what stress relief does when
-// the host has not seen its own peer registration for too long: it activates
-// in monitor and always modes, labels its sampling decisions with the reason,
+// makeStale makes the peers not fresh, and runs Recalc before and after more
+// than peersStaleAfter passes.
+func makeStale(sr *StressRelief, clock *clockwork.FakeClock, peers *freshnessPeers) {
+	peers.everFresh.Store(true)
+	peers.fresh.Store(false)
+	sr.Recalc()
+	clock.Advance(26 * time.Second)
+	sr.Recalc()
+}
+
+// TestStressRelief_StalePeers tests what stress relief does when the peer
+// list has not been fresh for longer than peersStaleAfter: it activates in
+// monitor and always modes, labels its sampling decisions with the reason,
 // logs when the state changes, and leaves never mode alone.
-func TestStressRelief_StalePeerRegistration(t *testing.T) {
+func TestStressRelief_StalePeers(t *testing.T) {
 	for _, tc := range []struct {
 		mode       string
 		wantStress bool
@@ -292,22 +302,27 @@ func TestStressRelief_StalePeerRegistration(t *testing.T) {
 	} {
 		t.Run(tc.mode, func(t *testing.T) {
 			clock := clockwork.NewFakeClock()
-			peers := &registrationAgePeers{}
+			peers := &freshnessPeers{}
 			sr, stop := newPeerStressRelief(t, clock, tc.mode, peers)
 			defer stop()
 			logs := &logger.MockLogger{}
 			sr.Logger = logs
 
-			// A fresh registration is not stress.
-			peers.seen.Store(true)
-			peers.age.Store(int64(time.Second))
+			peers.everFresh.Store(true)
+			peers.fresh.Store(true)
 			sr.Recalc()
-			assert.Equal(t, tc.mode == "always", sr.Stressed())
+			assert.Equal(t, tc.mode == "always", sr.Stressed(), "fresh peers are not stress")
 
-			// A registration older than the limit is.
-			peers.age.Store(int64(peerRegistrationMaxAge + time.Second))
+			peers.fresh.Store(false)
 			sr.Recalc()
-			assert.Equal(t, tc.wantStress, sr.Stressed())
+			clock.Advance(25 * time.Second)
+			sr.Recalc()
+			assert.Equal(t, tc.mode == "always", sr.Stressed(), "peers that are not fresh for peersStaleAfter are not stale yet")
+			assert.False(t, hasWarning(logs, "peers are stale"))
+
+			clock.Advance(time.Second)
+			sr.Recalc()
+			assert.Equal(t, tc.wantStress, sr.Stressed(), "stale peers are stress")
 			if tc.wantStress {
 				_, _, reason := sr.GetSampleRate("a-trace")
 				assert.Equal(t, tc.wantReason, reason)
@@ -319,35 +334,35 @@ func TestStressRelief_StalePeerRegistration(t *testing.T) {
 			sr.Recalc()
 			assert.Len(t, warnings(logs), before)
 
-			// A fresh registration ends it, after the minimum activation time.
-			peers.age.Store(0)
+			// Fresh peers end it, after the minimum activation time.
+			peers.fresh.Store(true)
 			clock.Advance(6 * time.Second)
 			sr.Recalc()
 			assert.Equal(t, tc.mode == "always", sr.Stressed())
 			assert.True(t, hasWarning(logs, "peers are fresh again"))
+
+			peers.fresh.Store(false)
+			sr.Recalc()
+			assert.Equal(t, tc.mode == "always", sr.Stressed(), "the limit counts from the start of each time the peers are not fresh")
 		})
 	}
 }
 
 // TestStressRelief_StaysOnAfterPeersAreFresh tests that in monitor mode stress
 // relief stays on for MinimumActivationDuration after the last tick that found
-// the peers stale. The peers can be stale for only the tick that activates it,
-// or for a long time. Either way, the peer list may still be filling again when
-// the registration is fresh, so it must not turn off at once.
+// the peers stale. That can be the tick that activates it, or one much later.
 func TestStressRelief_StaysOnAfterPeersAreFresh(t *testing.T) {
 	for name, staleFor := range map[string]time.Duration{
-		"stale for one tick": 0,
-		"stale for a while":  10 * time.Second,
+		"activated on this tick": 0,
+		"activated a while ago":  10 * time.Second,
 	} {
 		t.Run(name, func(t *testing.T) {
 			clock := clockwork.NewFakeClock()
-			peers := &registrationAgePeers{}
+			peers := &freshnessPeers{}
 			sr, stop := newPeerStressRelief(t, clock, "monitor", peers)
 			defer stop()
 
-			peers.seen.Store(true)
-			peers.age.Store(int64(peerRegistrationMaxAge + time.Second))
-			sr.Recalc()
+			makeStale(sr, clock, peers)
 			require.True(t, sr.Stressed())
 			if staleFor > 0 {
 				clock.Advance(staleFor)
@@ -356,7 +371,7 @@ func TestStressRelief_StaysOnAfterPeersAreFresh(t *testing.T) {
 			}
 
 			// The last tick that found the peers stale was just now.
-			peers.age.Store(0)
+			peers.fresh.Store(true)
 			sr.Recalc()
 			assert.True(t, sr.Stressed(), "fresh peers do not end stress relief at once")
 			clock.Advance(4 * time.Second)
@@ -369,17 +384,20 @@ func TestStressRelief_StaysOnAfterPeersAreFresh(t *testing.T) {
 	}
 }
 
-// TestStressRelief_NoRegistrationIsNotStale tests that a host that has not
-// yet seen its own registration, and peers that cannot report one, are never
-// treated as stale: such a host has no peer list to lose.
-func TestStressRelief_NoRegistrationIsNotStale(t *testing.T) {
+// TestStressRelief_NeverFreshIsNotStress tests that peers that have never been
+// fresh, and peers that cannot tell, never activate stress relief: such a host
+// is not ready and has no peer list to lose.
+func TestStressRelief_NeverFreshIsNotStress(t *testing.T) {
 	for name, peers := range map[string]peer.Peers{
-		"not seen yet":   &registrationAgePeers{},
-		"no age to give": &peer.MockPeers{},
+		"never fresh": &freshnessPeers{},
+		"cannot tell": &peer.MockPeers{},
 	} {
 		t.Run(name, func(t *testing.T) {
-			sr, stop := newPeerStressRelief(t, clockwork.NewFakeClock(), "monitor", peers)
+			clock := clockwork.NewFakeClock()
+			sr, stop := newPeerStressRelief(t, clock, "monitor", peers)
 			defer stop()
+			sr.Recalc()
+			clock.Advance(50 * time.Second)
 			sr.Recalc()
 			assert.False(t, sr.Stressed())
 		})
@@ -408,7 +426,7 @@ func warnings(l *logger.MockLogger) []string {
 }
 
 // newPeerStressRelief returns a started StressRelief in the given mode that
-// reads its registration age from peers, and that the test drives with Recalc
+// asks peers whether they are fresh, and that the test drives with Recalc
 // alone. It activates at 80, deactivates at 50 and stays on for at least 5
 // seconds of the fake clock. The returned function stops it.
 func newPeerStressRelief(t *testing.T, clock clockwork.Clock, mode string, peers peer.Peers) (*StressRelief, func()) {
