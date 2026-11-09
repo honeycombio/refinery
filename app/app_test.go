@@ -2256,13 +2256,15 @@ func BenchmarkDistributedTraces(b *testing.B) {
 }
 
 func TestLogUpstreamTLS(t *testing.T) {
-	const api = "https://proxy.internal:8443"
+	const proxy = "https://proxy.internal:8443"
 	testCases := []struct {
-		name       string
-		tls        tlsconfig.Options
-		loggerType string
-		loggerHost string
-		wantLogs   []string
+		name        string
+		tls         tlsconfig.Options
+		api         string // defaults to proxy
+		loggerType  string
+		loggerHost  string
+		noLoggerKey bool
+		wantLogs    []string
 	}{
 		{name: "not configured", loggerType: "honeycomb", loggerHost: "https://api.honeycomb.io"},
 		{
@@ -2280,7 +2282,7 @@ func TestLogUpstreamTLS(t *testing.T) {
 		{
 			name:       "CA file with logger on the proxy",
 			tls:        tlsconfig.Options{CAFile: "ca.pem"},
-			loggerType: "honeycomb", loggerHost: api + "/",
+			loggerType: "honeycomb", loggerHost: proxy + "/",
 			wantLogs: []string{"loaded upstream TLS configuration at startup"},
 		},
 		{
@@ -2289,9 +2291,41 @@ func TestLogUpstreamTLS(t *testing.T) {
 			loggerType: "stdout", loggerHost: "https://api.honeycomb.io",
 			wantLogs: []string{"loaded upstream TLS configuration at startup"},
 		},
+		{
+			name:       "CA file with logger on the proxy, host in a different case",
+			tls:        tlsconfig.Options{CAFile: "ca.pem"},
+			loggerType: "honeycomb", loggerHost: "https://PROXY.internal:8443",
+			wantLogs: []string{"loaded upstream TLS configuration at startup"},
+		},
+		{
+			name: "CA file with logger on the proxy, explicit default port",
+			tls:  tlsconfig.Options{CAFile: "ca.pem"},
+			api:  "https://proxy.internal", loggerType: "honeycomb", loggerHost: "https://proxy.internal:443",
+			wantLogs: []string{"loaded upstream TLS configuration at startup"},
+		},
+		{
+			name:       "CA file with logger on the same host, different port",
+			tls:        tlsconfig.Options{CAFile: "ca.pem"},
+			loggerType: "honeycomb", loggerHost: "https://proxy.internal",
+			wantLogs: []string{"loaded upstream TLS configuration at startup", "HoneycombLogger.APIHost is not Network.HoneycombAPI"},
+		},
+		{
+			name:       "CA file with logger elsewhere but no logger API key",
+			tls:        tlsconfig.Options{CAFile: "ca.pem"},
+			loggerType: "honeycomb", loggerHost: "https://api.honeycomb.io", noLoggerKey: true,
+			wantLogs: []string{"loaded upstream TLS configuration at startup"},
+		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			api := tc.api
+			if api == "" {
+				api = proxy
+			}
+			loggerKey := "logger-key"
+			if tc.noLoggerKey {
+				loggerKey = ""
+			}
 			lgr := &logger.MockLogger{}
 			a := &App{
 				Logger: lgr,
@@ -2299,7 +2333,7 @@ func TestLogUpstreamTLS(t *testing.T) {
 					UpstreamTLS:                 tc.tls,
 					GetHoneycombAPIVal:          api,
 					GetLoggerTypeVal:            tc.loggerType,
-					GetHoneycombLoggerConfigVal: config.HoneycombLoggerConfig{APIHost: tc.loggerHost},
+					GetHoneycombLoggerConfigVal: config.HoneycombLoggerConfig{APIHost: tc.loggerHost, APIKey: loggerKey},
 				},
 			}
 			a.logUpstreamTLS()

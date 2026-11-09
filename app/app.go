@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/honeycombio/refinery/agent"
 	"github.com/honeycombio/refinery/collect"
@@ -118,13 +120,15 @@ func (a *App) logUpstreamTLS() {
 		"ca_file":   upstreamTLS.CAFile,
 	}).Logf("loaded upstream TLS configuration at startup")
 
-	if upstreamTLS.CAFile == "" || a.Config.GetLoggerType() != "honeycomb" {
+	loggerConfig := a.Config.GetHoneycombLoggerConfig()
+	// without an API key, the Honeycomb logger discards everything
+	if upstreamTLS.CAFile == "" || a.Config.GetLoggerType() != "honeycomb" || loggerConfig.APIKey == "" {
 		return
 	}
-	loggerHost := a.Config.GetHoneycombLoggerConfig().APIHost
+	loggerHost := loggerConfig.APIHost
 	loggerURL, err1 := url.Parse(loggerHost)
 	apiURL, err2 := url.Parse(a.Config.GetHoneycombAPI())
-	if err1 != nil || err2 != nil || loggerURL.Scheme != "https" || loggerURL.Host == apiURL.Host {
+	if err1 != nil || err2 != nil || loggerURL.Scheme != "https" || hostPort(loggerURL) == hostPort(apiURL) {
 		return
 	}
 	msg := "HoneycombLogger.APIHost is not Network.HoneycombAPI; Honeycomb logger output is verified against UpstreamTLSCAFile and may fail to send"
@@ -135,4 +139,14 @@ func (a *App) logUpstreamTLS() {
 	}).Logf("%s", msg)
 	// also print it, since the Honeycomb logger may be unable to deliver it
 	fmt.Fprintf(os.Stderr, "WARNING: %s (HoneycombLogger.APIHost=%s, Network.HoneycombAPI=%s)\n", msg, loggerHost, a.Config.GetHoneycombAPI())
+}
+
+// hostPort returns u's lowercased host and its port, filling in the scheme's
+// default port, so equivalent URLs compare equal.
+func hostPort(u *url.URL) string {
+	port := u.Port()
+	if port == "" {
+		port = map[string]string{"http": "80", "https": "443"}[u.Scheme]
+	}
+	return net.JoinHostPort(strings.ToLower(u.Hostname()), port)
 }
