@@ -32,6 +32,13 @@ const (
 	// keep the host in the mix.
 	refreshCacheInterval = 3 * time.Second
 
+	// refreshCacheJitter is the most that a host adds to refreshCacheInterval.
+	refreshCacheJitter = refreshCacheInterval / 5
+
+	// maxRefreshCacheInterval is the longest a host waits between registrations
+	// while its publishes succeed.
+	maxRefreshCacheInterval = refreshCacheInterval + refreshCacheJitter
+
 	// peerManagementHealthKey is ready once this host has seen its own registration.
 	peerManagementHealthKey = "peer_management"
 
@@ -257,7 +264,7 @@ func (p *RedisPubsubPeers) Ready() error {
 		// we want our refresh cache interval to vary from peer to peer so they
 		// don't always hit redis at the same time, so we add a random jitter of up
 		// to 20% of the interval
-		interval := refreshCacheInterval + time.Duration(rand.Int63n(int64(refreshCacheInterval/5)))
+		interval := refreshCacheInterval + time.Duration(rand.Int63n(int64(refreshCacheJitter)))
 		ticker := p.Clock.NewTicker(interval)
 		defer ticker.Stop()
 
