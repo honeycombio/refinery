@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -253,4 +254,50 @@ func TestClientCertificateExpiryWarningClearsAfterRenewal(t *testing.T) {
 	assert.Equal(t, "expired-again", clientCN(t, cfg))
 	require.Len(t, *warnings, 2)
 	assert.Contains(t, (*warnings)[1].msg, "has expired")
+}
+
+func TestClientCertificateExpiresWhileRenewalFails(t *testing.T) {
+	pki := tlsconfigtest.New(t)
+	// certificate validity has one-second precision
+	notAfter := time.Now().Truncate(time.Second).Add(2 * time.Second)
+	pki.WriteClientCertValidity(t, "client", notAfter.Add(-time.Minute), notAfter)
+	warnings, warn := recordWarnings()
+	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile}, warn)
+	require.NoError(t, err)
+	assert.Equal(t, "client", clientCN(t, cfg))
+	require.Len(t, *warnings, 1)
+	assert.Contains(t, (*warnings)[0].msg, "expires soon")
+
+	// the renewal is broken, so the expiring certificate stays in use
+	require.NoError(t, os.WriteFile(pki.ClientKeyFile, []byte("corrupt"), 0o600))
+	touch(t, time.Minute, pki.ClientCertFile, pki.ClientKeyFile)
+	assert.Equal(t, "client", clientCN(t, cfg))
+	require.Len(t, *warnings, 2)
+	assert.Contains(t, (*warnings)[1].msg, "failed to reload")
+
+	time.Sleep(time.Until(notAfter) + 100*time.Millisecond)
+	assert.Equal(t, "client", clientCN(t, cfg))
+	require.Len(t, *warnings, 3)
+	assert.Contains(t, (*warnings)[2].msg, "has expired")
+}
+
+func TestClientCertificateConcurrentHandshakes(t *testing.T) {
+	pki := tlsconfigtest.New(t)
+	pki.WriteClientCertValidity(t, "client", time.Now().Add(-2*time.Hour), time.Now().Add(-time.Hour))
+	warnings, warn := recordWarnings()
+	cfg, err := New(Options{CertFile: pki.ClientCertFile, KeyFile: pki.ClientKeyFile}, warn)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	for range 50 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cert, err := cfg.GetClientCertificate(&tls.CertificateRequestInfo{})
+			assert.NoError(t, err)
+			assert.NotNil(t, cert)
+		}()
+	}
+	wg.Wait()
+	assert.Len(t, *warnings, 1, "concurrent handshakes report the expiry once")
 }
