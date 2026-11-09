@@ -205,18 +205,23 @@ groups:
           proxy trusts. The certificate and key may be in the same file; set
           both settings to that path.
 
-          Refinery checks the modification times of the certificate and key
-          files on each new TLS connection and reloads them when either
-          changes, so short-lived certificates can be rotated without a
-          restart. Replacing a file's contents without changing its
-          modification time is not detected. Connections that are already open
+          Each time Refinery opens a new connection and the upstream asks for
+          a client certificate, Refinery checks the modification times of the
+          certificate and key files and reloads them when either changes, so
+          short-lived certificates can be rotated without a restart.
+          Replacing a file's contents without changing its modification time
+          is not detected. Connections that are already open
           keep using the certificate they were opened with. In Kubernetes,
           mount the Secret as a directory rather than with `subPath`, because
           `subPath` mounts don't receive updates. If the new files cannot be
           loaded, Refinery logs a warning and keeps using the last valid
           certificate. Refinery also logs a warning when the certificate in
-          use has expired or has less than a tenth of its lifetime left.
-          Changing the configured path requires a restart.
+          use has expired or has less than a tenth of its lifetime left. Both
+          checks happen only when a new connection is opened, so a
+          long-lived connection can delay them. With the `honeycomb` logger,
+          these warnings are also printed to stderr, because the logger sends
+          through the same certificate. Changing the configured path requires
+          a restart.
 
       - name: UpstreamTLSKeyFile
         type: string

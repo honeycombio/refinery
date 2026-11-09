@@ -214,6 +214,8 @@ If the proxy only needs Refinery to trust its private CA, and not to present a c
 * Refinery reloads the certificate and key when their modification times change, without a restart.
   Open connections keep their old certificate; new connections use the new one.
   Refinery logs a warning if a reload fails, and when the certificate in use is close to or past its expiry.
+  These checks run only when Refinery opens a new connection and the upstream asks for a client certificate, so a long-lived connection can delay them.
+  With the `honeycomb` logger, the warnings are also printed to stderr, since the logger sends through the same certificate.
 
 In Kubernetes, store the certificate in a Secret, such as one created by cert-manager, and mount it as a directory.
 Don't use `subPath`, because `subPath` mounts don't receive updates when the Secret is renewed.

@@ -158,6 +158,10 @@ func main() {
 	}
 	upstreamTLS, err := tlsconfig.New(c.GetUpstreamTLSConfig(), func(msg string, fields map[string]any) {
 		lgr.Warn().WithFields(fields).Logf("%s", msg)
+		// the Honeycomb logger sends through these same TLS settings, so it may be unable to deliver this
+		if c.GetLoggerType() == "honeycomb" {
+			fmt.Fprintf(os.Stderr, "WARNING: %s %v\n", msg, fields)
+		}
 	})
 	if err != nil {
 		fmt.Printf("unable to configure upstream TLS: %v\n", err)
