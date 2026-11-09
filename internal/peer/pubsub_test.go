@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -352,8 +353,17 @@ func TestRedisPubsubPeers_ConcurrentRegistrations(t *testing.T) {
 	}
 	require.NoError(t, peers.Start())
 
-	// A registered callback makes the list-change path run for every change.
-	peers.RegisterUpdatedPeersCallback(func() {})
+	// The list must have been fresh, or checkHash does not run the callbacks.
+	for range 3 {
+		registerSelf(t, peers)
+		clock.Advance(maxRefreshCacheInterval)
+	}
+	registerSelf(t, peers)
+	_, everFresh := peers.PeersAreFresh()
+	require.True(t, everFresh)
+
+	var callbacks atomic.Int64
+	peers.RegisterUpdatedPeersCallback(func() { callbacks.Add(1) })
 
 	const registrations = 20
 	var wg sync.WaitGroup
@@ -370,6 +380,7 @@ func TestRedisPubsubPeers_ConcurrentRegistrations(t *testing.T) {
 	got, err := peers.GetPeers()
 	require.NoError(t, err)
 	assert.Len(t, got, registrations+1, "every registration is in the list, plus this host")
+	assert.Eventually(t, func() bool { return callbacks.Load() > 0 }, time.Second, time.Millisecond, "the registrations changed the list")
 }
 
 // newOutagePeers returns started, ready peers named id on ps, a pubsub that
@@ -480,6 +491,31 @@ func TestRedisPubsubPeers_OutageKeepsLivePeers(t *testing.T) {
 			})
 		})
 	}
+}
+
+// TestRedisPubsubPeers_HealthyChangesAreNotDelayed tests that a host tells
+// the sharder about a new peer at once while peer messages arrive as often as
+// a healthy cluster sends them: at least once per refresh interval.
+func TestRedisPubsubPeers_HealthyChangesAreNotDelayed(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// The pubsub is down, so the only peer messages are the ones the test sends.
+		peers, _, _ := newHungPeers(t, nil, nil)
+		lists := recordPeerLists(t, peers)
+
+		registerSelf(t, peers)
+		for range 3 {
+			register(peers, "a")
+			time.Sleep(maxRefreshCacheInterval)
+		}
+		synctest.Wait()
+		before := len(lists())
+
+		register(peers, "b")
+		synctest.Wait()
+		got := lists()
+		require.Len(t, got, before+1, "a new peer changes the list at once")
+		assert.Equal(t, []string{"http://a:3443", "http://b:3443"}, got[before])
+	})
 }
 
 // TestRedisPubsubPeers_StartingHostChangesPeersOnce tests that a starting host

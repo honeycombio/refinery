@@ -57,7 +57,7 @@ const (
 
 // Health checks and warnings.
 const (
-	// peerManagementHealthKey is ready once this host has seen its own registration.
+	// peerManagementHealthKey is ready once the peer list has been fresh.
 	peerManagementHealthKey = "peer_management"
 
 	peerManagementHealthCheckInInterval = time.Second
@@ -213,10 +213,19 @@ func (p *RedisPubsubPeers) PeersAreFresh() (fresh, everFresh bool) {
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
-// in a separate goroutine if the hash has changed.
+// in a separate goroutine if the hash has changed. It reports num_peers and
+// peer_hash every time, but runs no callbacks until the peer list has been fresh.
 func (p *RedisPubsubPeers) checkHash() {
 	peers := p.peers.SortedKeys()
 	newhash := hashList(peers)
+	p.Metrics.Gauge("num_peers", float64(len(peers)))
+	p.Metrics.Gauge("peer_hash", float64(newhash))
+
+	// A starting host's list is still filling; resharding on it would send
+	// spans to the wrong hosts.
+	if _, everFresh := p.PeersAreFresh(); !everFresh {
+		return
+	}
 
 	p.mut.Lock()
 	changed := newhash != p.hash
@@ -230,8 +239,6 @@ func (p *RedisPubsubPeers) checkHash() {
 	for _, cb := range callbacks {
 		go cb()
 	}
-	p.Metrics.Gauge("num_peers", float64(len(peers)))
-	p.Metrics.Gauge("peer_hash", float64(newhash))
 }
 
 func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
@@ -317,7 +324,8 @@ func (p *RedisPubsubPeers) Ready() error {
 			select {
 			case <-ticker.Chan():
 				age, seen := p.RegistrationAge()
-				p.Health.Ready(peerManagementHealthKey, seen)
+				_, everFresh := p.PeersAreFresh()
+				p.Health.Ready(peerManagementHealthKey, everFresh)
 				if !seen {
 					age = p.Clock.Since(started)
 				}
@@ -406,7 +414,12 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 	// we never want to return an empty list of peers, so if the system returns
 	// an empty list, return a single peer (its name doesn't really matter).
 	// This keeps the sharding logic happy.
-	peers := p.peers.SortedValues()
+	var peers []string
+	// A starting host's list is still filling. With only itself, its sharder
+	// keeps every trace until the first callback.
+	if _, everFresh := p.PeersAreFresh(); everFresh {
+		peers = p.peers.SortedValues()
+	}
 	if len(peers) == 0 {
 		myaddr, err := publicAddr(p.Logger, p.Config)
 		if err != nil {
