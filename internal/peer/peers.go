@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
@@ -31,14 +30,6 @@ type FreshnessReporter interface {
 	// started for every peer to register (everFresh). everFresh does not go
 	// back to false, and fresh is never true without it.
 	PeersAreFresh() (fresh, everFresh bool)
-}
-
-// RegistrationAgeReporter is implemented by Peers that learn about their peers
-// through a service, and so can lose contact with that service.
-type RegistrationAgeReporter interface {
-	// RegistrationAge is how long ago this host last saw its own registration
-	// come back through the service. The bool is false until it has seen one.
-	RegistrationAge() (age time.Duration, seen bool)
 }
 
 func publicAddr(logger logger.Logger, cfg config.Config) (string, error) {

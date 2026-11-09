@@ -125,60 +125,6 @@ func TestRedisPubsubPeers_PeersAreFresh(t *testing.T) {
 	})
 }
 
-// TestRedisPubsubPeers_RegistrationAge tests that a host reports no age until
-// it has seen its own registration come back through the peers channel, and
-// that only its own registration resets the age afterwards.
-func TestRedisPubsubPeers_RegistrationAge(t *testing.T) {
-	clock := clockwork.NewFakeClock()
-	ps := &pubsub.LocalPubSub{
-		Config: &config.MockConfig{},
-	}
-	require.NoError(t, ps.Start())
-	defer ps.Stop()
-
-	healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
-	require.NoError(t, healthRecorder.Start())
-	defer healthRecorder.Stop()
-
-	peers := &RedisPubsubPeers{
-		Config: &config.MockConfig{
-			GetPeerListenAddrVal: "127.0.0.1:3443",
-			RedisIdentifier:      "somehostname",
-		},
-		PubSub:     ps,
-		Clock:      clock,
-		Health:     healthRecorder,
-		InstanceID: "me",
-		Done:       make(chan struct{}),
-	}
-	require.NoError(t, peers.Start())
-
-	_, seen := peers.RegistrationAge()
-	assert.False(t, seen, "no registration has come back yet")
-
-	peers.listen(context.Background(), newPeerCommand(Register, "http://other:3443", "other").marshal())
-	_, seen = peers.RegistrationAge()
-	assert.False(t, seen, "another host's registration is not ours")
-
-	peers.listen(context.Background(), newPeerCommand(Register, "http://somehostname:3443", "me").marshal())
-	age, seen := peers.RegistrationAge()
-	assert.True(t, seen)
-	assert.Equal(t, time.Duration(0), age)
-
-	clock.Advance(40 * time.Second)
-	age, seen = peers.RegistrationAge()
-	assert.True(t, seen, "losing contact must not look like never having had it")
-	assert.Equal(t, 40*time.Second, age)
-
-	peers.listen(context.Background(), newPeerCommand(Register, "http://other:3443", "other").marshal())
-	age, _ = peers.RegistrationAge()
-	assert.Equal(t, 40*time.Second, age, "another host's registration does not reset the age")
-
-	peers.listen(context.Background(), newPeerCommand(Register, "http://somehostname:3443", "me").marshal())
-	age, _ = peers.RegistrationAge()
-	assert.Equal(t, time.Duration(0), age)
-}
-
 // newHungPeers returns started, ready peers on a pubsub whose Publish hangs
 // until the test calls Up on it. It also returns the health recorder the peers
 // report to. A nil metric or log gets the default of the peers. Call it inside

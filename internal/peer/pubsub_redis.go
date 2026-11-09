@@ -188,27 +188,16 @@ type RedisPubsubPeers struct {
 	hash      uint64
 	callbacks []func()
 
-	// lastSelfSeen is when this host's own Register message last came back
-	// through the subscription; nil if none has. Store Clock.Now unchanged:
-	// UTC, Local, In, Round, Truncate and encoding strip the monotonic reading.
-	lastSelfSeen atomic.Pointer[time.Time]
-}
-
-var _ RegistrationAgeReporter = (*RedisPubsubPeers)(nil)
-
-func (p *RedisPubsubPeers) RegistrationAge() (time.Duration, bool) {
-	last := p.lastSelfSeen.Load()
-	if last == nil {
-		return 0, false
-	}
-	return p.Clock.Since(*last), true
+	// selfSeen is whether this host's own registration has come back through
+	// the subscription, which shows that its peers hear it too.
+	selfSeen atomic.Bool
 }
 
 var _ FreshnessReporter = (*RedisPubsubPeers)(nil)
 
 func (p *RedisPubsubPeers) PeersAreFresh() (fresh, everFresh bool) {
 	lastMessage, contactTime := p.contact.read()
-	everFresh = p.lastSelfSeen.Load() != nil && contactTime >= peersFreshDelay
+	everFresh = p.selfSeen.Load() && contactTime >= peersFreshDelay
 	return everFresh && p.Clock.Since(lastMessage) <= peerMessageGapLimit, everFresh
 }
 
@@ -251,8 +240,7 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 	// Advance the clock before Set, so the entry's expiry counts from this message.
 	p.contact.messageArrived()
 	if cmd.action == Register && cmd.id == p.InstanceID {
-		now := p.Clock.Now()
-		p.lastSelfSeen.Store(&now)
+		p.selfSeen.Store(true)
 	}
 
 	switch cmd.action {
@@ -268,7 +256,7 @@ var redisPubSubPeersMetrics = []metrics.Metadata{
 	{Name: "num_peers", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the active number of peers in the cluster"},
 	{Name: "peer_hash", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the hash of the current list of peers"},
 	{Name: "peer_messages", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of messages received by the peers service"},
-	{Name: "peer_registration_age_ms", Type: metrics.Gauge, Unit: metrics.Milliseconds, Description: "milliseconds since this host last saw its own registration come back through Redis, or since it started if it has not seen one"},
+	{Name: "peers_fresh", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "1 when the peer list of this host is fresh, 0 when it is not, for example while it cannot hear its peers through Redis"},
 }
 
 func (p *RedisPubsubPeers) Start() error {
@@ -323,14 +311,14 @@ func (p *RedisPubsubPeers) Ready() error {
 		for {
 			select {
 			case <-ticker.Chan():
-				age, seen := p.RegistrationAge()
-				_, everFresh := p.PeersAreFresh()
+				fresh, everFresh := p.PeersAreFresh()
 				p.Health.Ready(peerManagementHealthKey, everFresh)
-				if !seen {
-					age = p.Clock.Since(started)
+				if fresh {
+					p.Metrics.Gauge("peers_fresh", 1)
+				} else {
+					p.Metrics.Gauge("peers_fresh", 0)
 				}
-				p.Metrics.Gauge("peer_registration_age_ms", float64(age.Milliseconds()))
-				if !seen && !warned && p.Clock.Since(started) >= noRegistrationWarnAfter {
+				if !p.selfSeen.Load() && !warned && p.Clock.Since(started) >= noRegistrationWarnAfter {
 					warned = true
 					p.Logger.Warn().Logf("this host has not seen its own registration come back through Redis, so it is not ready; check that Redis is reachable, that the credentials are valid, and that the user may use both PUBLISH and SUBSCRIBE")
 				}
