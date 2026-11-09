@@ -291,39 +291,37 @@ func warnMessages(l *logger.MockLogger) []string {
 	return out
 }
 
-// TestRedisPubsubPeers_RegistrationAgeGauge tests that peers report how long
-// ago the host saw its own registration, in milliseconds, once a second. A host
-// that has not seen one yet reports how long it has waited, so the gauge exists
-// from the start and grows until the first registration: one alert on a high
-// value covers a host that never registered and a host that lost contact.
-func TestRedisPubsubPeers_RegistrationAgeGauge(t *testing.T) {
+// TestRedisPubsubPeers_PeersFreshGauge tests that peers report once a second
+// whether the peer list is fresh, from the start of the host, and report
+// num_peers before the list is fresh.
+func TestRedisPubsubPeers_PeersFreshGauge(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		metric := &metrics.MockMetrics{}
 		metric.Start()
 		peers, _, _ := newHungPeers(t, metric, nil)
 
-		time.Sleep(10500 * time.Millisecond)
+		time.Sleep(1500 * time.Millisecond)
 		synctest.Wait()
-		age, found := metric.Get("peer_registration_age_ms")
-		require.True(t, found, "the gauge exists before the host has seen its registration")
-		assert.Equal(t, float64(10000), age, "without a registration the age counts from the start of the host")
+		value, found := metric.Get("peers_fresh")
+		require.True(t, found, "the gauge exists before the first peer message")
+		assert.Equal(t, float64(0), value)
 
-		peers.listen(context.Background(), newPeerCommand(Register, "http://somehostname:3443", "me").marshal())
+		registerSelf(t, peers)
+		_, found = metric.Get("num_peers")
+		assert.True(t, found, "a host whose list is not fresh yet still reports its peer count")
+		for range 4 {
+			time.Sleep(2 * time.Second)
+			registerSelf(t, peers)
+		}
 		time.Sleep(time.Second)
 		synctest.Wait()
-		age, _ = metric.Get("peer_registration_age_ms")
-		assert.Equal(t, float64(500), age, "the first registration resets the age; the next report is half a second after it")
+		value, _ = metric.Get("peers_fresh")
+		assert.Equal(t, float64(1), value, "the list is fresh")
 
-		time.Sleep(4 * time.Second)
+		time.Sleep(peerMessageGapLimit + time.Second)
 		synctest.Wait()
-		age, _ = metric.Get("peer_registration_age_ms")
-		assert.Equal(t, float64(4500), age, "the age grows while the registration does not come back")
-
-		peers.listen(context.Background(), newPeerCommand(Register, "http://somehostname:3443", "me").marshal())
-		time.Sleep(time.Second)
-		synctest.Wait()
-		age, _ = metric.Get("peer_registration_age_ms")
-		assert.Equal(t, float64(500), age, "a new registration resets the age")
+		value, _ = metric.Get("peers_fresh")
+		assert.Equal(t, float64(0), value, "a long gap makes the list not fresh")
 	})
 }
 
