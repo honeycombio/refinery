@@ -20,6 +20,7 @@ import (
 	"github.com/jonboulle/clockwork"
 )
 
+// Registration timing.
 const (
 	// PeerEntryTimeout is how long we will wait before expiring a peer that
 	// doesn't check in. The ratio of refresh to peer timeout should be about
@@ -38,7 +39,19 @@ const (
 	// maxRefreshCacheInterval is the longest a host waits between registrations
 	// while its publishes succeed.
 	maxRefreshCacheInterval = refreshCacheInterval + refreshCacheJitter
+)
 
+// Contact with peers.
+const (
+	// peerMessageGapLimit is the longest gap between peer messages that still
+	// counts as contact. It must be longer than a healthy gap
+	// (maxRefreshCacheInterval) and short enough that a counted gap cannot
+	// expire a live peer (PeerEntryTimeout less maxRefreshCacheInterval).
+	peerMessageGapLimit = PeerEntryTimeout / 2
+)
+
+// Health checks and warnings.
+const (
 	// peerManagementHealthKey is ready once this host has seen its own registration.
 	peerManagementHealthKey = "peer_management"
 
@@ -101,6 +114,39 @@ func (p *peerCommand) marshal() string {
 	return string(p.action) + p.address + "," + p.id
 }
 
+// contactClock only advances time when a peer message arrives, and then only
+// by the time since the previous peer message, if that gap is at most
+// peerMessageGapLimit. RedisPubsubPeers expires peer entries on it, so no entry
+// expires while this host hears no peer messages. In that time it cannot tell
+// a peer that stopped from a peer whose registrations do not reach it.
+type contactClock struct {
+	clock clockwork.Clock
+	mut   sync.Mutex
+	// lastMessage is when the last peer message arrived; zero before the first.
+	lastMessage time.Time
+	contactTime time.Duration
+}
+
+// Now returns the zero time plus the contact time. Only differences between
+// its values mean anything.
+func (c *contactClock) Now() time.Time {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+	return time.Time{}.Add(c.contactTime)
+}
+
+// messageArrived records a peer message that arrives now.
+func (c *contactClock) messageArrived() {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+	// Read the clock under the lock, so that lastMessage only moves forward.
+	now := c.clock.Now()
+	if gap := now.Sub(c.lastMessage); !c.lastMessage.IsZero() && gap <= peerMessageGapLimit {
+		c.contactTime += gap
+	}
+	c.lastMessage = now
+}
+
 var _ Peers = (*RedisPubsubPeers)(nil)
 
 type RedisPubsubPeers struct {
@@ -119,9 +165,10 @@ type RedisPubsubPeers struct {
 	// since the pubsub subscription is still active.
 	Done chan struct{}
 
-	peers *generics.MapWithTTL[string, string]
-	sub   pubsub.Subscription
-	topic string // formatted topic name
+	peers   *generics.MapWithTTL[string, string]
+	contact contactClock
+	sub     pubsub.Subscription
+	topic   string // formatted topic name
 
 	// mut guards hash and callbacks: a pubsub runs subscription callbacks concurrently.
 	mut       sync.Mutex
@@ -172,10 +219,14 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 		return
 	}
 	p.Metrics.Count("peer_messages", 1)
+
+	// Advance the clock before Set, so the entry's expiry counts from this message.
+	p.contact.messageArrived()
 	if cmd.action == Register && cmd.id == p.InstanceID {
 		now := p.Clock.Now()
 		p.lastSelfSeen.Store(&now)
 	}
+
 	switch cmd.action {
 	case Unregister:
 		p.peers.Delete(cmd.id)
@@ -205,6 +256,8 @@ func (p *RedisPubsubPeers) Start() error {
 	}
 
 	p.peers = generics.NewMapWithTTL[string, string](PeerEntryTimeout, nil)
+	p.contact.clock = p.Clock
+	p.peers.Clock = &p.contact
 	p.callbacks = make([]func(), 0)
 
 	p.topic = p.PubSub.FormatTopic("peers")

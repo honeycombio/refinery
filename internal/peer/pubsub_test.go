@@ -434,3 +434,77 @@ func TestRedisPubsubPeers_OutageKeepsLivePeers(t *testing.T) {
 		})
 	}
 }
+
+// TestRedisPubsubPeers_LongGapsDoNotExpirePeers tests that a gap between peer
+// messages longer than peerMessageGapLimit does not count toward the expiry
+// of entries, and that a shorter gap does.
+func TestRedisPubsubPeers_LongGapsDoNotExpirePeers(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// The pubsub is down, so the only peer messages are the ones the test sends.
+		peers, _, _ := newHungPeers(t, nil, nil)
+		self := "http://somehostname:3443"
+		assertPeers := func(want []string, msg string) {
+			t.Helper()
+			got, err := peers.GetPeers()
+			require.NoError(t, err)
+			assert.Equal(t, want, got, msg)
+		}
+		cluster := []string{"http://a:3443", "http://b:3443", self}
+
+		// b registers last at 9 seconds of contact time, so it expires after 19.
+		for range 4 {
+			registerSelf(t, peers)
+			register(peers, "a")
+			register(peers, "b")
+			time.Sleep(3 * time.Second)
+		}
+		time.Sleep(PeerEntryTimeout + 7*time.Second)
+		assertPeers(cluster, "a gap of 20 seconds")
+
+		registerSelf(t, peers)
+		register(peers, "a")
+		assertPeers(cluster, "the first message after a gap of 20 seconds")
+
+		// The gap of peerMessageGapLimit counts: 14 seconds of contact time.
+		time.Sleep(peerMessageGapLimit)
+		registerSelf(t, peers)
+		register(peers, "a")
+		time.Sleep(3 * time.Second)
+		registerSelf(t, peers)
+		register(peers, "a")
+		assertPeers(cluster, "17 seconds of contact time")
+
+		time.Sleep(3 * time.Second)
+		registerSelf(t, peers)
+		register(peers, "a")
+		assertPeers([]string{"http://a:3443", self}, "20 seconds of contact time")
+	})
+}
+
+// TestRedisPubsubPeers_PeerSurvivesALostRegistration tests that a peer whose
+// next registration is lost stays in the list, even when the registration
+// before came after a gap: its entry expires PeerEntryTimeout of contact time
+// after that registration arrived, gap included.
+func TestRedisPubsubPeers_PeerSurvivesALostRegistration(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// The pubsub is down, so the only peer messages are the ones the test sends.
+		peers, _, _ := newHungPeers(t, nil, nil)
+		for range 4 {
+			registerSelf(t, peers)
+			register(peers, "a")
+			time.Sleep(3 * time.Second)
+		}
+
+		time.Sleep(1500 * time.Millisecond)
+		register(peers, "a")
+		// The next registration from a is lost; the one after comes two
+		// intervals later.
+		for range 2 {
+			time.Sleep(maxRefreshCacheInterval)
+			registerSelf(t, peers)
+		}
+		got, err := peers.GetPeers()
+		require.NoError(t, err)
+		assert.Equal(t, []string{"http://a:3443", "http://somehostname:3443"}, got)
+	})
+}
