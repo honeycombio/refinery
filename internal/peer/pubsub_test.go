@@ -3,6 +3,7 @@ package peer
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -66,6 +67,20 @@ func TestPeerActions(t *testing.T) {
 
 	b = cmd2.unmarshal("Rfoo")
 	assert.False(t, b)
+}
+
+// register sends peers a registration from the host with the given ID, as if
+// it came through the subscription.
+func register(peers *RedisPubsubPeers, id string) {
+	peers.listen(context.Background(), newPeerCommand(Register, "http://"+id+":3443", id).marshal())
+}
+
+// registerSelf sends peers their own registration, as if it came back through
+// the subscription.
+func registerSelf(t *testing.T, peers *RedisPubsubPeers) {
+	addr, err := publicAddr(peers.Logger, peers.Config)
+	require.NoError(t, err)
+	peers.listen(context.Background(), newPeerCommand(Register, addr, peers.InstanceID).marshal())
 }
 
 // TestRedisPubsubPeers_RegistrationAge tests that a host reports no age until
@@ -310,4 +325,112 @@ func TestRedisPubsubPeers_ConcurrentRegistrations(t *testing.T) {
 	got, err := peers.GetPeers()
 	require.NoError(t, err)
 	assert.Len(t, got, registrations+1, "every registration is in the list, plus this host")
+}
+
+// newOutagePeers returns started, ready peers named id on ps, a pubsub that
+// the test takes down and up. Call it inside a synctest bubble: its cleanup
+// waits for the peers to stop there.
+func newOutagePeers(t *testing.T, ps *pubsubtest.OutagePubSub, id string) *RedisPubsubPeers {
+	clock := clockwork.NewRealClock()
+	healthRecorder := &health.Health{Clock: clock, Metrics: &metrics.NullMetrics{}, Logger: &logger.NullLogger{}}
+	require.NoError(t, healthRecorder.Start())
+	t.Cleanup(func() { require.NoError(t, healthRecorder.Stop()) })
+
+	peers := &RedisPubsubPeers{
+		Config: &config.MockConfig{
+			GetPeerListenAddrVal: "127.0.0.1:3443",
+			RedisIdentifier:      id,
+			PeerTimeout:          5 * time.Second,
+		},
+		PubSub:     ps,
+		Clock:      clock,
+		Health:     healthRecorder,
+		InstanceID: id,
+		Done:       make(chan struct{}),
+	}
+	require.NoError(t, peers.Start())
+	require.NoError(t, peers.Ready())
+	// The peers' publishes must end before the pubsub closes.
+	t.Cleanup(func() {
+		ps.Up()
+		close(peers.Done)
+		synctest.Wait()
+	})
+	return peers
+}
+
+// recordPeerLists registers a callback on peers that records the list
+// GetPeers returns each time the peers change. The returned function gives
+// the lists recorded so far.
+func recordPeerLists(t *testing.T, peers *RedisPubsubPeers) func() [][]string {
+	var mut sync.Mutex
+	var lists [][]string
+	peers.RegisterUpdatedPeersCallback(func() {
+		list, err := peers.GetPeers()
+		assert.NoError(t, err)
+		mut.Lock()
+		defer mut.Unlock()
+		lists = append(lists, list)
+	})
+	return func() [][]string {
+		mut.Lock()
+		defer mut.Unlock()
+		return slices.Clone(lists)
+	}
+}
+
+// TestRedisPubsubPeers_OutageKeepsLivePeers tests that after a Redis outage
+// longer than PeerEntryTimeout, the sharder never gets a list without a live
+// host: a host that started during the outage is added when it registers, and
+// a host that stopped is dropped PeerEntryTimeout of contact time later.
+func TestRedisPubsubPeers_OutageKeepsLivePeers(t *testing.T) {
+	const outage = PeerEntryTimeout + 500*time.Millisecond
+	cluster := []string{"http://host0:3443", "http://host1:3443", "http://host2:3443"}
+	for _, tc := range []struct {
+		name  string
+		stops bool // a host registers before the outage and never again
+		joins bool // a host starts during the outage
+		want  [][]string
+	}{
+		{name: "no change", want: [][]string{}},
+		{name: "a host stops", stops: true, want: [][]string{cluster}},
+		{name: "a host joins", joins: true, want: [][]string{append(slices.Clone(cluster), "http://host3:3443")}},
+		{name: "a host stops and a host joins", stops: true, joins: true, want: [][]string{
+			append([]string{"http://stopped:3443"}, append(slices.Clone(cluster), "http://host3:3443")...),
+			append(slices.Clone(cluster), "http://host3:3443"),
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				ps := &pubsubtest.OutagePubSub{}
+				require.NoError(t, ps.Start())
+				t.Cleanup(ps.Close)
+				host0 := newOutagePeers(t, ps, "host0")
+				newOutagePeers(t, ps, "host1")
+				newOutagePeers(t, ps, "host2")
+				lists := recordPeerLists(t, host0)
+
+				time.Sleep(15 * time.Second)
+				if tc.stops {
+					// Only host0 hears this host, so only host0 has to drop it.
+					host0.listen(context.Background(), newPeerCommand(Register, "http://stopped:3443", "a-stopped-host").marshal())
+				}
+				synctest.Wait()
+				before := len(lists())
+
+				ps.Down()
+				time.Sleep(outage / 2)
+				if tc.joins {
+					newOutagePeers(t, ps, "host3")
+				}
+				time.Sleep(outage - outage/2)
+				ps.Up()
+				time.Sleep(20 * time.Second)
+				synctest.Wait()
+
+				got := lists()[before:]
+				assert.Equal(t, tc.want, got, "after the outage the sharder sees only the changes to the cluster")
+			})
+		})
+	}
 }
