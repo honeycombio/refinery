@@ -2150,6 +2150,14 @@ groups:
           "always" means that Stress Relief is always on, which may be useful
           in an emergency situation.
 
+          In "monitor" and "always" modes, Stress Relief also activates when
+          this host has not heard any of its peers through Redis for about 30
+          seconds. The sampling reason is `RedisUnreachable`. While Redis is
+          unreachable, Refinery keeps its last list of peers; a peer that
+          stops in that time stays in the list until the host hears its peers
+          again. Stress Relief covers that gap, so that all hosts sample the
+          same way. In "never" mode Refinery only logs that the peers are stale.
+
       - name: ActivationLevel
         v1group: StressRelief
         v1name: ActivationLevel
