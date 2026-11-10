@@ -1253,6 +1253,11 @@ This setting sets the Stress Relief mode.
 "never" means that Stress Relief will never activate.
 "monitor" is the recommended setting, and means that Stress Relief will monitor the status of Refinery and activate according to the levels set by fields such as `ActivationLevel`.
 "always" means that Stress Relief is always on, which may be useful in an emergency situation.
+In "monitor" and "always" modes, Stress Relief also activates when this host has not heard any of its peers through Redis for about 30 seconds.
+The sampling reason is `RedisUnreachable`.
+While Redis is unreachable, Refinery keeps its last list of peers; a peer that stops in that time stays in the list until the host hears its peers again.
+Stress Relief covers that gap, so that all hosts sample the same way.
+In "never" mode Refinery only logs that the peers are stale.
 
 - Eligible for live reload.
 - Type: `string`

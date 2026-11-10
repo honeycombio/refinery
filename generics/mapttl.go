@@ -14,13 +14,18 @@ type itemWithTTL[V any] struct {
 	Expiration time.Time
 }
 
+// Clock is the part of a clock that MapWithTTL uses.
+type Clock interface {
+	Now() time.Time
+}
+
 // MapWithTTL is a map with a TTL (time to live) for each item. After the TTL expires,
 // the item is automatically removed from the map when any of Length, Keys, SortedKeys,
 // Values, or SortedValues is called.
 type MapWithTTL[K cmp.Ordered, V any] struct {
 	Items map[K]itemWithTTL[V]
 	TTL   time.Duration
-	Clock clockwork.Clock
+	Clock Clock
 	mut   sync.RWMutex
 }
 
