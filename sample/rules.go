@@ -295,13 +295,31 @@ func extractValueFromSpan(
 		}
 	}
 	if checkNestedFields {
-		jsonStr, err := json.Marshal(span.Data)
-		if err == nil {
-			for _, field := range condition.Fields {
-				result := gjson.Get(string(jsonStr), field)
-				if result.Exists() {
-					return result.String(), true, false
+		// Resolve each field against the same span as above: root-prefixed
+		// fields are looked up (without the prefix) on the root span, and
+		// everything else on the original span.
+		var originalJSON, rootJSON []byte
+		for _, field := range condition.Fields {
+			target := &originalJSON
+			span = original
+			if strings.HasPrefix(field, config.RootPrefix) {
+				if trace.RootSpan == nil {
+					continue
 				}
+				field = field[len(config.RootPrefix):]
+				target = &rootJSON
+				span = trace.RootSpan
+			}
+			if *target == nil {
+				jsonStr, err := json.Marshal(span.Data)
+				if err != nil {
+					continue
+				}
+				*target = jsonStr
+			}
+			result := gjson.GetBytes(*target, field)
+			if result.Exists() {
+				return result.String(), true, false
 			}
 		}
 	}
