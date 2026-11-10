@@ -127,7 +127,10 @@ func (r *zstdReader) releaseLocked() {
 	}
 	r.released = true
 	// Reset(nil) drains the stream and drops the frame, so the decoder is safe
-	// to hand to the next stream.
-	_ = r.dec.Reset(nil)
+	// to hand to the next stream. If it fails, the decoder's state is unknown,
+	// so drop it instead of pooling it.
+	if err := r.dec.Reset(nil); err != nil {
+		return
+	}
 	decoderPool.Put(&decoderResult{dec: r.dec})
 }
