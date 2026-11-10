@@ -310,7 +310,9 @@ func (p *RedisPubsubPeers) stop() {
 		return
 	}
 
-	err = p.PubSub.Publish(context.Background(), p.topic, newPeerCommand(Unregister, myaddr, p.InstanceID).marshal())
+	ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
+	defer cancel()
+	err = p.PubSub.Publish(ctx, p.topic, newPeerCommand(Unregister, myaddr, p.InstanceID).marshal())
 	if err != nil {
 		p.Logger.Error().WithFields(map[string]interface{}{
 			"error":       err,
