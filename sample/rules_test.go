@@ -1120,6 +1120,7 @@ func TestRulesWithNestedRootFields(t *testing.T) {
 		scope     string
 		fields    []string
 		value     string
+		noRoot    bool
 		wantMatch bool
 	}{
 		{
@@ -1146,6 +1147,22 @@ func TestRulesWithNestedRootFields(t *testing.T) {
 			scope:     "span",
 			fields:    []string{"db.system", "root.http.method"},
 			value:     "postgres",
+			wantMatch: true,
+		},
+		{
+			name:      "root prefixed nested field is skipped when the trace has no root span",
+			scope:     "span",
+			fields:    []string{"root.http.method"},
+			value:     "GET",
+			noRoot:    true,
+			wantMatch: false,
+		},
+		{
+			name:      "later nested field still matches when the trace has no root span",
+			scope:     "span",
+			fields:    []string{"root.http.method", "db.system"},
+			value:     "postgres",
+			noRoot:    true,
 			wantMatch: true,
 		},
 	}
@@ -1190,7 +1207,9 @@ func TestRulesWithNestedRootFields(t *testing.T) {
 			trace := &types.Trace{}
 			trace.AddSpan(root)
 			trace.AddSpan(child)
-			trace.RootSpan = root
+			if !tc.noRoot {
+				trace.RootSpan = root
+			}
 
 			sampler := &RulesBasedSampler{
 				Config:  rules,
