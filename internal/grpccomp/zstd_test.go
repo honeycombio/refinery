@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 	"runtime"
+	"sync"
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
@@ -119,6 +120,42 @@ func TestDecompressReleasesDecoder(t *testing.T) {
 		require.Len(t, out, 1<<20)
 		closeReader(t, full)
 	}
+}
+
+// TestDecompressConcurrentReadAndClose checks that Read and Close serialize. A
+// decoder decodes one stream at a time and a closed reader's decoder is already
+// back in the pool, so a Read racing a Close must not touch it. Run with -race.
+func TestDecompressConcurrentReadAndClose(t *testing.T) {
+	encoder, err := zstd.NewWriter(nil)
+	require.NoError(t, err)
+	defer encoder.Close()
+	compressed := encoder.EncodeAll(bytes.Repeat([]byte("trace_id=abc123 span_id=def456 "), 40_000), nil)
+
+	compressor := &zstdCompressor{}
+	reader, err := compressor.Decompress(bytes.NewReader(compressed))
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = io.Copy(io.Discard, reader)
+		}()
+	}
+	var closeErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		closeErr = reader.(io.Closer).Close()
+	}()
+	wg.Wait()
+	require.NoError(t, closeErr)
+
+	// A second Close and a Read after Close are harmless.
+	closeReader(t, reader)
+	_, err = reader.Read(make([]byte, 16))
+	require.ErrorIs(t, err, io.EOF)
 }
 
 func closeReader(t *testing.T, r io.Reader) {

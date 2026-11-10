@@ -91,17 +91,22 @@ func (w *zstdWriteCloser) Close() error {
 }
 
 type zstdReader struct {
+	mu       sync.Mutex
 	dec      *zstd.Decoder
 	released bool
 }
 
+// Read and Close take the lock because a decoder decodes one stream at a time,
+// and a released decoder is already back in the pool for another message.
 func (r *zstdReader) Read(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if r.released {
 		return 0, io.EOF
 	}
 	n, err := r.dec.Read(p)
 	if err != nil {
-		r.release()
+		r.releaseLocked()
 	}
 	return n, err
 }
@@ -110,11 +115,13 @@ func (r *zstdReader) Read(p []byte) (int, error) {
 // decompressed message exceeds its size limit and closes the reader, so a
 // decoder abandoned mid-stream would otherwise keep its window buffer forever.
 func (r *zstdReader) Close() error {
-	r.release()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.releaseLocked()
 	return nil
 }
 
-func (r *zstdReader) release() {
+func (r *zstdReader) releaseLocked() {
 	if r.released {
 		return
 	}
