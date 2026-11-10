@@ -58,14 +58,16 @@ var encoderPool = sync.Pool{
 	},
 }
 
-// maxDecodedMessage bounds the memory a zstd decoder may allocate while
-// decompressing one message. gRPC caps the decompressed output at the server's
-// MaxRecvMsgSize (15MB by default in refinery's config) and a frame's window
-// never needs to exceed the message it carries, so this covers that limit and
-// leaves room for doubling it. Without a bound the decoder honors whatever
-// window a frame declares, up to the library default of 512MiB, and a message a
-// few bytes long can make refinery allocate that much.
-const maxDecodedMessage = 32 << 20
+// maxDecodedMessage bounds the window a client-supplied frame may declare. gRPC
+// caps the decompressed message at the server's MaxRecvMsgSize, but the decoder
+// allocates the frame's window before any output reaches that limit, and the
+// library default allows 512MiB. Every encoder level of this library emits at
+// most an 8MiB window unless the client sets one explicitly, and a message
+// bounded by MaxRecvMsgSize has no use for a longer one. The cap does not depend
+// on MaxRecvMsgSize, which can be configured much higher: larger messages still
+// decode, they just do not need a larger window. This matches the HTTP path in
+// route.makeDecoders.
+const maxDecodedMessage = 8 << 20
 
 var decoderPool = sync.Pool{
 	New: func() any {

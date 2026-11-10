@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"math/rand"
 	"runtime"
 	"sync"
 	"testing"
@@ -51,6 +52,11 @@ func TestDecompressRejectsOversizedFrame(t *testing.T) {
 			wantErr: zstd.ErrWindowSizeExceeded,
 		},
 		{
+			name:    "window just over the cap",
+			frame:   zstdFrameWithWindow(24), // 16 MiB
+			wantErr: zstd.ErrWindowSizeExceeded,
+		},
+		{
 			name:    "content size",
 			frame:   zstdFrameWithContentSize(256 << 20), // 256 MiB, under the library's default 512 MiB window limit
 			wantErr: zstd.ErrDecoderSizeExceeded,
@@ -91,6 +97,37 @@ func TestDecompressRoundTrip(t *testing.T) {
 	out, err := io.ReadAll(reader)
 	require.NoError(t, err)
 	require.Equal(t, payload, out)
+}
+
+// TestDecompressAcceptsLargestEncoderWindow guards the cap from the other side.
+// A payload larger than the encoder's window makes the pooled encoder declare
+// its full 8 MiB window, the largest it emits, and it must still decode.
+func TestDecompressAcceptsLargestEncoderWindow(t *testing.T) {
+	payload := make([]byte, 9<<20)
+	rng := rand.New(rand.NewSource(1))
+	for i := range payload {
+		payload[i] = byte(rng.Intn(8)) // compressible, but not a single repeated run
+	}
+
+	compressor := &zstdCompressor{}
+	var buf bytes.Buffer
+	w, err := compressor.Compress(&buf)
+	require.NoError(t, err)
+	_, err = w.Write(payload)
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+
+	var header zstd.Header
+	require.NoError(t, header.Decode(buf.Bytes()))
+	require.EqualValues(t, 8<<20, header.WindowSize,
+		"the payload should make the encoder declare the largest window it emits")
+
+	reader, err := compressor.Decompress(bytes.NewReader(buf.Bytes()))
+	require.NoError(t, err)
+	defer closeReader(t, reader)
+	out, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.True(t, bytes.Equal(payload, out), "round trip changed the payload")
 }
 
 // TestDecompressReleasesDecoder checks that a decoder is returned to the pool
