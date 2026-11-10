@@ -49,10 +49,18 @@ const (
 	// expire a live peer (PeerEntryTimeout less maxRefreshCacheInterval).
 	peerMessageGapLimit = PeerEntryTimeout / 2
 
+	// peersFreshRegistrations is how many registrations from each peer a
+	// starting host waits for before its list is fresh. Two means one lost
+	// registration does not leave a peer out. One does not tolerate a loss; on
+	// kind, a delay of one registration interval did no better than no delay
+	// when Redis blipped during a rollout.
+	peersFreshRegistrations = 2
+
 	// peersFreshDelay is the contact time a starting host waits before its list
-	// is fresh: two registrations from each peer, so one lost registration does
-	// not leave a peer out.
-	peersFreshDelay = 2 * maxRefreshCacheInterval
+	// is fresh: long enough to hear peersFreshRegistrations registrations from
+	// each peer, however long they wait between registrations. A pod that
+	// starts takes about this long longer to become ready.
+	peersFreshDelay = peersFreshRegistrations * maxRefreshCacheInterval
 )
 
 // Health checks and warnings.
