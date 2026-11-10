@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
@@ -20,6 +21,14 @@ type Peers interface {
 	Ready() error
 	// make it injectable
 	startstop.Starter
+}
+
+// RegistrationAgeReporter is implemented by Peers that learn about their peers
+// through a service, and so can lose contact with that service.
+type RegistrationAgeReporter interface {
+	// RegistrationAge is how long ago this host last saw its own registration
+	// come back through the service. The bool is false until it has seen one.
+	RegistrationAge() (age time.Duration, seen bool)
 }
 
 func publicAddr(logger logger.Logger, cfg config.Config) (string, error) {

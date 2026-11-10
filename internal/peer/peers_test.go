@@ -12,6 +12,7 @@ import (
 	"github.com/facebookgo/inject"
 	"github.com/facebookgo/startstop"
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
@@ -66,6 +67,7 @@ func newPeers(c config.Config) (Peers, error) {
 		{Value: &metrics.NullMetrics{}, Name: "metrics"},
 		{Value: &logger.NullLogger{}},
 		{Value: clockwork.NewFakeClock()},
+		{Value: &health.Health{}},
 		{Value: "12345678", Name: "instanceID"},
 	}
 	err := g.Provide(objects...)

@@ -52,6 +52,14 @@ func (l *MockLogger) Error() Entry {
 	}
 }
 
+// GetEvents returns a copy of the events logged so far. Read events with it, and
+// not from Events, when another goroutine can still log.
+func (l *MockLogger) GetEvents() []*MockLoggerEvent {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	return append([]*MockLoggerEvent(nil), l.Events...)
+}
+
 func (l *MockLogger) SetLevel(level string) error {
 	return nil
 }
