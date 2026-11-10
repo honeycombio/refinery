@@ -11,9 +11,12 @@ x-refinery: &refinery
   volumes:
     - ./config.yaml:/etc/refinery/refinery.yaml
     - ./rules.yaml:/etc/refinery/rules.yaml
+    - certs:/certs:ro
   depends_on:
     redis:
       condition: service_healthy
+    upstream:
+      condition: service_started
 
 services:
   refinery:
@@ -57,6 +60,18 @@ services:
       gen-certs:
         condition: service_completed_successfully
 
+  # Stands in for Honeycomb behind a proxy that requires mutual TLS. It accepts
+  # only clients presenting a certificate from the smoke-test CA and logs the
+  # verified client certificate for each request.
+  upstream:
+    image: nginx:1.29-alpine
+    volumes:
+      - ./upstream-nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certs:/certs:ro
+    depends_on:
+      gen-certs:
+        condition: service_completed_successfully
+
   # Self-signed CA plus a server certificate for the "redis" hostname.
   #
   # A CA rather than a lone self-signed cert: it gives --tls-ca-cert-file
@@ -69,7 +84,7 @@ services:
       - |
         set -e
         cd /certs
-        if [ -f cert.pem ]; then
+        if [ -f cert.pem ] && [ -f client.pem ]; then
           echo "Certs exist!"
           exit 0
         fi
@@ -88,8 +103,20 @@ services:
           -in key.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
           -out cert.pem -extfile ext.cnf
 
-        # The redis image drops privileges and cannot read a root-owned 0600 key.
-        chmod a+r key.pem
+        # Server certificate for the mTLS upstream, and the client
+        # certificate Refinery presents to it.
+        printf 'subjectAltName=DNS:upstream\nextendedKeyUsage=serverAuth\n' > upstream-ext.cnf
+        openssl req -newkey rsa:2048 -nodes -keyout upstream-key.pem -out upstream.csr -subj "/CN=upstream"
+        openssl x509 -req -days 365 -in upstream.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
+          -out upstream.pem -extfile upstream-ext.cnf
+
+        printf 'extendedKeyUsage=clientAuth\n' > client-ext.cnf
+        openssl req -newkey rsa:2048 -nodes -keyout client-key.pem -out client.csr -subj "/CN=refinery"
+        openssl x509 -req -days 365 -in client.csr -CA ca.pem -CAkey ca-key.pem -CAcreateserial \
+          -out client.pem -extfile client-ext.cnf
+
+        # The redis and refinery images drop privileges and cannot read a root-owned 0600 key.
+        chmod a+r key.pem client-key.pem
     volumes:
       - certs:/certs
 

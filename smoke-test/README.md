@@ -11,7 +11,9 @@ Multiple Refinery hosts, so we can assert the primary usage of a Redis backend: 
 
 Refinery's subscriptions recovering after Redis restarts.
 
-`10-peers.bats` covers the first two; `20-redis-restart.bats` the last. Bats runs the files in sorted order, so the numeric prefixes set the order: peers first, against a freshly started stack, then the tests that disrupt it.
+Refinery presenting its client certificate to an upstream that requires **mutual TLS**. An nginx container stands in for Honeycomb behind an mTLS proxy.
+
+`10-peers.bats` covers the first two; `20-redis-restart.bats` the third; `30-upstream-mtls.bats` the last. Bats runs the files in sorted order, so the numeric prefixes set the order: peers first, against a freshly started stack, then the tests that disrupt it.
 
 ## How Do I Even?
 
