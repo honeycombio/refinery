@@ -65,6 +65,12 @@ func (m *MockMetrics) Histogram(name string, val float64) {
 	}
 	m.Histograms[name] = append(m.Histograms[name], val)
 }
+func (m *MockMetrics) HistogramBatch(name string, obs []float64) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	m.Histograms[name] = append(m.Histograms[name], obs...)
+}
 func (m *MockMetrics) Up(name string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()

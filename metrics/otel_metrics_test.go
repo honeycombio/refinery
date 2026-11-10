@@ -233,3 +233,48 @@ func Benchmark_OTelMetrics_ConcurrentAccess(b *testing.B) {
 		})
 	})
 }
+
+func Test_OTelMetrics_HistogramBatch(t *testing.T) {
+	rdr := sdkmetric.NewManualReader()
+	o := &OTelMetrics{
+		Logger:     &logger.MockLogger{},
+		Config:     &config.MockConfig{},
+		testReader: rdr,
+	}
+	require.NoError(t, o.Start())
+	defer o.Stop()
+
+	o.Register(Metadata{Name: "test_hist_batch", Type: Histogram})
+	o.Register(Metadata{Name: "test_hist_each", Type: Histogram})
+
+	obs := []float64{0.5, 3, 3, 100, 70000, 5e10}
+	for _, v := range obs {
+		o.Histogram("test_hist_each", v)
+	}
+	o.HistogramBatch("test_hist_batch", obs)
+	// an empty batch records nothing
+	o.HistogramBatch("test_hist_batch", nil)
+
+	rm := metricdata.ResourceMetrics{}
+	require.NoError(t, rdr.Collect(t.Context(), &rm))
+	points := map[string]metricdata.HistogramDataPoint[float64]{}
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if h, ok := m.Data.(metricdata.Histogram[float64]); ok {
+				require.Len(t, h.DataPoints, 1)
+				points[m.Name] = h.DataPoints[0]
+			}
+		}
+	}
+	batch, each := points["test_hist_batch"], points["test_hist_each"]
+	require.NotZero(t, batch.Count, "the batch histogram recorded nothing")
+
+	// Registering a histogram records an initial 0, so both have it.
+	assert.EqualValues(t, len(obs)+1, batch.Count)
+	assert.InDelta(t, 5e10+70106.5, batch.Sum, 1e-3)
+	assert.Equal(t, each.Count, batch.Count)
+	assert.Equal(t, each.Sum, batch.Sum)
+	assert.Equal(t, each.BucketCounts, batch.BucketCounts)
+	assert.Equal(t, each.Min, batch.Min)
+	assert.Equal(t, each.Max, batch.Max)
+}
