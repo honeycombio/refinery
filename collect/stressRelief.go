@@ -129,10 +129,10 @@ type StressRelief struct {
 	minDuration        time.Duration
 	topic              string // formatted topic name
 
-	// peersLastFresh is when Recalc first saw the peer list not fresh; zero
+	// peersNotFreshSince is when Recalc first saw the peer list not fresh; zero
 	// while it is fresh.
-	peersLastFresh time.Time
-	peersWereStale bool
+	peersNotFreshSince time.Time
+	peersWereStale     bool
 
 	algorithms map[string]func(string, string) float64
 
@@ -495,7 +495,7 @@ func (s *StressRelief) Recalc() uint {
 	// A stale peer list can disagree with the lists of other hosts. In monitor
 	// and always modes that counts as stress, so every host samples
 	// deterministically. In never mode it is only logged.
-	peersAreStale := s.peersAreStale()
+	peersAreStale := s.checkPeersStale()
 	if peersAreStale != s.peersWereStale {
 		s.peersWereStale = peersAreStale
 		if peersAreStale {
@@ -555,7 +555,7 @@ func (s *StressRelief) Recalc() uint {
 	return localLevel
 }
 
-// peersAreStale reports whether the peer list has not been fresh for longer
+// checkPeersStale reports whether the peer list has not been fresh for longer
 // than peersStaleAfter. A list that has never been fresh, and peers that
 // cannot tell, such as file peers, are never stale. s.lock must be held.
 //
@@ -563,21 +563,21 @@ func (s *StressRelief) Recalc() uint {
 // PeerEntryTimeout. Monitor mode stays on for MinimumActivationDuration after
 // this turns false, so it covers that time only if MinimumActivationDuration
 // is at least PeerEntryTimeout; the default of 10s is.
-func (s *StressRelief) peersAreStale() bool {
+func (s *StressRelief) checkPeersStale() bool {
 	reporter, ok := s.Peer.(peer.FreshnessReporter)
 	if !ok {
 		return false
 	}
 	fresh, everFresh := reporter.PeersAreFresh()
 	if fresh || !everFresh {
-		s.peersLastFresh = time.Time{}
+		s.peersNotFreshSince = time.Time{}
 		return false
 	}
 	now := s.Clock.Now()
-	if s.peersLastFresh.IsZero() {
-		s.peersLastFresh = now
+	if s.peersNotFreshSince.IsZero() {
+		s.peersNotFreshSince = now
 	}
-	return now.Sub(s.peersLastFresh) > peersStaleAfter
+	return now.Sub(s.peersNotFreshSince) > peersStaleAfter
 }
 
 // clusterStressLevel calculates the overall stress level for the cluster
