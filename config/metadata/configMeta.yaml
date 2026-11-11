@@ -1476,31 +1476,19 @@ groups:
         firstversion: v3.5.0
         summary: paces garbage collection by a Go memory limit derived from `AvailableMemory`, and compares the live heap to the memory budget.
         description: >
-          Experimental, off by default.
+          Experimental.
 
-          When enabled and `AvailableMemory` is set, Refinery sets the Go
-          memory limit (`GOMEMLIMIT`) to 95% of `AvailableMemory` and, unless
-          `GOGC` is set in the environment, turns off percentage-based garbage
-          collection. Garbage is then collected as the heap nears the limit,
-          and the live heap as of the last collection, rather than all heap
-          objects, is compared to the memory budget, so uncollected garbage is
-          not mistaken for buffered traces. If that reading is over budget,
-          Refinery forces a collection to refresh it, at most once a second,
-          before evicting traces.
+          When enabled and `AvailableMemory` is set, Refinery sets `GOMEMLIMIT`
+          to 95% of `AvailableMemory`, turns `GOGC` off unless it is set in the
+          environment, and compares the live heap rather than all heap objects
+          to the memory budget. A `GOMEMLIMIT` set in the environment is kept.
 
-          Process memory (RSS) and `memory_inuse` will read higher and
-          sawtooth, which is not a leak. `memory_heap_allocation` holds the
-          live heap; use `memory_live_heap` for cache pressure. Leave real
-          headroom between `AvailableMemory` and the container's memory limit.
-          Pacing is skipped if the memory budget is at or above 95% of
-          `AvailableMemory`.
-
-          If `GOMEMLIMIT` is set in the environment, Refinery changes neither
-          it nor `GOGC`, but still compares the live heap. With this disabled,
-          an operator's own `GOMEMLIMIT` does not change what is compared.
+          Expect RSS and `memory_inuse` to sit near the limit; use
+          `memory_live_heap` for cache pressure. Leave headroom between
+          `AvailableMemory` and the container's memory limit.
 
           Read at startup only. Refinery logs "GC paced by GOMEMLIMIT from
-          AvailableMemory, GOGC off" at startup when pacing is active.
+          AvailableMemory, GOGC off" when pacing is active.
 
       - name: DisableRedistribution
         type: defaulttrue

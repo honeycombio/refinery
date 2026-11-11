@@ -171,13 +171,13 @@ func TestCheckAllocIgnoresGarbageWhenPaced(t *testing.T) {
 			runtime.KeepAlive(sink)
 			sink = nil
 
-			c := newPacingTestCollector(t, config.MemorySize(maxAlloc), tt.enableGCPacing, clockwork.NewFakeClock())
-			c.checkAlloc(context.Background())
+			collector := newPacingTestCollector(t, config.MemorySize(maxAlloc), tt.enableGCPacing, clockwork.NewFakeClock())
+			collector.checkAlloc(context.Background())
 
-			_, evicted := c.Metrics.Get("collector_cache_eviction")
+			_, evicted := collector.Metrics.Get("collector_cache_eviction")
 			assert.Equal(t, tt.wantEvict, evicted)
 			if !tt.wantEvict {
-				got, ok := c.Metrics.Get(NUMERATOR_MEMORY_HEAP_ALLOC)
+				got, ok := collector.Metrics.Get(NUMERATOR_MEMORY_HEAP_ALLOC)
 				require.True(t, ok)
 				assert.Less(t, got, float64(maxAlloc))
 			}
@@ -193,7 +193,7 @@ func TestCheckAllocRefreshesLiveHeapAtBoundedRate(t *testing.T) {
 
 	// The fake clock is never advanced, so the monitor goroutine never ticks.
 	clock := clockwork.NewFakeClock()
-	c := newPacingTestCollector(t, 1, true, clock)
+	collector := newPacingTestCollector(t, 1, true, clock)
 	numGC := func() uint64 {
 		var s debug.GCStats
 		debug.ReadGCStats(&s)
@@ -202,17 +202,17 @@ func TestCheckAllocRefreshesLiveHeapAtBoundedRate(t *testing.T) {
 
 	// Each over-budget check evicts, which forces its own GC and restarts the interval.
 	before := numGC()
-	c.checkAlloc(context.Background())
+	collector.checkAlloc(context.Background())
 	afterFirst := numGC()
 	assert.Greater(t, afterFirst, before)
 
 	// Within the interval only the eviction GC runs, not a refresh GC as well.
-	c.checkAlloc(context.Background())
+	collector.checkAlloc(context.Background())
 	withinInterval := numGC() - afterFirst
 
-	c.lastGC = clock.Now().Add(-liveHeapRefreshInterval)
+	collector.lastGC = clock.Now().Add(-liveHeapRefreshInterval)
 	before = numGC()
-	c.checkAlloc(context.Background())
+	collector.checkAlloc(context.Background())
 	pastInterval := numGC() - before
 
 	assert.Greater(t, pastInterval, withinInterval, "a refresh GC should run once the interval has passed")

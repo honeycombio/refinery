@@ -115,7 +115,7 @@ type InMemCollector struct {
 
 	memMetricSample []rtmetrics.Sample // Memory monitoring using runtime/metrics
 	lastGC          time.Time          // when checkAlloc last forced a GC; only touched by checkAlloc
-	enableGCPacing  bool               // EnableGCPacing as of Start; like GOMEMLIMIT, it is not reloaded
+	enableGCPacing  bool               // read at Start only, since GOMEMLIMIT is not reloaded
 }
 
 // These are the names of the metrics we use to track the number of events sent to peers through the router.
