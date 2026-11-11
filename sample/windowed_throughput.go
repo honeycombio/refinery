@@ -19,12 +19,14 @@ import (
 func effectiveWindowedThroughputSamplerConfig(c *config.WindowedThroughputSamplerConfig) config.WindowedThroughputSamplerConfig {
 	e := *c
 	defaults.MustSet(&e)
+	// The engine floors the lookback to a whole number of update windows, so a
+	// 90s and a 91s lookback over a 2s window are the same engine. A lookback
+	// shorter than one window floors to zero, which the engine then replaces
+	// with its default, so the default has to be applied after flooring.
+	e.LookbackFrequency = e.UpdateFrequency * (e.LookbackFrequency / e.UpdateFrequency)
 	if e.LookbackFrequency == 0 {
 		e.LookbackFrequency = 30 * e.UpdateFrequency
 	}
-	// The engine floors the lookback to a whole number of update windows, so a
-	// 90s and a 91s lookback over a 2s window are the same engine.
-	e.LookbackFrequency = e.UpdateFrequency * (e.LookbackFrequency / e.UpdateFrequency)
 	return e
 }
 

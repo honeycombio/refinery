@@ -190,19 +190,31 @@ func TestEffectiveDefaultsMatchDynsamplerGo(t *testing.T) {
 // TestWindowedLookbackMatchesEngine checks the one default the helper has to
 // predict rather than pass through. The engine floors the lookback to a whole
 // number of update windows in Start, so the helper has to floor it the same way
-// or the key names a lookback the engine isn't using.
+// or the key names a lookback the engine isn't using. A lookback shorter than
+// one window floors to zero, and the engine replaces that with its default.
 func TestWindowedLookbackMatchesEngine(t *testing.T) {
-	c := &config.WindowedThroughputSamplerConfig{
-		FieldList:         []string{"service.name"},
-		UpdateFrequency:   config.Duration(2 * time.Second),
-		LookbackFrequency: config.Duration(95 * time.Second),
+	tests := []struct {
+		lookback time.Duration
+		want     time.Duration
+	}{
+		{lookback: 95 * time.Second, want: 94 * time.Second},
+		{lookback: time.Second, want: 60 * time.Second},
 	}
-	e := effectiveWindowedThroughputSamplerConfig(c)
-	d := createDynForWindowedThroughputSampler(c)
-	defer d.Stop()
+	for _, tt := range tests {
+		t.Run(tt.lookback.String(), func(t *testing.T) {
+			c := &config.WindowedThroughputSamplerConfig{
+				FieldList:         []string{"service.name"},
+				UpdateFrequency:   config.Duration(2 * time.Second),
+				LookbackFrequency: config.Duration(tt.lookback),
+			}
+			e := effectiveWindowedThroughputSamplerConfig(c)
+			d := createDynForWindowedThroughputSampler(c)
+			defer d.Stop()
 
-	assert.Equal(t, 94*time.Second, d.LookbackFrequencyDuration)
-	assert.Equal(t, time.Duration(e.LookbackFrequency), d.LookbackFrequencyDuration)
+			assert.Equal(t, tt.want, d.LookbackFrequencyDuration)
+			assert.Equal(t, time.Duration(e.LookbackFrequency), d.LookbackFrequencyDuration)
+		})
+	}
 }
 
 // TestLookbackFlooringSharesEngine checks that two lookbacks the engine floors to
