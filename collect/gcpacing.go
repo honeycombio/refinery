@@ -80,14 +80,14 @@ func newMemorySamples() []rtmetrics.Sample {
 	}
 }
 
-// readMemory reads the Go heap. The reading is paced only if gcPacing is set,
-// so that without EnableGCPacing an operator's own GOMEMLIMIT does not change
-// what is compared to the budget.
-func readMemory(samples []rtmetrics.Sample, gcPacing bool) memory {
+// readMemory reads the Go heap. The reading is paced only if enableGCPacing is
+// set, so that without EnableGCPacing an operator's own GOMEMLIMIT does not
+// change what is compared to the budget.
+func readMemory(samples []rtmetrics.Sample, enableGCPacing bool) memory {
 	rtmetrics.Read(samples)
 	return memory{
 		heapObjects: samples[0].Value.Uint64(),
 		liveHeap:    samples[1].Value.Uint64(),
-		paced:       gcPacing && samples[2].Value.Uint64() < math.MaxInt64,
+		paced:       enableGCPacing && samples[2].Value.Uint64() < math.MaxInt64,
 	}
 }

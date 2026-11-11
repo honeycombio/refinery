@@ -115,7 +115,7 @@ type InMemCollector struct {
 
 	memMetricSample []rtmetrics.Sample // Memory monitoring using runtime/metrics
 	lastGC          time.Time          // when checkAlloc last forced a GC; only touched by checkAlloc
-	gcPacing        bool               // EnableGCPacing as of Start; like GOMEMLIMIT, it is not reloaded
+	enableGCPacing  bool               // EnableGCPacing as of Start; like GOMEMLIMIT, it is not reloaded
 }
 
 // These are the names of the metrics we use to track the number of events sent to peers through the router.
@@ -205,7 +205,7 @@ func (i *InMemCollector) Start() error {
 
 	// Initialize runtime/metrics sample for efficient memory monitoring
 	i.memMetricSample = newMemorySamples()
-	i.gcPacing = i.Config.GetCollectionConfig().EnableGCPacing
+	i.enableGCPacing = i.Config.GetCollectionConfig().EnableGCPacing
 
 	i.workers = make([]*CollectorWorker, numWorkers)
 
@@ -272,13 +272,13 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	maxAlloc := inMemConfig.GetMaxAlloc()
 	i.Metrics.Store(DENOMINATOR_MEMORY_MAX_ALLOC, float64(maxAlloc))
 
-	mem := readMemory(i.memMetricSample, i.gcPacing)
+	mem := readMemory(i.memMetricSample, i.enableGCPacing)
 	if mem.paced && maxAlloc > 0 && mem.used() >= uint64(maxAlloc) && i.Clock.Since(i.lastGC) >= liveHeapRefreshInterval {
 		// The live heap only updates when a GC finishes, so confirm the reading
 		// is current before evicting traces on the strength of it.
 		runtime.GC()
 		i.lastGC = i.Clock.Now()
-		mem = readMemory(i.memMetricSample, i.gcPacing)
+		mem = readMemory(i.memMetricSample, i.enableGCPacing)
 	}
 	currentAlloc := mem.used()
 

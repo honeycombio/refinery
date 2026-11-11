@@ -26,7 +26,7 @@ func restoreGCSettings(t *testing.T) {
 	})
 }
 
-func newPacingTestCollector(t *testing.T, maxAlloc config.MemorySize, gcPacing bool, clock clockwork.Clock) *InMemCollector {
+func newPacingTestCollector(t *testing.T, maxAlloc config.MemorySize, enableGCPacing bool, clock clockwork.Clock) *InMemCollector {
 	return newTestCollector(t, &config.MockConfig{
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
@@ -37,7 +37,7 @@ func newPacingTestCollector(t *testing.T, maxAlloc config.MemorySize, gcPacing b
 			SendTicker:   config.Duration(2 * time.Millisecond),
 			TraceTimeout: config.Duration(5 * time.Millisecond),
 		},
-		GetCollectionConfigVal: config.CollectionConfig{MaxAlloc: maxAlloc, EnableGCPacing: gcPacing},
+		GetCollectionConfigVal: config.CollectionConfig{MaxAlloc: maxAlloc, EnableGCPacing: enableGCPacing},
 	}, clock)
 }
 
@@ -149,14 +149,14 @@ func TestReadMemory(t *testing.T) {
 // when GC is paced by a memory limit and EnableGCPacing is on.
 func TestCheckAllocIgnoresGarbageWhenPaced(t *testing.T) {
 	tests := []struct {
-		name      string
-		gcPacing  bool
-		limit     int64
-		wantEvict bool
+		name           string
+		enableGCPacing bool
+		limit          int64
+		wantEvict      bool
 	}{
-		{name: "paced", gcPacing: true, limit: 1 << 40, wantEvict: false},
-		{name: "EnableGCPacing off, operator GOMEMLIMIT set", gcPacing: false, limit: 1 << 40, wantEvict: true},
-		{name: "EnableGCPacing on, no memory limit", gcPacing: true, limit: math.MaxInt64, wantEvict: true},
+		{name: "paced", enableGCPacing: true, limit: 1 << 40, wantEvict: false},
+		{name: "EnableGCPacing off, operator GOMEMLIMIT set", enableGCPacing: false, limit: 1 << 40, wantEvict: true},
+		{name: "EnableGCPacing on, no memory limit", enableGCPacing: true, limit: math.MaxInt64, wantEvict: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -171,7 +171,7 @@ func TestCheckAllocIgnoresGarbageWhenPaced(t *testing.T) {
 			runtime.KeepAlive(sink)
 			sink = nil
 
-			c := newPacingTestCollector(t, config.MemorySize(maxAlloc), tt.gcPacing, clockwork.NewFakeClock())
+			c := newPacingTestCollector(t, config.MemorySize(maxAlloc), tt.enableGCPacing, clockwork.NewFakeClock())
 			c.checkAlloc(context.Background())
 
 			_, evicted := c.Metrics.Get("collector_cache_eviction")
