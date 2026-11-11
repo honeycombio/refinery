@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/creasty/defaults"
 	dynsampler "github.com/honeycombio/dynsampler-go"
 
 	"github.com/honeycombio/refinery/config"
@@ -20,15 +21,7 @@ import (
 // writes that field's default.
 func effectiveDynamicSamplerConfig(c *config.DynamicSamplerConfig) config.DynamicSamplerConfig {
 	e := *c
-	if e.SampleRate == 0 {
-		e.SampleRate = 10
-	}
-	if e.ClearFrequency == 0 {
-		e.ClearFrequency = config.Duration(30 * time.Second)
-	}
-	if e.MaxKeys == 0 {
-		e.MaxKeys = 500
-	}
+	defaults.MustSet(&e)
 	return e
 }
 

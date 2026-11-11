@@ -192,11 +192,14 @@ func (d *DeterministicSamplerConfig) GetSamplingFields() []string {
 
 var _ GetSamplingFielder = (*DynamicSamplerConfig)(nil)
 
+// The default tags on the dynamic sampler configs are not applied when the
+// rules are loaded. The sample package applies them when it builds the engine,
+// so the engine and the shared-dynsampler key see the same values.
 type DynamicSamplerConfig struct {
-	SampleRate     int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1"`
-	ClearFrequency Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
+	SampleRate     int64    `json:"samplerate" yaml:"SampleRate,omitempty" validate:"required,gte=1" default:"10"`
+	ClearFrequency Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty" default:"30s"`
 	FieldList      []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
-	MaxKeys        int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
+	MaxKeys        int      `json:"maxkeys" yaml:"MaxKeys,omitempty" default:"500"`
 	UseTraceLength bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
@@ -207,14 +210,14 @@ func (d *DynamicSamplerConfig) GetSamplingFields() []string {
 var _ GetSamplingFielder = (*EMADynamicSamplerConfig)(nil)
 
 type EMADynamicSamplerConfig struct {
-	GoalSampleRate      int      `json:"goalsamplerate" yaml:"GoalSampleRate,omitempty" validate:"gte=1"`
-	AdjustmentInterval  Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
-	Weight              float64  `json:"weight" yaml:"Weight,omitempty" validate:"gt=0,lt=1"`
+	GoalSampleRate      int      `json:"goalsamplerate" yaml:"GoalSampleRate,omitempty" validate:"gte=1" default:"10"`
+	AdjustmentInterval  Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty" default:"15s"`
+	Weight              float64  `json:"weight" yaml:"Weight,omitempty" validate:"gt=0,lt=1" default:"0.5"`
 	AgeOutValue         float64  `json:"ageoutvalue" yaml:"AgeOutValue,omitempty"`
-	BurstMultiple       float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty"`
-	BurstDetectionDelay uint     `json:"burstdetectiondelay" yaml:"BurstDetectionDelay,omitempty"`
+	BurstMultiple       float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty" default:"2"`
+	BurstDetectionDelay uint     `json:"burstdetectiondelay" yaml:"BurstDetectionDelay,omitempty" default:"3"`
 	FieldList           []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
-	MaxKeys             int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
+	MaxKeys             int      `json:"maxkeys" yaml:"MaxKeys,omitempty" default:"500"`
 	UseTraceLength      bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
@@ -225,16 +228,16 @@ func (d *EMADynamicSamplerConfig) GetSamplingFields() []string {
 var _ GetSamplingFielder = (*EMAThroughputSamplerConfig)(nil)
 
 type EMAThroughputSamplerConfig struct {
-	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty"`
+	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" default:"100"`
 	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
-	InitialSampleRate    int      `json:"initialsamplerate" yaml:"InitialSampleRate,omitempty"`
-	AdjustmentInterval   Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty"`
-	Weight               float64  `json:"weight" yaml:"Weight,omitempty"`
+	InitialSampleRate    int      `json:"initialsamplerate" yaml:"InitialSampleRate,omitempty" default:"10"`
+	AdjustmentInterval   Duration `json:"adjustmentinterval" yaml:"AdjustmentInterval,omitempty" default:"15s"`
+	Weight               float64  `json:"weight" yaml:"Weight,omitempty" default:"0.5"`
 	AgeOutValue          float64  `json:"ageoutvalue" yaml:"AgeOutValue,omitempty"`
-	BurstMultiple        float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty"`
-	BurstDetectionDelay  uint     `json:"burstdetectiondelay" yaml:"BurstDetectionDelay,omitempty"`
+	BurstMultiple        float64  `json:"burstmultiple" yaml:"BurstMultiple,omitempty" default:"2"`
+	BurstDetectionDelay  uint     `json:"burstdetectiondelay" yaml:"BurstDetectionDelay,omitempty" default:"3"`
 	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty"`
-	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
+	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty" default:"500"`
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
@@ -245,12 +248,12 @@ func (d *EMAThroughputSamplerConfig) GetSamplingFields() []string {
 var _ GetSamplingFielder = (*WindowedThroughputSamplerConfig)(nil)
 
 type WindowedThroughputSamplerConfig struct {
-	UpdateFrequency      Duration `json:"updatefrequency" yaml:"UpdateFrequency,omitempty"`
+	UpdateFrequency      Duration `json:"updatefrequency" yaml:"UpdateFrequency,omitempty" default:"1s"`
 	LookbackFrequency    Duration `json:"lookbackfrequency" yaml:"LookbackFrequency,omitempty"`
-	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty"`
+	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" default:"100"`
 	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
 	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty"`
-	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
+	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty" default:"500"`
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 
@@ -261,11 +264,11 @@ func (d *WindowedThroughputSamplerConfig) GetSamplingFields() []string {
 var _ GetSamplingFielder = (*TotalThroughputSamplerConfig)(nil)
 
 type TotalThroughputSamplerConfig struct {
-	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1"`
+	GoalThroughputPerSec int      `json:"goalthroughputpersec" yaml:"GoalThroughputPerSec,omitempty" validate:"gte=1" default:"100"`
 	UseClusterSize       bool     `json:"useclustersize" yaml:"UseClusterSize,omitempty"`
-	ClearFrequency       Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty"`
+	ClearFrequency       Duration `json:"clearfrequency" yaml:"ClearFrequency,omitempty" default:"30s"`
 	FieldList            []string `json:"fieldlist" yaml:"FieldList,omitempty" validate:"required"`
-	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty"`
+	MaxKeys              int      `json:"maxkeys" yaml:"MaxKeys,omitempty" default:"500"`
 	UseTraceLength       bool     `json:"usetracelength" yaml:"UseTraceLength,omitempty"`
 }
 

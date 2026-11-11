@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/creasty/defaults"
 	dynsampler "github.com/honeycombio/dynsampler-go"
 
 	"github.com/honeycombio/refinery/config"
@@ -17,21 +18,13 @@ import (
 // otherwise be applied when the engine is built. See effectiveDynamicSamplerConfig.
 func effectiveWindowedThroughputSamplerConfig(c *config.WindowedThroughputSamplerConfig) config.WindowedThroughputSamplerConfig {
 	e := *c
-	if e.GoalThroughputPerSec == 0 {
-		e.GoalThroughputPerSec = 100
-	}
-	if e.UpdateFrequency == 0 {
-		e.UpdateFrequency = config.Duration(time.Second)
-	}
+	defaults.MustSet(&e)
 	if e.LookbackFrequency == 0 {
 		e.LookbackFrequency = 30 * e.UpdateFrequency
 	}
 	// The engine floors the lookback to a whole number of update windows, so a
 	// 90s and a 91s lookback over a 2s window are the same engine.
 	e.LookbackFrequency = e.UpdateFrequency * (e.LookbackFrequency / e.UpdateFrequency)
-	if e.MaxKeys == 0 {
-		e.MaxKeys = 500
-	}
 	return e
 }
 

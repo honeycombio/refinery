@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/creasty/defaults"
 	dynsampler "github.com/honeycombio/dynsampler-go"
 
 	"github.com/honeycombio/refinery/config"
@@ -17,15 +18,7 @@ import (
 // otherwise be applied when the engine is built. See effectiveDynamicSamplerConfig.
 func effectiveTotalThroughputSamplerConfig(c *config.TotalThroughputSamplerConfig) config.TotalThroughputSamplerConfig {
 	e := *c
-	if e.GoalThroughputPerSec == 0 {
-		e.GoalThroughputPerSec = 100
-	}
-	if e.ClearFrequency == 0 {
-		e.ClearFrequency = config.Duration(30 * time.Second)
-	}
-	if e.MaxKeys == 0 {
-		e.MaxKeys = 500
-	}
+	defaults.MustSet(&e)
 	return e
 }
 

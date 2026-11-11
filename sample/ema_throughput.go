@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/creasty/defaults"
 	dynsampler "github.com/honeycombio/dynsampler-go"
 
 	"github.com/honeycombio/refinery/config"
@@ -17,30 +18,10 @@ import (
 // be applied when the engine is built. See effectiveDynamicSamplerConfig.
 func effectiveEMAThroughputSamplerConfig(c *config.EMAThroughputSamplerConfig) config.EMAThroughputSamplerConfig {
 	e := *c
-	if e.GoalThroughputPerSec == 0 {
-		e.GoalThroughputPerSec = 100
-	}
-	if e.InitialSampleRate == 0 {
-		e.InitialSampleRate = 10
-	}
-	if e.AdjustmentInterval == 0 {
-		e.AdjustmentInterval = config.Duration(15 * time.Second)
-	}
-	if e.Weight == 0 {
-		e.Weight = 0.5
-	}
-	// AgeOutValue follows Weight, so it has to be defaulted after it.
+	defaults.MustSet(&e)
+	// AgeOutValue follows Weight, so it cannot be a static default.
 	if e.AgeOutValue == 0 {
 		e.AgeOutValue = e.Weight
-	}
-	if e.BurstMultiple == 0 {
-		e.BurstMultiple = 2
-	}
-	if e.BurstDetectionDelay == 0 {
-		e.BurstDetectionDelay = 3
-	}
-	if e.MaxKeys == 0 {
-		e.MaxKeys = 500
 	}
 	return e
 }
