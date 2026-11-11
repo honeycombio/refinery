@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	huskyotlp "github.com/honeycombio/husky/otlp"
@@ -61,6 +62,10 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := r.processOTLPRequest(ctx, result.Batches, keyToUse, ri.UserAgent); err != nil {
+		if errors.Is(err, ErrEnvironmentUnavailable) {
+			r.handleOTLPFailureResponse(w, req, ErrEnvironmentUnavailable)
+			return
+		}
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusInternalServerError})
 		return
 	}
