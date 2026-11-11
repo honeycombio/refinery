@@ -114,7 +114,7 @@ complete:
     - name: memory_heap_allocation
       type: Gauge
       unit: Bytes
-      description: current heap allocation; the live heap as of the last GC when a Go memory limit is set
+      description: current heap allocation; the live heap as of the last GC when GC pacing is enabled
     - name: memory_live_heap
       type: Gauge
       unit: Bytes
