@@ -2,6 +2,14 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Unreleased
+
+### New opt-in setting: `Collection.EnableGCPacing`
+
+Off by default, so nothing changes unless you set it. When enabled and `AvailableMemory` is set, Refinery sets `GOMEMLIMIT` to 95% of `AvailableMemory`, turns `GOGC` off (unless you set it), and compares the live heap rather than all heap objects to the memory budget. That stops uncollected garbage from being mistaken for buffered traces. Expect process memory (RSS) and `memory_inuse` to sit near the limit; this is not a leak.
+
+Before enabling it, update boards, triggers, and SLOs on `memory_inuse`, `memory_heap_allocation`, or container memory, including the standard Refinery ones, and leave headroom between `AvailableMemory` and the container's memory limit. The new `memory_live_heap` gauge reports the live heap whether or not the setting is on, so you can re-baseline alerts first. See the `EnableGCPacing` entry in the configuration reference for details.
+
 ## Version 3.4.4
 
 This patch release contains one dependency update. There are no configuration changes.

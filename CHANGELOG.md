@@ -1,5 +1,11 @@
 # Refinery Changelog
 
+## Unreleased
+
+### 💡 Enhancements
+
+- feat: opt-in `Collection.EnableGCPacing` paces GC by a memory limit and compares the live heap to the memory budget in https://github.com/honeycombio/refinery/pull/1892
+
 ## 3.4.4 2026-10-23
 
 This is a patch release carrying a husky update that changes how a malformed OTLP attribute is handled.
