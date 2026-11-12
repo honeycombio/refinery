@@ -332,6 +332,7 @@ type CollectionConfig struct {
 	HealthCheckTimeout  Duration   `yaml:"HealthCheckTimeout" default:"15s"`
 	MaxMemoryPercentage int        `yaml:"MaxMemoryPercentage" default:"75"`
 	MaxAlloc            MemorySize `yaml:"MaxAlloc"`
+	EnableGCPacing      bool       `yaml:"EnableGCPacing"`
 
 	ShutdownDelay Duration `yaml:"ShutdownDelay" default:"15s"`
 

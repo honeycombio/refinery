@@ -114,6 +114,8 @@ type InMemCollector struct {
 	hostname string
 
 	memMetricSample []rtmetrics.Sample // Memory monitoring using runtime/metrics
+	gcCycles        uint64             // GC cycles as of the last checkAlloc; only touched by checkAlloc
+	enableGCPacing  bool               // read at Start only, since GOMEMLIMIT is not reloaded
 }
 
 // These are the names of the metrics we use to track the number of events sent to peers through the router.
@@ -134,7 +136,8 @@ var inMemCollectorMetrics = []metrics.Metadata{
 	{Name: "collector_peer_queue", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "number of spans currently in the peer queue"},
 	{Name: "collector_cache_size", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "number of traces currently stored in the trace cache"},
 	{Name: "collect_cache_entries", Type: metrics.Histogram, Unit: metrics.Dimensionless, Description: "Total number of traces currently stored in the cache from all workers"},
-	{Name: "memory_heap_allocation", Type: metrics.Gauge, Unit: metrics.Bytes, Description: "current heap allocation"},
+	{Name: "memory_heap_allocation", Type: metrics.Gauge, Unit: metrics.Bytes, Description: "current heap allocation; the live heap as of the last GC when GC pacing is enabled"},
+	{Name: "memory_live_heap", Type: metrics.Gauge, Unit: metrics.Bytes, Description: "heap memory occupied by live objects as of the last GC"},
 	{Name: "memory_limit", Type: metrics.Gauge, Unit: metrics.Bytes, Description: "configured maximum memory allocation for the collector (derived from MaxAlloc or AvailableMemory * MaxMemoryPercentage)"},
 	{Name: "span_received", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans received by the collector"},
 	{Name: "span_processed", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "number of spans processed by the collector"},
@@ -201,8 +204,9 @@ func (i *InMemCollector) Start() error {
 	}
 
 	// Initialize runtime/metrics sample for efficient memory monitoring
-	i.memMetricSample = make([]rtmetrics.Sample, 1)
-	i.memMetricSample[0].Name = metrics.RtMetricNameMemory
+	i.memMetricSample = newMemorySamples()
+	i.enableGCPacing = i.Config.GetCollectionConfig().EnableGCPacing
+	i.warnOnBudgetNearGCLimit()
 
 	i.workers = make([]*CollectorWorker, numWorkers)
 
@@ -245,6 +249,8 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.StressRelief.UpdateFromConfig()
 
+	i.warnOnBudgetNearGCLimit()
+
 	// Send reload signals to all workers to clear their local samplers
 	// so that the new configuration will be propagated
 	for _, worker := range i.workers {
@@ -258,15 +264,30 @@ func (i *InMemCollector) reloadConfigs() {
 
 // checkAlloc performs memory monitoring using runtime/metrics instead of
 // runtime.ReadMemStats. This avoids stop-the-world pauses that can impact performance.
+//
+// The reading compared to the budget is all heap objects, unless EnableGCPacing
+// is on and a Go memory limit is set (see ConfigureGCPacing). Then GC runs only
+// as the heap nears the limit, so heap objects include arbitrary amounts of
+// garbage and the live heap marked by the last GC is the measure of what the
+// cache holds.
 func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	inMemConfig := i.Config.GetCollectionConfig()
 	maxAlloc := inMemConfig.GetMaxAlloc()
 	i.Metrics.Store(DENOMINATOR_MEMORY_MAX_ALLOC, float64(maxAlloc))
 
-	rtmetrics.Read(i.memMetricSample)
-	currentAlloc := i.memMetricSample[0].Value.Uint64()
+	mem := readMemory(i.memMetricSample, i.enableGCPacing)
+	if mem.paced && maxAlloc > 0 && mem.used() >= uint64(maxAlloc) && mem.gcCycles == i.gcCycles {
+		// The live heap only updates when a GC finishes, and none has since the
+		// last check, so confirm the reading is current before evicting traces
+		// on the strength of it.
+		runtime.GC()
+		mem = readMemory(i.memMetricSample, i.enableGCPacing)
+	}
+	i.gcCycles = mem.gcCycles
+	currentAlloc := mem.used()
 
 	i.Metrics.Gauge(NUMERATOR_MEMORY_HEAP_ALLOC, float64(currentAlloc))
+	i.Metrics.Gauge("memory_live_heap", float64(mem.liveHeap))
 
 	// Check if we're within memory budget
 	if maxAlloc == 0 || currentAlloc < uint64(maxAlloc) {

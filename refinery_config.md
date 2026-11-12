@@ -141,6 +141,59 @@ Reserved Honeycomb header prefixes ("x-honeycomb-" and "x-hny-") cannot be set.
 - Type: `map`
 - Example: `FORWARD_TO_URL:https://api.honeycomb.io`
 
+### `UpstreamTLSCertFile`
+
+`UpstreamTLSCertFile` is the path to a PEM-encoded client certificate that Refinery presents to the upstream Honeycomb API for mutual TLS.
+
+When set together with `UpstreamTLSKeyFile`, Refinery presents this client certificate on HTTPS connections to `HoneycombAPI`, which carry the trace data Refinery forwards, API key lookups (`/1/auth`), and other API requests Refinery passes through such as markers, and on logs sent by the `honeycomb` logger.
+This is useful when Refinery sends through a proxy that requires mutual TLS.
+Refinery's OTel metrics and traces, peer-to-peer traffic, OpAMP, and fetching configuration over HTTP(S) do not use this certificate; send OTel telemetry through an OpenTelemetry Collector if it needs mutual TLS.
+The file must contain the client certificate followed by any intermediate certificates needed to chain it to the CA that the proxy trusts.
+The certificate and key may be in the same file; set both settings to that path.
+Each time Refinery opens a new connection and the upstream asks for a client certificate, Refinery checks the modification times of the certificate and key files and reloads them when either changes, so short-lived certificates can be rotated without a restart.
+Replacing a file's contents without changing its modification time is not detected.
+Connections that are already open keep using the certificate they were opened with.
+In Kubernetes, mount the Secret as a directory rather than with `subPath`, because `subPath` mounts don't receive updates.
+If the new files cannot be loaded, Refinery logs a warning and keeps using the last valid certificate.
+Refinery also logs a warning when the certificate in use has expired or has less than a tenth of its lifetime left.
+Both checks happen only when a new connection is opened, so a long-lived connection can delay them.
+With the `honeycomb` logger, these warnings are also printed to stderr, because the logger sends through the same certificate.
+Changing the configured path requires a restart.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `/etc/refinery/tls/client.crt`
+
+### `UpstreamTLSKeyFile`
+
+`UpstreamTLSKeyFile` is the path to the PEM-encoded private key for `UpstreamTLSCertFile`.
+
+Must be set together with `UpstreamTLSCertFile`.
+The key must be an unencrypted PEM key in PKCS #1, PKCS #8, or SEC 1 (EC) format.
+The key file is reloaded along with the certificate when either file changes.
+Changing the configured path requires a restart.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `/etc/refinery/tls/client.key`
+
+### `UpstreamTLSCAFile`
+
+`UpstreamTLSCAFile` is the path to a PEM-encoded CA bundle used to verify the upstream Honeycomb API server certificate.
+
+When set, Refinery trusts only the certificates in this bundle when connecting to `HoneycombAPI` and sending `honeycomb` logger output, instead of the system's trusted root certificates.
+Use this when the upstream endpoint, such as an mTLS proxy, presents a certificate from a private CA.
+The bundle may contain more than one CA certificate.
+This setting can be used on its own or with a client certificate.
+Changes to the file contents or path require a restart.
+Because this bundle replaces the system roots, set `HoneycombLogger.APIHost` to the same proxy as `HoneycombAPI`.
+Otherwise logs sent directly to Honeycomb fail TLS verification; Refinery logs a warning at startup when it detects this.
+If Refinery reaches the upstream through an `https://` forward proxy set in `HTTPS_PROXY`, the connection to that forward proxy is also verified against this bundle, so include the CA that signed the forward proxy's certificate.
+
+- Not eligible for live reload.
+- Type: `string`
+- Example: `/etc/refinery/tls/ca.crt`
+
 ## OpAMP Configuration
 
 `OpAMP` contains OpAMP configuration options.
@@ -982,6 +1035,29 @@ If set, `Collections.AvailableMemory` must not be defined.
 
 - Eligible for live reload.
 - Type: `memorysize`
+
+### `EnableGCPacing`
+
+`EnableGCPacing` paces garbage collection by a Go memory limit derived from `AvailableMemory`, and compares the live heap to the memory budget.
+
+Off by default.
+When enabled and `AvailableMemory` is set, Refinery sets `GOMEMLIMIT` to 95% of `AvailableMemory`, turns `GOGC` off unless it is set in the environment, and compares the live heap rather than all heap objects to the memory budget.
+A `GOMEMLIMIT` set in the environment is kept.
+Pacing is skipped if the memory budget is at or above 95% of `AvailableMemory`.
+This stops uncollected garbage from being mistaken for buffered traces, so there are fewer needless evictions, steadier stress relief readings, and less CPU spent on garbage collection.
+The cost is that process memory (RSS) and `memory_inuse` sit near the limit and sawtooth, because garbage stays resident until the heap nears the limit.
+That is not a leak.
+`memory_heap_allocation` then holds the live heap, and `memory_live_heap` reports it either way.
+The live heap is measured at each collection, which with `GOGC` off happens as the heap nears the limit, so eviction and stress relief react to a surge then rather than at once.
+Before enabling, update any board, trigger, or SLO built on `memory_inuse`, `memory_heap_allocation`, or container memory, including the standard Refinery boards and alerts; use `memory_live_heap` for cache pressure.
+Leave real headroom between `AvailableMemory` and the container's memory limit, and do not enable this if the container is tight on memory or shares a node with other memory-hungry processes.
+Keep `MaxMemoryPercentage` at or below 85; above that the budget is within 10% of the limit, and Refinery logs a warning at startup and on reload.
+If you set `MaxAlloc` instead of `AvailableMemory`, Refinery does not set `GOMEMLIMIT`, but still compares the live heap if `GOMEMLIMIT` is set in the environment.
+Read at startup only; a live reload does not change the limit.
+Refinery logs "GC paced by GOMEMLIMIT from AvailableMemory, GOGC off" when pacing is active.
+
+- Not eligible for live reload.
+- Type: `bool`
 
 ### `ShutdownDelay`
 

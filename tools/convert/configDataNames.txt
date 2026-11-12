@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2026-10-13 at 11:46:56 UTC.
+# Automatically generated on 2026-11-11 at 14:18:16 UTC.
 
 General:
   - ConfigurationVersion
@@ -207,6 +207,8 @@ Collection:
   - MaxMemoryPercentage
 
   - MaxAlloc (originally InMemCollector.MaxAlloc)
+
+  - EnableGCPacing
 
   - DisableRedistribution
 

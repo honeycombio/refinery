@@ -123,6 +123,9 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Loggers can't be used until startstop.Start has run, so log this below.
+	gcLimit := collect.ConfigureGCPacing(c.GetCollectionConfig())
+
 	// when refinery receives a shutdown signal, we need to
 	// immediately let its peers know so they can stop sending
 	// data to it.
@@ -298,6 +301,10 @@ func main() {
 	if err := startstop.Start(g.Objects(), ststLogger); err != nil {
 		fmt.Printf("failed to start injected dependencies. error: %+v\n", err)
 		os.Exit(1)
+	}
+
+	if gcLimit > 0 {
+		lgr.Warn().WithField("gomemlimit_bytes", gcLimit).Logf("GC paced by GOMEMLIMIT from AvailableMemory, GOGC off")
 	}
 
 	// Now that all components are started, we can notify our peers that we are ready
