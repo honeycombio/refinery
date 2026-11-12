@@ -148,9 +148,11 @@ func (h *HoneycombLogger) readResponses() {
 	}
 }
 
-// handleResponse reports a failed send on stderr. Only the first error in a
-// run of failures is printed; the next response with a status code (Honeycomb
-// answered again) re-arms the report.
+// handleResponse reports a failed send on stderr. Each run of failures is
+// reported once: only a clean 202 (no error, status code set) re-arms the
+// report. Whole-batch failures such as 401, 429 or 5xx set both a status code
+// and an error, so they are reported once per run, not once per line.
+// Sampled-out lines never reach this function because Logf drops them first.
 func (h *HoneycombLogger) handleResponse(resp transmission.Response) {
 	respString := fmt.Sprintf("Response: status: %d, duration: %s", resp.StatusCode, resp.Duration)
 	// read response, log if there's an error
@@ -283,7 +285,14 @@ func (h *HoneycombEntry) Logf(f string, args ...interface{}) {
 		// use the level and the format string as the key for the sampler
 		// this allows us to avoid sampling on high-cardinality fields in the message
 		rate := h.sampler.GetSampleRate(fmt.Sprintf(`%s:%s`, level, f))
+		// drop sampled-out lines here, as logger/logrus.go does, so libhoney never
+		// sees them. Otherwise it returns a "dropped due to sampling" response
+		// that handleResponse would report as a transport error.
+		if shouldDrop(uint(rate)) {
+			return
+		}
 		ev.SampleRate = uint(rate)
 	}
-	ev.Send()
+	// the sample decision has already been made above, so send presampled
+	ev.SendPresampled()
 }
