@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/honeycombio/refinery/config"
+	"github.com/honeycombio/refinery/logger"
 )
 
 func restoreGCSettings(t *testing.T) {
@@ -185,35 +186,84 @@ func TestCheckAllocIgnoresGarbageWhenPaced(t *testing.T) {
 	}
 }
 
-// Over-budget live heap readings force a GC to refresh them, at most once a second.
-func TestCheckAllocRefreshesLiveHeapAtBoundedRate(t *testing.T) {
-	restoreGCSettings(t)
-	debug.SetMemoryLimit(1 << 40)
-	debug.SetGCPercent(-1)
-
-	// The fake clock is never advanced, so the monitor goroutine never ticks.
-	clock := clockwork.NewFakeClock()
-	collector := newPacingTestCollector(t, 1, true, clock)
-	numGC := func() uint64 {
-		var s debug.GCStats
-		debug.ReadGCStats(&s)
-		return uint64(s.NumGC)
+// An over-budget live heap reading forces a GC to refresh it only when no GC
+// has finished since the last check, since otherwise the reading is current.
+func TestCheckAllocRefreshesStaleLiveHeap(t *testing.T) {
+	tests := []struct {
+		name         string
+		gcSinceCheck bool
+		wantGCs      uint64
+	}{
+		{name: "no GC since the last check refreshes, then evicts", gcSinceCheck: false, wantGCs: 2},
+		{name: "a GC since the last check only evicts", gcSinceCheck: true, wantGCs: 1},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restoreGCSettings(t)
+			debug.SetMemoryLimit(1 << 40)
+			debug.SetGCPercent(-1)
 
-	// Each over-budget check evicts, which forces its own GC and restarts the interval.
-	before := numGC()
-	collector.checkAlloc(context.Background())
-	afterFirst := numGC()
-	assert.Greater(t, afterFirst, before)
+			// The fake clock is never advanced, so the monitor goroutine never ticks.
+			collector := newPacingTestCollector(t, 1<<40, true, clockwork.NewFakeClock())
+			conf := collector.Config.(*config.MockConfig)
+			setMaxAlloc := func(maxAlloc config.MemorySize) {
+				conf.Mux.Lock()
+				conf.GetCollectionConfigVal.MaxAlloc = maxAlloc
+				conf.Mux.Unlock()
+			}
+			numGC := func() uint64 {
+				var stats debug.GCStats
+				debug.ReadGCStats(&stats)
+				return uint64(stats.NumGC)
+			}
 
-	// Within the interval only the eviction GC runs, not a refresh GC as well.
-	collector.checkAlloc(context.Background())
-	withinInterval := numGC() - afterFirst
+			// The live heap reads 0 until the first GC.
+			runtime.GC()
+			collector.checkAlloc(context.Background())
+			if tt.gcSinceCheck {
+				runtime.GC()
+			}
+			setMaxAlloc(1)
+			before := numGC()
+			collector.checkAlloc(context.Background())
 
-	collector.lastGC = clock.Now().Add(-liveHeapRefreshInterval)
-	before = numGC()
-	collector.checkAlloc(context.Background())
-	pastInterval := numGC() - before
+			assert.Equal(t, tt.wantGCs, numGC()-before)
+			_, evicted := collector.Metrics.Get("collector_cache_eviction")
+			assert.True(t, evicted)
+		})
+	}
+}
 
-	assert.Greater(t, pastInterval, withinInterval, "a refresh GC should run once the interval has passed")
+func TestWarnOnBudgetNearGCLimit(t *testing.T) {
+	const limit = 100 << 20
+	tests := []struct {
+		name           string
+		enableGCPacing bool
+		limit          int64
+		budget         config.MemorySize
+		wantWarn       bool
+	}{
+		{name: "budget at 94% of the limit warns", enableGCPacing: true, limit: limit, budget: limit / 100 * 94, wantWarn: true},
+		{name: "budget at 85% of the limit is fine", enableGCPacing: true, limit: limit, budget: limit / 100 * 85},
+		{name: "EnableGCPacing off", enableGCPacing: false, limit: limit, budget: limit / 100 * 94},
+		{name: "no memory limit", enableGCPacing: true, limit: math.MaxInt64, budget: limit / 100 * 94},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restoreGCSettings(t)
+			collector := newPacingTestCollector(t, tt.budget, tt.enableGCPacing, clockwork.NewFakeClock())
+			debug.SetMemoryLimit(tt.limit)
+			mockLogger := &logger.MockLogger{}
+			collector.Logger = mockLogger
+
+			collector.warnOnBudgetNearGCLimit()
+
+			var warned bool
+			for _, event := range mockLogger.Events {
+				_, ok := event.Fields["warn"]
+				warned = warned || ok
+			}
+			assert.Equal(t, tt.wantWarn, warned)
+		})
+	}
 }

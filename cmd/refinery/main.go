@@ -291,7 +291,7 @@ func main() {
 	}
 
 	if gcLimit > 0 {
-		lgr.Info().WithField("gomemlimit_bytes", gcLimit).Logf("GC paced by GOMEMLIMIT from AvailableMemory, GOGC off")
+		lgr.Warn().WithField("gomemlimit_bytes", gcLimit).Logf("GC paced by GOMEMLIMIT from AvailableMemory, GOGC off")
 	}
 
 	// Now that all components are started, we can notify our peers that we are ready

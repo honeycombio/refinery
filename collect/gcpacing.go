@@ -5,7 +5,6 @@ import (
 	"os"
 	"runtime/debug"
 	rtmetrics "runtime/metrics"
-	"time"
 
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/metrics"
@@ -15,11 +14,10 @@ import (
 // the Go runtime does not track.
 const availableMemoryPercentage = 95
 
-// liveHeapRefreshInterval bounds the forced GCs that refresh the live heap
-// when it reads over budget: with GOGC off, nothing else would collect
-// between a load drop and the next limit-driven GC, so the reading could stay
-// stale-high and evict traces that no longer need to go.
-const liveHeapRefreshInterval = time.Second
+// maxBudgetLimitPercentage is how much of the Go memory limit the memory
+// budget can take before a live heap near the budget leaves too little
+// garbage headroom, and GC with GOGC off runs nearly back to back.
+const maxBudgetLimitPercentage = 90
 
 // ConfigureGCPacing paces GC by GOMEMLIMIT at availableMemoryPercentage of
 // AvailableMemory, with GOGC off, so that uncollected garbage is not mistaken
@@ -51,6 +49,7 @@ func ConfigureGCPacing(c config.CollectionConfig) int64 {
 const (
 	rtMetricLiveHeap    = "/gc/heap/live:bytes"
 	rtMetricMemoryLimit = "/gc/gomemlimit:bytes"
+	rtMetricGCCycles    = "/gc/cycles/total:gc-cycles"
 )
 
 // memory is a reading of the Go heap.
@@ -62,6 +61,9 @@ type memory struct {
 	// paced is whether a Go memory limit is set, which is when liveHeap rather
 	// than heapObjects reflects the memory the cache is holding.
 	paced bool
+	// gcCycles counts completed GCs, so a reading can tell whether liveHeap
+	// has been refreshed since the last one.
+	gcCycles uint64
 }
 
 // used is the reading to compare against the memory budget.
@@ -77,6 +79,7 @@ func newMemorySamples() []rtmetrics.Sample {
 		{Name: metrics.RtMetricNameMemory},
 		{Name: rtMetricLiveHeap},
 		{Name: rtMetricMemoryLimit},
+		{Name: rtMetricGCCycles},
 	}
 }
 
@@ -88,5 +91,23 @@ func readMemory(samples []rtmetrics.Sample, enableGCPacing bool) memory {
 		heapObjects: samples[0].Value.Uint64(),
 		liveHeap:    samples[1].Value.Uint64(),
 		paced:       enableGCPacing && samples[2].Value.Uint64() < math.MaxInt64,
+		gcCycles:    samples[3].Value.Uint64(),
 	}
+}
+
+// warnOnBudgetNearGCLimit warns when GC is paced and the memory budget is above
+// maxBudgetLimitPercentage of the Go memory limit.
+func (i *InMemCollector) warnOnBudgetNearGCLimit() {
+	if !i.enableGCPacing {
+		return
+	}
+	limit := debug.SetMemoryLimit(-1)
+	budget := int64(i.Config.GetCollectionConfig().GetMaxAlloc())
+	if limit == math.MaxInt64 || budget <= limit/100*maxBudgetLimitPercentage {
+		return
+	}
+	i.Logger.Warn().
+		WithField("memory_budget_bytes", budget).
+		WithField("gomemlimit_bytes", limit).
+		Logf("memory budget is close to GOMEMLIMIT, so GC can run nearly back to back; lower MaxMemoryPercentage")
 }

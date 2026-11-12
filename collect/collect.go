@@ -114,7 +114,7 @@ type InMemCollector struct {
 	hostname string
 
 	memMetricSample []rtmetrics.Sample // Memory monitoring using runtime/metrics
-	lastGC          time.Time          // when checkAlloc last forced a GC; only touched by checkAlloc
+	gcCycles        uint64             // GC cycles as of the last checkAlloc; only touched by checkAlloc
 	enableGCPacing  bool               // read at Start only, since GOMEMLIMIT is not reloaded
 }
 
@@ -206,6 +206,7 @@ func (i *InMemCollector) Start() error {
 	// Initialize runtime/metrics sample for efficient memory monitoring
 	i.memMetricSample = newMemorySamples()
 	i.enableGCPacing = i.Config.GetCollectionConfig().EnableGCPacing
+	i.warnOnBudgetNearGCLimit()
 
 	i.workers = make([]*CollectorWorker, numWorkers)
 
@@ -248,6 +249,8 @@ func (i *InMemCollector) reloadConfigs() {
 
 	i.StressRelief.UpdateFromConfig()
 
+	i.warnOnBudgetNearGCLimit()
+
 	// Send reload signals to all workers to clear their local samplers
 	// so that the new configuration will be propagated
 	for _, worker := range i.workers {
@@ -273,13 +276,14 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 	i.Metrics.Store(DENOMINATOR_MEMORY_MAX_ALLOC, float64(maxAlloc))
 
 	mem := readMemory(i.memMetricSample, i.enableGCPacing)
-	if mem.paced && maxAlloc > 0 && mem.used() >= uint64(maxAlloc) && i.Clock.Since(i.lastGC) >= liveHeapRefreshInterval {
-		// The live heap only updates when a GC finishes, so confirm the reading
-		// is current before evicting traces on the strength of it.
+	if mem.paced && maxAlloc > 0 && mem.used() >= uint64(maxAlloc) && mem.gcCycles == i.gcCycles {
+		// The live heap only updates when a GC finishes, and none has since the
+		// last check, so confirm the reading is current before evicting traces
+		// on the strength of it.
 		runtime.GC()
-		i.lastGC = i.Clock.Now()
 		mem = readMemory(i.memMetricSample, i.enableGCPacing)
 	}
+	i.gcCycles = mem.gcCycles
 	currentAlloc := mem.used()
 
 	i.Metrics.Gauge(NUMERATOR_MEMORY_HEAP_ALLOC, float64(currentAlloc))
@@ -324,7 +328,6 @@ func (i *InMemCollector) checkAlloc(ctx context.Context) {
 
 	// Manually trigger GC to reclaim memory immediately
 	runtime.GC()
-	i.lastGC = i.Clock.Now()
 }
 
 // isReady checks if all workers are healthy by verifying they've
