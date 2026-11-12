@@ -949,20 +949,6 @@ Fractional values with a suffix are supported.
 If `AvailableMemory` is set, `Collections.MaxAlloc` must not be defined.
 A useful value for this setting will leave 1-2GB of pod memory for overages.
 For typical configurations this may be about 85%-90% of the pod's total memory.
-**Garbage collection pacing (new behavior in v3.5).** When this is set, Refinery sets the Go memory limit (`GOMEMLIMIT`) to 95% of this value and, unless `GOGC` is set in the environment, turns off percentage-based garbage collection.
-Garbage is then collected as the heap nears the limit, and the live heap, rather than all allocated memory, is what `MaxMemoryPercentage` is compared to.
-This stops uncollected garbage from being mistaken for buffered traces, so there are fewer needless evictions and steadier stress relief readings.
-The cost is that process memory (RSS) will look higher and sawtooth, because garbage stays resident until the heap nears the limit.
-That is not a leak.
-Because the limit is 95% of this value, leave real headroom between this value and the container's memory limit, and do not set it above what the container actually has.
-Do not use this if the container is tight on memory or shares a node with other memory-hungry processes.
-`MaxMemoryPercentage` should be comfortably below 95; if the budget is at or above 95% of this value, pacing is skipped.
-This does not apply if you set `MaxAlloc` instead.
-Precedence: if `GOMEMLIMIT` is set in the environment, Refinery changes neither it nor `GOGC` (but still compares the live heap).
-If only `GOGC` is set, it is kept, but the limit is still set.
-To keep the previous behavior entirely, set `GOMEMLIMIT=off`.
-Refinery logs "GC paced by GOMEMLIMIT from AvailableMemory, GOGC off" at startup when pacing is active.
-Unlike the rest of this setting, pacing is decided only at startup: changing this value with a live reload changes the memory budget but not the Go memory limit.
 
 - Eligible for live reload.
 - Type: `memorysize`
@@ -975,8 +961,7 @@ Unlike the rest of this setting, pacing is decided only at startup: changing thi
 `MaxMemoryPercentage` is the maximum percentage of memory that should be allocated by the span collector.
 
 If nonzero, then it must be an integer value between 1 and 100, representing the target maximum percentage of memory that should be allocated by the span collector.
-If set to a non-zero value, then once per tick (see `SendTicker`) the collector will compare allocated bytes to this calculated value.
-This is the live heap when garbage collection is paced by a memory limit (see `AvailableMemory`), and all heap objects otherwise.
+If set to a non-zero value, then once per tick (see `SendTicker`) the collector will compare total allocated bytes to this calculated value.
 If allocation is too high, then traces will be ejected from the cache early to reduce memory.
 Useful values for this setting are generally in the range of 70-90.
 
@@ -997,6 +982,28 @@ If set, `Collections.AvailableMemory` must not be defined.
 
 - Eligible for live reload.
 - Type: `memorysize`
+
+### `EnableGCPacing`
+
+`EnableGCPacing` paces garbage collection by a Go memory limit derived from `AvailableMemory`, and compares the live heap to the memory budget.
+
+Off by default.
+When enabled and `AvailableMemory` is set, Refinery sets `GOMEMLIMIT` to 95% of `AvailableMemory`, turns `GOGC` off unless it is set in the environment, and compares the live heap rather than all heap objects to the memory budget.
+A `GOMEMLIMIT` set in the environment is kept.
+Pacing is skipped if the memory budget is at or above 95% of `AvailableMemory`.
+This stops uncollected garbage from being mistaken for buffered traces, so there are fewer needless evictions, steadier stress relief readings, and less CPU spent on garbage collection.
+The cost is that process memory (RSS) and `memory_inuse` sit near the limit and sawtooth, because garbage stays resident until the heap nears the limit.
+That is not a leak.
+`memory_heap_allocation` then holds the live heap, and `memory_live_heap` reports it either way.
+Before enabling, update any board, trigger, or SLO built on `memory_inuse`, `memory_heap_allocation`, or container memory, including the standard Refinery boards and alerts; use `memory_live_heap` for cache pressure.
+Leave real headroom between `AvailableMemory` and the container's memory limit, and do not enable this if the container is tight on memory or shares a node with other memory-hungry processes.
+Keep `MaxMemoryPercentage` comfortably below 95.
+It has no effect if you set `MaxAlloc` instead of `AvailableMemory`.
+Read at startup only; a live reload does not change the limit.
+Refinery logs "GC paced by GOMEMLIMIT from AvailableMemory, GOGC off" when pacing is active.
+
+- Not eligible for live reload.
+- Type: `bool`
 
 ### `ShutdownDelay`
 

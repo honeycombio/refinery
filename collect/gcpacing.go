@@ -27,8 +27,11 @@ const liveHeapRefreshInterval = time.Second
 // GOMEMLIMIT or GOGC env var wins. It does nothing when AvailableMemory is not
 // set, or when the memory budget leaves no headroom under the limit, since a
 // live heap above a GC limit with GOGC off means back-to-back GCs. Returns the
-// limit set, or 0.
+// limit set, or 0. It does nothing unless EnableGCPacing is set.
 func ConfigureGCPacing(c config.CollectionConfig) int64 {
+	if !c.EnableGCPacing {
+		return 0
+	}
 	if _, ok := os.LookupEnv("GOMEMLIMIT"); ok {
 		return 0
 	}
@@ -77,11 +80,13 @@ func newMemorySamples() []rtmetrics.Sample {
 	}
 }
 
-func readMemory(samples []rtmetrics.Sample) memory {
+// readMemory marks the reading paced only if enableGCPacing is set, so an
+// operator's own GOMEMLIMIT does not change what is compared to the budget.
+func readMemory(samples []rtmetrics.Sample, enableGCPacing bool) memory {
 	rtmetrics.Read(samples)
 	return memory{
 		heapObjects: samples[0].Value.Uint64(),
 		liveHeap:    samples[1].Value.Uint64(),
-		paced:       samples[2].Value.Uint64() < math.MaxInt64,
+		paced:       enableGCPacing && samples[2].Value.Uint64() < math.MaxInt64,
 	}
 }

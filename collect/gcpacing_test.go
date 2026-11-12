@@ -26,7 +26,7 @@ func restoreGCSettings(t *testing.T) {
 	})
 }
 
-func newPacingTestCollector(t *testing.T, maxAlloc config.MemorySize, clock clockwork.Clock) *InMemCollector {
+func newPacingTestCollector(t *testing.T, maxAlloc config.MemorySize, enableGCPacing bool, clock clockwork.Clock) *InMemCollector {
 	return newTestCollector(t, &config.MockConfig{
 		SampleCache: config.SampleCacheConfig{
 			KeptSize:          100,
@@ -37,7 +37,7 @@ func newPacingTestCollector(t *testing.T, maxAlloc config.MemorySize, clock cloc
 			SendTicker:   config.Duration(2 * time.Millisecond),
 			TraceTimeout: config.Duration(5 * time.Millisecond),
 		},
-		GetCollectionConfigVal: config.CollectionConfig{MaxAlloc: maxAlloc},
+		GetCollectionConfigVal: config.CollectionConfig{MaxAlloc: maxAlloc, EnableGCPacing: enableGCPacing},
 	}, clock)
 }
 
@@ -58,8 +58,14 @@ func TestConfigureGCPacing(t *testing.T) {
 			wantGCPercent: 100,
 		},
 		{
-			name:          "AvailableMemory sets limit to 95% and turns GOGC off",
+			name:          "AvailableMemory without EnableGCPacing leaves defaults",
 			conf:          config.CollectionConfig{AvailableMemory: 100 * gib, MaxMemoryPercentage: 75},
+			wantLimit:     math.MaxInt64,
+			wantGCPercent: 100,
+		},
+		{
+			name:          "AvailableMemory sets limit to 95% and turns GOGC off",
+			conf:          config.CollectionConfig{EnableGCPacing: true, AvailableMemory: 100 * gib, MaxMemoryPercentage: 75},
 			wantReturn:    95 * gib,
 			wantLimit:     95 * gib,
 			wantGCPercent: -1,
@@ -67,7 +73,7 @@ func TestConfigureGCPacing(t *testing.T) {
 		{
 			name:          "explicit GOGC is kept",
 			env:           map[string]string{"GOGC": "100"},
-			conf:          config.CollectionConfig{AvailableMemory: 100 * gib, MaxMemoryPercentage: 75},
+			conf:          config.CollectionConfig{EnableGCPacing: true, AvailableMemory: 100 * gib, MaxMemoryPercentage: 75},
 			wantReturn:    95 * gib,
 			wantLimit:     95 * gib,
 			wantGCPercent: 100,
@@ -75,19 +81,19 @@ func TestConfigureGCPacing(t *testing.T) {
 		{
 			name:          "explicit GOMEMLIMIT wins",
 			env:           map[string]string{"GOMEMLIMIT": "10GiB"},
-			conf:          config.CollectionConfig{AvailableMemory: 100 * gib, MaxMemoryPercentage: 75},
+			conf:          config.CollectionConfig{EnableGCPacing: true, AvailableMemory: 100 * gib, MaxMemoryPercentage: 75},
 			wantLimit:     math.MaxInt64,
 			wantGCPercent: 100,
 		},
 		{
 			name:          "budget at the limit would thrash GC, so leave defaults",
-			conf:          config.CollectionConfig{AvailableMemory: 100 * gib, MaxMemoryPercentage: 95},
+			conf:          config.CollectionConfig{EnableGCPacing: true, AvailableMemory: 100 * gib, MaxMemoryPercentage: 95},
 			wantLimit:     math.MaxInt64,
 			wantGCPercent: 100,
 		},
 		{
 			name:          "budget just under the limit is paced",
-			conf:          config.CollectionConfig{AvailableMemory: 100 * gib, MaxMemoryPercentage: 94},
+			conf:          config.CollectionConfig{EnableGCPacing: true, AvailableMemory: 100 * gib, MaxMemoryPercentage: 94},
 			wantReturn:    95 * gib,
 			wantLimit:     95 * gib,
 			wantGCPercent: -1,
@@ -119,15 +125,16 @@ func TestReadMemory(t *testing.T) {
 	samples := newMemorySamples()
 
 	debug.SetMemoryLimit(math.MaxInt64)
-	assert.False(t, readMemory(samples).paced)
+	assert.False(t, readMemory(samples, true).paced)
 	debug.SetMemoryLimit(1 << 40)
-	assert.True(t, readMemory(samples).paced)
+	assert.True(t, readMemory(samples, true).paced)
+	assert.False(t, readMemory(samples, false).paced, "an operator's GOMEMLIMIT alone does not pace the reading")
 
 	const size = 64 << 20
 	retained := make([]byte, size)
 	runtime.GC()
 	unmarked := make([]byte, size)
-	mem := readMemory(samples)
+	mem := readMemory(samples, true)
 	runtime.KeepAlive(retained)
 	runtime.KeepAlive(unmarked)
 
@@ -139,33 +146,43 @@ func TestReadMemory(t *testing.T) {
 }
 
 // Garbage that has not been collected yet must not count against the budget
-// when GC is paced by a memory limit.
+// when GC is paced by a memory limit and EnableGCPacing is on.
 func TestCheckAllocIgnoresGarbageWhenPaced(t *testing.T) {
-	restoreGCSettings(t)
-	debug.SetMemoryLimit(1 << 40)
-	debug.SetGCPercent(-1)
+	tests := []struct {
+		name           string
+		enableGCPacing bool
+		limit          int64
+		wantEvict      bool
+	}{
+		{name: "paced", enableGCPacing: true, limit: 1 << 40, wantEvict: false},
+		{name: "EnableGCPacing off, operator GOMEMLIMIT set", enableGCPacing: false, limit: 1 << 40, wantEvict: true},
+		{name: "EnableGCPacing on, no memory limit", enableGCPacing: true, limit: math.MaxInt64, wantEvict: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			restoreGCSettings(t)
+			debug.SetMemoryLimit(tt.limit)
+			debug.SetGCPercent(-1)
 
-	const garbage = 64 << 20
-	runtime.GC()
-	maxAlloc := readMemory(newMemorySamples()).liveHeap + garbage/2
-	sink := make([]byte, garbage)
-	runtime.KeepAlive(sink)
-	sink = nil
+			const garbage = 64 << 20
+			runtime.GC()
+			maxAlloc := readMemory(newMemorySamples(), true).liveHeap + garbage/2
+			sink := make([]byte, garbage)
+			runtime.KeepAlive(sink)
+			sink = nil
 
-	c := newPacingTestCollector(t, config.MemorySize(maxAlloc), clockwork.NewFakeClock())
-	c.checkAlloc(context.Background())
+			collector := newPacingTestCollector(t, config.MemorySize(maxAlloc), tt.enableGCPacing, clockwork.NewFakeClock())
+			collector.checkAlloc(context.Background())
 
-	got, ok := c.Metrics.Get(NUMERATOR_MEMORY_HEAP_ALLOC)
-	require.True(t, ok)
-	assert.Less(t, got, float64(maxAlloc))
-	_, evicted := c.Metrics.Get("collector_cache_eviction")
-	assert.False(t, evicted)
-
-	// Unpaced, the same heap is over budget.
-	debug.SetMemoryLimit(math.MaxInt64)
-	c.checkAlloc(context.Background())
-	_, evicted = c.Metrics.Get("collector_cache_eviction")
-	assert.True(t, evicted)
+			_, evicted := collector.Metrics.Get("collector_cache_eviction")
+			assert.Equal(t, tt.wantEvict, evicted)
+			if !tt.wantEvict {
+				got, ok := collector.Metrics.Get(NUMERATOR_MEMORY_HEAP_ALLOC)
+				require.True(t, ok)
+				assert.Less(t, got, float64(maxAlloc))
+			}
+		})
+	}
 }
 
 // Over-budget live heap readings force a GC to refresh them, at most once a second.
@@ -176,7 +193,7 @@ func TestCheckAllocRefreshesLiveHeapAtBoundedRate(t *testing.T) {
 
 	// The fake clock is never advanced, so the monitor goroutine never ticks.
 	clock := clockwork.NewFakeClock()
-	c := newPacingTestCollector(t, 1, clock)
+	collector := newPacingTestCollector(t, 1, true, clock)
 	numGC := func() uint64 {
 		var s debug.GCStats
 		debug.ReadGCStats(&s)
@@ -185,17 +202,17 @@ func TestCheckAllocRefreshesLiveHeapAtBoundedRate(t *testing.T) {
 
 	// Each over-budget check evicts, which forces its own GC and restarts the interval.
 	before := numGC()
-	c.checkAlloc(context.Background())
+	collector.checkAlloc(context.Background())
 	afterFirst := numGC()
 	assert.Greater(t, afterFirst, before)
 
 	// Within the interval only the eviction GC runs, not a refresh GC as well.
-	c.checkAlloc(context.Background())
+	collector.checkAlloc(context.Background())
 	withinInterval := numGC() - afterFirst
 
-	c.lastGC = clock.Now().Add(-liveHeapRefreshInterval)
+	collector.lastGC = clock.Now().Add(-liveHeapRefreshInterval)
 	before = numGC()
-	c.checkAlloc(context.Background())
+	collector.checkAlloc(context.Background())
 	pastInterval := numGC() - before
 
 	assert.Greater(t, pastInterval, withinInterval, "a refresh GC should run once the interval has passed")
