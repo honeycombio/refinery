@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -111,21 +112,36 @@ func getSharedDynsamplerAndRecorder[ST dynsampler.Sampler, CT any](
 	return dynsamplerInstance, r
 }
 
-// makeDynsamplerKey builds a dynsampler map key with a sorted copy of fieldList so that
-// configs with the same fields in different order always map to the same instance.
-func makeDynsamplerKey(prefix, samplerType string, rate int64, fieldList []string) string {
+// makeDynsamplerKey builds a dynsampler map key from the prefix identifying where
+// the sampler is configured, its type, and a config-derived signature. The config
+// signature must name every field that affects sampling behavior, with defaults
+// already applied, so that two differently configured samplers never share one
+// engine and two identically configured ones always do.
+func makeDynsamplerKey(prefix, samplerType, configKey string) string {
+	return fmt.Sprintf("%s:%s:%s", prefix, samplerType, configKey)
+}
+
+// sortedFieldList returns a sorted copy of the field list so that configs with
+// the same fields in different order always map to the same instance.
+func sortedFieldList(fieldList []string) []string {
 	sorted := make([]string, len(fieldList))
 	copy(sorted, fieldList)
 	slices.Sort(sorted)
-	return fmt.Sprintf("%s:%s:%d:%v", prefix, samplerType, rate, sorted)
+	return sorted
+}
+
+func formatFloat(f float64) string {
+	return strconv.FormatFloat(f, 'f', -1, 64)
 }
 
 // createSampler creates a sampler with shared dynsamplers based on the config type.
 // A unique dynsampler is created based on a composite key that includes the keyPrefix
-// (dataset/environment), sampler type, and configuration parameters (e.g., sample rate
-// and field list). This ensures that samplers with identical configurations share the
-// same underlying dynsampler instance, guaranteeing consistent sampling decisions across
-// parallel collector workers within a single Refinery instance.
+// (dataset/environment, plus the rule for rules-based samplers), sampler type, and a
+// signature derived from the full sampler configuration. This ensures that samplers
+// with identical configurations share the same underlying dynsampler instance,
+// guaranteeing consistent sampling decisions across parallel collector workers within
+// a single Refinery instance, while preventing differently configured samplers from
+// sharing one engine.
 func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	var sampler Sampler
 
@@ -133,17 +149,17 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	case *config.DeterministicSamplerConfig:
 		sampler = &DeterministicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics}
 	case *config.DynamicSamplerConfig:
-		dynsamplerKey := makeDynsamplerKey(keyPrefix, "dynamic", c.SampleRate, c.FieldList)
+		dynsamplerKey := makeDynsamplerKey(keyPrefix, "dynamic", dynamicSamplerConfigKey(c))
 		dynsamplerInstance, recorder := getSharedDynsamplerAndRecorder(s, dynsamplerKey, "dynamic", c, createDynForDynamicSampler)
 		sampler = &DynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance, metricsRecorder: recorder}
 	case *config.EMADynamicSamplerConfig:
-		dynsamplerKey := makeDynsamplerKey(keyPrefix, "emadynamic", int64(c.GoalSampleRate), c.FieldList)
+		dynsamplerKey := makeDynsamplerKey(keyPrefix, "emadynamic", emaDynamicSamplerConfigKey(c))
 		dynsamplerInstance, recorder := getSharedDynsamplerAndRecorder(s, dynsamplerKey, "emadynamic", c, createDynForEMADynamicSampler)
 		sampler = &EMADynamicSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance, metricsRecorder: recorder}
 	case *config.RulesBasedSamplerConfig:
 		sampler = &RulesBasedSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, SamplerFactory: s, samplerPrefix: keyPrefix}
 	case *config.TotalThroughputSamplerConfig:
-		dynsamplerKey := makeDynsamplerKey(keyPrefix, "totalthroughput", int64(c.GoalThroughputPerSec), c.FieldList)
+		dynsamplerKey := makeDynsamplerKey(keyPrefix, "totalthroughput", totalThroughputSamplerConfigKey(c))
 		dynsamplerInstance, recorder := getSharedDynsamplerAndRecorder(s, dynsamplerKey, "totalthroughput", c, createDynForTotalThroughputSampler)
 		// only track goal throughput config if we need to recalculate it later based on cluster size
 		if c.UseClusterSize {
@@ -153,7 +169,7 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 		}
 		sampler = &TotalThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance, metricsRecorder: recorder}
 	case *config.EMAThroughputSamplerConfig:
-		dynsamplerKey := makeDynsamplerKey(keyPrefix, "emathroughput", int64(c.GoalThroughputPerSec), c.FieldList)
+		dynsamplerKey := makeDynsamplerKey(keyPrefix, "emathroughput", emaThroughputSamplerConfigKey(c))
 		dynsamplerInstance, recorder := getSharedDynsamplerAndRecorder(s, dynsamplerKey, "emathroughput", c, createDynForEMAThroughputSampler)
 		// only track goal throughput config if we need to recalculate it later based on cluster size
 		if c.UseClusterSize {
@@ -163,7 +179,7 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 		}
 		sampler = &EMAThroughputSampler{Config: c, Logger: s.Logger, Metrics: s.Metrics, dynsampler: dynsamplerInstance, metricsRecorder: recorder}
 	case *config.WindowedThroughputSamplerConfig:
-		dynsamplerKey := makeDynsamplerKey(keyPrefix, "windowedthroughput", int64(c.GoalThroughputPerSec), c.FieldList)
+		dynsamplerKey := makeDynsamplerKey(keyPrefix, "windowedthroughput", windowedThroughputSamplerConfigKey(c))
 		dynsamplerInstance, recorder := getSharedDynsamplerAndRecorder(s, dynsamplerKey, "windowedthroughput", c, createDynForWindowedThroughputSampler)
 		// only track goal throughput config if we need to recalculate it later based on cluster size
 		if c.UseClusterSize {
@@ -187,7 +203,11 @@ func (s *SamplerFactory) createSampler(c any, keyPrefix string) Sampler {
 	s.Logger.Debug().WithField("dataset", keyPrefix).Logf("created implementation for sampler type %T", c)
 	// Update peer counts after creating a sampler
 	s.updatePeerCounts()
-	s.Metrics.Gauge("unique_dynsampler_count", float64(len(s.sharedDynsamplers)))
+
+	s.mutex.Lock()
+	dynsamplerCount := len(s.sharedDynsamplers)
+	s.mutex.Unlock()
+	s.Metrics.Gauge("unique_dynsampler_count", float64(dynsamplerCount))
 
 	return sampler
 }
@@ -201,12 +221,15 @@ func (s *SamplerFactory) GetSamplerImplementationForKey(samplerKey string) Sampl
 }
 
 // GetDownstreamSampler creates a downstream sampler for use in rules-based sampling,
-// ensuring it participates in the shared dynsampler system
+// ensuring it participates in the shared dynsampler system. ruleID identifies the
+// rule the sampler belongs to, so that two rules configured the same way each get
+// their own engine and their own throughput budget rather than splitting one.
 func (s *SamplerFactory) GetDownstreamSampler(
 	parentSamplerKey string,
+	ruleID string,
 	downstreamConfig *config.RulesBasedDownstreamSampler,
 ) Sampler {
-	keyPrefix := fmt.Sprintf("rules:%s:", parentSamplerKey)
+	keyPrefix := fmt.Sprintf("rules:%s:%s:", parentSamplerKey, ruleID)
 
 	// Extract the actual config from the downstream wrapper
 	var actualConfig any
