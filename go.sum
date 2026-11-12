@@ -121,8 +121,8 @@ github.com/honeycombio/dynsampler-go v0.6.4 h1:EM3FXN2Lfmso41MRMmSvRynMrz+AHiRff
 github.com/honeycombio/dynsampler-go v0.6.4/go.mod h1:M5YYNOfxRrBlEWDatTlHMYo5F7GjwVnptx5z+uXIVMo=
 github.com/honeycombio/hpsf v0.14.0 h1:LeQbDuT+aVmiJnWp9Kqb9Qqz5OZcjDk85RMzzwKtCKI=
 github.com/honeycombio/hpsf v0.14.0/go.mod h1:VyPjyn1GViOiCrpBbPZCkEJnuDuSTUpU8LV5CWVTQm4=
-github.com/honeycombio/husky v0.46.0 h1:cXALENxeghsbCxtFCLCQGGEGRSu/0+oi7SZ7xuxdzc4=
-github.com/honeycombio/husky v0.46.0/go.mod h1:cvMH9DCaEWwqMlYPtOHpU8lwGfJw2Zh4U1mj0P5N3mc=
+github.com/honeycombio/husky v0.47.0 h1:rg44xia2AT5//x305/6uFprn15hATwSlK1D1SIqZ9Ds=
+github.com/honeycombio/husky v0.47.0/go.mod h1:cvMH9DCaEWwqMlYPtOHpU8lwGfJw2Zh4U1mj0P5N3mc=
 github.com/honeycombio/libhoney-go v1.27.1 h1:79FR19fVpaeDMqTDfpXtMxd90vzsxhZnIOSysMrUSQQ=
 github.com/honeycombio/libhoney-go v1.27.1/go.mod h1:qLZO8Q3ep/hISEoVC7m8N9ZOvn2eqaGdoJg9XXXasqM=
 github.com/inconshreveable/mousetrap v1.1.0 h1:wN+x4NVGpMsO7ErUn/mUI3vEoE6Jt13X2s0bqwp9tc8=
