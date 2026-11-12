@@ -235,3 +235,17 @@ func BenchmarkConcurrentAccess(b *testing.B) {
 		})
 	})
 }
+
+func TestMultiMetrics_HistogramBatch(t *testing.T) {
+	first, second := &MockMetrics{}, &MockMetrics{}
+	first.Start()
+	second.Start()
+	mm := NewMultiMetrics()
+	mm.AddChild(first)
+	mm.AddChild(second)
+
+	mm.HistogramBatch("sizes", []float64{1, 5, 9})
+
+	assert.Equal(t, []float64{1, 5, 9}, first.Histograms["sizes"])
+	assert.Equal(t, []float64{1, 5, 9}, second.Histograms["sizes"])
+}

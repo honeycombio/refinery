@@ -4,18 +4,23 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgryski/go-wyhash"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/generics"
+	"github.com/honeycombio/refinery/internal/health"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/metrics"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/jonboulle/clockwork"
 )
 
+// Registration timing.
 const (
 	// PeerEntryTimeout is how long we will wait before expiring a peer that
 	// doesn't check in. The ratio of refresh to peer timeout should be about
@@ -27,6 +32,47 @@ const (
 	// timeout phase in order to allow multiple timeouts to fail and yet still
 	// keep the host in the mix.
 	refreshCacheInterval = 3 * time.Second
+
+	// refreshCacheJitter is the most that a host adds to refreshCacheInterval.
+	refreshCacheJitter = refreshCacheInterval / 5
+
+	// maxRefreshCacheInterval is the longest a host waits between registrations
+	// while its publishes succeed.
+	maxRefreshCacheInterval = refreshCacheInterval + refreshCacheJitter
+)
+
+// Contact with peers and freshness of the peer list.
+const (
+	// peerMessageGapLimit is the longest gap between peer messages that still
+	// counts as contact. It must be longer than a healthy gap
+	// (maxRefreshCacheInterval) and short enough that a counted gap cannot
+	// expire a live peer (PeerEntryTimeout less maxRefreshCacheInterval).
+	peerMessageGapLimit = PeerEntryTimeout / 2
+
+	// peersFreshRegistrations is how many registrations from each peer a
+	// starting host waits for before its list is fresh. Two means one lost
+	// registration does not leave a peer out. One does not tolerate a loss; on
+	// kind, a delay of one registration interval did no better than no delay
+	// when Redis blipped during a rollout.
+	peersFreshRegistrations = 2
+
+	// peersFreshDelay is the contact time a starting host waits before its list
+	// is fresh: long enough to hear peersFreshRegistrations registrations from
+	// each peer, however long they wait between registrations. A pod that
+	// starts takes about this long longer to become ready.
+	peersFreshDelay = peersFreshRegistrations * maxRefreshCacheInterval
+)
+
+// Health checks and warnings.
+const (
+	// peerManagementHealthKey is ready once the peer list has been fresh.
+	peerManagementHealthKey = "peer_management"
+
+	peerManagementHealthCheckInInterval = time.Second
+
+	peerManagementHealthCheckInTimeout = 15 * time.Second
+
+	noRegistrationWarnAfter = 30 * time.Second
 )
 
 type peerAction string
@@ -81,6 +127,47 @@ func (p *peerCommand) marshal() string {
 	return string(p.action) + p.address + "," + p.id
 }
 
+// contactClock only advances time when a peer message arrives, and then only
+// by the time since the previous peer message, if that gap is at most
+// peerMessageGapLimit. RedisPubsubPeers expires peer entries on it, so no entry
+// expires while this host hears no peer messages. In that time it cannot tell
+// a peer that stopped from a peer whose registrations do not reach it.
+type contactClock struct {
+	clock clockwork.Clock
+	mut   sync.Mutex
+	// lastMessage is when the last peer message arrived; zero before the first.
+	lastMessage time.Time
+	contactTime time.Duration
+}
+
+// Now returns the zero time plus the contact time. Only differences between
+// its values mean anything.
+func (c *contactClock) Now() time.Time {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+	return time.Time{}.Add(c.contactTime)
+}
+
+// messageArrived records a peer message that arrives now.
+func (c *contactClock) messageArrived() {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+	// Read the clock under the lock, so that lastMessage only moves forward.
+	now := c.clock.Now()
+	if gap := now.Sub(c.lastMessage); !c.lastMessage.IsZero() && gap <= peerMessageGapLimit {
+		c.contactTime += gap
+	}
+	c.lastMessage = now
+}
+
+// read returns when the last peer message arrived, and the contact time since
+// the first one.
+func (c *contactClock) read() (lastMessage time.Time, contactTime time.Duration) {
+	c.mut.Lock()
+	defer c.mut.Unlock()
+	return c.lastMessage, c.contactTime
+}
+
 var _ Peers = (*RedisPubsubPeers)(nil)
 
 type RedisPubsubPeers struct {
@@ -89,6 +176,7 @@ type RedisPubsubPeers struct {
 	Logger     logger.Logger   `inject:""`
 	PubSub     pubsub.PubSub   `inject:""`
 	Clock      clockwork.Clock `inject:""`
+	Health     health.Recorder `inject:""`
 	InstanceID string          `inject:"instanceID"`
 
 	// Done is a channel that will be closed when the service should stop.
@@ -98,26 +186,56 @@ type RedisPubsubPeers struct {
 	// since the pubsub subscription is still active.
 	Done chan struct{}
 
-	peers     *generics.MapWithTTL[string, string]
+	peers   *generics.MapWithTTL[string, string]
+	contact contactClock
+	sub     pubsub.Subscription
+	topic   string // formatted topic name
+
+	// mut guards hash and callbacks: a pubsub runs subscription callbacks concurrently.
+	mut       sync.Mutex
 	hash      uint64
 	callbacks []func()
-	sub       pubsub.Subscription
-	topic     string // formatted topic name
+
+	// selfSeen is whether this host's own registration has come back through
+	// the subscription, which shows that its peers hear it too.
+	selfSeen atomic.Bool
+}
+
+var _ FreshnessReporter = (*RedisPubsubPeers)(nil)
+
+func (p *RedisPubsubPeers) PeersAreFresh() (fresh, everFresh bool) {
+	lastMessage, contactTime := p.contact.read()
+	everFresh = p.selfSeen.Load() && contactTime >= peersFreshDelay
+	return everFresh && p.Clock.Since(lastMessage) <= peerMessageGapLimit, everFresh
 }
 
 // checkHash checks the hash of the current list of peers and calls any registered callbacks
-// in a separate goroutine if the hash has changed.
+// in a separate goroutine if the hash has changed. It reports num_peers and
+// peer_hash every time, but runs no callbacks until the peer list has been fresh.
 func (p *RedisPubsubPeers) checkHash() {
 	peers := p.peers.SortedKeys()
 	newhash := hashList(peers)
-	if newhash != p.hash {
-		p.hash = newhash
-		for _, cb := range p.callbacks {
-			go cb()
-		}
-	}
 	p.Metrics.Gauge("num_peers", float64(len(peers)))
-	p.Metrics.Gauge("peer_hash", float64(p.hash))
+	p.Metrics.Gauge("peer_hash", float64(newhash))
+
+	// A starting host's list is still filling; resharding on it would send
+	// spans to the wrong hosts.
+	if _, everFresh := p.PeersAreFresh(); !everFresh {
+		return
+	}
+
+	p.mut.Lock()
+	changed := newhash != p.hash
+	var callbacks []func()
+	if changed {
+		p.hash = newhash
+		callbacks = slices.Clone(p.callbacks)
+	}
+	p.mut.Unlock()
+
+	for _, cb := range callbacks {
+		go cb()
+	}
 }
 
 func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
@@ -126,6 +244,13 @@ func (p *RedisPubsubPeers) listen(ctx context.Context, msg string) {
 		return
 	}
 	p.Metrics.Count("peer_messages", 1)
+
+	// Advance the clock before Set, so the entry's expiry counts from this message.
+	p.contact.messageArrived()
+	if cmd.action == Register && cmd.id == p.InstanceID {
+		p.selfSeen.Store(true)
+	}
+
 	switch cmd.action {
 	case Unregister:
 		p.peers.Delete(cmd.id)
@@ -139,6 +264,7 @@ var redisPubSubPeersMetrics = []metrics.Metadata{
 	{Name: "num_peers", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the active number of peers in the cluster"},
 	{Name: "peer_hash", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "the hash of the current list of peers"},
 	{Name: "peer_messages", Type: metrics.Counter, Unit: metrics.Dimensionless, Description: "the number of messages received by the peers service"},
+	{Name: "peers_fresh", Type: metrics.Gauge, Unit: metrics.Dimensionless, Description: "1 when the peer list of this host is fresh, 0 when it is not, for example while it cannot hear its peers through Redis"},
 }
 
 func (p *RedisPubsubPeers) Start() error {
@@ -154,6 +280,8 @@ func (p *RedisPubsubPeers) Start() error {
 	}
 
 	p.peers = generics.NewMapWithTTL[string, string](PeerEntryTimeout, nil)
+	p.contact.clock = p.Clock
+	p.peers.Clock = &p.contact
 	p.callbacks = make([]func(), 0)
 
 	p.topic = p.PubSub.FormatTopic("peers")
@@ -170,6 +298,8 @@ func (p *RedisPubsubPeers) Start() error {
 		return err
 	}
 	p.peers.Set(p.InstanceID, myaddr)
+
+	p.Health.Register(peerManagementHealthKey, peerManagementHealthCheckInTimeout)
 	return nil
 }
 
@@ -178,12 +308,41 @@ func (p *RedisPubsubPeers) Ready() error {
 	if err != nil {
 		return err
 	}
+
+	// Report readiness from its own goroutine so a hung publish cannot stall
+	// the reports and fail the liveness check.
+	go func() {
+		ticker := p.Clock.NewTicker(peerManagementHealthCheckInInterval)
+		defer ticker.Stop()
+		started := p.Clock.Now()
+		warned := false
+		for {
+			select {
+			case <-ticker.Chan():
+				fresh, everFresh := p.PeersAreFresh()
+				p.Health.Ready(peerManagementHealthKey, everFresh)
+				if fresh {
+					p.Metrics.Gauge("peers_fresh", 1)
+				} else {
+					p.Metrics.Gauge("peers_fresh", 0)
+				}
+				if !p.selfSeen.Load() && !warned && p.Clock.Since(started) >= noRegistrationWarnAfter {
+					warned = true
+					p.Logger.Warn().Logf("this host has not seen its own registration come back through Redis, so it is not ready; check that Redis is reachable, that the credentials are valid, and that the user may use both PUBLISH and SUBSCRIBE")
+				}
+			case <-p.Done:
+				p.Health.Unregister(peerManagementHealthKey)
+				return
+			}
+		}
+	}()
+
 	// periodically refresh our presence in the list of peers, and update peers as they come in
 	go func() {
 		// we want our refresh cache interval to vary from peer to peer so they
 		// don't always hit redis at the same time, so we add a random jitter of up
 		// to 20% of the interval
-		interval := refreshCacheInterval + time.Duration(rand.Int63n(int64(refreshCacheInterval/5)))
+		interval := refreshCacheInterval + time.Duration(rand.Int63n(int64(refreshCacheJitter)))
 		ticker := p.Clock.NewTicker(interval)
 		defer ticker.Stop()
 
@@ -209,10 +368,13 @@ func (p *RedisPubsubPeers) Ready() error {
 				}
 				cancel()
 			case <-logTicker.Chan():
+				p.mut.Lock()
+				hash := p.hash
+				p.mut.Unlock()
 				p.Logger.Debug().WithFields(map[string]any{
 					"ids":       p.peers.SortedKeys(),
 					"peers":     p.peers.SortedValues(),
-					"hash":      p.hash,
+					"hash":      hash,
 					"num_peers": p.peers.Length(),
 					"self":      myaddr,
 				}).Logf("peer report")
@@ -233,7 +395,9 @@ func (p *RedisPubsubPeers) stop() {
 		return
 	}
 
-	err = p.PubSub.Publish(context.Background(), p.topic, newPeerCommand(Unregister, myaddr, p.InstanceID).marshal())
+	ctx, cancel := context.WithTimeout(context.Background(), p.Config.GetPeerTimeout())
+	defer cancel()
+	err = p.PubSub.Publish(ctx, p.topic, newPeerCommand(Unregister, myaddr, p.InstanceID).marshal())
 	if err != nil {
 		p.Logger.Error().WithFields(map[string]interface{}{
 			"error":       err,
@@ -246,7 +410,12 @@ func (p *RedisPubsubPeers) GetPeers() ([]string, error) {
 	// we never want to return an empty list of peers, so if the system returns
 	// an empty list, return a single peer (its name doesn't really matter).
 	// This keeps the sharding logic happy.
-	peers := p.peers.SortedValues()
+	var peers []string
+	// A starting host's list is still filling. With only itself, its sharder
+	// keeps every trace until the first callback.
+	if _, everFresh := p.PeersAreFresh(); everFresh {
+		peers = p.peers.SortedValues()
+	}
 	if len(peers) == 0 {
 		myaddr, err := publicAddr(p.Logger, p.Config)
 		if err != nil {
@@ -262,6 +431,8 @@ func (p *RedisPubsubPeers) GetInstanceID() (string, error) {
 }
 
 func (p *RedisPubsubPeers) RegisterUpdatedPeersCallback(callback func()) {
+	p.mut.Lock()
+	defer p.mut.Unlock()
 	p.callbacks = append(p.callbacks, callback)
 }
 

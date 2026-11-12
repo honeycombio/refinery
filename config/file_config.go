@@ -12,6 +12,8 @@ import (
 
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
+
+	"github.com/honeycombio/refinery/internal/tlsconfig"
 )
 
 // In order to be able to unmarshal "15s" etc. into time.Duration, we need to
@@ -89,6 +91,10 @@ type NetworkConfig struct {
 	HoneycombAPI      string            `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
 	HTTPIdleTimeout   Duration          `yaml:"HTTPIdleTimeout"`
 	AdditionalHeaders map[string]string `yaml:"AdditionalHeaders" default:"{}"`
+
+	UpstreamTLSCertFile string `yaml:"UpstreamTLSCertFile"`
+	UpstreamTLSKeyFile  string `yaml:"UpstreamTLSKeyFile"`
+	UpstreamTLSCAFile   string `yaml:"UpstreamTLSCAFile"`
 }
 
 type AccessKeyConfig struct {
@@ -580,11 +586,12 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 	mainconf.SampleCache.WorkerCount = uint(mainconf.Collection.GetWorkerCount())
 
 	cfg := &fileConfig{
-		mainConfig:  mainconf,
-		mainHash:    mainhash,
-		rulesConfig: rulesconf,
-		rulesHash:   ruleshash,
-		opts:        opts,
+		mainConfig:   mainconf,
+		mainHash:     mainhash,
+		rulesConfig:  rulesconf,
+		rulesHash:    ruleshash,
+		opts:         opts,
+		lastLoadTime: time.Now(),
 	}
 
 	// Return warning error if there were warnings but no real errors
@@ -645,6 +652,15 @@ func NewConfig(opts *CmdEnv, currentVersion ...string) (Config, error) {
 		os.Exit(0)
 	}
 
+	if !opts.NoValidate {
+		if _, tlsErr := tlsconfig.New(cfg.GetUpstreamTLSConfig(), nil); tlsErr != nil {
+			return nil, &FileConfigError{
+				ConfigLocations: opts.ConfigLocations,
+				ConfigResults:   ValidationResults{{Message: tlsErr.Error(), Severity: Error}},
+			}
+		}
+	}
+
 	cfg.callbacks = make([]ConfigReloadCallback, 0)
 
 	return cfg, err
@@ -684,6 +700,7 @@ func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) error {
 	f.mainHash = cfg.mainHash
 	f.rulesConfig = cfg.rulesConfig
 	f.rulesHash = cfg.rulesHash
+	f.lastLoadTime = cfg.lastLoadTime
 	f.mux.Unlock() // can't defer -- we don't want callbacks to deadlock
 
 	for _, cb := range f.callbacks {
@@ -902,6 +919,18 @@ func (f *fileConfig) GetAdditionalHeaders() map[string]string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Network.AdditionalHeaders
+}
+
+func (f *fileConfig) GetUpstreamTLSConfig() tlsconfig.Options {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	n := f.mainConfig.Network
+	return tlsconfig.Options{
+		CertFile: n.UpstreamTLSCertFile,
+		KeyFile:  n.UpstreamTLSKeyFile,
+		CAFile:   n.UpstreamTLSCAFile,
+	}
 }
 
 func (f *fileConfig) GetLoggerLevel() Level {
@@ -1171,6 +1200,9 @@ func (f *fileConfig) GetParentIdFieldNames() []string {
 }
 
 func (f *fileConfig) GetConfigMetadata() []ConfigMetadata {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
 	ret := make([]ConfigMetadata, 2)
 	ret[0] = ConfigMetadata{
 		Type:     "config",

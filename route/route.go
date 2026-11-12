@@ -25,6 +25,7 @@ import (
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	healthserver "google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
@@ -570,6 +571,8 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	apiHost := r.Config.GetHoneycombAPI()
 	userAgent := getUserAgentFromRequest(req)
 	batchedResponses := make([]*BatchResponse, 0, len(batchedEvents.events))
+	em := eventMetricsPool.Get().(*eventMetrics)
+	defer r.flushEventMetrics(em)
 	for _, bev := range batchedEvents.events {
 		if !bev.Data.IsEmpty() {
 			ev := &types.Event{
@@ -584,7 +587,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 			}
 
 			addIncomingUserAgent(ev, userAgent)
-			err = r.processEvent(ev, reqID)
+			err = r.processEventInto(ev, reqID, em)
 		} else {
 			err = fmt.Errorf("empty event data")
 		}
@@ -623,9 +626,13 @@ func (router *Router) processOTLPRequest(
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
 	if err != nil {
-		return nil
+		// setOTLPEnvironmentName has already logged the cause. Failing the
+		// request lets the sender see that it was not accepted.
+		return environmentLookupFailure(err)
 	}
 	totalEvents := 0
+	em := eventMetricsPool.Get().(*eventMetrics)
+	defer router.flushEventMetrics(em)
 	for _, batch := range batches {
 		totalEvents += len(batch.Events)
 		for _, ev := range batch.Events {
@@ -640,7 +647,7 @@ func (router *Router) processOTLPRequest(
 				Data:        types.NewPayload(router.Config, ev.Attributes),
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
-			if err := router.processEvent(event, requestID); err != nil {
+			if err := router.processEventInto(event, requestID, em); err != nil {
 				router.Logger.Error().Logf("Error processing event: %s", err.Error())
 			}
 		}
@@ -663,9 +670,13 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	// get environment name - will be empty for legacy keys
 	environment, err := router.getEnvironmentName(apiKey)
 	if err != nil {
-		return nil
+		// setOTLPEnvironmentName has already logged the cause. Failing the
+		// request lets the sender see that it was not accepted.
+		return environmentLookupFailure(err)
 	}
 	totalEvents := 0
+	em := eventMetricsPool.Get().(*eventMetrics)
+	defer router.flushEventMetrics(em)
 	for _, batch := range batches {
 		coreFieldsUnmarshaler := types.NewCoreFieldsUnmarshaler(types.CoreFieldsUnmarshalerOptions{
 			Config:  router.Config,
@@ -701,7 +712,7 @@ func (router *Router) processOTLPRequestBatchMsgp(
 				Data:        payload,
 			}
 			addIncomingUserAgent(event, incomingUserAgent)
-			if err := router.processEvent(event, requestID); err != nil {
+			if err := router.processEventInto(event, requestID, em); err != nil {
 				router.Logger.Error().Logf("Error processing event: %s", err.Error())
 			}
 		}
@@ -710,7 +721,58 @@ func (router *Router) processOTLPRequestBatchMsgp(
 	return nil
 }
 
+// eventMetrics accumulates the per-event metrics of one request so they are
+// recorded once per request instead of once per event.
+type eventMetrics struct {
+	eventBytes                      []float64
+	spans, nonspans, peers, dropped int64
+	logBytes, traceBytes            int64
+}
+
+const maxPooledEventBytes = 4096
+
+var eventMetricsPool = sync.Pool{
+	New: func() any { return new(eventMetrics) },
+}
+
+func (r *Router) flushEventMetrics(em *eventMetrics) {
+	if len(em.eventBytes) > 0 {
+		r.Metrics.HistogramBatch(r.metricsNames.routerEventBytes, em.eventBytes)
+	}
+	for _, c := range []struct {
+		name string
+		n    int64
+	}{
+		{r.metricsNames.routerSpan, em.spans},
+		{r.metricsNames.routerNonspan, em.nonspans},
+		{r.metricsNames.routerPeer, em.peers},
+		{r.metricsNames.routerDropped, em.dropped},
+		{"bytes_received_logs", em.logBytes},
+		{"bytes_received_traces", em.traceBytes},
+	} {
+		if c.n != 0 {
+			r.Metrics.Count(c.name, c.n)
+		}
+	}
+
+	eventBytes := em.eventBytes[:0]
+	if cap(eventBytes) > maxPooledEventBytes {
+		eventBytes = nil
+	}
+	*em = eventMetrics{eventBytes: eventBytes}
+	eventMetricsPool.Put(em)
+}
+
+// processEvent handles a single event and records its metrics immediately.
 func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
+	em := eventMetricsPool.Get().(*eventMetrics)
+	defer r.flushEventMetrics(em)
+	return r.processEventInto(ev, reqID, em)
+}
+
+// processEventInto handles an event and adds its metrics to em, which the
+// caller flushes with flushEventMetrics once its request is done.
+func (r *Router) processEventInto(ev *types.Event, reqID interface{}, em *eventMetrics) error {
 	debugLog := r.iopLogger.Debug().
 		WithField("request_id", reqID).
 		WithString("api_host", ev.APIHost).
@@ -719,7 +781,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	// record the event bytes size
 	// we do this early so can include all event types (span, event, log, etc)
-	r.Metrics.Histogram(r.metricsNames.routerEventBytes, float64(ev.GetDataSize()))
+	em.eventBytes = append(em.eventBytes, float64(ev.GetDataSize()))
 
 	// An error here is effectively a parsing error, so return it up the stack.
 	if err := ev.Data.ExtractMetadata(); err != nil {
@@ -733,7 +795,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 	if ev.Data.MetaTraceID == "" {
 		// not part of a trace. send along upstream
-		r.Metrics.Increment(r.metricsNames.routerNonspan)
+		em.nonspans++
 		debugLog.WithString("api_host", ev.APIHost).
 			WithString("dataset", ev.Dataset).
 			Logf("sending non-trace event from batch")
@@ -752,13 +814,13 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// only record bytes received for incoming traffic when opamp is enabled and record usage is set to true
 	if r.routerType.IsIncoming() && r.Config.GetOpAMPConfig().Enabled && r.Config.GetOpAMPConfig().RecordUsage.Get() {
 		if span.Data.MetaSignalType == "log" {
-			r.Metrics.Count("bytes_received_logs", int64(span.GetDataSize()))
+			em.logBytes += int64(span.GetDataSize())
 		} else {
-			r.Metrics.Count("bytes_received_traces", int64(span.GetDataSize()))
+			em.traceBytes += int64(span.GetDataSize())
 		}
 	}
 
-	r.Metrics.Increment(r.metricsNames.routerSpan)
+	em.spans++
 
 	// we know we're a span, but we need to check if we're in Stress Relief mode;
 	// if we are, then we want to make an immediate, deterministic trace decision
@@ -774,9 +836,9 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 
 			}
 
-			// If the span was kept, we want to generate a probe that we'll forward
-			// to a peer IF this span would have been forwarded.
-			ev.Data.MetaRefineryProbe.Set(true)
+			// If the span was kept, it has already been queued for upstream. We
+			// want to generate a probe that we'll forward to a peer IF this
+			// span would have been forwarded.
 			isProbe = true
 		}
 	}
@@ -784,12 +846,20 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 	// Figure out if we should handle this span locally or pass on to a peer
 	targetShard := r.Sharder.WhichShard(ev.Data.MetaTraceID)
 	if !targetShard.Equals(r.Sharder.MyShard()) {
-		r.Metrics.Increment(r.metricsNames.routerPeer)
+		em.peers++
 		debugLog.
 			WithString("peer", targetShard.GetAddress()).
 			WithField("isprobe", isProbe).
 			Logf("Sending span from batch to peer")
 
+		if isProbe {
+			// ev is already queued for upstream, so mark and address a copy
+			// instead of ev itself. The copy shares the payload's underlying
+			// data, which nothing modifies from here on.
+			probe := *ev
+			probe.Data.MetaRefineryProbe.Set(true)
+			ev = &probe
+		}
 		ev.APIHost = targetShard.GetAddress()
 
 		// Unfortunately this doesn't tell us if the event was actually
@@ -813,7 +883,7 @@ func (r *Router) processEvent(ev *types.Event, reqID interface{}) error {
 		err = r.Collector.AddSpanFromPeer(span)
 	}
 	if err != nil {
-		r.Metrics.Increment(r.metricsNames.routerDropped)
+		em.dropped++
 		debugLog.Logf("Dropping span from batch, channel full")
 		return err
 	}
@@ -951,6 +1021,9 @@ func makeDecoders(concurrency int) (*zstd.Decoder, error) {
 		// By default this will be set to 4 or GOMAXPROCS, whatever is lower.
 		zstd.WithDecoderConcurrency(concurrency),
 		zstd.WithDecoderLowmem(true),
+		// This bounds both the window and the output of DecodeAll. The gzip and
+		// uncompressed body readers already stop at HTTPMessageSizeMax, so
+		// anything larger than this could not be decoded by those paths either.
 		zstd.WithDecoderMaxMemory(8*1024*1024),
 	)
 	if err != nil {
@@ -1108,6 +1181,36 @@ type AuthInfo struct {
 	ID           string          `json:"id"`
 }
 
+// ErrEnvironmentLookup is returned for an OTLP request whose API key's
+// environment could not be looked up, for example because the key was
+// rejected. Its events cannot be addressed, so the request is rejected instead
+// of being dropped after a success response. Retrying would not help.
+var ErrEnvironmentLookup = errors.New("failed to look up environment for API key")
+
+// ErrEnvironmentUnavailable is the retryable form of ErrEnvironmentLookup, for
+// when the lookup failed to get an answer at all and may succeed later.
+var ErrEnvironmentUnavailable = huskyotlp.OTLPError{
+	Message:        "failed to look up environment for API key, try again later",
+	HTTPStatusCode: http.StatusServiceUnavailable,
+	GRPCStatusCode: codes.Unavailable,
+}
+
+// retryableLookupError marks a lookupEnvironment failure that may succeed if
+// tried again: no response, a 429, or a 5xx.
+type retryableLookupError struct{ error }
+
+func (e retryableLookupError) Unwrap() error { return e.error }
+
+// environmentLookupFailure picks the error to return to the sender of a request
+// whose environment lookup failed with err.
+func environmentLookupFailure(err error) error {
+	var retryable retryableLookupError
+	if errors.As(err, &retryable) {
+		return ErrEnvironmentUnavailable
+	}
+	return ErrEnvironmentLookup
+}
+
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
 	if apiKey == "" {
 		return "", nil
@@ -1144,7 +1247,7 @@ func (r *Router) setOTLPEnvironmentName(
 ) {
 	envName, err := r.getEnvironmentName(apiKey)
 	if err != nil {
-		r.Logger.Error().WithField("error", err).WithField("signal", string(signal)).Logf("failed to look up environment name for OTLP request")
+		r.Logger.Error().WithString("cause", err.Error()).WithField("signal", string(signal)).Logf("failed to look up environment name for OTLP request")
 	}
 	ri.EnvironmentName = envName
 
@@ -1184,13 +1287,15 @@ func (r *Router) lookupEnvironment(apiKey string) (authData, error) {
 	r.Logger.Debug().WithString("endpoint", authURL.String()).Logf("Attempting to get environment name using API key")
 	resp, err := r.proxyClient.Do(req)
 	if err != nil {
-		return authData{}, fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)
+		return authData{}, retryableLookupError{fmt.Errorf("failed sending AuthInfo request to Honeycomb API. %w", err)}
 	}
 	defer resp.Body.Close()
 
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized:
 		return authData{}, fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+		return authData{}, retryableLookupError{fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)}
 	case resp.StatusCode > 299:
 		return authData{}, fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)
 	}

@@ -1112,6 +1112,124 @@ func TestRulesWithNestedFields(t *testing.T) {
 	}
 }
 
+func TestRulesWithNestedRootFields(t *testing.T) {
+	mockCfg := &config.MockConfig{}
+
+	testCases := []struct {
+		name      string
+		scope     string
+		fields    []string
+		value     string
+		noRoot    bool
+		wantMatch bool
+	}{
+		{
+			name:      "root prefixed nested field",
+			fields:    []string{"root.http.method"},
+			value:     "GET",
+			wantMatch: true,
+		},
+		{
+			name:      "root prefixed nested field, span scope",
+			scope:     "span",
+			fields:    []string{"root.http.method"},
+			value:     "GET",
+			wantMatch: true,
+		},
+		{
+			name:      "root prefixed nested field does not match child spans",
+			fields:    []string{"root.db.system"},
+			value:     "postgres",
+			wantMatch: false,
+		},
+		{
+			name:      "nested field listed before a root prefixed field",
+			scope:     "span",
+			fields:    []string{"db.system", "root.http.method"},
+			value:     "postgres",
+			wantMatch: true,
+		},
+		{
+			name:      "root prefixed nested field is skipped when the trace has no root span",
+			scope:     "span",
+			fields:    []string{"root.http.method"},
+			value:     "GET",
+			noRoot:    true,
+			wantMatch: false,
+		},
+		{
+			name:      "later nested field still matches when the trace has no root span",
+			scope:     "span",
+			fields:    []string{"root.http.method", "db.system"},
+			value:     "postgres",
+			noRoot:    true,
+			wantMatch: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			rules := &config.RulesBasedSamplerConfig{
+				CheckNestedFields: true,
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "nested",
+						SampleRate: 10,
+						Scope:      tc.scope,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Fields:   tc.fields,
+								Operator: config.EQ,
+								Value:    tc.value,
+							},
+						},
+					},
+				},
+			}
+			for _, cond := range rules.Rules[0].Conditions {
+				require.NoError(t, cond.Init())
+			}
+
+			root := &types.Span{
+				Event: &types.Event{
+					Data: types.NewPayload(mockCfg, map[string]interface{}{
+						"http": map[string]interface{}{"method": "GET"},
+					}),
+				},
+			}
+			child := &types.Span{
+				Event: &types.Event{
+					Data: types.NewPayload(mockCfg, map[string]interface{}{
+						"db": map[string]interface{}{"system": "postgres"},
+					}),
+				},
+			}
+			trace := &types.Trace{}
+			trace.AddSpan(root)
+			trace.AddSpan(child)
+			if !tc.noRoot {
+				trace.RootSpan = root
+			}
+
+			sampler := &RulesBasedSampler{
+				Config:  rules,
+				Logger:  &logger.NullLogger{},
+				Metrics: &metrics.NullMetrics{},
+			}
+			require.NoError(t, sampler.Start())
+
+			rate, _, reason, _ := sampler.GetSampleRate(trace)
+			if tc.wantMatch {
+				assert.Equal(t, uint(10), rate)
+				assert.Contains(t, reason, "nested")
+			} else {
+				assert.Equal(t, uint(1), rate)
+				assert.Equal(t, "no rule matched", reason)
+			}
+		})
+	}
+}
+
 func TestRulesWithDynamicSampler(t *testing.T) {
 	mockCfg := &config.MockConfig{}
 	data := []TestRulesData{

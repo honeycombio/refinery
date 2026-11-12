@@ -2,6 +2,12 @@ General:
   ConfigurationVersion: 2
   MinRefineryVersion: v2.0
 
+Network:
+  HoneycombAPI: https://upstream:8443
+  UpstreamTLSCertFile: /certs/client.pem
+  UpstreamTLSKeyFile: /certs/client-key.pem
+  UpstreamTLSCAFile: /certs/ca.pem
+
 Logger:
   Type: stdout
   Level: info

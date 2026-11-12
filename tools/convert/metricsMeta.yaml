@@ -71,6 +71,10 @@ complete:
       type: Counter
       unit: Dimensionless
       description: the number of messages received by the peers service
+    - name: peers_fresh
+      type: Gauge
+      unit: Dimensionless
+      description: 1 when the peer list of this host is fresh, 0 when it is not, for example while it cannot hear its peers through Redis
     - name: trace_duration_ms
       type: Histogram
       unit: Milliseconds

@@ -12,11 +12,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/facebookgo/inject"
+	huskyotlp "github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/collect"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/health"
@@ -893,6 +896,69 @@ func TestGetEnvironmentName(t *testing.T) {
 	})
 }
 
+// Whether a failed environment lookup may succeed on a retry decides whether the
+// sender is told to retry, so check how each outcome is classified.
+func TestLookupEnvironmentFailureIsRetryable(t *testing.T) {
+	tests := []struct {
+		name      string
+		status    int
+		closeConn bool
+		retryable bool
+	}{
+		{name: "key rejected", status: http.StatusUnauthorized},
+		{name: "forbidden", status: http.StatusForbidden},
+		{name: "rate limited", status: http.StatusTooManyRequests, retryable: true},
+		{name: "server error", status: http.StatusInternalServerError, retryable: true},
+		{name: "bad gateway", status: http.StatusBadGateway, retryable: true},
+		{name: "no response", closeConn: true, retryable: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.closeConn {
+					conn, _, _ := w.(http.Hijacker).Hijack()
+					conn.Close()
+					return
+				}
+				w.WriteHeader(tt.status)
+			}))
+			defer server.Close()
+
+			router := &Router{
+				Config:      &config.MockConfig{GetHoneycombAPIVal: server.URL},
+				Logger:      &logger.MockLogger{},
+				proxyClient: server.Client(),
+			}
+			_, err := router.lookupEnvironment(esAPIKey)
+			require.Error(t, err)
+
+			if tt.retryable {
+				assert.Equal(t, ErrEnvironmentUnavailable, environmentLookupFailure(err))
+			} else {
+				assert.Equal(t, ErrEnvironmentLookup, environmentLookupFailure(err))
+			}
+		})
+	}
+}
+
+func TestSetOTLPEnvironmentNameLogsLookupFailure(t *testing.T) {
+	l := &logger.MockLogger{}
+	router := &Router{
+		Config: &config.MockConfig{},
+		Logger: l,
+		environmentCache: newEnvironmentCache(time.Second, func(key string) (authData, error) {
+			return authData{}, errors.New("auth is down")
+		}),
+	}
+
+	ri := huskyotlp.RequestInfo{Dataset: "ds"}
+	router.setOTLPEnvironmentName(&ri, esAPIKey, otlpSignalTrace)
+
+	require.Len(t, l.Events, 1)
+	assert.Equal(t, "auth is down", l.Events[0].Fields["cause"], "the log carries the reason")
+	assert.Equal(t, "", ri.EnvironmentName)
+}
+
 func TestGRPCHealthProbeCheck(t *testing.T) {
 	router := &Router{
 		Config: &config.MockConfig{},
@@ -1255,6 +1321,51 @@ func TestProcessEventMetrics(t *testing.T) {
 			assert.Equal(t, tt.expectedCount, mockMetrics.CounterIncrements[tt.metricName])
 		})
 	}
+}
+
+func TestEventMetricsFlushedOncePerRequest(t *testing.T) {
+	t.Parallel()
+
+	mockMetrics := &metrics.MockMetrics{}
+	mockMetrics.Start()
+	router := &Router{
+		Config:               &config.MockConfig{TraceIdFieldNames: []string{"trace.trace_id"}},
+		Logger:               &logger.NullLogger{},
+		Metrics:              mockMetrics,
+		UpstreamTransmission: &transmit.MockTransmission{},
+		PeerTransmission:     &transmit.MockTransmission{},
+		Collector:            collect.NewMockCollector(),
+		Sharder:              &sharder.MockSharder{Self: &sharder.TestShard{Addr: "http://localhost:12345"}},
+		routerType:           types.RouterTypeIncoming,
+		iopLogger:            iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: types.RouterTypeIncoming.String()},
+	}
+	router.registerMetricNames()
+	router.UpstreamTransmission.(*transmit.MockTransmission).Start()
+
+	newEvent := func(data map[string]interface{}) *types.Event {
+		return &types.Event{
+			Context:   context.Background(),
+			APIHost:   "test.honeycomb.io",
+			Dataset:   "test-dataset",
+			Timestamp: time.Now(),
+			Data:      types.NewPayload(router.Config, data),
+		}
+	}
+
+	em := &eventMetrics{}
+	require.NoError(t, router.processEventInto(newEvent(map[string]interface{}{"trace.trace_id": "t1"}), "req", em))
+	require.NoError(t, router.processEventInto(newEvent(map[string]interface{}{"trace.trace_id": "t2"}), "req", em))
+	require.NoError(t, router.processEventInto(newEvent(map[string]interface{}{"no_trace": "x"}), "req", em))
+
+	assert.Empty(t, mockMetrics.CounterIncrements, "nothing is recorded before the flush")
+	assert.Empty(t, mockMetrics.Histograms)
+
+	router.flushEventMetrics(em)
+
+	assert.Len(t, mockMetrics.Histograms[router.metricsNames.routerEventBytes], 3, "one size observation per event")
+	assert.EqualValues(t, 2, mockMetrics.CounterIncrements[router.metricsNames.routerSpan])
+	assert.EqualValues(t, 1, mockMetrics.CounterIncrements[router.metricsNames.routerNonspan])
+	assert.NotContains(t, mockMetrics.CounterIncrements, router.metricsNames.routerDropped, "zero counters are not recorded")
 }
 
 // TestBatchStopsOnDatasetError covers the missing return after
@@ -1790,4 +1901,144 @@ func readAll(t testing.TB, r io.Reader) []byte {
 	got, err := io.ReadAll(r)
 	require.NoError(t, err)
 	return got
+}
+
+// stressReliefCollector stands in for InMemCollector while stress relief is
+// active: like InMemCollector.ProcessSpanImmediately, it keeps every span and
+// enqueues it for upstream transmission.
+type stressReliefCollector struct {
+	collect.MockCollector
+	upstream transmit.Transmission
+}
+
+func (c *stressReliefCollector) Stressed() bool { return true }
+
+func (c *stressReliefCollector) ProcessSpanImmediately(sp *types.Span) (bool, bool) {
+	c.upstream.EnqueueSpan(sp)
+	return true, true
+}
+
+// batchRecorder is an HTTP server that records the events posted to /1/batch.
+type batchRecorder struct {
+	server *httptest.Server
+	mu     sync.Mutex
+	events []map[string]any
+}
+
+func newBatchRecorder(t *testing.T) *batchRecorder {
+	r := &batchRecorder{}
+	r.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		var batch []struct {
+			Data map[string]any `msgpack:"data"`
+		}
+		dec := msgpack.NewDecoder(req.Body)
+		dec.UseLooseInterfaceDecoding(true)
+		if err := dec.Decode(&batch); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		resp := make([]map[string]any, len(batch))
+		r.mu.Lock()
+		for i, ev := range batch {
+			r.events = append(r.events, ev.Data)
+			resp[i] = map[string]any{"status": http.StatusAccepted}
+		}
+		r.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	t.Cleanup(r.server.Close)
+	return r
+}
+
+func (r *batchRecorder) received() []map[string]any {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.events)
+}
+
+// TestStressReliefKeptSpansAreNotMutatedIntoProbes checks that when stress
+// relief keeps a span whose trace is owned by another node, the span that goes
+// upstream is delivered intact (and exactly once), and only a probe goes to the
+// owning peer. Both are built from the same *types.Event, so the probe must not
+// change the event that is already queued for upstream.
+func TestStressReliefKeptSpansAreNotMutatedIntoProbes(t *testing.T) {
+	upstreamServer := newBatchRecorder(t)
+	peerServer := newBatchRecorder(t)
+
+	mockConfig := &config.MockConfig{TraceIdFieldNames: []string{"trace.trace_id"}}
+
+	newTransmission := func(tt types.TransmitType) *transmit.DirectTransmission {
+		dt := transmit.NewDirectTransmission(tt, http.DefaultTransport.(*http.Transport), 100, time.Minute, 10*time.Second, false, nil)
+		dt.Logger = &logger.NullLogger{}
+		dt.Metrics = &metrics.NullMetrics{}
+		require.NoError(t, dt.Start())
+		// Stop is called explicitly below to flush; this covers early test failures.
+		t.Cleanup(func() { _ = dt.Stop() })
+		return dt
+	}
+	upstream := newTransmission(types.TransmitTypeUpstream)
+	peer := newTransmission(types.TransmitTypePeer)
+
+	// Traces whose owner is the peer must be probed; the one we own is not.
+	remoteTraces := []string{"remote-1", "remote-2", "remote-3"}
+	const localTrace = "local-1"
+	const spansPerTrace = 4
+
+	router := &Router{
+		Config:               mockConfig,
+		Logger:               &logger.NullLogger{},
+		Metrics:              &metrics.NullMetrics{},
+		UpstreamTransmission: upstream,
+		PeerTransmission:     peer,
+		Collector:            &stressReliefCollector{upstream: upstream},
+		Sharder: &sharder.MockSharder{
+			Self:  &sharder.TestShard{Addr: "http://self.invalid"},
+			Other: &sharder.TestShard{Addr: peerServer.server.URL, TraceIDs: remoteTraces},
+		},
+		routerType: types.RouterTypeIncoming,
+		iopLogger:  iopLogger{Logger: &logger.NullLogger{}, incomingOrPeer: types.RouterTypeIncoming.String()},
+	}
+	router.registerMetricNames()
+
+	for _, traceID := range append(slices.Clone(remoteTraces), localTrace) {
+		for i := range spansPerTrace {
+			ev := &types.Event{
+				Context:   context.Background(),
+				APIHost:   upstreamServer.server.URL,
+				APIKey:    "key",
+				Dataset:   "dataset",
+				Timestamp: time.Now(),
+				Data: types.NewPayload(mockConfig, map[string]any{
+					"trace.trace_id": traceID,
+					"span_num":       i,
+				}),
+			}
+			require.NoError(t, router.processEvent(ev, "req"))
+		}
+	}
+
+	// Stop flushes whatever is still batched.
+	require.NoError(t, upstream.Stop())
+	require.NoError(t, peer.Stop())
+
+	// Every kept span must reach upstream exactly once, without probe marking.
+	seen := map[string]int{}
+	for _, ev := range upstreamServer.received() {
+		assert.NotContains(t, ev, types.MetaRefineryProbe, "upstream span carries the probe marker: %v", ev)
+		seen[fmt.Sprintf("%v/%v", ev["trace.trace_id"], ev["span_num"])]++
+	}
+	for _, traceID := range append(slices.Clone(remoteTraces), localTrace) {
+		for i := range spansPerTrace {
+			assert.Equal(t, 1, seen[fmt.Sprintf("%s/%d", traceID, i)], "span %d of trace %s should reach upstream once", i, traceID)
+		}
+	}
+
+	// The peer gets one probe per kept span of the traces it owns, and nothing else.
+	peerEvents := peerServer.received()
+	assert.Len(t, peerEvents, len(remoteTraces)*spansPerTrace)
+	for _, ev := range peerEvents {
+		assert.Equal(t, true, ev[types.MetaRefineryProbe], "peer should only receive probes: %v", ev)
+		assert.Contains(t, remoteTraces, ev["trace.trace_id"])
+	}
 }

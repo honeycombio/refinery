@@ -11,6 +11,8 @@ import (
 	"github.com/honeycombio/husky/otlp"
 	"github.com/honeycombio/refinery/config"
 	"github.com/honeycombio/refinery/internal/configwatcher"
+	"github.com/honeycombio/refinery/internal/tlsconfig"
+	"github.com/honeycombio/refinery/internal/tlsconfig/tlsconfigtest"
 	"github.com/honeycombio/refinery/logger"
 	"github.com/honeycombio/refinery/pubsub"
 	"github.com/stretchr/testify/assert"
@@ -1507,5 +1509,116 @@ func TestAdditionalHeadersReservedHeadersRejected(t *testing.T) {
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "reserved")
 		})
+	}
+}
+
+func TestUpstreamTLS(t *testing.T) {
+	pki := tlsconfigtest.New(t)
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Network.UpstreamTLSCertFile", pki.ClientCertFile,
+		"Network.UpstreamTLSKeyFile", pki.ClientKeyFile,
+		"Network.UpstreamTLSCAFile", pki.CAFile,
+	)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	cfgFile, rulesFile := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--config", cfgFile, "--rules_config", rulesFile})
+	require.NoError(t, err)
+
+	assert.Equal(t, tlsconfig.Options{
+		CertFile: pki.ClientCertFile,
+		KeyFile:  pki.ClientKeyFile,
+		CAFile:   pki.CAFile,
+	}, c.GetUpstreamTLSConfig())
+}
+
+func TestUpstreamTLSUnreadableFiles(t *testing.T) {
+	pki := tlsconfigtest.New(t)
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Network.UpstreamTLSCertFile", pki.ClientCertFile,
+		"Network.UpstreamTLSKeyFile", "/nonexistent/client.key",
+	)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	cfgFile, rulesFile := createTempConfigs(t, cm, rm)
+
+	_, err := getConfig([]string{"--config", cfgFile, "--rules_config", rulesFile})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "Validation failed for config")
+	assert.Contains(t, err.Error(), "/nonexistent/client.key")
+
+	_, err = getConfig([]string{"--no-validate", "--config", cfgFile, "--rules_config", rulesFile})
+	assert.NoError(t, err)
+}
+
+func TestUpstreamTLSEmpty(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	cfgFile, rulesFile := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--config", cfgFile, "--rules_config", rulesFile})
+	require.NoError(t, err)
+
+	assert.Equal(t, tlsconfig.Options{}, c.GetUpstreamTLSConfig())
+}
+
+func TestUpstreamTLSCertAndKeyRequiredTogether(t *testing.T) {
+	testCases := []struct {
+		field   string
+		missing string
+	}{
+		{"UpstreamTLSCertFile", "UpstreamTLSKeyFile"},
+		{"UpstreamTLSKeyFile", "UpstreamTLSCertFile"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.field, func(t *testing.T) {
+			cm := makeYAML(
+				"General.ConfigurationVersion", 2,
+				"Network."+tc.field, "/etc/refinery/tls/file.pem",
+			)
+			rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+			cfgFile, rulesFile := createTempConfigs(t, cm, rm)
+			_, err := getConfig([]string{"--config", cfgFile, "--rules_config", rulesFile})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "includes "+tc.field+", which also requires "+tc.missing)
+		})
+	}
+}
+
+func TestConfigMetadataLoadedAt(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2, "Network.ListenAddr", "0.0.0.0:8080")
+	rm := makeYAML("ConfigVersion", 2)
+	cfg, rules := createTempConfigs(t, cm, rm)
+
+	// LoadedAt has a resolution of one second.
+	beforeLoad := time.Now().Truncate(time.Second)
+	c, err := getConfig([]string{"--no-validate", "--config", cfg, "--rules_config", rules})
+	require.NoError(t, err)
+
+	loadedAt := func() []time.Time {
+		md := c.GetConfigMetadata()
+		require.Len(t, md, 2)
+		times := make([]time.Time, 0, len(md))
+		for _, m := range md {
+			ts, err := time.Parse(time.RFC3339, m.LoadedAt)
+			require.NoError(t, err)
+			times = append(times, ts)
+		}
+		return times
+	}
+
+	for _, ts := range loadedAt() {
+		assert.False(t, ts.Before(beforeLoad), "LoadedAt %v is earlier than the load at %v", ts, beforeLoad)
+	}
+
+	// Make sure a reload happens in a later second, then change the config.
+	time.Sleep(1100 * time.Millisecond)
+	beforeReload := time.Now().Truncate(time.Second)
+	cm = makeYAML("General.ConfigurationVersion", 2, "Network.ListenAddr", "0.0.0.0:9000")
+	require.NoError(t, os.WriteFile(cfg, []byte(cm), 0644))
+	require.NoError(t, c.Reload())
+	require.Equal(t, "0.0.0.0:9000", c.GetListenAddr())
+
+	for _, ts := range loadedAt() {
+		assert.False(t, ts.Before(beforeReload), "LoadedAt %v is earlier than the reload at %v", ts, beforeReload)
 	}
 }

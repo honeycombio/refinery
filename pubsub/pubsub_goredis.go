@@ -77,6 +77,11 @@ func (ps *GoRedisPubSub) Start() error {
 		options.Password = redisCfg.Password
 		options.DB = redisCfg.Database
 
+		// Without this, go-redis ignores the context deadline when it dials or
+		// reads, so a Publish to an unresponsive Redis waits for the 5 second
+		// go-redis timeout.
+		options.ContextTimeoutEnabled = true
+
 		if redisCfg.UseTLS {
 			ps.Logger.Info().WithField("TLSInsecure", redisCfg.UseTLSInsecure).Logf("Using TLS with Redis")
 			options.TLSConfig = &tls.Config{
@@ -101,14 +106,6 @@ func (ps *GoRedisPubSub) Start() error {
 	} else {
 		ps.Logger.Info().WithField("hosts", options.Addrs).Logf("Using Redis Universal client")
 		client = redis.NewUniversalClient(options)
-	}
-
-	// If authcode was provided, ping once to check the credentials.
-	if authcode != "" {
-		if err := client.Ping(context.Background()).Err(); err != nil {
-			client.Close()
-			return err
-		}
 	}
 
 	for _, metric := range goredisPubSubMetrics {
@@ -167,7 +164,7 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 
 	sub := &GoRedisSubscription{
 		topic:  topic,
-		pubsub: ps.client.Subscribe(ctx, topic),
+		pubsub: ps.client.Subscribe(ctx), // no topic here, so this does not dial Redis
 		cb:     callback,
 		done:   make(chan struct{}),
 	}
@@ -176,6 +173,8 @@ func (ps *GoRedisPubSub) Subscribe(ctx context.Context, topic string, callback S
 	ps.mut.Unlock()
 	go func() {
 		receiveRootCtx := context.Background()
+		// Subscribe off the caller's goroutine. go-redis keeps the topic after a failed dial and resubscribes.
+		_ = sub.pubsub.Subscribe(receiveRootCtx, topic)
 		redisch := sub.pubsub.Channel()
 		for {
 			select {

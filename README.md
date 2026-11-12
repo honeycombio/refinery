@@ -190,6 +190,63 @@ A quick start for specific scenarios is below:
 +
 +When using Beelines with a classic API key to send data to Refinery, ensure that the `SendKey` is also a classic Key, not an environment and service(E&S) key.
 
+## Sending Through an mTLS Proxy
+
+If Refinery must send to Honeycomb through a proxy that requires mutual TLS, point `Network.HoneycombAPI` at the proxy and give Refinery a client certificate:
+
+```yaml
+Network:
+  HoneycombAPI: https://mtls-proxy.internal:8443
+  UpstreamTLSCertFile: /etc/refinery/tls/tls.crt
+  UpstreamTLSKeyFile: /etc/refinery/tls/tls.key
+  UpstreamTLSCAFile: /etc/refinery/tls/ca.crt # only if the proxy's certificate is from a private CA
+```
+
+If the proxy only needs Refinery to trust its private CA, and not to present a client certificate, set `UpstreamTLSCAFile` on its own.
+
+* These settings apply to the data Refinery forwards, to API key lookups, to other API requests Refinery passes through such as markers, and to logs from the `honeycomb` logger.
+  They don't apply to Refinery's OTel metrics and traces, peer-to-peer traffic, OpAMP, or fetching configuration over HTTP(S).
+  Send OTel telemetry through an OpenTelemetry Collector if it needs mutual TLS.
+* `UpstreamTLSCAFile` replaces the system's trusted roots.
+  When using it with the `honeycomb` logger, set `HoneycombLogger.APIHost` to the same proxy, or logs will fail to send.
+  If Refinery reaches the upstream through an `https://` forward proxy set in `HTTPS_PROXY`, the connection to that forward proxy uses these settings too, so the bundle must also include the CA that signed the forward proxy's certificate.
+* The certificate file must include any intermediate certificates.
+  The key must be unencrypted PEM.
+* Refinery reloads the certificate and key when their modification times change, without a restart.
+  Open connections keep their old certificate; new connections use the new one.
+  Refinery logs a warning if a reload fails, and when the certificate in use is close to or past its expiry.
+  These checks run only when Refinery opens a new connection and the upstream asks for a client certificate, so a long-lived connection can delay them.
+  With the `honeycomb` logger, the warnings are also printed to stderr, since the logger sends through the same certificate.
+
+In Kubernetes, store the certificate in a Secret, such as one created by cert-manager, and mount it as a directory.
+Don't use `subPath`, because `subPath` mounts don't receive updates when the Secret is renewed.
+With the Helm chart:
+
+```yaml
+config:
+  Network:
+    HoneycombAPI: https://mtls-proxy.internal:8443
+    UpstreamTLSCertFile: /etc/refinery/tls/tls.crt
+    UpstreamTLSKeyFile: /etc/refinery/tls/tls.key
+    UpstreamTLSCAFile: /etc/refinery/tls/ca.crt
+extraVolumes:
+  - name: upstream-tls
+    secret:
+      secretName: refinery-client-tls
+extraVolumeMounts:
+  - name: upstream-tls
+    mountPath: /etc/refinery/tls
+    readOnly: true
+```
+
+The `ca.crt` in a cert-manager Secret is the CA that issued Refinery's client certificate, and some issuers leave it empty.
+Use it for `UpstreamTLSCAFile` only if the same CA signed the proxy's server certificate; otherwise mount the proxy's CA from a separate Secret or ConfigMap.
+
+When the proxy rejects Refinery's certificate, Refinery logs an error for each failed send.
+If the proxy rejects the TLS handshake, the `error` field contains a TLS or connection error, such as `remote error: tls: certificate required` or `http2: client conn could not be established`.
+If the proxy accepts the handshake but rejects the request, the log includes the proxy's `status_code` and `response_body`.
+Senders still receive successful responses from Refinery, so check Refinery's logs when data stops arriving.
+
 ## Dry Run Mode
 
 When getting started with Refinery or when updating sampling rules, it may be helpful to verify that the rules are working as expected before you start dropping traffic. To do so, use Dry Run Mode in Refinery.

@@ -3,7 +3,7 @@
 # Honeycomb Refinery Metrics Documentation
 
 This document contains the description of various metrics used in Refinery.
-It was automatically generated on 2026-11-11 at 14:18:27 UTC.
+It was automatically generated on 2026-11-12 at 10:07:54 UTC.
 
 Note: This document does not include metrics defined in the dynsampler-go dependency, as those metrics are generated dynamically at runtime. As a result, certain metrics may be missing or incomplete in this document, but they will still be available during execution with their full names.
 
@@ -30,6 +30,7 @@ This table includes metrics with fully defined names.
 | num_peers | Gauge | Dimensionless | the active number of peers in the cluster |
 | peer_hash | Gauge | Dimensionless | the hash of the current list of peers |
 | peer_messages | Counter | Dimensionless | the number of messages received by the peers service |
+| peers_fresh | Gauge | Dimensionless | 1 when the peer list of this host is fresh, 0 when it is not, for example while it cannot hear its peers through Redis |
 | trace_duration_ms | Histogram | Milliseconds | time taken to process a trace from arrival to send |
 | trace_span_count | Histogram | Dimensionless | number of spans in a trace |
 | collector_incoming_queue | Histogram | Dimensionless | number of spans currently in the incoming queue |

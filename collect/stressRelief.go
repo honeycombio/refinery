@@ -29,6 +29,11 @@ const (
 	NUMERATOR_INCOMING_QUEUE     = "collector_incoming_queue_length"
 	NUMERATOR_MEMORY_HEAP_ALLOC  = "memory_heap_allocation"
 	stressReliefTopic            = "refinery-stress-relief"
+
+	// peersStaleAfter is how long the peer list can stay not fresh before
+	// stress relief treats the peers as stale. The list stops being fresh about 5 seconds into
+	// a Redis outage, so stress relief acts about 30 seconds in.
+	peersStaleAfter = 25 * time.Second
 )
 
 // All of the numerator metrics are gauges. The denominator metrics are constants.
@@ -80,6 +85,17 @@ const (
 	Always
 )
 
+func (m StressReliefMode) String() string {
+	switch m {
+	case Monitor:
+		return "monitor"
+	case Always:
+		return "always"
+	default:
+		return "never"
+	}
+}
+
 type stressReport struct {
 	key   string
 	level uint
@@ -113,6 +129,11 @@ type StressRelief struct {
 	minDuration        time.Duration
 	topic              string // formatted topic name
 
+	// peersNotFreshSince is when Recalc first saw the peer list not fresh; zero
+	// while it is fresh.
+	peersNotFreshSince time.Time
+	peersWereStale     bool
+
 	algorithms map[string]func(string, string) float64
 
 	lock         sync.RWMutex
@@ -135,9 +156,7 @@ func (s *StressRelief) Start() error {
 	defer func() { s.Logger.Debug().Logf("Finished starting StressRelief system") }()
 
 	// register with health
-	// Set health check timeout to 15 seconds (3x go-redis DialTimeout of 5s).
-	// This allows the stress relief system multiple retry attempts before
-	// the health check fails, preventing premature failure during transient issues.
+	// This trips only if the monitor loop stops running.
 	s.Health.Register(StressReliefHealthKey, 15*time.Second)
 
 	// register stress level metrics
@@ -187,6 +206,11 @@ func (s *StressRelief) Start() error {
 			tickCounter      = 0
 		)
 
+		// Publish from a separate goroutine so a slow Redis cannot stall this loop.
+		// The channel holds only the newest level.
+		levels := make(chan uint, 1)
+		go s.publishStressLevels(levels)
+
 		tick := s.Clock.NewTicker(100 * time.Millisecond)
 		defer tick.Stop()
 		for {
@@ -195,9 +219,15 @@ func (s *StressRelief) Start() error {
 				currentLevel := s.Recalc()
 
 				if lastLevel != currentLevel || tickCounter == maxTicksBetweenReports {
-					err := s.PubSub.Publish(context.Background(), s.topic, newStressReliefMessage(currentLevel, s.hostID).String())
-					if err != nil {
-						s.Logger.Error().Logf("failed to publish stress level: %s", err)
+					select {
+					case levels <- currentLevel:
+					default:
+						// The publisher is busy: replace the queued level with this one.
+						select {
+						case <-levels:
+						default:
+						}
+						levels <- currentLevel
 					}
 
 					lastLevel = currentLevel
@@ -215,6 +245,24 @@ func (s *StressRelief) Start() error {
 		}
 	}(s)
 	return nil
+}
+
+// publishStressLevels publishes each level it receives, each within the peer
+// timeout, until s.Done closes.
+func (s *StressRelief) publishStressLevels(levels <-chan uint) {
+	for {
+		select {
+		case level := <-levels:
+			ctx, cancel := context.WithTimeout(context.Background(), s.Config.GetPeerTimeout())
+			err := s.PubSub.Publish(ctx, s.topic, newStressReliefMessage(level, s.hostID).String())
+			cancel()
+			if err != nil {
+				s.Logger.Error().Logf("failed to publish stress level: %s", err)
+			}
+		case <-s.Done:
+			return
+		}
+	}
 }
 
 const stressReliefMessageSeparator = "|"
@@ -444,6 +492,23 @@ func (s *StressRelief) Recalc() uint {
 	s.overallStressLevel = overallStressLevel
 	s.RefineryMetrics.Gauge("stress_level", float64(s.overallStressLevel))
 
+	// A stale peer list can disagree with the lists of other hosts. In monitor
+	// and always modes that counts as stress, so every host samples
+	// deterministically. In never mode it is only logged.
+	peersAreStale := s.checkPeersStale()
+	if peersAreStale != s.peersWereStale {
+		s.peersWereStale = peersAreStale
+		if peersAreStale {
+			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peers are stale; this host has not heard its peers through Redis")
+		} else {
+			s.Logger.Warn().WithField("mode", s.mode.String()).Logf("peers are fresh again")
+		}
+	}
+	if peersAreStale {
+		reason = "RedisUnreachable"
+		formula = ""
+	}
+
 	s.reason = reason
 	s.formula = formula
 
@@ -453,25 +518,25 @@ func (s *StressRelief) Recalc() uint {
 	case Always:
 		s.stressed = true
 	case Monitor:
-		// If it's off, should we activate it?
-		if !s.stressed && s.overallStressLevel >= s.activateLevel {
-			s.stressed = true
-			s.Logger.Warn().WithFields(map[string]interface{}{
-				"individual_stress_level": localLevel,
-				"cluster_stress_level":    clusterStressLevel,
-				"stress_level":            s.overallStressLevel,
-				"stress_formula":          s.formula,
-				"reason":                  s.reason,
-			}).Logf("StressRelief has been activated")
-		}
-		// We want make sure that stress relief is below the deactivate level
-		// for a minimum time after the last time we said it should be, so
-		// whenever it's above that value we push the time out.
-		if s.stressed && s.overallStressLevel >= s.deactivateLevel {
+		if !s.stressed {
+			// It's off, so should we activate it?
+			if s.overallStressLevel >= s.activateLevel || peersAreStale {
+				s.stressed = true
+				s.stayOnUntil = s.Clock.Now().Add(s.minDuration)
+				s.Logger.Warn().WithFields(map[string]interface{}{
+					"individual_stress_level": localLevel,
+					"cluster_stress_level":    clusterStressLevel,
+					"stress_level":            s.overallStressLevel,
+					"stress_formula":          s.formula,
+					"reason":                  s.reason,
+				}).Logf("StressRelief has been activated")
+			}
+		} else if s.overallStressLevel >= s.deactivateLevel || peersAreStale {
+			// We want make sure that stress relief is below the deactivate level
+			// for a minimum time after the last time we said it should be, so
+			// whenever it's above that value we push the time out.
 			s.stayOnUntil = s.Clock.Now().Add(s.minDuration)
-		}
-		// If it's on, should we deactivate it?
-		if s.stressed && s.overallStressLevel < s.deactivateLevel && s.Clock.Now().After(s.stayOnUntil) {
+		} else if s.Clock.Now().After(s.stayOnUntil) {
 			s.stressed = false
 			s.Logger.Warn().WithFields(map[string]interface{}{
 				"individual_stress_level": localLevel,
@@ -488,6 +553,31 @@ func (s *StressRelief) Recalc() uint {
 	}
 
 	return localLevel
+}
+
+// checkPeersStale reports whether the peer list has not been fresh for longer
+// than peersStaleAfter. A list that has never been fresh, and peers that
+// cannot tell, such as file peers, are never stale. s.lock must be held.
+//
+// After an outage, peers that stopped during it stay in the list for up to
+// PeerEntryTimeout. Monitor mode stays on for MinimumActivationDuration after
+// this turns false, so it covers that time only if MinimumActivationDuration
+// is at least PeerEntryTimeout; the default of 10s is.
+func (s *StressRelief) checkPeersStale() bool {
+	reporter, ok := s.Peer.(peer.FreshnessReporter)
+	if !ok {
+		return false
+	}
+	fresh, everFresh := reporter.PeersAreFresh()
+	if fresh || !everFresh {
+		s.peersNotFreshSince = time.Time{}
+		return false
+	}
+	now := s.Clock.Now()
+	if s.peersNotFreshSince.IsZero() {
+		s.peersNotFreshSince = now
+	}
+	return now.Sub(s.peersNotFreshSince) > peersStaleAfter
 }
 
 // clusterStressLevel calculates the overall stress level for the cluster
