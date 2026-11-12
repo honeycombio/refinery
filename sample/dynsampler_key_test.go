@@ -251,13 +251,15 @@ func TestFieldListSeparatorIsUnambiguous(t *testing.T) {
 
 // TestRuleIdentityIsInTheKey checks that identically configured rules in one
 // rules file each get their own engine, so each gets its own throughput budget.
+// The rules share a name, since rule names are not required to be unique and
+// the rule's index is what has to keep their engines apart.
 func TestRuleIdentityIsInTheKey(t *testing.T) {
 	const ruleCount = 4
 
 	rules := make([]map[string]any, 0, ruleCount)
 	for i := range ruleCount {
 		rules = append(rules, map[string]any{
-			"Name": fmt.Sprintf("rule-%d", i),
+			"Name": "same",
 			"Conditions": []map[string]any{
 				{"Field": "service.name", "Operator": "=", "Value": fmt.Sprintf("svc-%d", i)},
 			},
@@ -290,8 +292,4 @@ func TestRuleIdentityIsInTheKey(t *testing.T) {
 
 	require.NotNil(t, factory.GetSamplerImplementationForKey("production"))
 	assert.Len(t, factory.sharedDynsamplers, ruleCount)
-
-	// Rules sharing a name still get their own engine, since the index is what
-	// makes the identity unique.
-	assert.NotEqual(t, makeRuleID(0, "same"), makeRuleID(1, "same"))
 }
