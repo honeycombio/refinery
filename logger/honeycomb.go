@@ -38,6 +38,9 @@ type HoneycombLogger struct {
 	libhClient        *libhoney.Client
 	builder           *libhoney.Builder
 	sampler           dynsampler.Sampler
+
+	// transportErrorReported is only touched by the readResponses goroutine.
+	transportErrorReported bool
 }
 
 var _ = Logger((*HoneycombLogger)(nil))
@@ -141,16 +144,32 @@ func (h *HoneycombLogger) addResourceAttributes() {
 func (h *HoneycombLogger) readResponses() {
 	resps := h.libhClient.TxResponses()
 	for resp := range resps {
-		respString := fmt.Sprintf("Response: status: %d, duration: %s", resp.StatusCode, resp.Duration)
-		// read response, log if there's an error
-		switch {
-		case resp.StatusCode == 0: // log message dropped due to sampling
-			continue
-		case resp.Err != nil:
+		h.handleResponse(resp)
+	}
+}
+
+// handleResponse reports a failed send on stderr. Each run of failures is
+// reported once: only a clean 202 (no error, status code set) re-arms the
+// report. Whole-batch failures such as 401, 429 or 5xx set both a status code
+// and an error, so they are reported once per run, not once per line.
+// Sampled-out lines never reach this function because Logf drops them first.
+func (h *HoneycombLogger) handleResponse(resp transmission.Response) {
+	respString := fmt.Sprintf("Response: status: %d, duration: %s", resp.StatusCode, resp.Duration)
+	// read response, log if there's an error
+	switch {
+	case resp.Err != nil:
+		// transport errors, queue overflows and encoding errors all have status 0
+		if !h.transportErrorReported {
+			h.transportErrorReported = true
 			fmt.Fprintf(os.Stderr, "Honeycomb Logger got an error back from Honeycomb while trying to send a log line: %s, error: %s, body: %s\n", respString, resp.Err.Error(), string(resp.Body))
-		case resp.StatusCode > 202:
-			fmt.Fprintf(os.Stderr, "Honeycomb Logger got an unexpected status code back from Honeycomb while trying to send a log line: %s, %s\n", respString, string(resp.Body))
 		}
+		return
+	case resp.StatusCode == 0: // log message dropped due to sampling
+		return
+	}
+	h.transportErrorReported = false
+	if resp.StatusCode > 202 {
+		fmt.Fprintf(os.Stderr, "Honeycomb Logger got an unexpected status code back from Honeycomb while trying to send a log line: %s, %s\n", respString, string(resp.Body))
 	}
 }
 
@@ -266,7 +285,14 @@ func (h *HoneycombEntry) Logf(f string, args ...interface{}) {
 		// use the level and the format string as the key for the sampler
 		// this allows us to avoid sampling on high-cardinality fields in the message
 		rate := h.sampler.GetSampleRate(fmt.Sprintf(`%s:%s`, level, f))
+		// drop sampled-out lines here, as logger/logrus.go does, so libhoney never
+		// sees them. Otherwise it returns a "dropped due to sampling" response
+		// that handleResponse would report as a transport error.
+		if shouldDrop(uint(rate)) {
+			return
+		}
 		ev.SampleRate = uint(rate)
 	}
-	ev.Send()
+	// the sample decision has already been made above, so send presampled
+	ev.SendPresampled()
 }
