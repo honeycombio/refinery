@@ -38,6 +38,11 @@ var (
 	ErrReqToEvent          = handlerError{nil, "failed to parse event", http.StatusBadRequest, false, true}
 	ErrBatchToEvent        = handlerError{nil, "failed to parse event within batch", http.StatusBadRequest, false, true}
 	ErrInvalidContentType  = handlerError{nil, husky.ErrInvalidContentType.Message, husky.ErrInvalidContentType.HTTPStatusCode, false, true}
+
+	// These answer an event or batch request whose environment lookup failed,
+	// with the same status codes the OTLP endpoints use for it.
+	ErrEnvironmentLookupFailed      = handlerError{nil, ErrEnvironmentLookup.Error(), http.StatusInternalServerError, false, true}
+	ErrEnvironmentLookupUnavailable = handlerError{nil, ErrEnvironmentUnavailable.Message, ErrEnvironmentUnavailable.HTTPStatusCode, false, true}
 )
 
 func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, err error) {
