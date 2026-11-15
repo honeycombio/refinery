@@ -160,7 +160,7 @@ func main() {
 		ForceAttemptHTTP2:   true,
 	}
 	upstreamTLS, err := tlsconfig.New(c.GetUpstreamTLSConfig(), func(msg string, fields map[string]any) {
-		lgr.Warn().WithFields(fields).Logf("%s", msg)
+		logTLSWarning(lgr.Warn().WithFields(fields), msg)
 		// the Honeycomb logger sends through these same TLS settings, so it may be unable to deliver this
 		if c.GetLoggerType() == "honeycomb" {
 			fmt.Fprintf(os.Stderr, "WARNING: %s %v\n", msg, fields)
@@ -367,4 +367,20 @@ func main() {
 	startstop.Stop(g.Objects(), ststLogger)
 	close(monitorDone)
 	close(sigsToExit)
+}
+
+// logTLSWarning logs a tlsconfig warning with a constant format string per
+// message. The honeycomb logger samples on level and format string, so sharing
+// "%s" with other warnings would let one of them suppress the others.
+func logTLSWarning(entry logger.Entry, msg string) {
+	switch msg {
+	case tlsconfig.MsgCertExpired:
+		entry.Logf(tlsconfig.MsgCertExpired)
+	case tlsconfig.MsgCertExpiresSoon:
+		entry.Logf(tlsconfig.MsgCertExpiresSoon)
+	case tlsconfig.MsgCertReloadFailed:
+		entry.Logf(tlsconfig.MsgCertReloadFailed)
+	default:
+		entry.Logf("upstream TLS warning: %s", msg)
+	}
 }

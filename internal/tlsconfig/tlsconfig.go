@@ -16,6 +16,14 @@ type Options struct {
 	CAFile   string
 }
 
+// Messages passed to a Warner. They are constants so callers can use each one
+// as its own log format string.
+const (
+	MsgCertExpired      = "upstream TLS client certificate has expired"
+	MsgCertExpiresSoon  = "upstream TLS client certificate expires soon"
+	MsgCertReloadFailed = "failed to reload upstream TLS client certificate; continuing with the previous certificate"
+)
+
 // Warner reports a problem with the client certificate that doesn't stop
 // Refinery from sending, such as a failed reload or an upcoming expiry.
 type Warner func(msg string, fields map[string]any)
@@ -103,9 +111,9 @@ func (r *certReloader) checkExpiry() {
 	var msg string
 	switch {
 	case now.After(leaf.NotAfter):
-		msg = "upstream TLS client certificate has expired"
+		msg = MsgCertExpired
 	case leaf.NotAfter.Sub(now) < leaf.NotAfter.Sub(leaf.NotBefore)/10:
-		msg = "upstream TLS client certificate expires soon"
+		msg = MsgCertExpiresSoon
 	}
 	key := msg + leaf.NotAfter.String()
 	if msg != "" && key != r.lastExpiryWarn && r.warn != nil {
@@ -123,7 +131,7 @@ func (r *certReloader) getClientCertificate(*tls.CertificateRequestInfo) (*tls.C
 	defer r.mu.Unlock()
 	if err := r.load(); err != nil {
 		if err.Error() != r.lastReloadErr && r.warn != nil {
-			r.warn("failed to reload upstream TLS client certificate; continuing with the previous certificate", map[string]any{
+			r.warn(MsgCertReloadFailed, map[string]any{
 				"error": err.Error(),
 			})
 		}
