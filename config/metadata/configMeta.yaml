@@ -1559,6 +1559,7 @@ groups:
         valuetype: nondefault
         default: false
         reload: false
+        unpublished: true
         firstversion: v3.5.0
         summary: paces garbage collection by a Go memory limit derived from `AvailableMemory`, and compares the live heap to the memory budget.
         description: >

@@ -2,15 +2,15 @@
 
 ## 3.5.0 2026-11-17
 
-This release keeps Refinery running when Redis is unreachable and adds mutual TLS client certificates for upstream traffic.
-It also adds an opt-in GC pacing mode, fixes stress relief sending kept spans to a peer instead of upstream, and gives each rule in a rules-based sampler its own sampler engine.
+The main theme of this release is keeping Refinery running when Redis is unreachable.
+It also adds mutual TLS client certificates for upstream traffic, fixes stress relief misrouting kept spans to a peer instead of upstream, and prevents two or more rules with identically configured dynamic samplers from sharing one sampler engine and its state.
 
 ### 💡 Enhancements
 
-- feat: add opt-in GC pacing by GOMEMLIMIT with live-heap eviction (`Collection.EnableGCPacing`) by @lizthegrey in https://github.com/honeycombio/refinery/pull/1892
 - feat: Allow configuration of mTLS client certificates for upstream traffic by @mterhar in https://github.com/honeycombio/refinery/pull/1887
 - feat(route): log request details when an OTLP request is rejected by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1900
 - perf(route): record per-event metrics once per request by @lizthegrey in https://github.com/honeycombio/refinery/pull/1894
+- feat(experimental): add opt-in GC pacing by GOMEMLIMIT with live-heap eviction by @lizthegrey in https://github.com/honeycombio/refinery/pull/1892
 
 ### 🐛 Fixes
 

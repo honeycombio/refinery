@@ -5,13 +5,6 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 ## Version 3.5.0
 
 This release keeps Refinery running when Redis is unreachable, lets it present a client certificate to its upstream, and fixes stress relief sending kept spans to a peer instead of Honeycomb.
-It adds four settings. All of them are optional, and existing configurations keep working. Several behaviours change, and they are listed under Operator-visible Changes.
-
-### New opt-in setting: `Collection.EnableGCPacing`
-
-Off by default, so nothing changes unless you set it. When enabled and `AvailableMemory` is set, Refinery sets `GOMEMLIMIT` to 95% of `AvailableMemory`, turns `GOGC` off (unless you set it), and compares the live heap rather than all heap objects to the memory budget. That stops uncollected garbage from being mistaken for buffered traces. Expect process memory (RSS) and `memory_inuse` to sit near the limit; this is not a leak.
-
-Before enabling it, update boards, triggers, and SLOs on `memory_inuse`, `memory_heap_allocation`, or container memory, including the standard Refinery ones, and leave headroom between `AvailableMemory` and the container's memory limit. The new `memory_live_heap` gauge reports the live heap whether or not the setting is on, so you can re-baseline alerts first. See the `EnableGCPacing` entry in the configuration reference for details.
 
 ### New settings for upstream mutual TLS: `Network.UpstreamTLSCertFile`, `UpstreamTLSKeyFile` and `UpstreamTLSCAFile`
 
@@ -35,7 +28,7 @@ Refinery can present a client certificate to the upstream API, for sending throu
 * Refinery rejects zstd-compressed OTLP requests whose frame declares a window larger than 8 MiB. This applies to gRPC and to HTTP, and a small request can no longer make Refinery allocate hundreds of megabytes before any data is read. Normal clients are not affected.
 * An OTLP JSON trace request that sends `startTimeUnixNano`, `endTimeUnixNano` or a span event's `timeUnixNano` as a JSON number is now accepted. Previously the whole request was rejected and every span in it was lost. Senders that use strings are not affected. This comes from [husky v0.47.0](https://github.com/honeycombio/husky/releases/tag/v0.47.0).
 * The router metrics are recorded once when a request finishes, not once per event. Counts and distributions are unchanged, but they appear when the request ends.
-* `memory_live_heap` is a new gauge for the live heap as of the last GC. It reports whether or not GC pacing is on.
+* `memory_live_heap` is a new gauge for the live heap as of the last GC.
 * `loaded_at` in `/query/configmetadata` now reports when the config and rules were loaded. It used to report `0001-01-01T00:00:00Z`.
 * With `CheckNestedFields` on, a condition on a nested field with a `root.` prefix, such as `root.http.method`, now matches the root span. It never matched before.
 * When sending a batch fails with a network error, the log line now has the message `failed to send batch`. Before, the message was empty.
