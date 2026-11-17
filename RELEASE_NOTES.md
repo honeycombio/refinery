@@ -2,13 +2,49 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
-## Unreleased
+## Version 3.5.0
+
+This release keeps Refinery running when Redis is unreachable, lets it present a client certificate to its upstream, and fixes stress relief sending kept spans to a peer instead of Honeycomb.
+It adds four settings. All of them are optional, and existing configurations keep working. Several behaviours change, and they are listed under Operator-visible Changes.
 
 ### New opt-in setting: `Collection.EnableGCPacing`
 
 Off by default, so nothing changes unless you set it. When enabled and `AvailableMemory` is set, Refinery sets `GOMEMLIMIT` to 95% of `AvailableMemory`, turns `GOGC` off (unless you set it), and compares the live heap rather than all heap objects to the memory budget. That stops uncollected garbage from being mistaken for buffered traces. Expect process memory (RSS) and `memory_inuse` to sit near the limit; this is not a leak.
 
 Before enabling it, update boards, triggers, and SLOs on `memory_inuse`, `memory_heap_allocation`, or container memory, including the standard Refinery ones, and leave headroom between `AvailableMemory` and the container's memory limit. The new `memory_live_heap` gauge reports the live heap whether or not the setting is on, so you can re-baseline alerts first. See the `EnableGCPacing` entry in the configuration reference for details.
+
+### New settings for upstream mutual TLS: `Network.UpstreamTLSCertFile`, `UpstreamTLSKeyFile` and `UpstreamTLSCAFile`
+
+Refinery can present a client certificate to the upstream API, for sending through a proxy that requires mutual TLS. Set `UpstreamTLSCertFile` and `UpstreamTLSKeyFile` together, and optionally `UpstreamTLSCAFile` to verify the upstream with a private CA instead of the system roots. Nothing changes if none of them is set.
+
+* The certificate is used for connections to `HoneycombAPI` (events, `/1/auth` and other API requests Refinery passes through) and for the `honeycomb` logger. It is not used for OTel metrics and traces, peer traffic, OpAMP or fetching configuration.
+* Refinery checks the certificate and key files when it opens a new connection and reloads them when either changes, so short-lived certificates can rotate without a restart. Connections that are already open keep the certificate they were opened with. If a replacement fails to load, Refinery logs a warning and keeps the last valid certificate.
+* A changed path, or a changed CA bundle, needs a restart. When `UpstreamTLSCAFile` is set, point `HoneycombLogger.APIHost` at the same proxy as `HoneycombAPI`, or the `honeycomb` logger will fail TLS verification. Refinery logs a warning at startup when it detects that.
+
+### Operator-visible Changes
+
+* Refinery stays up when Redis is unreachable. Previously a hung Redis could stop stress relief reporting its health, `/alive` returned 503 after 15 seconds, and Kubernetes restarted every pod, even with stress relief off. A pod that started while Redis was down could not open its port before the liveness probe gave up.
+  * A host that starts with Redis down now listens in under a second, but is not Ready until its own registration comes back through Redis. A host that is already Ready stays Ready. A healthy pod now takes a few seconds longer to become Ready after it starts, so a rolling restart takes longer than before.
+  * Hosts keep their last peer list while they cannot hear their peers, instead of shrinking it as entries expire.
+  * In `monitor` and `always` stress relief modes, a host that has not heard its peers through Redis for about 30 seconds activates stress relief. Traces it keeps carry the sampling reason `stress_relief/deterministic/RedisUnreachable`, and every host decides each trace the same way. In `never` mode Refinery only logs `peers are stale; this host has not heard its peers through Redis`, and traces can be split when a peer changes during the outage.
+  * New gauge `peers_fresh` is 1 while the host can hear its peers and 0 while it cannot.
+* Stress relief now sends the spans it keeps to Honeycomb. Previously a kept span could be addressed to a peer instead, so it did not reach Honeycomb, and the span carried a `meta.refinery.probe` marker. Peers still receive a probe copy, as intended.
+* Each rule in a rules-based sampler that has a downstream dynamic sampler now gets its own sampler engine. Rules with identical downstream samplers used to share one engine, and so shared one goal and one `MaxKeys` budget. With the throughput samplers, each rule now gets its full configured throughput, so a deployment with several identical rules keeps more events after upgrading. With the other dynamic samplers each rule now has its own key counts and `MaxKeys` budget, so sampling rates can shift a little. The `unique_dynsampler_count` gauge goes up. Samplers now share an engine only when every setting that affects sampling matches, and an omitted setting shares an engine with the same setting written out at its default.
+* When Refinery cannot look up the environment for an API key, an OTLP trace or log request now fails instead of returning success with the events dropped. A lookup that failed to get an answer, or got a 429 or 5xx, returns HTTP 503 or gRPC `Unavailable`, which exporters retry. Any other failure, such as a rejected key, returns HTTP 500 or gRPC `Internal`, which they do not retry. The cause is logged as `cause`. If you see new 5xx responses on OTLP ingest after upgrading, check the lookup failures in the logs.
+* A rejected OTLP request now logs the sender's `user_agent`, the `dataset` header, `content_type`, `content_encoding` and `content_length`, so a failure can be traced to a sender.
+* Refinery rejects zstd-compressed OTLP requests whose frame declares a window larger than 8 MiB. This applies to gRPC and to HTTP, and a small request can no longer make Refinery allocate hundreds of megabytes before any data is read. Normal clients are not affected.
+* An OTLP JSON trace request that sends `startTimeUnixNano`, `endTimeUnixNano` or a span event's `timeUnixNano` as a JSON number is now accepted. Previously the whole request was rejected and every span in it was lost. Senders that use strings are not affected. This comes from [husky v0.47.0](https://github.com/honeycombio/husky/releases/tag/v0.47.0).
+* The router metrics are recorded once when a request finishes, not once per event. Counts and distributions are unchanged, but they appear when the request ends.
+* `memory_live_heap` is a new gauge for the live heap as of the last GC. It reports whether or not GC pacing is on.
+* `loaded_at` in `/query/configmetadata` now reports when the config and rules were loaded. It used to report `0001-01-01T00:00:00Z`.
+* With `CheckNestedFields` on, a condition on a nested field with a `root.` prefix, such as `root.http.method`, now matches the root span. It never matched before.
+* When sending a batch fails with a network error, the log line now has the message `failed to send batch`. Before, the message was empty.
+* The `honeycomb` logger now reports transport errors, such as a TLS failure or a refused connection, on stderr. Before, a logger that could not reach Honeycomb printed nothing.
+
+### Maintenance
+
+* Updated dependencies, including husky 0.47.0, gRPC 1.85, OpenTelemetry 1.47, go-redis 9.23 and klauspost/compress 1.20.4.
+* The default PGO profile is replaced with a profile of the release candidate. It affects how the binary is compiled, not what Refinery does.
 
 ## Version 3.4.4
 

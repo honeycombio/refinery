@@ -1,10 +1,39 @@
 # Refinery Changelog
 
-## Unreleased
+## 3.5.0 2026-11-17
+
+This release keeps Refinery running when Redis is unreachable and adds mutual TLS client certificates for upstream traffic.
+It also adds an opt-in GC pacing mode, fixes stress relief sending kept spans to a peer instead of upstream, and gives each rule in a rules-based sampler its own sampler engine.
 
 ### 💡 Enhancements
 
-- feat: opt-in `Collection.EnableGCPacing` paces GC by a memory limit and compares the live heap to the memory budget in https://github.com/honeycombio/refinery/pull/1892
+- feat: add opt-in GC pacing by GOMEMLIMIT with live-heap eviction (`Collection.EnableGCPacing`) by @lizthegrey in https://github.com/honeycombio/refinery/pull/1892
+- feat: Allow configuration of mTLS client certificates for upstream traffic by @mterhar in https://github.com/honeycombio/refinery/pull/1887
+- feat(route): log request details when an OTLP request is rejected by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1900
+- perf(route): record per-event metrics once per request by @lizthegrey in https://github.com/honeycombio/refinery/pull/1894
+
+### 🐛 Fixes
+
+- fix: keep Refinery running when Redis is unreachable by @robbkidd in https://github.com/honeycombio/refinery/pull/1888
+- fix(peer): keep the peer list whole through a Redis outage by @robbkidd in https://github.com/honeycombio/refinery/pull/1906
+- fix: during stress relief, batches of kept spans no longer getting misrouted to a peer instead of upstream by @robbkidd in https://github.com/honeycombio/refinery/pull/1890
+- fix: derive shared-dynsampler keys from defaulted config and rule identity (re-lands #1859 by @sam-spinner) by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1873
+- fix(route): fail an OTLP request when its environment lookup fails by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1901
+- fix: bound zstd decode memory on the gRPC ingest path by @lizthegrey in https://github.com/honeycombio/refinery/pull/1896
+- fix: honor root. prefix when CheckNestedFields expands nested JSON by @Bortlesboat in https://github.com/honeycombio/refinery/pull/1907
+- fix: return a much more accurate loaded_at time in /query/configmetadata responses by @vignesh2027 in https://github.com/honeycombio/refinery/pull/1869
+- fix(transmit): include a message in the log when a batch fails to send by @mterhar in https://github.com/honeycombio/refinery/pull/1902
+- fix(logger): report honeycomb logger transport errors instead of dropping them by @jay23606 in https://github.com/honeycombio/refinery/pull/1912
+
+### 🛠 Maintenance
+
+- maint(deps): bump husky to v0.47.0 by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1916
+- maint(deps): bump husky to v0.46.0 for bounded zstd decode by @lizthegrey in https://github.com/honeycombio/refinery/pull/1898
+- maint(deps): bump the minor-patch group across 1 directory with 19 updates by @dependabot in https://github.com/honeycombio/refinery/pull/1908
+- maint(deps): bump klauspost/compress to v1.20.4 for capped DecodeAll preallocation by @lizthegrey in https://github.com/honeycombio/refinery/pull/1909
+- maint: apply a production CPU profile as default.pgo by @lizthegrey in https://github.com/honeycombio/refinery/pull/1893
+- maint: replace default.pgo with a profile of the release candidate by @lizthegrey in https://github.com/honeycombio/refinery/pull/1913
+- docs: update contributor guidance, clarify expectations about generated licenses and docs by @robbkidd in https://github.com/honeycombio/refinery/pull/1891
 
 ## 3.4.4 2026-10-23
 

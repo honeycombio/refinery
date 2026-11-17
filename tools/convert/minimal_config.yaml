@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2026-10-13 at 11:46:57 UTC
+# automatically generated on 2026-11-17 at 13:30:54 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -13,6 +13,9 @@ Network:
   AdditionalHeaders: 
     FORWARD_TO_URL: "https://api.honeycomb.io"
 
+  UpstreamTLSCertFile: "/etc/refinery/tls/client.crt"
+  UpstreamTLSKeyFile: "/etc/refinery/tls/client.key"
+  UpstreamTLSCAFile: "/etc/refinery/tls/ca.crt"
 OpAMP:
 AccessKeys:
   ReceiveKeys: 
@@ -109,6 +112,7 @@ Collection:
   AvailableMemory: "4.5Gb"
   MaxMemoryPercentage: 75
   MaxAlloc: 0
+  EnableGCPacing: false
   ShutdownDelay: 15s
   HealthCheckTimeout: 15s
   WorkerCount: 0
