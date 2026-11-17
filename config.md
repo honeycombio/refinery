@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2026-11-12 at 10:07:55 UTC.
+It was automatically generated on 2026-11-17 at 17:38:35 UTC.
 
 ## The Config file
 
@@ -1049,29 +1049,6 @@ If set, `Collections.AvailableMemory` must not be defined.
 
 - Eligible for live reload.
 - Type: `memorysize`
-
-### `EnableGCPacing`
-
-EnableGCPacing paces garbage collection by a Go memory limit derived from `AvailableMemory`, and compares the live heap to the memory budget.
-
-Off by default.
-When enabled and `AvailableMemory` is set, Refinery sets `GOMEMLIMIT` to 95% of `AvailableMemory`, turns `GOGC` off unless it is set in the environment, and compares the live heap rather than all heap objects to the memory budget.
-A `GOMEMLIMIT` set in the environment is kept.
-Pacing is skipped if the memory budget is at or above 95% of `AvailableMemory`.
-This stops uncollected garbage from being mistaken for buffered traces, so there are fewer needless evictions, steadier stress relief readings, and less CPU spent on garbage collection.
-The cost is that process memory (RSS) and `memory_inuse` sit near the limit and sawtooth, because garbage stays resident until the heap nears the limit.
-That is not a leak.
-`memory_heap_allocation` then holds the live heap, and `memory_live_heap` reports it either way.
-The live heap is measured at each collection, which with `GOGC` off happens as the heap nears the limit, so eviction and stress relief react to a surge then rather than at once.
-Before enabling, update any board, trigger, or SLO built on `memory_inuse`, `memory_heap_allocation`, or container memory, including the standard Refinery boards and alerts; use `memory_live_heap` for cache pressure.
-Leave real headroom between `AvailableMemory` and the container's memory limit, and do not enable this if the container is tight on memory or shares a node with other memory-hungry processes.
-Keep `MaxMemoryPercentage` at or below 85; above that the budget is within 10% of the limit, and Refinery logs a warning at startup and on reload.
-If you set `MaxAlloc` instead of `AvailableMemory`, Refinery does not set `GOMEMLIMIT`, but still compares the live heap if `GOMEMLIMIT` is set in the environment.
-Read at startup only; a live reload does not change the limit.
-Refinery logs "GC paced by GOMEMLIMIT from AvailableMemory, GOGC off" when pacing is active.
-
-- Not eligible for live reload.
-- Type: `bool`
 
 ### `ShutdownDelay`
 

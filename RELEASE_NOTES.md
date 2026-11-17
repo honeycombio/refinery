@@ -2,13 +2,45 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
-## Unreleased
+## Version 3.5.0
 
-### New opt-in setting: `Collection.EnableGCPacing`
+This release keeps Refinery running when Redis is unreachable, lets it present a client certificate to its upstream, and fixes stress relief sending kept spans to a peer instead of Honeycomb.
 
-Off by default, so nothing changes unless you set it. When enabled and `AvailableMemory` is set, Refinery sets `GOMEMLIMIT` to 95% of `AvailableMemory`, turns `GOGC` off (unless you set it), and compares the live heap rather than all heap objects to the memory budget. That stops uncollected garbage from being mistaken for buffered traces. Expect process memory (RSS) and `memory_inuse` to sit near the limit; this is not a leak.
+### Redis Outage Handling
 
-Before enabling it, update boards, triggers, and SLOs on `memory_inuse`, `memory_heap_allocation`, or container memory, including the standard Refinery ones, and leave headroom between `AvailableMemory` and the container's memory limit. The new `memory_live_heap` gauge reports the live heap whether or not the setting is on, so you can re-baseline alerts first. See the `EnableGCPacing` entry in the configuration reference for details.
+Refinery now stays up when Redis is unreachable. Previously a Redis outage could make `/alive` fail and Kubernetes restart every Refinery pod, even with stress relief off.
+
+* Hosts keep their last peer list while they cannot hear their peers through Redis.
+* A pod that starts while Redis is down listens at once, but is not Ready until Redis is back. Healthy pods also take a few seconds longer to become Ready, so rolling restarts take longer.
+* In `monitor` and `always` stress relief modes, a host that has not heard its peers through Redis for about 30 seconds activates stress relief with the reason `RedisUnreachable`. In `never` mode it only logs a warning.
+
+### Configuration Changes
+
+* **Added**: `Network.UpstreamTLSCertFile`, `UpstreamTLSKeyFile` and `UpstreamTLSCAFile` - present a client certificate to the upstream API, for sending through a proxy that requires mutual TLS, and optionally verify the upstream with a private CA. Refinery reads a changed certificate when it opens a new connection; connections already open keep the certificate they were opened with. When `UpstreamTLSCAFile` is set, point `HoneycombLogger.APIHost` at the same proxy as `HoneycombAPI`.
+
+### New Metrics
+
+* `peers_fresh` - gauge that is 1 while the host can hear its peers through Redis and 0 while it cannot.
+* `memory_live_heap` - gauge of the live heap as of the last GC.
+
+### Operator-visible Changes
+
+* Each rule in a rules-based sampler now gets its own downstream dynamic sampler engine. Rules with identically configured samplers used to share one engine and its goal and `MaxKeys` budget, so a deployment with several such rules may keep more events after upgrading.
+* An OTLP trace or log request now fails when Refinery cannot look up the environment for its API key. Previously it returned success and dropped the events. An unanswered lookup, a 429 or a 5xx will have Refinery return HTTP 503 or gRPC `Unavailable`, which exporters retry.
+* Refinery rejects zstd-compressed OTLP requests whose frame declares a window larger than 8 MiB. Normal clients are not affected.
+
+### Fixes
+
+* Stress relief sends all kept spans to Honeycomb. A bug introduced in v3.1.0 caused some kept spans to be sent to a peer instead and would never reach Honeycomb.
+* OTLP JSON trace requests with span or span event timestamps sent as JSON numbers are now accepted, from [husky v0.47.0](https://github.com/honeycombio/husky/releases/tag/v0.47.0).
+* With `CheckNestedFields` on, a condition on a nested field with a `root.` prefix now matches the root span.
+* `loaded_at` in `/query/configmetadata` now reports when the config and rules were loaded.
+* Logging: rejected OTLP requests log the sender's user agent and request details, failed batch sends log a message, and the `honeycomb` logger reports transport errors on stderr.
+
+### Maintenance
+
+* Updated dependencies, including husky 0.47.0, gRPC 1.85, OpenTelemetry 1.47, go-redis 9.23 and klauspost/compress 1.20.4.
+* Updated the default PGO profile used to build the binary.
 
 ## Version 3.4.4
 
