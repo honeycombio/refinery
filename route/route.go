@@ -24,6 +24,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	healthserver "google.golang.org/grpc/health"
@@ -1085,11 +1086,32 @@ type authData struct {
 	keyID       string
 }
 
+const (
+	// maxConcurrentEnvironmentLookups caps the /1/auth lookups in flight at once,
+	// so that a flood of unknown API keys cannot open unlimited upstream calls.
+	maxConcurrentEnvironmentLookups = 16
+	// environmentFailureTTL is how long a key whose lookup was rejected stays
+	// rejected without asking /1/auth again.
+	environmentFailureTTL = time.Minute
+	// maxEnvironmentFailures bounds the rejected keys held in memory.
+	maxEnvironmentFailures = 10_000
+)
+
+var errEnvironmentLookupsBusy = retryableLookupError{errors.New("too many concurrent environment lookups")}
+
 type environmentCache struct {
-	mutex sync.RWMutex
-	items map[string]*cacheItem
-	ttl   time.Duration
-	getFn func(string) (authData, error)
+	mutex    sync.RWMutex
+	items    map[string]*cacheItem
+	failures map[string]*failedItem
+	ttl      time.Duration
+	getFn    func(string) (authData, error)
+	lookups  singleflight.Group
+	inFlight chan struct{}
+}
+
+type failedItem struct {
+	expiresAt time.Time
+	err       error
 }
 
 // SetEnvironmentCache replaces the environment cache with a new one using the
@@ -1105,9 +1127,11 @@ func (r *Router) SetEnvironmentCache(ttl time.Duration, getFn func(string) (stri
 
 func newEnvironmentCache(ttl time.Duration, getFn func(string) (authData, error)) *environmentCache {
 	return &environmentCache{
-		items: make(map[string]*cacheItem),
-		ttl:   ttl,
-		getFn: getFn,
+		items:    make(map[string]*cacheItem),
+		failures: make(map[string]*failedItem),
+		ttl:      ttl,
+		getFn:    getFn,
+		inFlight: make(chan struct{}, maxConcurrentEnvironmentLookups),
 	}
 }
 
@@ -1116,48 +1140,64 @@ type cacheItem struct {
 	value     authData
 }
 
-// get queries the cached items, returning cache hits that have not expired.
-// Cache missed use the configured getFn to populate the cache.
+// get queries the cached items, returning cache hits and rejections that have
+// not expired. A cache miss uses the configured getFn to populate the cache.
+// The lock is never held during getFn, so a slow lookup does not delay hits.
 func (c *environmentCache) get(key string) (authData, error) {
-	var val authData
-	var hit bool
-	// get read lock so that we don't attempt to read from the map
-	// while another routine has a write lock and is actively writing
-	// to the map.
-	c.mutex.RLock()
-	if item, ok := c.items[key]; ok && time.Now().Before(item.expiresAt) {
-		val = item.value
-		hit = true
-	}
-	c.mutex.RUnlock()
-	if hit {
-		return val, nil
+	if val, ok, err := c.cached(key); ok {
+		return val, err
 	}
 
-	// get write lock early so we don't execute getFn in parallel so the
-	// the result will be cached before the next lock is acquired to prevent
-	// subsequent calls to getFn for the same key
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// check if the cache has been populated while waiting for a write lock
-	if item, ok := c.items[key]; ok {
-		if time.Now().Before(item.expiresAt) {
-			return item.value, nil
+	// Concurrent misses for the same key share one lookup.
+	res, err, _ := c.lookups.Do(key, func() (any, error) {
+		select {
+		case c.inFlight <- struct{}{}:
+			defer func() { <-c.inFlight }()
+		default:
+			return authData{}, errEnvironmentLookupsBusy
 		}
-	}
 
-	val, err := c.getFn(key)
+		val, err := c.getFn(key)
+
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+		var retryable retryableLookupError
+		switch {
+		case err == nil:
+			c.addItem(key, val, c.ttl)
+		case !errors.As(err, &retryable):
+			// Asking again would get the same answer, so remember it
+			// for a while. Reset rather than scan when full, to bound
+			// memory under a flood of unique keys.
+			if len(c.failures) >= maxEnvironmentFailures {
+				clear(c.failures)
+			}
+			c.failures[key] = &failedItem{expiresAt: time.Now().Add(environmentFailureTTL), err: err}
+		}
+		return val, err
+	})
 	if err != nil {
 		return authData{}, err
 	}
+	return res.(authData), nil
+}
 
-	c.addItem(key, val, c.ttl)
-	return val, nil
+// cached returns the unexpired cache entry or rejection for key, if any.
+func (c *environmentCache) cached(key string) (authData, bool, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	now := time.Now()
+	if item, ok := c.items[key]; ok && now.Before(item.expiresAt) {
+		return item.value, true, nil
+	}
+	if f, ok := c.failures[key]; ok && now.Before(f.expiresAt) {
+		return authData{}, true, f.err
+	}
+	return authData{}, false, nil
 }
 
 // addItem create a new cache entry in the environment cache.
-// This is not thread-safe, and should only be used in tests
+// This is not thread-safe: callers other than tests must hold the write lock.
 func (c *environmentCache) addItem(key string, value authData, ttl time.Duration) {
 	c.items[key] = &cacheItem{
 		expiresAt: time.Now().Add(ttl),

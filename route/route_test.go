@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -825,6 +826,97 @@ func TestEnvironmentCache(t *testing.T) {
 		if err != expectedErr {
 			t.Errorf("expected %e - got %e", expectedErr, err)
 		}
+	})
+
+	t.Run("a slow lookup does not delay cache hits", func(t *testing.T) {
+		release := make(chan struct{})
+		defer close(release)
+		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
+			<-release
+			return authData{environment: "slow"}, nil
+		})
+		cache.addItem("cached", authData{environment: "value"}, time.Minute)
+
+		go cache.get("uncached")
+		time.Sleep(10 * time.Millisecond) // let the lookup start
+
+		done := make(chan authData)
+		go func() { val, _ := cache.get("cached"); done <- val }()
+		select {
+		case val := <-done:
+			assert.Equal(t, "value", val.environment)
+		case <-time.After(time.Second):
+			t.Fatal("cache hit blocked behind an in-flight lookup")
+		}
+	})
+
+	t.Run("concurrent misses for one key share a lookup", func(t *testing.T) {
+		var calls atomic.Int32
+		release := make(chan struct{})
+		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
+			calls.Add(1)
+			<-release
+			return authData{environment: "value"}, nil
+		})
+
+		var wg sync.WaitGroup
+		for range 10 {
+			wg.Go(func() {
+				val, err := cache.get("key")
+				assert.NoError(t, err)
+				assert.Equal(t, "value", val.environment)
+			})
+		}
+		time.Sleep(20 * time.Millisecond) // let every caller reach the lookup
+		close(release)
+		wg.Wait()
+		assert.EqualValues(t, 1, calls.Load())
+	})
+
+	t.Run("lookups beyond the concurrency cap fail as retryable", func(t *testing.T) {
+		started := make(chan struct{})
+		release := make(chan struct{})
+		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
+			started <- struct{}{}
+			<-release
+			return authData{environment: key}, nil
+		})
+
+		var wg sync.WaitGroup
+		for i := range maxConcurrentEnvironmentLookups {
+			wg.Go(func() { cache.get(fmt.Sprintf("key-%d", i)) })
+			<-started
+		}
+
+		_, err := cache.get("one-too-many")
+		assert.Equal(t, ErrEnvironmentUnavailable, environmentLookupFailure(err))
+
+		close(release)
+		wg.Wait()
+		// The rejection is not remembered once a slot is free.
+		go func() { <-started }()
+		val, err := cache.get("one-too-many")
+		assert.NoError(t, err)
+		assert.Equal(t, "one-too-many", val.environment)
+	})
+
+	t.Run("rejected keys are remembered and retryable failures are not", func(t *testing.T) {
+		calls := map[string]int{}
+		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
+			calls[key]++
+			if key == "rejected" {
+				return authData{}, errors.New("received 401 response")
+			}
+			return authData{}, retryableLookupError{errors.New("received 503 response")}
+		})
+
+		for range 3 {
+			_, err := cache.get("rejected")
+			assert.Equal(t, ErrEnvironmentLookup, environmentLookupFailure(err))
+			_, err = cache.get("unavailable")
+			assert.Equal(t, ErrEnvironmentUnavailable, environmentLookupFailure(err))
+		}
+		assert.Equal(t, map[string]int{"rejected": 1, "unavailable": 3}, calls)
 	})
 }
 
