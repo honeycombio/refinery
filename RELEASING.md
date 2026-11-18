@@ -7,8 +7,8 @@ Licenses are different: a PR that changes dependencies must include the matching
 - Check that licenses are current with `make verify-licenses`
 - Regenerate documentation with `make all` from within the `tools/convert` folder.
   - If there have been changes to `rules.md`, you may need to manually modify the `rules_complete.yaml` to reflect the same change.
-- If either `refinery_config.md` or `refinery_rules.md` were modified in this release, you must also open a [docs](https://github.com/honeycombio/docs) PR and update these files there under `content/_common/refinery/`.
-  - Replace the underscores (`_`) in the filenames with a dash (`-`) or the docs linter will be upset.
+- If either `refinery_config.md` or `refinery_rules.md` were modified in this release, you must also open a [docs](https://github.com/honeycombio/docs) PR and update these files there as the Mintlify snippets under `mintlify/snippets/_common/refinery/`.
+  - The snippet filenames use a dash (`-`) instead of the underscore (`_`) and end in `.mdx`, such as `refinery-config.mdx`.
   - Address any feedback from the the docs team and apply that feedback back into this repo.
   - For added points, get the docs team to give feedback on docs changes in the original PR that changed them.
 - Refresh the PGO profile if the ingest path changed a lot since it was last captured (see [Refreshing the PGO profile](#refreshing-the-pgo-profile)). This is optional for most releases.
