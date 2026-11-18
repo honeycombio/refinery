@@ -521,6 +521,25 @@ func TestHTTPIdleTimeout(t *testing.T) {
 	}
 }
 
+func TestMaxIdleConnsPerHost(t *testing.T) {
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+
+	config, rules := createTempConfigs(t, makeYAML("General.ConfigurationVersion", 2), rm)
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	require.NoError(t, err)
+	assert.Equal(t, 100, c.GetMaxIdleConnsPerHost())
+
+	config, rules = createTempConfigs(t, makeYAML("General.ConfigurationVersion", 2, "Network.MaxIdleConnsPerHost", 250), rm)
+	c, err = getConfig([]string{"--config", config, "--rules_config", rules})
+	require.NoError(t, err)
+	assert.Equal(t, 250, c.GetMaxIdleConnsPerHost())
+
+	config, rules = createTempConfigs(t, makeYAML("General.ConfigurationVersion", 2, "Network.MaxIdleConnsPerHost", 1), rm)
+	_, err = getConfig([]string{"--config", config, "--rules_config", rules})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "MaxIdleConnsPerHost")
+}
+
 func TestDryRun(t *testing.T) {
 	cm := makeYAML("General.ConfigurationVersion", 2, "Debugging.DryRun", true)
 	rm := makeYAML("ConfigVersion", 2)
