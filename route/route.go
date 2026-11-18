@@ -1089,7 +1089,7 @@ type authData struct {
 const (
 	// maxConcurrentEnvironmentLookups caps the /1/auth lookups in flight at once,
 	// so that a flood of unknown API keys cannot open unlimited upstream calls.
-	maxConcurrentEnvironmentLookups = 16
+	maxConcurrentEnvironmentLookups = 10
 	// environmentFailureTTL is how long a key whose lookup was rejected stays
 	// rejected without asking /1/auth again.
 	environmentFailureTTL = time.Minute
