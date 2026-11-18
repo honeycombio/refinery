@@ -873,11 +873,11 @@ func TestEnvironmentCache(t *testing.T) {
 		assert.EqualValues(t, 1, calls.Load())
 	})
 
-	t.Run("lookups beyond the concurrency cap fail as retryable", func(t *testing.T) {
-		started := make(chan struct{})
+	t.Run("lookups beyond the concurrency cap wait for a slot", func(t *testing.T) {
+		started := make(chan string)
 		release := make(chan struct{})
 		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
-			started <- struct{}{}
+			started <- key
 			<-release
 			return authData{environment: key}, nil
 		})
@@ -888,16 +888,18 @@ func TestEnvironmentCache(t *testing.T) {
 			<-started
 		}
 
-		_, err := cache.get("one-too-many")
-		assert.Equal(t, ErrEnvironmentUnavailable, environmentLookupFailure(err))
+		done := make(chan authData)
+		go func() { val, _ := cache.get("one-too-many"); done <- val }()
+		select {
+		case key := <-started:
+			t.Fatalf("lookup for %s started beyond the cap", key)
+		case <-time.After(20 * time.Millisecond):
+		}
 
 		close(release)
+		assert.Equal(t, "one-too-many", <-started)
+		assert.Equal(t, "one-too-many", (<-done).environment)
 		wg.Wait()
-		// The rejection is not remembered once a slot is free.
-		go func() { <-started }()
-		val, err := cache.get("one-too-many")
-		assert.NoError(t, err)
-		assert.Equal(t, "one-too-many", val.environment)
 	})
 
 	t.Run("rejected keys are remembered and retryable failures are not", func(t *testing.T) {

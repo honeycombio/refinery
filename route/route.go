@@ -1097,8 +1097,6 @@ const (
 	maxEnvironmentFailures = 10_000
 )
 
-var errEnvironmentLookupsBusy = retryableLookupError{errors.New("too many concurrent environment lookups")}
-
 type environmentCache struct {
 	mutex    sync.RWMutex
 	items    map[string]*cacheItem
@@ -1150,12 +1148,10 @@ func (c *environmentCache) get(key string) (authData, error) {
 
 	// Concurrent misses for the same key share one lookup.
 	res, err, _ := c.lookups.Do(key, func() (any, error) {
-		select {
-		case c.inFlight <- struct{}{}:
-			defer func() { <-c.inFlight }()
-		default:
-			return authData{}, errEnvironmentLookupsBusy
-		}
+		// Wait for a slot so that a flood of unknown keys queues here
+		// instead of opening unbounded calls to /1/auth.
+		c.inFlight <- struct{}{}
+		defer func() { <-c.inFlight }()
 
 		val, err := c.getFn(key)
 
