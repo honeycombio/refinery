@@ -795,27 +795,6 @@ func TestEnvironmentCache(t *testing.T) {
 		assert.Equal(t, aStillVeryClassicEnvironment.environment, val.environment)
 	})
 
-	t.Run("ignores expired items", func(t *testing.T) {
-		called := false
-		cache := newEnvironmentCache(time.Millisecond, func(key string) (authData, error) {
-			called = true
-			return authData{environment: "value"}, nil
-		})
-		cache.addItem("key", authData{environment: "value"}, time.Millisecond)
-		time.Sleep(time.Millisecond * 5)
-
-		val, err := cache.get("key")
-		if err != nil {
-			t.Errorf("got error calling getOrSet - %e", err)
-		}
-		if val.environment != "value" {
-			t.Errorf("expected %s - got %s", "value", val.environment)
-		}
-		if !called {
-			t.Errorf("expected to call getFn")
-		}
-	})
-
 	t.Run("errors returned from getFn are propagated", func(t *testing.T) {
 		expectedErr := errors.New("error")
 		cache := newEnvironmentCache(time.Second, func(key string) (authData, error) {
@@ -829,16 +808,18 @@ func TestEnvironmentCache(t *testing.T) {
 	})
 
 	t.Run("a slow lookup does not delay cache hits", func(t *testing.T) {
+		started := make(chan struct{})
 		release := make(chan struct{})
 		defer close(release)
 		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
+			close(started)
 			<-release
 			return authData{environment: "slow"}, nil
 		})
 		cache.addItem("cached", authData{environment: "value"}, time.Minute)
 
 		go cache.get("uncached")
-		time.Sleep(10 * time.Millisecond) // let the lookup start
+		<-started
 
 		done := make(chan authData)
 		go func() { val, _ := cache.get("cached"); done <- val }()
@@ -848,6 +829,34 @@ func TestEnvironmentCache(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("cache hit blocked behind an in-flight lookup")
 		}
+	})
+
+	t.Run("an expired entry is served while one lookup refreshes it", func(t *testing.T) {
+		var calls atomic.Int32
+		release := make(chan struct{})
+		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
+			calls.Add(1)
+			<-release
+			return authData{environment: "new"}, nil
+		})
+		cache.addItem("key", authData{environment: "old"}, -time.Second)
+
+		for range 5 {
+			done := make(chan authData)
+			go func() { val, _ := cache.get("key"); done <- val }()
+			select {
+			case val := <-done:
+				assert.Equal(t, "old", val.environment)
+			case <-time.After(time.Second):
+				t.Fatal("expired entry waited for its refresh")
+			}
+		}
+		close(release)
+		assert.Eventually(t, func() bool {
+			val, _ := cache.get("key")
+			return val.environment == "new"
+		}, time.Second, time.Millisecond)
+		assert.EqualValues(t, 1, calls.Load())
 	})
 
 	t.Run("concurrent misses for one key share a lookup", func(t *testing.T) {
@@ -867,59 +876,155 @@ func TestEnvironmentCache(t *testing.T) {
 				assert.Equal(t, "value", val.environment)
 			})
 		}
-		time.Sleep(20 * time.Millisecond) // let every caller reach the lookup
+		// Give every caller time to miss. A late caller hits the cache,
+		// which also makes no second call, so this cannot pass wrongly.
+		time.Sleep(20 * time.Millisecond)
 		close(release)
 		wg.Wait()
 		assert.EqualValues(t, 1, calls.Load())
 	})
 
 	t.Run("lookups beyond the concurrency cap wait for a slot", func(t *testing.T) {
-		started := make(chan string)
+		var inFlight, maxInFlight atomic.Int32
+		started := make(chan struct{}, 2*maxConcurrentEnvironmentLookups)
 		release := make(chan struct{})
 		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
-			started <- key
+			n := inFlight.Add(1)
+			for m := maxInFlight.Load(); n > m && !maxInFlight.CompareAndSwap(m, n); m = maxInFlight.Load() {
+			}
+			started <- struct{}{}
 			<-release
+			inFlight.Add(-1)
 			return authData{environment: key}, nil
 		})
 
 		var wg sync.WaitGroup
-		for i := range maxConcurrentEnvironmentLookups {
-			wg.Go(func() { cache.get(fmt.Sprintf("key-%d", i)) })
-			<-started
+		for i := range 2 * maxConcurrentEnvironmentLookups {
+			wg.Go(func() {
+				key := fmt.Sprintf("key-%d", i)
+				val, err := cache.get(key)
+				assert.NoError(t, err)
+				assert.Equal(t, key, val.environment)
+			})
 		}
-
-		done := make(chan authData)
-		go func() { val, _ := cache.get("one-too-many"); done <- val }()
+		for range maxConcurrentEnvironmentLookups {
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("lookups below the cap did not start")
+			}
+		}
 		select {
-		case key := <-started:
-			t.Fatalf("lookup for %s started beyond the cap", key)
-		case <-time.After(20 * time.Millisecond):
+		case <-started:
+			t.Fatal("a lookup started beyond the cap")
+		case <-time.After(50 * time.Millisecond):
 		}
-
 		close(release)
-		assert.Equal(t, "one-too-many", <-started)
-		assert.Equal(t, "one-too-many", (<-done).environment)
 		wg.Wait()
+		assert.EqualValues(t, maxConcurrentEnvironmentLookups, maxInFlight.Load())
 	})
 
-	t.Run("rejected keys are remembered and retryable failures are not", func(t *testing.T) {
+	t.Run("only rejected keys are remembered", func(t *testing.T) {
 		calls := map[string]int{}
 		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
 			calls[key]++
-			if key == "rejected" {
-				return authData{}, errors.New("received 401 response")
+			switch key {
+			case "rejected":
+				return authData{}, errAPIKeyRejected
+			case "forbidden":
+				return authData{}, errors.New("received 403 response")
 			}
 			return authData{}, retryableLookupError{errors.New("received 503 response")}
 		})
 
 		for range 3 {
-			_, err := cache.get("rejected")
-			assert.Equal(t, ErrEnvironmentLookup, environmentLookupFailure(err))
-			_, err = cache.get("unavailable")
-			assert.Equal(t, ErrEnvironmentUnavailable, environmentLookupFailure(err))
+			for _, key := range []string{"rejected", "forbidden", "unavailable"} {
+				_, err := cache.get(key)
+				assert.Error(t, err)
+			}
 		}
-		assert.Equal(t, map[string]int{"rejected": 1, "unavailable": 3}, calls)
+		assert.Equal(t, map[string]int{"rejected": 1, "forbidden": 3, "unavailable": 3}, calls)
 	})
+
+	t.Run("oversized keys are rejected without a lookup", func(t *testing.T) {
+		cache := newEnvironmentCache(time.Minute, func(key string) (authData, error) {
+			t.Error("should not have called getFn")
+			return authData{}, nil
+		})
+		_, err := cache.get(strings.Repeat("k", maxAPIKeyLength+1))
+		assert.Equal(t, ErrEnvironmentLookup, environmentLookupFailure(err))
+		assert.Empty(t, cache.failures)
+	})
+}
+
+func TestEnvironmentCacheWithUpstream(t *testing.T) {
+	tests := []struct {
+		name      string
+		responses []func(http.ResponseWriter)
+		wantCalls int
+		wantEnv   string
+		wantErrs  int
+	}{
+		{
+			name: "a proxy 404 is not remembered",
+			responses: []func(http.ResponseWriter){
+				func(w http.ResponseWriter) { w.WriteHeader(http.StatusNotFound) },
+				authOK,
+			},
+			wantCalls: 2, wantEnv: "prod", wantErrs: 1,
+		},
+		{
+			name: "a cut-off body is not remembered",
+			responses: []func(http.ResponseWriter){
+				func(w http.ResponseWriter) { w.Write([]byte(`{"environment":`)) },
+				authOK,
+			},
+			wantCalls: 2, wantEnv: "prod", wantErrs: 1,
+		},
+		{
+			name: "a 401 is remembered",
+			responses: []func(http.ResponseWriter){
+				func(w http.ResponseWriter) { w.WriteHeader(http.StatusUnauthorized) },
+				authOK,
+			},
+			wantCalls: 1, wantEnv: "", wantErrs: 2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls int
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				tt.responses[min(calls, len(tt.responses)-1)](w)
+				calls++
+			}))
+			defer server.Close()
+
+			router := &Router{
+				Config:      &config.MockConfig{GetHoneycombAPIVal: server.URL},
+				Logger:      &logger.MockLogger{},
+				proxyClient: server.Client(),
+			}
+			cache := newEnvironmentCache(time.Minute, router.lookupEnvironment)
+
+			var errs int
+			var val authData
+			for range 2 {
+				v, err := cache.get(esAPIKey)
+				if err != nil {
+					errs++
+					continue
+				}
+				val = v
+			}
+			assert.Equal(t, tt.wantCalls, calls)
+			assert.Equal(t, tt.wantErrs, errs)
+			assert.Equal(t, tt.wantEnv, val.environment)
+		})
+	}
+}
+
+func authOK(w http.ResponseWriter) {
+	w.Write([]byte(`{"environment":{"name":"prod"},"id":"kid"}`))
 }
 
 func TestGetEnvironmentName(t *testing.T) {

@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -1095,7 +1096,15 @@ const (
 	environmentFailureTTL = time.Minute
 	// maxEnvironmentFailures bounds the rejected keys held in memory.
 	maxEnvironmentFailures = 10_000
+	// maxAPIKeyLength is the longest API key that is looked up.
+	maxAPIKeyLength = 128
 )
+
+// errAPIKeyRejected is the lookup error for a key that /1/auth answered with a
+// 401. It is the only lookup failure the environment cache remembers.
+var errAPIKeyRejected = errors.New("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+
+var errAPIKeyTooLong = fmt.Errorf("API key is longer than %d bytes", maxAPIKeyLength)
 
 type environmentCache struct {
 	mutex    sync.RWMutex
@@ -1134,37 +1143,70 @@ func newEnvironmentCache(ttl time.Duration, getFn func(string) (authData, error)
 }
 
 type cacheItem struct {
-	expiresAt time.Time
-	value     authData
+	expiresAt  time.Time
+	value      authData
+	refreshing atomic.Bool
 }
 
-// get queries the cached items, returning cache hits and rejections that have
-// not expired. A cache miss uses the configured getFn to populate the cache.
-// The lock is never held during getFn, so a slow lookup does not delay hits.
+// get returns the cached entry for key. A miss looks the key up with getFn and
+// waits for the answer. An expired entry is still returned while one
+// background lookup refreshes it, so busy keys never wait on /1/auth. The lock
+// is never held during getFn, so a slow lookup does not delay other callers.
 func (c *environmentCache) get(key string) (authData, error) {
-	if val, ok, err := c.cached(key); ok {
-		return val, err
+	// Reject oversized keys before they reach the cache, the lookup group
+	// or /1/auth. Real keys are at most 64 bytes.
+	if len(key) > maxAPIKeyLength {
+		return authData{}, errAPIKeyTooLong
 	}
 
-	// Concurrent misses for the same key share one lookup.
+	c.mutex.RLock()
+	item := c.items[key]
+	failure := c.failures[key]
+	c.mutex.RUnlock()
+
+	now := time.Now()
+	if item != nil {
+		if !now.Before(item.expiresAt) && item.refreshing.CompareAndSwap(false, true) {
+			go func() {
+				c.lookup(key)
+				item.refreshing.Store(false)
+			}()
+		}
+		return item.value, nil
+	}
+	if failure != nil && now.Before(failure.expiresAt) {
+		return authData{}, failure.err
+	}
+	return c.lookup(key)
+}
+
+// lookup calls getFn for key and records the result. Concurrent lookups for
+// the same key share one call.
+func (c *environmentCache) lookup(key string) (authData, error) {
 	res, err, _ := c.lookups.Do(key, func() (any, error) {
+		// A lookup that finished after this caller missed may have
+		// answered already.
+		if val, ok, err := c.fresh(key); ok {
+			return val, err
+		}
+
 		// Wait for a slot so that a flood of unknown keys queues here
 		// instead of opening unbounded calls to /1/auth.
 		c.inFlight <- struct{}{}
-		defer func() { <-c.inFlight }()
-
 		val, err := c.getFn(key)
+		<-c.inFlight
 
 		c.mutex.Lock()
 		defer c.mutex.Unlock()
-		var retryable retryableLookupError
 		switch {
 		case err == nil:
 			c.addItem(key, val, c.ttl)
-		case !errors.As(err, &retryable):
+			delete(c.failures, key)
+		case errors.Is(err, errAPIKeyRejected):
 			// Asking again would get the same answer, so remember it
 			// for a while. Reset rather than scan when full, to bound
 			// memory under a flood of unique keys.
+			delete(c.items, key)
 			if len(c.failures) >= maxEnvironmentFailures {
 				clear(c.failures)
 			}
@@ -1178,8 +1220,8 @@ func (c *environmentCache) get(key string) (authData, error) {
 	return res.(authData), nil
 }
 
-// cached returns the unexpired cache entry or rejection for key, if any.
-func (c *environmentCache) cached(key string) (authData, bool, error) {
+// fresh returns the unexpired cache entry or rejection for key, if any.
+func (c *environmentCache) fresh(key string) (authData, bool, error) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	now := time.Now()
@@ -1329,7 +1371,7 @@ func (r *Router) lookupEnvironment(apiKey string) (authData, error) {
 
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized:
-		return authData{}, fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+		return authData{}, errAPIKeyRejected
 	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
 		return authData{}, retryableLookupError{fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)}
 	case resp.StatusCode > 299:
@@ -1338,7 +1380,8 @@ func (r *Router) lookupEnvironment(apiKey string) (authData, error) {
 
 	authinfo := AuthInfo{}
 	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
-		return authData{}, fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
+		// A body cut off or timed out mid-read may decode next time.
+		return authData{}, retryableLookupError{fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API. %w", err)}
 	}
 	r.Logger.Debug().WithString("environment", authinfo.Environment.Name).Logf("Got environment")
 	return authData{
