@@ -876,8 +876,9 @@ func TestEnvironmentCache(t *testing.T) {
 				assert.Equal(t, "value", val.environment)
 			})
 		}
-		// Give every caller time to miss. A late caller hits the cache,
-		// which also makes no second call, so this cannot pass wrongly.
+		// Give every caller time to miss. A caller that arrives after the
+		// lookup finishes hits the cache instead, so on a slow machine this
+		// can miss a regression, but it cannot fail when sharing works.
 		time.Sleep(20 * time.Millisecond)
 		close(release)
 		wg.Wait()
