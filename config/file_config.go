@@ -86,11 +86,12 @@ type OpAMPConfig struct {
 }
 
 type NetworkConfig struct {
-	ListenAddr        string            `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
-	PeerListenAddr    string            `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
-	HoneycombAPI      string            `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
-	HTTPIdleTimeout   Duration          `yaml:"HTTPIdleTimeout"`
-	AdditionalHeaders map[string]string `yaml:"AdditionalHeaders" default:"{}"`
+	ListenAddr          string            `yaml:"ListenAddr" default:"0.0.0.0:8080" cmdenv:"HTTPListenAddr"`
+	PeerListenAddr      string            `yaml:"PeerListenAddr" default:"0.0.0.0:8081" cmdenv:"PeerListenAddr"`
+	HoneycombAPI        string            `yaml:"HoneycombAPI" default:"https://api.honeycomb.io" cmdenv:"HoneycombAPI"`
+	HTTPIdleTimeout     Duration          `yaml:"HTTPIdleTimeout"`
+	MaxIdleConnsPerHost int               `yaml:"MaxIdleConnsPerHost" default:"100"`
+	AdditionalHeaders   map[string]string `yaml:"AdditionalHeaders" default:"{}"`
 
 	UpstreamTLSCertFile string `yaml:"UpstreamTLSCertFile"`
 	UpstreamTLSKeyFile  string `yaml:"UpstreamTLSKeyFile"`
@@ -751,6 +752,13 @@ func (f *fileConfig) GetHTTPIdleTimeout() time.Duration {
 	defer f.mux.RUnlock()
 
 	return time.Duration(f.mainConfig.Network.HTTPIdleTimeout)
+}
+
+func (f *fileConfig) GetMaxIdleConnsPerHost() int {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.mainConfig.Network.MaxIdleConnsPerHost
 }
 
 func (f *fileConfig) GetCompressPeerCommunication() bool {

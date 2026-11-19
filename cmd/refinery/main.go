@@ -158,6 +158,8 @@ func main() {
 		}).Dial,
 		TLSHandshakeTimeout: 15 * time.Second,
 		ForceAttemptHTTP2:   true,
+		MaxIdleConnsPerHost: c.GetMaxIdleConnsPerHost(),
+		IdleConnTimeout:     90 * time.Second,
 	}
 	upstreamTLS, err := tlsconfig.New(c.GetUpstreamTLSConfig(), func(msg string, fields map[string]any) {
 		lgr.Warn().WithFields(fields).Logf("%s", msg)
@@ -180,6 +182,10 @@ func main() {
 		}).Dial,
 		TLSHandshakeTimeout: 1200 * time.Millisecond,
 		ForceAttemptHTTP2:   true,
+		// Go keeps only 2 idle connections per host by default, so each concurrent
+		// batch send beyond that would open a new connection and close it afterwards.
+		MaxIdleConnsPerHost: c.GetMaxIdleConnsPerHost(),
+		IdleConnTimeout:     90 * time.Second,
 	}
 
 	stressRelief := &collect.StressRelief{Done: done}

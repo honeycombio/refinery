@@ -147,6 +147,26 @@ groups:
           activity, then it pings the client to see if the transport is still
           alive. "0s" means no timeout.
 
+      - name: MaxIdleConnsPerHost
+        type: int
+        valuetype: nondefault
+        default: 100
+        reload: false
+        firstversion: v3.6
+        validations:
+          - type: minimum
+            arg: 2
+        summary: is the number of idle connections Refinery keeps open to each peer and to the upstream API.
+        description: >
+          Refinery sends many batches at the same time to each peer and to the
+          upstream Honeycomb API. After a send, Refinery keeps the connection
+          open for the next send, up to this number of connections for each
+          host. Refinery closes each connection beyond this number after its
+          send, and opens a new one for the next send. On Linux nodes, each
+          closed connection stays in the conntrack table for some time, so a
+          low value can fill that table in larger clusters. Refinery closes a
+          connection that is idle for 90 seconds.
+
       - name: HoneycombAPI
         type: url
         valuetype: nondefault
