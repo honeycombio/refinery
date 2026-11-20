@@ -433,22 +433,28 @@ func (r *RulesBasedSamplerCondition) setMatchesFunction() error {
 		}
 		return nil
 	case NEQ, EQ, GT, LT, LTE, GTE:
-		return setCompareOperators(r, r.Operator)
+		if err := setCompareOperators(r, r.Operator); err != nil {
+			return err
+		}
+		r.requireField()
 	case StartsWith, Contains, DoesNotContain:
 		err := setMatchStringBasedOperators(r, r.Operator)
 		if err != nil {
 			return err
 		}
+		r.requireField()
 	case In, NotIn:
 		err := setInBasedOperators(r, r.Operator)
 		if err != nil {
 			return err
 		}
+		r.requireField()
 	case MatchesRegexp:
 		err := setRegexStringMatchOperator(r)
 		if err != nil {
 			return err
 		}
+		r.requireField()
 	case HasRootSpan:
 		// this is evaluated at the trace level, so we don't need to do anything here
 		return nil
@@ -456,6 +462,18 @@ func (r *RulesBasedSamplerCondition) setMatchesFunction() error {
 		return fmt.Errorf("unknown operator '%s'", r.Operator)
 	}
 	return nil
+}
+
+// requireField makes the condition fail when the field is not present, so that
+// a missing value is never compared as the string "<nil>".
+func (r *RulesBasedSamplerCondition) requireField() {
+	matches := r.Matches
+	if matches == nil {
+		return
+	}
+	r.Matches = func(value any, exists bool) bool {
+		return exists && matches(value, exists)
+	}
 }
 
 func tryConvertToInt(v any) (int, bool) {
