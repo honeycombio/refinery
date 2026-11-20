@@ -3166,3 +3166,71 @@ func TestRulesBasedSamplerGivesEachRuleItsOwnDynsampler(t *testing.T) {
 	assert.Same(t, rule1Sampler.dynsampler, second.samplers[rule1Key].(*DynamicSampler).dynsampler)
 	assert.Same(t, rule2Sampler.dynsampler, second.samplers[rule2Key].(*DynamicSampler).dynsampler)
 }
+
+// A condition on a field that is not present on the span must not match,
+// whatever the operator or datatype.
+func TestRulesDoNotMatchMissingFields(t *testing.T) {
+	mockCfg := &config.MockConfig{}
+	testdata := []struct {
+		name     string
+		operator string
+		datatype string
+		value    any
+	}{
+		{"string equals", config.EQ, "string", "<nil>"},
+		{"string not equals", config.NEQ, "string", "abc"},
+		{"string less than", config.LT, "string", "zzz"},
+		{"string less or equal", config.LTE, "string", "zzz"},
+		{"string greater or equal", config.GTE, "string", "<"},
+		{"starts with", config.StartsWith, "", "<"},
+		{"contains", config.Contains, "", "nil"},
+		{"does not contain", config.DoesNotContain, "", "abc"},
+		{"in", config.In, "", []any{"<nil>"}},
+		{"not in", config.NotIn, "", []any{"abc"}},
+		{"matches", config.MatchesRegexp, "", `^[^/]*$`},
+	}
+
+	testMetrics := &metrics.MockMetrics{}
+	testMetrics.Start()
+
+	for _, d := range testdata {
+		t.Run(d.name, func(t *testing.T) {
+			rules := &config.RulesBasedSamplerConfig{
+				Rules: []*config.RulesBasedSamplerRule{
+					{
+						Name:       "missing",
+						SampleRate: 10,
+						Conditions: []*config.RulesBasedSamplerCondition{
+							{
+								Field:    "test",
+								Operator: d.operator,
+								Datatype: d.datatype,
+								Value:    d.value,
+							},
+						},
+					},
+				},
+			}
+			require.NoError(t, rules.Rules[0].Conditions[0].Init())
+
+			sampler := &RulesBasedSampler{
+				Config:  rules,
+				Logger:  &logger.NullLogger{},
+				Metrics: testMetrics,
+			}
+			sampler.Start()
+
+			trace := &types.Trace{}
+			trace.AddSpan(&types.Span{
+				Event: &types.Event{
+					Data: types.NewPayload(mockCfg, map[string]interface{}{
+						"other": "value",
+					}),
+				},
+			})
+
+			rate, _, _, _ := sampler.GetSampleRate(trace)
+			assert.Equal(t, uint(1), rate)
+		})
+	}
+}
