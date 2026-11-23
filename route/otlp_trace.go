@@ -150,16 +150,6 @@ func (t *TraceServer) ExportTraceData(
 
 	t.router.Metrics.Increment(t.router.metricsNames.routerOtlpTraceGrpc)
 
-	// Perform final authentication check (key processing already done in handler)
-	apicfg := t.router.Config.GetAccessKeyConfig()
-	keyID := ""
-	if apicfg.HasKeyIDs() {
-		keyID = t.router.getKeyID(ri.ApiKey)
-	}
-	if err := apicfg.IsAccepted(ri.ApiKey, keyID); err != nil {
-		return nil, status.Error(codes.Unauthenticated, err.Error())
-	}
-
 	// Use optimized msgpack processing path with already translated data
 	if err := t.router.processOTLPRequestBatchMsgp(ctx, result.Batches, ri.ApiKey, ri.UserAgent); err != nil {
 		return nil, huskyotlp.AsGRPCError(err)
@@ -222,11 +212,15 @@ func customTraceExportHandler(
 	// Get request info from GRPC metadata and prepare our custom wrapper.
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
 
-	// Handle SendKeyMode logic before validation, similar to HTTP handler
+	// Check the caller's own key before SendKeyMode can replace it, and before
+	// parsing the body, the same way the HTTP handler does.
 	apicfg := traceServer.router.Config.GetAccessKeyConfig()
 	keyID := ""
 	if apicfg.HasKeyIDs() {
 		keyID = traceServer.router.getKeyID(ri.ApiKey)
+	}
+	if err := apicfg.IsAccepted(ri.ApiKey, keyID); err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	keyToUse, err := apicfg.GetReplaceKey(ri.ApiKey, keyID)
 	if err != nil {
