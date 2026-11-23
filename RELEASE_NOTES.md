@@ -4,7 +4,7 @@ While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links t
 
 ## Version 3.5.1
 
-This patch release fixes connection churn between peers, closes a gap in `AcceptOnlyListedKeys` on the gRPC trace endpoint, and protects the OTLP trace parser from deeply nested attribute values.
+This patch release fixes connection churn between peers and includes several smaller fixes.
 
 ### Configuration Changes
 
@@ -12,6 +12,7 @@ This patch release fixes connection churn between peers, closes a gap in `Accept
 
 ### Fixes
 
+* With `AcceptOnlyListedKeys: true`, the gRPC OTLP trace endpoint now checks the caller's own API key against `ReceiveKeys` before any `SendKey` replacement, matching the HTTP endpoints. If gRPC trace senders rely on `SendKeyMode` to be accepted, add their keys to `ReceiveKeys`.
 * OTLP log records with no `time_unix_nano` now use `observed_time_unix_nano` instead of being stamped 1970-01-01, from [husky v0.47.1](https://github.com/honeycombio/husky/releases/tag/v0.47.1).
 
 ## Version 3.5.0
