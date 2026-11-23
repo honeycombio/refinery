@@ -37,6 +37,7 @@ func populateConfigContents(cfg Config) configContents {
 			PeerListenAddr:      cfg.GetPeerListenAddr(),
 			HoneycombAPI:        cfg.GetHoneycombAPI(),
 			HTTPIdleTimeout:     Duration(cfg.GetHTTPIdleTimeout()),
+			MaxIdleConnsPerHost: cfg.GetMaxIdleConnsPerHost(),
 			UpstreamTLSCertFile: upstreamTLS.CertFile,
 			UpstreamTLSKeyFile:  upstreamTLS.KeyFile,
 			UpstreamTLSCAFile:   upstreamTLS.CAFile,

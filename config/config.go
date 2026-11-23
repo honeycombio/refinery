@@ -44,6 +44,10 @@ type Config interface {
 	// GetHTTPIdleTimeout returns the idle timeout for refinery's HTTP server
 	GetHTTPIdleTimeout() time.Duration
 
+	// GetMaxIdleConnsPerHost returns how many idle connections Refinery keeps
+	// open to each peer and to the upstream API
+	GetMaxIdleConnsPerHost() int
+
 	// GetCompressPeerCommunication will be true if refinery should compress
 	// data before forwarding it to a peer.
 	GetCompressPeerCommunication() bool
