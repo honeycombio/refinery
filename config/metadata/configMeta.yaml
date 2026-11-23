@@ -152,7 +152,7 @@ groups:
         valuetype: nondefault
         default: 100
         reload: false
-        firstversion: v3.6
+        firstversion: v3.5.1
         validations:
           - type: minimum
             arg: 2
@@ -166,6 +166,12 @@ groups:
           closed connection stays in the conntrack table for some time, so a
           low value can fill that table in larger clusters. Refinery closes a
           connection that is idle for 90 seconds.
+
+          Peer traffic always uses HTTP/1.1, so this setting applies to it in
+          full. Upstream traffic usually uses HTTP/2, which sends many batches
+          over each connection and needs far fewer connections. For upstream,
+          this setting matters most when HTTP/1.1 is used, for example through
+          a proxy.
 
       - name: HoneycombAPI
         type: url
