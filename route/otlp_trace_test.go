@@ -1238,6 +1238,7 @@ func TestOTLPHandler(t *testing.T) {
 			sendKey        string
 			receiverKeys   []string
 			mode           string
+			acceptOnly     bool
 			wantStatus     int
 			wantBody       string
 			wantEventCount int
@@ -1354,8 +1355,63 @@ func TestOTLPHandler(t *testing.T) {
 				wantStatus: http.StatusUnauthorized,
 				wantBody:   `{"message":"missing 'x-honeycomb-team' header"}`,
 			},
+			// With AcceptOnlyListedKeys, the caller's own key must be listed,
+			// whatever SendKeyMode would replace it with.
+			{
+				apiKey:         "my-api-key",
+				sendKey:        "my-send-key",
+				receiverKeys:   []string{"my-api-key"},
+				mode:           "all",
+				acceptOnly:     true,
+				wantStatus:     http.StatusOK,
+				wantBody:       "{}",
+				wantEventCount: 2,
+			},
+			{
+				apiKey:       "my-api-key",
+				sendKey:      "my-send-key",
+				receiverKeys: []string{"other-key"},
+				mode:         "all",
+				acceptOnly:   true,
+				wantStatus:   http.StatusUnauthorized,
+				wantBody:     `{"message":"api key my-api-k... not found in list of authorized keys"}`,
+			},
+			{
+				apiKey:       "my-api-key",
+				sendKey:      "my-send-key",
+				receiverKeys: []string{"other-key"},
+				mode:         "nonblank",
+				acceptOnly:   true,
+				wantStatus:   http.StatusUnauthorized,
+				wantBody:     `{"message":"api key my-api-k... not found in list of authorized keys"}`,
+			},
+			{
+				apiKey:       "my-api-key",
+				sendKey:      "my-send-key",
+				receiverKeys: []string{"other-key"},
+				mode:         "unlisted",
+				acceptOnly:   true,
+				wantStatus:   http.StatusUnauthorized,
+				wantBody:     `{"message":"api key my-api-k... not found in list of authorized keys"}`,
+			},
+			{
+				sendKey:      "my-send-key",
+				receiverKeys: []string{"other-key"},
+				mode:         "all",
+				acceptOnly:   true,
+				wantStatus:   http.StatusUnauthorized,
+				wantBody:     `{"message":"api key ... not found in list of authorized keys"}`,
+			},
+			{
+				sendKey:      "my-send-key",
+				receiverKeys: []string{"other-key"},
+				mode:         "missingonly",
+				acceptOnly:   true,
+				wantStatus:   http.StatusUnauthorized,
+				wantBody:     `{"message":"api key ... not found in list of authorized keys"}`,
+			},
 		} {
-			t.Run(fmt.Sprintf("ApiKey %s SendKeyMode %s SendKey %s", tt.apiKey, tt.mode, tt.sendKey), func(t *testing.T) {
+			t.Run(fmt.Sprintf("ApiKey %s SendKeyMode %s SendKey %s AcceptOnlyListedKeys %v", tt.apiKey, tt.mode, tt.sendKey, tt.acceptOnly), func(t *testing.T) {
 				router.environmentCache.addItem(tt.apiKey, authData{environment: "local"}, time.Minute)
 				router.environmentCache.addItem(tt.sendKey, authData{environment: "local"}, time.Minute)
 
@@ -1368,9 +1424,10 @@ func TestOTLPHandler(t *testing.T) {
 				request.Header.Set("content-type", "application/json")
 				w := httptest.NewRecorder()
 				router.Config.(*config.MockConfig).GetAccessKeyConfigVal = config.AccessKeyConfig{
-					SendKey:     tt.sendKey,
-					SendKeyMode: tt.mode,
-					ReceiveKeys: tt.receiverKeys,
+					SendKey:              tt.sendKey,
+					SendKeyMode:          tt.mode,
+					ReceiveKeys:          tt.receiverKeys,
+					AcceptOnlyListedKeys: tt.acceptOnly,
 				}
 				router.postOTLPTrace(w, request)
 				require.Equal(t, tt.wantStatus, w.Code)
@@ -1391,7 +1448,7 @@ func TestOTLPHandler(t *testing.T) {
 				if tt.wantStatus == http.StatusOK {
 					require.NoError(t, err)
 				} else {
-					require.Error(t, err)
+					require.Equal(t, codes.Unauthenticated, status.Code(err))
 				}
 
 				if tt.wantEventCount > 0 {
