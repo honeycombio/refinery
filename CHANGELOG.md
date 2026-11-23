@@ -1,5 +1,22 @@
 # Refinery Changelog
 
+## 3.5.1 2026-11-23
+
+This is a patch release.
+It stops large clusters from filling the Linux conntrack table with short-lived peer connections, makes the gRPC OTLP trace endpoint check a caller's own API key against `AcceptOnlyListedKeys` before any `SendKey` replacement, and rejects OTLP trace attribute values nested too deeply to parse safely.
+
+### 🐛 Fixes
+
+- fix: reuse peer and upstream connections across batch sends by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1923
+- fix(route): check the gRPC trace key before replacing it by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1927
+- fix(route): stop reporting environment lookup failures as parse errors by @vignesh2027 in https://github.com/honeycombio/refinery/pull/1918
+
+### 🛠 Maintenance
+
+- maint(deps): bump husky to v0.47.2 by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1928
+- maint(deps): bump husky to v0.47.1 by @MikeGoldsmith in https://github.com/honeycombio/refinery/pull/1924
+- docs: point the release docs step at the Mintlify snippets by @robbkidd in https://github.com/honeycombio/refinery/pull/1921
+
 ## 3.5.0 2026-11-17
 
 The main theme of this release is keeping Refinery running when Redis is unreachable.

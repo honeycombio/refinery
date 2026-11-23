@@ -2,6 +2,19 @@
 
 While [CHANGELOG.md](./CHANGELOG.md) contains detailed documentation and links to all the source code changes in a given release, this document is intended to be aimed at a more comprehensible version of the contents of the release from the point of view of users of Refinery.
 
+## Version 3.5.1
+
+This patch release fixes connection churn between peers and includes several smaller fixes.
+
+### Configuration Changes
+
+* **Added**: `Network.MaxIdleConnsPerHost` (default 100) - the number of idle connections Refinery keeps open to each peer and to the upstream API. Refinery used Go's default of 2, so most concurrent batch sends opened a new connection and closed it afterwards. In large clusters those closed connections could fill the Linux conntrack table (`nf_conntrack: table full, dropping packet`). Idle connections now close after 90 seconds.
+
+### Fixes
+
+* With `AcceptOnlyListedKeys: true`, the gRPC OTLP trace endpoint now checks the caller's own API key against `ReceiveKeys` before any `SendKey` replacement, matching the HTTP endpoints. If gRPC trace senders rely on `SendKeyMode` to be accepted, add their keys to `ReceiveKeys`.
+* OTLP log records with no `time_unix_nano` now use `observed_time_unix_nano` instead of being stamped 1970-01-01, from [husky v0.47.1](https://github.com/honeycombio/husky/releases/tag/v0.47.1).
+
 ## Version 3.5.0
 
 This release keeps Refinery running when Redis is unreachable, lets it present a client certificate to its upstream, and fixes stress relief sending kept spans to a peer instead of Honeycomb.

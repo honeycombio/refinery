@@ -2,7 +2,7 @@
 ## Honeycomb Refinery Configuration ##
 ######################################
 #
-# created on 2026-11-17 at 17:38:35 UTC from ../../config.yaml using a template generated on 2026-11-17 at 17:38:28 UTC
+# created on 2026-11-23 at 17:13:05 UTC from ../../config.yaml using a template generated on 2026-11-23 at 17:13:02 UTC
 
 # This file contains a configuration for the Honeycomb Refinery. It is in YAML
 # format, organized into named groups, each of which contains a set of
@@ -116,6 +116,27 @@ Network:
     ## default: 0s
     ## Not eligible for live reload.
     # HTTPIdleTimeout: 0s
+
+    ## MaxIdleConnsPerHost is the number of idle connections Refinery keeps
+    ## open to each peer and to the upstream API.
+    ##
+    ## Refinery sends many batches at the same time to each peer and to the
+    ## upstream Honeycomb API. After a send, Refinery keeps the connection
+    ## open for the next send, up to this number of connections for each
+    ## host. Refinery closes each connection beyond this number after its
+    ## send, and opens a new one for the next send. On Linux nodes, each
+    ## closed connection stays in the conntrack table for some time, so a low
+    ## value can fill that table in larger clusters. Refinery closes a
+    ## connection that is idle for 90 seconds.
+    ## Peer traffic always uses HTTP/1.1, so this setting applies to it in
+    ## full. Upstream traffic usually uses HTTP/2, which sends many batches
+    ## over each connection and needs far fewer connections. For upstream,
+    ## this setting matters most when HTTP/1.1 is used, for example through a
+    ## proxy.
+    ##
+    ## default: 100
+    ## Not eligible for live reload.
+    # MaxIdleConnsPerHost: 100
 
     ## HoneycombAPI is the URL of the upstream Honeycomb API where the data
     ## will be sent.
