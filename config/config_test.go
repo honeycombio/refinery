@@ -957,6 +957,133 @@ func TestAdditionalAttributes(t *testing.T) {
 	assert.Equal(t, map[string]string{"name": "foo", "other": "bar", "another": "OneHundred"}, c.GetAdditionalAttributes())
 }
 
+func TestCopyFromRootDefaults(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	config, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--no-validate", "--config", config, "--rules_config", rules})
+	require.NoError(t, err)
+
+	got := c.GetCopyFromRoot()
+	assert.False(t, got.Enabled())
+	assert.False(t, got.UsesRegex())
+	assert.Empty(t, got.Names())
+	assert.Equal(t, "", got.Prefix())
+}
+
+func TestCopyFromRootExactNames(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Specialized.FieldsToCopyFromRoot", []string{"app.customer_id", "app.region"},
+		"Specialized.CopiedFieldPrefix", "root.",
+	)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	config, rules := createTempConfigs(t, cm, rm)
+	// validation is on here so the new fields have to be known to the metadata
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	require.NoError(t, err)
+
+	got := c.GetCopyFromRoot()
+	assert.True(t, got.Enabled())
+	assert.False(t, got.UsesRegex())
+	assert.Equal(t, []string{"app.customer_id", "app.region"}, got.Names())
+	assert.Equal(t, "root.app.region", got.Destination("app.region"))
+	assert.False(t, got.Matches("app.region"), "matching is only for regex mode")
+	assert.False(t, got.Selectable("meta.span_count"))
+	assert.True(t, got.Selectable("app.region"))
+}
+
+func TestCopyFromRootRegex(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Specialized.FieldsToCopyFromRoot", []string{`^app\.`, `^deploy\.env$`},
+		"Specialized.UseRegexForFieldsToCopyFromRoot", true,
+	)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	config, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	require.NoError(t, err)
+
+	got := c.GetCopyFromRoot()
+	assert.True(t, got.Enabled())
+	assert.True(t, got.UsesRegex())
+	assert.True(t, got.Matches("app.customer_id"))
+	assert.True(t, got.Matches("deploy.env"))
+	assert.False(t, got.Matches("deploy.environment"))
+	assert.False(t, got.Matches("http.method"))
+	assert.Equal(t, "app.customer_id", got.Destination("app.customer_id"))
+}
+
+func TestCopyFromRootInvalidRegexIsRejected(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Specialized.FieldsToCopyFromRoot", []string{"app.(unclosed"},
+		"Specialized.UseRegexForFieldsToCopyFromRoot", true,
+	)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	config, rules := createTempConfigs(t, cm, rm)
+	_, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "app.(unclosed")
+}
+
+func TestCopyFromRootInvalidRegexIsFineForExactNames(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Specialized.FieldsToCopyFromRoot", []string{"weird(name"},
+	)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	config, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"weird(name"}, c.GetCopyFromRoot().Names())
+}
+
+func TestCopyFromRootWrongElementType(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Specialized.FieldsToCopyFromRoot", []any{"ok", 12},
+	)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	config, rules := createTempConfigs(t, cm, rm)
+	_, err := getConfig([]string{"--config", config, "--rules_config", rules})
+	require.Error(t, err)
+}
+
+func TestCopyFromRootSurvivesSerialization(t *testing.T) {
+	cm := makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Specialized.FieldsToCopyFromRoot", []string{"app.customer_id"},
+		"Specialized.CopiedFieldPrefix", "root.",
+	)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	cfgFile, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--config", cfgFile, "--rules_config", rules})
+	require.NoError(t, err)
+
+	out, _, err := config.SerializeToYAML(c)
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "FieldsToCopyFromRoot")
+	assert.Contains(t, string(out), "app.customer_id")
+	assert.Contains(t, string(out), "CopiedFieldPrefix: root.")
+}
+
+func TestCopyFromRootReload(t *testing.T) {
+	cm := makeYAML("General.ConfigurationVersion", 2)
+	rm := makeYAML("RulesVersion", 2, "Samplers.__default__.DeterministicSampler.SampleRate", 1)
+	cfgFile, rules := createTempConfigs(t, cm, rm)
+	c, err := getConfig([]string{"--config", cfgFile, "--rules_config", rules})
+	require.NoError(t, err)
+	require.False(t, c.GetCopyFromRoot().Enabled())
+
+	require.NoError(t, os.WriteFile(cfgFile, []byte(makeYAML(
+		"General.ConfigurationVersion", 2,
+		"Specialized.FieldsToCopyFromRoot", []string{"app.customer_id"},
+	)), 0644))
+	require.NoError(t, c.Reload())
+	assert.Equal(t, []string{"app.customer_id"}, c.GetCopyFromRoot().Names())
+}
+
 func TestOTelMetricsAdditionalAttributes(t *testing.T) {
 	cm := makeYAML(
 		"General.ConfigurationVersion", 2,

@@ -72,6 +72,10 @@ func populateConfigContents(cfg Config) configContents {
 			EnvironmentCacheTTL:       Duration(cfg.GetEnvironmentCacheTTL()),
 			CompressPeerCommunication: getDefaultTrueValue(cfg.GetCompressPeerCommunication()),
 			AdditionalAttributes:      cfg.GetAdditionalAttributes(),
+
+			FieldsToCopyFromRoot:            cfg.GetCopyFromRoot().Fields(),
+			UseRegexForFieldsToCopyFromRoot: cfg.GetCopyFromRoot().UsesRegex(),
+			CopiedFieldPrefix:               cfg.GetCopyFromRoot().Prefix(),
 		},
 		IDFieldNames: IDFieldsConfig{
 			TraceNames:  cfg.GetTraceIdFieldNames(),

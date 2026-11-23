@@ -1547,6 +1547,282 @@ func TestAddAdditionalAttributes(t *testing.T) {
 	assert.Equal(t, "bar", events[0].Data.Get("other"), "new attribute should appear in data")
 }
 
+// TestCopyFromRoot tests copying root span fields onto the other spans of a trace
+func TestCopyFromRoot(t *testing.T) {
+	newCopy := func(t *testing.T, fields []string, useRegex bool, prefix string) config.CopyFromRoot {
+		t.Helper()
+		c, err := config.NewCopyFromRoot(fields, useRegex, prefix)
+		require.NoError(t, err)
+		return c
+	}
+
+	rootData := func() map[string]any {
+		return map[string]any{
+			"span.kind":       "root",
+			"app.customer_id": "c-42",
+			"app.region":      "eu",
+			"app.flags":       map[string]any{"beta": true},
+			"http.method":     "GET",
+		}
+	}
+
+	tests := []struct {
+		name      string
+		copy      config.CopyFromRoot
+		childData map[string]any
+		noRoot    bool
+		// wanted maps a field name to its expected value on the child span.
+		// A nil value means the field must be absent.
+		wanted map[string]any
+		// the root span must come out untouched by the copying
+		rootAbsent []string
+	}{
+		{
+			name:   "disabled by default",
+			copy:   config.CopyFromRoot{},
+			wanted: map[string]any{"app.customer_id": nil, "app.region": nil},
+		},
+		{
+			name: "exact names keep their name without a prefix",
+			copy: newCopy(t, []string{"app.customer_id", "app.region"}, false, ""),
+			wanted: map[string]any{
+				"app.customer_id": "c-42",
+				"app.region":      "eu",
+				"http.method":     nil,
+			},
+		},
+		{
+			name: "prefix is added to the copied name",
+			copy: newCopy(t, []string{"app.customer_id"}, false, "root."),
+			wanted: map[string]any{
+				"root.app.customer_id": "c-42",
+				"app.customer_id":      nil,
+			},
+			rootAbsent: []string{"root.app.customer_id"},
+		},
+		{
+			name:      "a value already on the span wins",
+			copy:      newCopy(t, []string{"app.customer_id", "app.region"}, false, ""),
+			childData: map[string]any{"app.customer_id": "child-own"},
+			wanted: map[string]any{
+				"app.customer_id": "child-own",
+				"app.region":      "eu",
+			},
+		},
+		{
+			name:      "a value already on the span at the prefixed name wins",
+			copy:      newCopy(t, []string{"app.customer_id"}, false, "root."),
+			childData: map[string]any{"root.app.customer_id": "child-own"},
+			wanted:    map[string]any{"root.app.customer_id": "child-own"},
+		},
+		{
+			name: "a name missing from the root span is not added",
+			copy: newCopy(t, []string{"app.customer_id", "does.not.exist"}, false, "root."),
+			wanted: map[string]any{
+				"root.app.customer_id": "c-42",
+				"root.does.not.exist":  nil,
+			},
+		},
+		{
+			name: "nested values are copied whole",
+			copy: newCopy(t, []string{"app.flags"}, false, "root."),
+			wanted: map[string]any{
+				"root.app.flags": map[string]any{"beta": true},
+			},
+		},
+		{
+			name: "regex selects every matching name",
+			copy: newCopy(t, []string{`^app\.`}, true, "root."),
+			wanted: map[string]any{
+				"root.app.customer_id": "c-42",
+				"root.app.region":      "eu",
+				"root.app.flags":       map[string]any{"beta": true},
+				"root.http.method":     nil,
+			},
+		},
+		{
+			name:      "regex mode also lets the span's own value win",
+			copy:      newCopy(t, []string{`^app\.region$`}, true, ""),
+			childData: map[string]any{"app.region": "us"},
+			wanted:    map[string]any{"app.region": "us", "app.customer_id": nil},
+		},
+		{
+			name: "a pattern that matches everything leaves refinery metadata alone",
+			copy: newCopy(t, []string{`.*`}, true, "root."),
+			wanted: map[string]any{
+				"root.app.customer_id":  "c-42",
+				"root.http.method":      "GET",
+				"root.meta.span_count":  nil,
+				"root.meta.signal_type": nil,
+			},
+		},
+		{
+			name:   "a trace that timed out without a root span is sent unchanged",
+			copy:   newCopy(t, []string{"app.customer_id"}, false, ""),
+			noRoot: true,
+			wanted: map[string]any{"app.customer_id": nil},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conf := &config.MockConfig{
+				GetTracesConfigVal: config.TracesConfig{
+					SendTicker:   config.Duration(2 * time.Millisecond),
+					SendDelay:    config.Duration(1 * time.Millisecond),
+					TraceTimeout: config.Duration(60 * time.Second),
+					MaxBatchSize: 500,
+				},
+				SampleCache: config.SampleCacheConfig{
+					KeptSize:          100,
+					DroppedSize:       100,
+					SizeCheckInterval: config.Duration(1 * time.Second),
+				},
+				GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+				TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
+				ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+				CopyFromRoot:       tt.copy,
+				GetCollectionConfigVal: config.CollectionConfig{
+					WorkerCount:       2,
+					ShutdownDelay:     config.Duration(1 * time.Millisecond),
+					IncomingQueueSize: 5,
+					PeerQueueSize:     5,
+				},
+			}
+			if tt.noRoot {
+				conf.GetTracesConfigVal.TraceTimeout = config.Duration(20 * time.Millisecond)
+			}
+
+			coll := newTestCollector(t, conf)
+			transmission := coll.Transmission.(*transmit.MockTransmission)
+
+			childData := map[string]any{"trace.parent_id": "root-span", "span.kind": "child"}
+			for k, v := range tt.childData {
+				childData[k] = v
+			}
+			coll.AddSpan(&types.Span{
+				TraceID: "trace-copy-from-root",
+				Event: &types.Event{
+					Dataset: "aoeu",
+					Data:    types.NewPayload(coll.Config, childData),
+					APIKey:  legacyAPIKey,
+				},
+			})
+
+			want := 1
+			if !tt.noRoot {
+				want = 2
+				// the root arrives last so the copy has to wait for it
+				coll.AddSpan(&types.Span{
+					TraceID: "trace-copy-from-root",
+					Event: &types.Event{
+						Dataset: "aoeu",
+						Data:    types.NewPayload(coll.Config, rootData()),
+						APIKey:  legacyAPIKey,
+					},
+					IsRoot: true,
+				})
+			}
+
+			events := transmission.GetBlock(want)
+			require.Len(t, events, want)
+
+			var child, root *types.Event
+			for _, ev := range events {
+				if ev.Data.Get("span.kind") == "root" {
+					root = ev
+				} else {
+					child = ev
+				}
+			}
+			require.NotNil(t, child, "the child span should be sent")
+
+			for field, value := range tt.wanted {
+				if value == nil {
+					assert.False(t, child.Data.Exists(field), "child span should not have %s", field)
+					continue
+				}
+				assert.Equal(t, value, child.Data.Get(field), "child span field %s", field)
+			}
+
+			if !tt.noRoot {
+				require.NotNil(t, root, "the root span should be sent")
+				assert.Equal(t, "c-42", root.Data.Get("app.customer_id"))
+				for _, field := range tt.rootAbsent {
+					assert.False(t, root.Data.Exists(field), "root span should not gain %s", field)
+				}
+			}
+		})
+	}
+}
+
+// TestCopyFromRootManyChildren makes sure every span in a larger trace gets the root
+// values.
+func TestCopyFromRootManyChildren(t *testing.T) {
+	copyCfg, err := config.NewCopyFromRoot([]string{`^app\.`}, true, "root.")
+	require.NoError(t, err)
+
+	conf := &config.MockConfig{
+		GetTracesConfigVal: config.TracesConfig{
+			SendTicker:   config.Duration(2 * time.Millisecond),
+			SendDelay:    config.Duration(1 * time.Millisecond),
+			TraceTimeout: config.Duration(60 * time.Second),
+			MaxBatchSize: 500,
+		},
+		SampleCache: config.SampleCacheConfig{
+			KeptSize:          100,
+			DroppedSize:       100,
+			SizeCheckInterval: config.Duration(1 * time.Second),
+		},
+		GetSamplerTypeVal:  &config.DeterministicSamplerConfig{SampleRate: 1},
+		TraceIdFieldNames:  []string{"trace.trace_id", "traceId"},
+		ParentIdFieldNames: []string{"trace.parent_id", "parentId"},
+		CopyFromRoot:       copyCfg,
+		GetCollectionConfigVal: config.CollectionConfig{
+			WorkerCount:       2,
+			ShutdownDelay:     config.Duration(1 * time.Millisecond),
+			IncomingQueueSize: 20,
+			PeerQueueSize:     20,
+		},
+	}
+
+	coll := newTestCollector(t, conf)
+	transmission := coll.Transmission.(*transmit.MockTransmission)
+
+	const children = 5
+	for n := 0; n < children; n++ {
+		coll.AddSpan(&types.Span{
+			TraceID: "trace-snapshot",
+			Event: &types.Event{
+				Dataset: "aoeu",
+				Data:    types.NewPayload(coll.Config, map[string]any{"trace.parent_id": "root-span"}),
+				APIKey:  legacyAPIKey,
+			},
+		})
+	}
+	coll.AddSpan(&types.Span{
+		TraceID: "trace-snapshot",
+		Event: &types.Event{
+			Dataset: "aoeu",
+			Data:    types.NewPayload(coll.Config, map[string]any{"app.customer_id": "c-42", "span.kind": "root"}),
+			APIKey:  legacyAPIKey,
+		},
+		IsRoot: true,
+	})
+
+	events := transmission.GetBlock(children + 1)
+	require.Len(t, events, children+1)
+	seen := 0
+	for _, ev := range events {
+		if ev.Data.Get("span.kind") == "root" {
+			continue
+		}
+		seen++
+		assert.Equal(t, "c-42", ev.Data.Get("root.app.customer_id"))
+	}
+	assert.Equal(t, children, seen)
+}
+
 // TestStressReliefSampleRate tests stress relief mode sample rate adjustment
 func TestStressReliefSampleRate(t *testing.T) {
 	conf := &config.MockConfig{
