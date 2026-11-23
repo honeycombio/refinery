@@ -3,7 +3,7 @@
 # Honeycomb Refinery Configuration Documentation
 
 This is the documentation for the configuration file for Honeycomb's Refinery.
-It was automatically generated on 2026-11-17 at 17:38:35 UTC.
+It was automatically generated on 2026-11-23 at 17:13:05 UTC.
 
 ## The Config file
 
@@ -138,6 +138,23 @@ This is the amount of time after which if the http server does not see any activ
 - Not eligible for live reload.
 - Type: `duration`
 - Default: `0s`
+
+### `MaxIdleConnsPerHost`
+
+MaxIdleConnsPerHost is the number of idle connections Refinery keeps open to each peer and to the upstream API.
+
+Refinery sends many batches at the same time to each peer and to the upstream Honeycomb API.
+After a send, Refinery keeps the connection open for the next send, up to this number of connections for each host.
+Refinery closes each connection beyond this number after its send, and opens a new one for the next send.
+On Linux nodes, each closed connection stays in the conntrack table for some time, so a low value can fill that table in larger clusters.
+Refinery closes a connection that is idle for 90 seconds.
+Peer traffic always uses HTTP/1.1, so this setting applies to it in full.
+Upstream traffic usually uses HTTP/2, which sends many batches over each connection and needs far fewer connections.
+For upstream, this setting matters most when HTTP/1.1 is used, for example through a proxy.
+
+- Not eligible for live reload.
+- Type: `int`
+- Default: `100`
 
 ### `HoneycombAPI`
 

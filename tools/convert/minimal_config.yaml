@@ -1,5 +1,5 @@
 # sample uncommented config file containing all possible fields
-# automatically generated on 2026-11-17 at 17:38:29 UTC
+# automatically generated on 2026-11-23 at 17:13:03 UTC
 General:
   ConfigurationVersion: 2
   MinRefineryVersion: "v2.0"
@@ -9,6 +9,7 @@ Network:
   ListenAddr: "0.0.0.0:8080"
   PeerListenAddr: "0.0.0.0:8081"
   HTTPIdleTimeout: 0s
+  MaxIdleConnsPerHost: 100
   HoneycombAPI: "https://api.honeycomb.io"
   AdditionalHeaders: 
     FORWARD_TO_URL: "https://api.honeycomb.io"

@@ -1,5 +1,5 @@
 # Names of groups and fields in the new config file format.
-# Automatically generated on 2026-11-17 at 13:30:54 UTC.
+# Automatically generated on 2026-11-23 at 17:13:02 UTC.
 
 General:
   - ConfigurationVersion
@@ -19,6 +19,8 @@ Network:
   - PeerListenAddr
 
   - HTTPIdleTimeout
+
+  - MaxIdleConnsPerHost
 
   - HoneycombAPI
 
