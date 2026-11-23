@@ -10,12 +10,6 @@ This patch release fixes connection churn between peers, closes a gap in `Accept
 
 * **Added**: `Network.MaxIdleConnsPerHost` (default 100) - the number of idle connections Refinery keeps open to each peer and to the upstream API. Refinery used Go's default of 2, so most concurrent batch sends opened a new connection and closed it afterwards. In large clusters those closed connections could fill the Linux conntrack table (`nf_conntrack: table full, dropping packet`). Idle connections now close after 90 seconds.
 
-### Operator-visible Changes
-
-* With `AcceptOnlyListedKeys: true` and a `SendKey`, the gRPC OTLP trace endpoint now rejects callers whose own key is not listed. Previously it replaced the key with the `SendKey` before the check, so with `SendKeyMode` `all`, `nonblank`, `unlisted` or `missingonly` any caller's traces were accepted and sent upstream under the `SendKey`. HTTP traces, OTLP logs and the event and batch endpoints already checked the caller's key, and are unchanged. If you rely on `SendKeyMode` to admit gRPC trace senders that aren't on `ReceiveKeys`, add their keys to the list.
-* OTLP trace requests with attribute values whose arrays or key-value lists nest more than 10,000 levels deep are now rejected with a parse error. Previously such a request could overflow the stack and crash Refinery. This comes from [husky v0.47.2](https://github.com/honeycombio/husky/releases/tag/v0.47.2).
-* When the environment lookup for an API key fails, `/1/events/` and `/1/batch/` now answer 503 (for no response, a 429 or a 5xx, so senders retry) or 500, instead of 400 `failed to parse event`. This matches the OTLP endpoints since 3.5.0.
-
 ### Fixes
 
 * OTLP log records with no `time_unix_nano` now use `observed_time_unix_nano` instead of being stamped 1970-01-01, from [husky v0.47.1](https://github.com/honeycombio/husky/releases/tag/v0.47.1).
