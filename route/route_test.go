@@ -1397,6 +1397,81 @@ func TestBatchStopsOnDatasetError(t *testing.T) {
 		"handler continued past the error and wrote a batch response too")
 }
 
+// A failed environment lookup says nothing about the request, so the event and
+// batch endpoints should not answer with a 400 parse error. They answer the way
+// the OTLP endpoints do: 503 when a retry may succeed, 500 otherwise.
+func TestEventAndBatchEnvironmentLookupFailure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		lookupErr error
+		status    int
+		msg       string
+	}{
+		{
+			name:      "key rejected",
+			lookupErr: errors.New("key rejected"),
+			status:    http.StatusInternalServerError,
+			msg:       ErrEnvironmentLookup.Error(),
+		},
+		{
+			name:      "auth unavailable",
+			lookupErr: retryableLookupError{errors.New("auth is down")},
+			status:    http.StatusServiceUnavailable,
+			msg:       ErrEnvironmentUnavailable.Message,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := newBatchRouter(t)
+			router.environmentCache = newEnvironmentCache(time.Second, func(key string) (authData, error) {
+				return authData{}, tt.lookupErr
+			})
+
+			t.Run("event", func(t *testing.T) {
+				req, err := http.NewRequest("POST", "/1/events/test-dataset", strings.NewReader(`{"trace.trace_id":"trace-1"}`))
+				require.NoError(t, err)
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("X-Honeycomb-Team", "test-api-key")
+				req = mux.SetURLVars(req, map[string]string{"datasetName": "test-dataset"})
+
+				w := httptest.NewRecorder()
+				router.event(w, req)
+
+				assert.Equal(t, tt.status, w.Code)
+				assert.Contains(t, w.Body.String(), tt.msg)
+				assert.NotContains(t, w.Body.String(), tt.lookupErr.Error(), "the lookup's own error stays in the log")
+			})
+
+			t.Run("batch", func(t *testing.T) {
+				batch := createBatchEvents(router.Config)
+				batchMsgpack, err := msgpack.Marshal(batch.events)
+				require.NoError(t, err)
+
+				req, err := http.NewRequest("POST", "/1/batch/test-dataset", bytes.NewReader(batchMsgpack))
+				require.NoError(t, err)
+				req.Header.Set("Content-Type", "application/x-msgpack")
+				req.Header.Set("X-Honeycomb-Team", "test-api-key")
+				req = mux.SetURLVars(req, map[string]string{"datasetName": "test-dataset"})
+
+				w := httptest.NewRecorder()
+				router.batch(w, req)
+
+				assert.Equal(t, tt.status, w.Code)
+				assert.Contains(t, w.Body.String(), tt.msg)
+				assert.NotContains(t, w.Body.String(), tt.lookupErr.Error(), "the lookup's own error stays in the log")
+			})
+
+			select {
+			case <-router.Collector.(*collect.MockCollector).Spans:
+				t.Error("a span was accepted even though its environment lookup failed")
+			default:
+			}
+		})
+	}
+}
+
 func newBatchRouter(t testing.TB) *Router {
 	// Set up mock collector and transmission
 	mockCollector := collect.NewMockCollector()

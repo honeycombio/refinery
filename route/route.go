@@ -462,6 +462,10 @@ func (r *Router) event(w http.ResponseWriter, req *http.Request) {
 
 	ev, err := r.requestToEvent(ctx, req, bodyBuffer.Bytes())
 	if err != nil {
+		if errors.As(err, new(environmentLookupError)) {
+			r.handlerReturnWithError(w, environmentLookupHandlerError(err), err)
+			return
+		}
 		r.handlerReturnWithError(w, ErrReqToEvent, err)
 		return
 	}
@@ -496,7 +500,7 @@ func (r *Router) requestToEvent(ctx context.Context, req *http.Request, reqBod [
 	// get environment name - will be empty for legacy keys
 	environment, err := r.getEnvironmentName(apiKey)
 	if err != nil {
-		return nil, err
+		return nil, environmentLookupError{err}
 	}
 
 	data := map[string]interface{}{}
@@ -549,7 +553,7 @@ func (r *Router) batch(w http.ResponseWriter, req *http.Request) {
 	// get environment name - will be empty for legacy keys
 	environment, err := r.getEnvironmentName(apiKey)
 	if err != nil {
-		r.handlerReturnWithError(w, ErrReqToEvent, err)
+		r.handlerReturnWithError(w, environmentLookupHandlerError(err), err)
 		return
 	}
 
@@ -1201,6 +1205,12 @@ type retryableLookupError struct{ error }
 
 func (e retryableLookupError) Unwrap() error { return e.error }
 
+// environmentLookupError marks an error from requestToEvent that came from the
+// environment lookup rather than from the event itself.
+type environmentLookupError struct{ error }
+
+func (e environmentLookupError) Unwrap() error { return e.error }
+
 // environmentLookupFailure picks the error to return to the sender of a request
 // whose environment lookup failed with err.
 func environmentLookupFailure(err error) error {
@@ -1209,6 +1219,16 @@ func environmentLookupFailure(err error) error {
 		return ErrEnvironmentUnavailable
 	}
 	return ErrEnvironmentLookup
+}
+
+// environmentLookupHandlerError is environmentLookupFailure for the event and
+// batch endpoints.
+func environmentLookupHandlerError(err error) handlerError {
+	var retryable retryableLookupError
+	if errors.As(err, &retryable) {
+		return ErrEnvironmentLookupUnavailable
+	}
+	return ErrEnvironmentLookupFailed
 }
 
 func (r *Router) getEnvironmentName(apiKey string) (string, error) {
