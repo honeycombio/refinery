@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -24,6 +25,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"github.com/tinylib/msgp/msgp"
 	"github.com/vmihailenco/msgpack/v5"
+	"golang.org/x/sync/singleflight"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	healthserver "google.golang.org/grpc/health"
@@ -1089,11 +1091,38 @@ type authData struct {
 	keyID       string
 }
 
+const (
+	// maxConcurrentEnvironmentLookups caps the /1/auth lookups in flight at once,
+	// so that a flood of unknown API keys cannot open unlimited upstream calls.
+	maxConcurrentEnvironmentLookups = 10
+	// environmentFailureTTL is how long a key whose lookup was rejected stays
+	// rejected without asking /1/auth again.
+	environmentFailureTTL = time.Minute
+	// maxEnvironmentFailures bounds the rejected keys held in memory.
+	maxEnvironmentFailures = 10_000
+	// maxAPIKeyLength is the longest API key that is looked up.
+	maxAPIKeyLength = 128
+)
+
+// errAPIKeyRejected is the lookup error for a key that /1/auth answered with a
+// 401. It is the only lookup failure the environment cache remembers.
+var errAPIKeyRejected = errors.New("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+
+var errAPIKeyTooLong = fmt.Errorf("API key is longer than %d bytes", maxAPIKeyLength)
+
 type environmentCache struct {
-	mutex sync.RWMutex
-	items map[string]*cacheItem
-	ttl   time.Duration
-	getFn func(string) (authData, error)
+	mutex    sync.RWMutex
+	items    map[string]*cacheItem
+	failures map[string]*failedItem
+	ttl      time.Duration
+	getFn    func(string) (authData, error)
+	lookups  singleflight.Group
+	inFlight chan struct{}
+}
+
+type failedItem struct {
+	expiresAt time.Time
+	err       error
 }
 
 // SetEnvironmentCache replaces the environment cache with a new one using the
@@ -1109,59 +1138,108 @@ func (r *Router) SetEnvironmentCache(ttl time.Duration, getFn func(string) (stri
 
 func newEnvironmentCache(ttl time.Duration, getFn func(string) (authData, error)) *environmentCache {
 	return &environmentCache{
-		items: make(map[string]*cacheItem),
-		ttl:   ttl,
-		getFn: getFn,
+		items:    make(map[string]*cacheItem),
+		failures: make(map[string]*failedItem),
+		ttl:      ttl,
+		getFn:    getFn,
+		inFlight: make(chan struct{}, maxConcurrentEnvironmentLookups),
 	}
 }
 
 type cacheItem struct {
-	expiresAt time.Time
-	value     authData
+	expiresAt  time.Time
+	value      authData
+	refreshing atomic.Bool
 }
 
-// get queries the cached items, returning cache hits that have not expired.
-// Cache missed use the configured getFn to populate the cache.
+// get returns the cached entry for key. A miss looks the key up with getFn and
+// waits for the answer. An expired entry is still returned while one
+// background lookup refreshes it, so busy keys never wait on /1/auth. The lock
+// is never held during getFn, so a slow lookup does not delay other callers.
 func (c *environmentCache) get(key string) (authData, error) {
-	var val authData
-	var hit bool
-	// get read lock so that we don't attempt to read from the map
-	// while another routine has a write lock and is actively writing
-	// to the map.
+	// Reject oversized keys before they reach the cache, the lookup group
+	// or /1/auth. Real keys are at most 64 bytes.
+	if len(key) > maxAPIKeyLength {
+		return authData{}, errAPIKeyTooLong
+	}
+
 	c.mutex.RLock()
-	if item, ok := c.items[key]; ok && time.Now().Before(item.expiresAt) {
-		val = item.value
-		hit = true
-	}
+	item := c.items[key]
+	failure := c.failures[key]
 	c.mutex.RUnlock()
-	if hit {
-		return val, nil
-	}
 
-	// get write lock early so we don't execute getFn in parallel so the
-	// the result will be cached before the next lock is acquired to prevent
-	// subsequent calls to getFn for the same key
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	// check if the cache has been populated while waiting for a write lock
-	if item, ok := c.items[key]; ok {
-		if time.Now().Before(item.expiresAt) {
-			return item.value, nil
+	now := time.Now()
+	if item != nil {
+		if !now.Before(item.expiresAt) && item.refreshing.CompareAndSwap(false, true) {
+			go func() {
+				c.lookup(key)
+				item.refreshing.Store(false)
+			}()
 		}
+		return item.value, nil
 	}
+	if failure != nil && now.Before(failure.expiresAt) {
+		return authData{}, failure.err
+	}
+	return c.lookup(key)
+}
 
-	val, err := c.getFn(key)
+// lookup calls getFn for key and records the result. Concurrent lookups for
+// the same key share one call.
+func (c *environmentCache) lookup(key string) (authData, error) {
+	res, err, _ := c.lookups.Do(key, func() (any, error) {
+		// A lookup that finished after this caller missed may have
+		// answered already.
+		if val, ok, err := c.fresh(key); ok {
+			return val, err
+		}
+
+		// Wait for a slot so that a flood of unknown keys queues here
+		// instead of opening unbounded calls to /1/auth.
+		c.inFlight <- struct{}{}
+		val, err := c.getFn(key)
+		<-c.inFlight
+
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
+		switch {
+		case err == nil:
+			c.addItem(key, val, c.ttl)
+			delete(c.failures, key)
+		case errors.Is(err, errAPIKeyRejected):
+			// Asking again would get the same answer, so remember it
+			// for a while. Reset rather than scan when full, to bound
+			// memory under a flood of unique keys.
+			delete(c.items, key)
+			if len(c.failures) >= maxEnvironmentFailures {
+				clear(c.failures)
+			}
+			c.failures[key] = &failedItem{expiresAt: time.Now().Add(environmentFailureTTL), err: err}
+		}
+		return val, err
+	})
 	if err != nil {
 		return authData{}, err
 	}
+	return res.(authData), nil
+}
 
-	c.addItem(key, val, c.ttl)
-	return val, nil
+// fresh returns the unexpired cache entry or rejection for key, if any.
+func (c *environmentCache) fresh(key string) (authData, bool, error) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	now := time.Now()
+	if item, ok := c.items[key]; ok && now.Before(item.expiresAt) {
+		return item.value, true, nil
+	}
+	if f, ok := c.failures[key]; ok && now.Before(f.expiresAt) {
+		return authData{}, true, f.err
+	}
+	return authData{}, false, nil
 }
 
 // addItem create a new cache entry in the environment cache.
-// This is not thread-safe, and should only be used in tests
+// This is not thread-safe: callers other than tests must hold the write lock.
 func (c *environmentCache) addItem(key string, value authData, ttl time.Duration) {
 	c.items[key] = &cacheItem{
 		expiresAt: time.Now().Add(ttl),
@@ -1313,7 +1391,7 @@ func (r *Router) lookupEnvironment(apiKey string) (authData, error) {
 
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized:
-		return authData{}, fmt.Errorf("received 401 response for AuthInfo request from Honeycomb API - check your API key")
+		return authData{}, errAPIKeyRejected
 	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
 		return authData{}, retryableLookupError{fmt.Errorf("received %d response for AuthInfo request from Honeycomb API", resp.StatusCode)}
 	case resp.StatusCode > 299:
@@ -1322,7 +1400,8 @@ func (r *Router) lookupEnvironment(apiKey string) (authData, error) {
 
 	authinfo := AuthInfo{}
 	if err := json.NewDecoder(resp.Body).Decode(&authinfo); err != nil {
-		return authData{}, fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API")
+		// A body cut off or timed out mid-read may decode next time.
+		return authData{}, retryableLookupError{fmt.Errorf("failed to JSON decode of AuthInfo response from Honeycomb API. %w", err)}
 	}
 	r.Logger.Debug().WithString("environment", authinfo.Environment.Name).Logf("Got environment")
 	return authData{
