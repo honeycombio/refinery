@@ -26,11 +26,12 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 	apicfg := r.Config.GetAccessKeyConfig()
-	keyID := ""
-	if apicfg.HasKeyIDs() {
-		keyID = r.getKeyID(ri.ApiKey)
+	keyID, err := r.checkAPIKey(apicfg, ri.ApiKey)
+	if errors.Is(err, ErrEnvironmentUnavailable) {
+		r.handleOTLPFailureResponse(w, req, ErrEnvironmentUnavailable)
+		return
 	}
-	if err := apicfg.IsAccepted(ri.ApiKey, keyID); err != nil {
+	if err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 		return
 	}
@@ -63,7 +64,6 @@ func (r *Router) postOTLPTrace(w http.ResponseWriter, req *http.Request) {
 
 	ri.ApiKey = keyToUse
 
-	var err error
 	switch ri.ContentType {
 	case "application/json":
 		r.Metrics.Increment(r.metricsNames.routerOtlpTraceHttpJson)
@@ -215,11 +215,11 @@ func customTraceExportHandler(
 	// Check the caller's own key before SendKeyMode can replace it, and before
 	// parsing the body, the same way the HTTP handler does.
 	apicfg := traceServer.router.Config.GetAccessKeyConfig()
-	keyID := ""
-	if apicfg.HasKeyIDs() {
-		keyID = traceServer.router.getKeyID(ri.ApiKey)
+	keyID, err := traceServer.router.checkAPIKey(apicfg, ri.ApiKey)
+	if errors.Is(err, ErrEnvironmentUnavailable) {
+		return nil, huskyotlp.AsGRPCError(err)
 	}
-	if err := apicfg.IsAccepted(ri.ApiKey, keyID); err != nil {
+	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	keyToUse, err := apicfg.GetReplaceKey(ri.ApiKey, keyID)

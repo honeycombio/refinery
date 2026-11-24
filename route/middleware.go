@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -45,11 +46,12 @@ func (r *Router) apiKeyProcessor(next http.Handler) http.Handler {
 		}
 
 		keycfg := r.Config.GetAccessKeyConfig()
-		keyID := ""
-		if keycfg.HasKeyIDs() {
-			keyID = r.getKeyID(apiKey)
+		keyID, err := r.checkAPIKey(keycfg, apiKey)
+		if errors.Is(err, ErrEnvironmentUnavailable) {
+			r.handlerReturnWithError(w, ErrEnvironmentLookupUnavailable, err)
+			return
 		}
-		if err := keycfg.IsAccepted(apiKey, keyID); err != nil {
+		if err != nil {
 			r.handlerReturnWithError(w, ErrAuthInvalid, err)
 			return
 		}

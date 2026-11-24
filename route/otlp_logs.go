@@ -19,11 +19,12 @@ func (r *Router) postOTLPLogs(w http.ResponseWriter, req *http.Request) {
 
 	ri := huskyotlp.GetRequestInfoFromHttpHeaders(req.Header)
 	apicfg := r.Config.GetAccessKeyConfig()
-	keyID := ""
-	if apicfg.HasKeyIDs() {
-		keyID = r.getKeyID(ri.ApiKey)
+	keyID, err := r.checkAPIKey(apicfg, ri.ApiKey)
+	if errors.Is(err, ErrEnvironmentUnavailable) {
+		r.handleOTLPFailureResponse(w, req, ErrEnvironmentUnavailable)
+		return
 	}
-	if err := apicfg.IsAccepted(ri.ApiKey, keyID); err != nil {
+	if err != nil {
 		r.handleOTLPFailureResponse(w, req, huskyotlp.OTLPError{Message: err.Error(), HTTPStatusCode: http.StatusUnauthorized})
 		return
 	}
@@ -90,11 +91,11 @@ func (l *LogsServer) Export(ctx context.Context, req *collectorlogs.ExportLogsSe
 	l.router.Metrics.Increment(l.router.metricsNames.routerOtlpLogGrpc)
 	ri := huskyotlp.GetRequestInfoFromGrpcMetadata(ctx)
 	apicfg := l.router.Config.GetAccessKeyConfig()
-	keyID := ""
-	if apicfg.HasKeyIDs() {
-		keyID = l.router.getKeyID(ri.ApiKey)
+	keyID, err := l.router.checkAPIKey(apicfg, ri.ApiKey)
+	if errors.Is(err, ErrEnvironmentUnavailable) {
+		return nil, huskyotlp.AsGRPCError(err)
 	}
-	if err := apicfg.IsAccepted(ri.ApiKey, keyID); err != nil {
+	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	keyToUse, _ := apicfg.GetReplaceKey(ri.ApiKey, keyID)
