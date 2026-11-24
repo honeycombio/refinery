@@ -128,6 +128,20 @@ func (a *AccessKeyConfig) HasKeyIDs() bool {
 	return len(a.ReceiveKeyIDs) > 0
 }
 
+// DependsOnKeyID reports whether IsAccepted or GetReplaceKey can give a
+// different answer for key depending on whether its key ID is listed in
+// ReceiveKeyIDs. When it does, a key whose key ID could not be looked up
+// cannot be judged yet.
+func (a *AccessKeyConfig) DependsOnKeyID(key string) bool {
+	if !a.HasKeyIDs() || key == "" || key == a.SendKey || slices.Contains(a.ReceiveKeys, key) {
+		return false
+	}
+	if a.AcceptOnlyListedKeys {
+		return true
+	}
+	return a.SendKey != "" && (a.SendKeyMode == "listedonly" || a.SendKeyMode == "unlisted")
+}
+
 // GetReplaceKey checks the given API key against the configuration
 // and possibly replaces it with the configured SendKey, if the settings so indicate.
 // It returns the key to use, or an error if the key is invalid given the settings.

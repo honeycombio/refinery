@@ -34,6 +34,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/trace/noop"
+	collectorlogs "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	collectortrace "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	common "go.opentelemetry.io/proto/otlp/common/v1"
 	resource "go.opentelemetry.io/proto/otlp/resource/v1"
@@ -43,8 +44,10 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/klauspost/compress/zstd"
 	"github.com/vmihailenco/msgpack/v5"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -957,6 +960,113 @@ func TestSetOTLPEnvironmentNameLogsLookupFailure(t *testing.T) {
 	require.Len(t, l.Events, 1)
 	assert.Equal(t, "auth is down", l.Events[0].Fields["cause"], "the log carries the reason")
 	assert.Equal(t, "", ri.EnvironmentName)
+}
+
+// A key that only its key ID can admit must be retried, not rejected as
+// unlisted, when /1/auth cannot answer, on every ingest path. A key that
+// /1/auth rejects is still rejected.
+func TestCheckAPIKeyLookupFailure(t *testing.T) {
+	mockMetrics := metrics.MockMetrics{}
+	mockMetrics.Start()
+	l := &logger.MockLogger{}
+	router := &Router{
+		Config: &config.MockConfig{GetAccessKeyConfigVal: config.AccessKeyConfig{
+			ReceiveKeys:          []string{"listed-key-whose-lookup-is-unavailable"},
+			ReceiveKeyIDs:        []string{"hcaik_listed"},
+			AcceptOnlyListedKeys: true,
+		}},
+		Metrics: &mockMetrics,
+		Logger:  l,
+		iopLogger: iopLogger{
+			Logger:         l,
+			incomingOrPeer: "incoming",
+		},
+		Tracer: noop.Tracer{},
+		environmentCache: newEnvironmentCache(time.Minute, func(key string) (authData, error) {
+			if key == lookupFailsAPIKey {
+				return authData{}, errors.New("received 401 response")
+			}
+			return authData{}, retryableLookupError{errors.New("received 429 response")}
+		}),
+	}
+	router.registerMetricNames()
+	grpcTraces := setupGRPCTestEnvironment(t, router)
+
+	httpOutcome := func(code int) string {
+		switch code {
+		case http.StatusOK:
+			return "accepted"
+		case http.StatusServiceUnavailable:
+			return "retry"
+		case http.StatusUnauthorized:
+			return "rejected"
+		}
+		return fmt.Sprintf("HTTP %d", code)
+	}
+	grpcOutcome := func(err error) string {
+		switch status.Code(err) {
+		case codes.OK:
+			return "accepted"
+		case codes.Unavailable:
+			return "retry"
+		case codes.Unauthenticated:
+			return "rejected"
+		}
+		return status.Code(err).String()
+	}
+	httpRequest := func(path, key string) *http.Request {
+		req := httptest.NewRequest("POST", path, nil)
+		req.Header.Set("content-type", "application/json")
+		req.Header.Set("x-honeycomb-team", key)
+		return req
+	}
+	paths := map[string]func(key string) string{
+		"events": func(key string) string {
+			w := httptest.NewRecorder()
+			router.apiKeyProcessor(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).
+				ServeHTTP(w, httpRequest("/1/events/ds", key))
+			return httpOutcome(w.Code)
+		},
+		"OTLP HTTP traces": func(key string) string {
+			w := httptest.NewRecorder()
+			router.postOTLPTrace(w, httpRequest("/v1/traces", key))
+			return httpOutcome(w.Code)
+		},
+		"OTLP HTTP logs": func(key string) string {
+			w := httptest.NewRecorder()
+			router.postOTLPLogs(w, httpRequest("/v1/logs", key))
+			return httpOutcome(w.Code)
+		},
+		"OTLP gRPC traces": func(key string) string {
+			_, err := grpcTraces.Export(createGRPCContext(map[string]string{"x-honeycomb-team": key}), &collectortrace.ExportTraceServiceRequest{})
+			return grpcOutcome(err)
+		},
+		"OTLP gRPC logs": func(key string) string {
+			ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-honeycomb-team", key))
+			_, err := NewLogsServer(router).Export(ctx, &collectorlogs.ExportLogsServiceRequest{})
+			return grpcOutcome(err)
+		},
+	}
+	for name, send := range paths {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, "retry", send(lookupUnavailableAPIKey), "lookup unavailable")
+			assert.Equal(t, "rejected", send(lookupFailsAPIKey), "lookup rejected")
+		})
+	}
+
+	t.Run("logs the cause", func(t *testing.T) {
+		before := len(l.GetEvents())
+		paths["events"](lookupUnavailableAPIKey)
+		var causes []any
+		for _, e := range l.GetEvents()[before:] {
+			causes = append(causes, e.Fields["cause"])
+		}
+		assert.Contains(t, causes, "received 429 response")
+	})
+
+	t.Run("a key listed in full needs no key ID", func(t *testing.T) {
+		assert.Equal(t, "accepted", paths["events"]("listed-key-whose-lookup-is-unavailable"))
+	})
 }
 
 func TestGRPCHealthProbeCheck(t *testing.T) {

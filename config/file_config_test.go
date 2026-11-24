@@ -192,6 +192,42 @@ func TestAccessKeyConfig_IsAccepted(t *testing.T) {
 	}
 }
 
+// DependsOnKeyID must be true exactly when a listed key ID would change
+// whether the key is accepted or which key it is sent with, so check it
+// against IsAccepted and GetReplaceKey for every combination of settings. A
+// blank key has no key ID to look up, so it never depends on one.
+func TestAccessKeyConfig_DependsOnKeyID(t *testing.T) {
+	modes := []string{"none", "all", "nonblank", "listedonly", "missingonly", "unlisted"}
+	keys := []string{"", "listedkey", "sendkey", "otherkey"}
+	for _, keyIDs := range [][]string{nil, {"kid1"}} {
+		for _, sendKey := range []string{"", "sendkey"} {
+			for _, mode := range modes {
+				for _, acceptOnly := range []bool{false, true} {
+					a := &AccessKeyConfig{
+						ReceiveKeys:          []string{"listedkey"},
+						ReceiveKeyIDs:        keyIDs,
+						SendKey:              sendKey,
+						SendKeyMode:          mode,
+						AcceptOnlyListedKeys: acceptOnly,
+					}
+					for _, key := range keys {
+						unlistedAccepted := a.IsAccepted(key, "") == nil
+						unlistedKey, _ := a.GetReplaceKey(key, "")
+						listedAccepted, listedKey := unlistedAccepted, unlistedKey
+						if len(keyIDs) > 0 && key != "" {
+							listedAccepted = a.IsAccepted(key, keyIDs[0]) == nil
+							listedKey, _ = a.GetReplaceKey(key, keyIDs[0])
+						}
+						want := unlistedAccepted != listedAccepted || unlistedKey != listedKey
+						assert.Equal(t, want, a.DependsOnKeyID(key),
+							"keyIDs=%v sendKey=%q mode=%s acceptOnly=%v key=%q", keyIDs, sendKey, mode, acceptOnly, key)
+					}
+				}
+			}
+		}
+	}
+}
+
 func BenchmarkAccessKeyConfig_IsAccepted(b *testing.B) {
 	// Generate realistic key lists
 	makeKeys := func(n int) []string {

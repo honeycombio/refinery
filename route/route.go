@@ -1279,14 +1279,36 @@ func (r *Router) setOTLPEnvironmentName(
 
 // getKeyID returns the Honeycomb ingest key ID associated with the given API
 // key. It uses the environment cache, so no additional API call is made if the
-// key has already been looked up. Returns an empty string for legacy keys,
-// blank keys, or if the lookup fails.
-func (r *Router) getKeyID(apiKey string) string {
+// key has already been looked up. Returns an empty string for legacy keys and
+// blank keys, which are not looked up, and with the error if the lookup fails.
+func (r *Router) getKeyID(apiKey string) (string, error) {
 	if apiKey == "" || config.IsLegacyAPIKey(apiKey) {
-		return ""
+		return "", nil
 	}
-	data, _ := r.environmentCache.get(apiKey)
-	return data.keyID
+	data, err := r.environmentCache.get(apiKey)
+	return data.keyID, err
+}
+
+// checkAPIKey returns the key ID of apiKey, looked up only when ReceiveKeyIDs
+// is set, and an error if cfg does not accept apiKey. If the lookup fails in
+// a way that may succeed later and the key ID decides whether apiKey is
+// accepted or replaced, the error is ErrEnvironmentUnavailable, so the sender
+// is told to retry instead of that its key is not listed.
+func (r *Router) checkAPIKey(cfg config.AccessKeyConfig, apiKey string) (string, error) {
+	keyID := ""
+	if cfg.HasKeyIDs() {
+		var err error
+		keyID, err = r.getKeyID(apiKey)
+		var retryable retryableLookupError
+		if errors.As(err, &retryable) && cfg.DependsOnKeyID(apiKey) {
+			r.Logger.Error().WithString("cause", err.Error()).Logf("failed to look up key ID for API key")
+			return "", ErrEnvironmentUnavailable
+		}
+	}
+	if err := cfg.IsAccepted(apiKey, keyID); err != nil {
+		return "", err
+	}
+	return keyID, nil
 }
 
 func (r *Router) lookupEnvironment(apiKey string) (authData, error) {
