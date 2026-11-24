@@ -1907,6 +1907,63 @@ groups:
           For example, it could be used for naming a Refinery cluster. Both
           keys and values must be strings.
 
+      - name: FieldsToCopyFromRoot
+        type: stringarray
+        valuetype: stringarray
+        example: "app.customer_id,app.region"
+        default: []
+        reload: true
+        validations:
+          - type: elementType
+            arg: string
+        summary: lists root span fields that Refinery copies onto every other span in the trace.
+        description: >
+          When a trace is sent, the listed fields are read from the root span
+          and added to every other span in that trace. This makes it possible
+          to query on a root span attribute, such as a customer ID, from any
+          span without propagating it through baggage.
+
+          A field is only copied onto a span that does not already have a field
+          of the destination name, so a value set by the application always wins.
+          Fields whose names start with `meta.` are never copied. The root span
+          itself is not changed.
+
+          The copy only happens when the root span arrived before the trace was
+          sent. Traces that time out without a root span are sent unchanged, and
+          so are spans that arrive after the trace decision was made.
+
+          By default each entry is an exact field name. Set
+          `UseRegexForFieldsToCopyFromRoot` to treat the entries as regular
+          expressions instead.
+
+      - name: UseRegexForFieldsToCopyFromRoot
+        type: bool
+        valuetype: nondefault
+        default: false
+        reload: true
+        summary: controls whether the entries in `FieldsToCopyFromRoot` are regular expressions.
+        description: >
+          When `true`, every root span field whose name matches at least one of
+          the entries in `FieldsToCopyFromRoot` is copied. The expressions are
+          not anchored, so use `^` and `$` to match whole names. Refinery has to
+          look at every field on the root span in this mode, which costs more
+          CPU than listing exact names. An invalid expression prevents the
+          configuration from loading.
+
+      - name: CopiedFieldPrefix
+        type: string
+        valuetype: nonemptystring
+        example: "root."
+        default: ""
+        reload: true
+        summary: is prepended to the name of every field copied from the root span.
+        description: >
+          For example, with a prefix of `root.` the field `app.customer_id` is
+          added to other spans as `root.app.customer_id`. The default is empty,
+          which keeps the original name. A prefix makes it clear in queries
+          which values were copied and avoids clashing with fields the span
+          already has.
+
   - name: IDFields
     title: "ID Fields"
     description: >

@@ -60,6 +60,7 @@ type MockConfig struct {
 	SampleCache                        SampleCacheConfig
 	StressRelief                       StressReliefConfig
 	AdditionalAttributes               map[string]string
+	CopyFromRoot                       CopyFromRoot
 	AdditionalHeaders                  map[string]string
 	UpstreamTLS                        tlsconfig.Options
 	TraceIdFieldNames                  []string
@@ -562,4 +563,11 @@ func (f *MockConfig) GetSamplingKeyFieldsForDestName(samplerKey string) []string
 	default:
 		return nil
 	}
+}
+
+func (f *MockConfig) GetCopyFromRoot() CopyFromRoot {
+	f.Mux.RLock()
+	defer f.Mux.RUnlock()
+
+	return f.CopyFromRoot
 }

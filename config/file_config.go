@@ -35,6 +35,7 @@ func (d *Duration) UnmarshalText(text []byte) error {
 
 type fileConfig struct {
 	mainConfig   *configContents
+	copyFromRoot CopyFromRoot
 	mainHash     string
 	rulesConfig  *V2SamplerConfig
 	rulesHash    string
@@ -385,6 +386,10 @@ type SpecializedConfig struct {
 	EnvironmentCacheTTL       Duration          `yaml:"EnvironmentCacheTTL" default:"1h"`
 	CompressPeerCommunication *DefaultTrue      `yaml:"CompressPeerCommunication" default:"true"` // Avoid pointer woe on access, use GetCompressPeerCommunication() instead.
 	AdditionalAttributes      map[string]string `yaml:"AdditionalAttributes" default:"{}"`
+
+	FieldsToCopyFromRoot            []string `yaml:"FieldsToCopyFromRoot" default:"[]"`
+	UseRegexForFieldsToCopyFromRoot bool     `yaml:"UseRegexForFieldsToCopyFromRoot" default:"false"`
+	CopiedFieldPrefix               string   `yaml:"CopiedFieldPrefix" default:""`
 }
 
 type IDFieldsConfig struct {
@@ -586,8 +591,14 @@ func newFileConfig(opts *CmdEnv, cData, rulesData []configData, currentVersion .
 	// Set workerCount on SampleCache once during initialization
 	mainconf.SampleCache.WorkerCount = uint(mainconf.Collection.GetWorkerCount())
 
+	copyFromRoot, err := newCopyFromRootFromConfig(mainconf)
+	if err != nil {
+		return nil, err
+	}
+
 	cfg := &fileConfig{
 		mainConfig:   mainconf,
+		copyFromRoot: copyFromRoot,
 		mainHash:     mainhash,
 		rulesConfig:  rulesconf,
 		rulesHash:    ruleshash,
@@ -698,6 +709,7 @@ func (f *fileConfig) Reload(opts ...ReloadedConfigDataOption) error {
 	// otherwise, update our state and call the callbacks
 	f.mux.Lock()
 	f.mainConfig = cfg.mainConfig
+	f.copyFromRoot = cfg.copyFromRoot
 	f.mainHash = cfg.mainHash
 	f.rulesConfig = cfg.rulesConfig
 	f.rulesHash = cfg.rulesHash
@@ -1232,4 +1244,16 @@ func (f *fileConfig) GetAdditionalAttributes() map[string]string {
 	defer f.mux.RUnlock()
 
 	return f.mainConfig.Specialized.AdditionalAttributes
+}
+
+func newCopyFromRootFromConfig(c *configContents) (CopyFromRoot, error) {
+	s := c.Specialized
+	return NewCopyFromRoot(s.FieldsToCopyFromRoot, s.UseRegexForFieldsToCopyFromRoot, s.CopiedFieldPrefix)
+}
+
+func (f *fileConfig) GetCopyFromRoot() CopyFromRoot {
+	f.mux.RLock()
+	defer f.mux.RUnlock()
+
+	return f.copyFromRoot
 }

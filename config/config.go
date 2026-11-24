@@ -171,6 +171,10 @@ type Config interface {
 
 	GetAdditionalAttributes() map[string]string
 
+	// GetCopyFromRoot returns the settings for copying root span fields onto
+	// the other spans of a trace.
+	GetCopyFromRoot() CopyFromRoot
+
 	GetTraceIdFieldNames() []string
 
 	GetParentIdFieldNames() []string

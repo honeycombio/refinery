@@ -723,12 +723,44 @@ func (i *InMemCollector) addAdditionalAttributes(sp *types.Span) {
 	}
 }
 
+// fieldsCopiedFromRoot returns the root span fields, keyed by their
+// destination name, that the CopyFromRoot settings select for this trace. It
+// returns nil when nothing is configured or the trace has no root span.
+func (i *InMemCollector) fieldsCopiedFromRoot(t *types.Trace) map[string]any {
+	cfg := i.Config.GetCopyFromRoot()
+	if !cfg.Enabled() || t == nil || t.RootSpan == nil {
+		return nil
+	}
+
+	root := t.RootSpan.Data
+	copied := make(map[string]any)
+	if cfg.UsesRegex() {
+		for k, v := range root.All() {
+			if cfg.Selectable(k) && cfg.Matches(k) {
+				copied[cfg.Destination(k)] = v
+			}
+		}
+		return copied
+	}
+
+	for _, k := range cfg.Names() {
+		if cfg.Selectable(k) && root.Exists(k) {
+			copied[cfg.Destination(k)] = root.Get(k)
+		}
+	}
+	return copied
+}
+
 func (i *InMemCollector) sendTraces() {
 	defer i.sendTracesWG.Done()
 
 	for t := range i.tracesToSend {
 		i.Metrics.Histogram("collector_outgoing_queue", float64(len(i.tracesToSend)))
 		_, span := otelutil.StartSpanMulti(context.Background(), i.Tracer, "sendTrace", map[string]interface{}{"num_spans": t.DescendantCount(), "tracesToSend_size": len(i.tracesToSend)})
+
+		// Read the root span's fields once, before the loop adds any
+		// refinery metadata to it, instead of once per span.
+		copied := i.fieldsCopiedFromRoot(t.Trace)
 
 		for _, sp := range t.GetSpans() {
 
@@ -762,6 +794,14 @@ func (i *InMemCollector) sendTraces() {
 			}
 			mergeTraceAndSpanSampleRates(sp, t.SampleRate(), isDryRun)
 			i.addAdditionalAttributes(sp)
+			if !sp.IsRoot {
+				for k, v := range copied {
+					// a value the span already carries always wins
+					if !sp.Data.Exists(k) {
+						sp.Data.Set(k, v)
+					}
+				}
+			}
 
 			sp.APIKey = t.APIKey
 			i.Transmission.EnqueueSpan(sp)
