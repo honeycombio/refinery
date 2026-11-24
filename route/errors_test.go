@@ -1,6 +1,7 @@
 package route
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -38,6 +39,34 @@ func TestHandlerReturnWithError(t *testing.T) {
 	if _, ok := e.Fields["error.stack_trace"]; !ok {
 		t.Error("expected fields to contain error.stack_trace", e.Fields)
 	}
+}
+
+func TestHandlerReturnWithErrorEscaping(t *testing.T) {
+	l := &logger.MockLogger{}
+	router := &Router{Logger: l}
+
+	w := httptest.NewRecorder()
+	customErr := handlerError{
+		status:   http.StatusBadRequest,
+		msg:      `unknown token "fake_token", "injected_field": true`,
+		detailed: false,
+		friendly: true,
+	}
+
+	router.handlerReturnWithError(w, customErr, errors.New("test cause"))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+	// Ensure the response body is strictly valid JSON and can be unmarshaled without error
+	var parsed struct {
+		Source string `json:"source"`
+		Error  string `json:"error"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &parsed)
+	require.NoError(t, err, "response body must be valid JSON")
+	assert.Equal(t, "refinery", parsed.Source)
+	assert.Equal(t, `unknown token "fake_token", "injected_field": true`, parsed.Error)
 }
 
 func TestHandleOTLPFailureResponseLogsCause(t *testing.T) {

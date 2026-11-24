@@ -1,6 +1,7 @@
 package route
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,6 +9,11 @@ import (
 
 	husky "github.com/honeycombio/husky/otlp"
 )
+
+type errorResponse struct {
+	Source string `json:"source"`
+	Error  string `json:"error"`
+}
 
 type handlerError struct {
 	// err is the error that we're throwing
@@ -64,8 +70,6 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 
 	r.Logger.Error().WithFields(fields).Logf("handler returning error")
 
-	w.WriteHeader(he.status)
-
 	errmsg := he.msg
 
 	if he.detailed {
@@ -76,8 +80,17 @@ func (r *Router) handlerReturnWithError(w http.ResponseWriter, he handlerError, 
 		errmsg = ErrGenericMessage
 	}
 
-	jsonErrMsg := []byte(`{"source":"refinery","error":"` + errmsg + `"}`)
+	resp := errorResponse{
+		Source: "refinery",
+		Error:  errmsg,
+	}
+	jsonErrMsg, err := json.Marshal(resp)
+	if err != nil {
+		jsonErrMsg = []byte(`{"source":"refinery","error":"unexpected error!"}`)
+	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(he.status)
 	w.Write(jsonErrMsg)
 }
 
