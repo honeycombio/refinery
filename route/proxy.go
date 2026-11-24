@@ -17,8 +17,16 @@ func (r *Router) proxy(w http.ResponseWriter, req *http.Request) {
 	forwarded := req.Header.Get("X-Forwarded-For")
 	// let's copy the request over to a new one and
 	// dispatch it upstream
+	// Enforce HTTPMessageSizeMax to prevent unbounded memory buffering and OOM crashes
+	req.Body = http.MaxBytesReader(w, req.Body, HTTPMessageSizeMax)
 	defer req.Body.Close()
-	reqBod, _ := io.ReadAll(req.Body)
+	reqBod, err := io.ReadAll(req.Body)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		w.Write([]byte(`{"source":"refinery","error":"request body exceeded maximum allowed size"}`))
+		return
+	}
 	buf := bytes.NewBuffer(reqBod)
 	upstreamReq, err := http.NewRequest(req.Method, upstreamTarget+req.URL.String(), buf)
 	if err != nil {
