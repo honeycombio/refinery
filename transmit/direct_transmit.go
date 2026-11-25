@@ -3,6 +3,7 @@ package transmit
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -524,6 +526,9 @@ func (d *DirectTransmission) sendBatch(wholeBatch []*types.Event) {
 			if httpErr, ok := err.(httpError); ok && httpErr.Timeout() {
 				continue
 			}
+			if isConnectionDropped(err) {
+				continue
+			}
 
 			break
 		}
@@ -744,6 +749,25 @@ func (z *batchedEvent) MarshalMsg(b []byte) (o []byte, err error) {
 
 type httpError interface {
 	Timeout() bool
+}
+
+// isConnectionDropped reports whether err means the connection closed before a
+// response arrived. An AWS ALB closes an HTTP/2 connection after 10,000 requests;
+// a write that races the close fails with a broken pipe or reset, and Go then
+// fails every other request in flight on that connection. Go does not retry
+// these, so we do. The server may already have processed the batch, so a retry
+// can occasionally send it twice.
+func isConnectionDropped(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+		return true
+	}
+	// The HTTP/2 errors are not exported, so match on their text.
+	msg := err.Error()
+	return strings.Contains(msg, "http2: client connection force closed") ||
+		strings.Contains(msg, "http2: server sent GOAWAY and closed the connection")
 }
 
 func buildRequestURL(apiHost, dataset string) (string, error) {

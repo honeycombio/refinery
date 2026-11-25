@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -1088,7 +1090,14 @@ func TestDirectTransmissionRetryLogic(t *testing.T) {
 		expectRetries  int
 		expectSuccess  bool
 		enableCompress bool
+		resetFirst     bool // reset the TCP connection instead of answering the first request
 	}{
+		{
+			name:          "connection_reset_retries",
+			resetFirst:    true,
+			expectRetries: 1,
+			expectSuccess: true,
+		},
 		{
 			name:          "429_with_retry_after_1s",
 			statusCode:    http.StatusTooManyRequests,
@@ -1153,7 +1162,15 @@ func TestDirectTransmissionRetryLogic(t *testing.T) {
 					assert.Equal(t, "zstd", r.Header.Get("Content-Encoding"))
 				}
 
-				if tt.statusCode == 0 {
+				if tt.resetFirst && count == 1 {
+					conn, _, err := w.(http.Hijacker).Hijack()
+					require.NoError(t, err)
+					conn.(*net.TCPConn).SetLinger(0) // close with RST, as a dropped connection does
+					conn.Close()
+					return
+				}
+
+				if tt.statusCode == 0 && !tt.resetFirst {
 					// Simulate timeout by hanging the request
 					time.Sleep(150 * time.Millisecond) // Longer than client timeout
 					return
@@ -1178,7 +1195,7 @@ func TestDirectTransmissionRetryLogic(t *testing.T) {
 			dt.enableCompression = tt.enableCompress
 
 			// Set shorter timeout for timeout test cases
-			if tt.statusCode == 0 {
+			if tt.statusCode == 0 && !tt.resetFirst {
 				dt.httpClient.Timeout = 100 * time.Millisecond
 			}
 
@@ -1546,6 +1563,20 @@ func BenchmarkTransmissionComparison(b *testing.B) {
 			})
 		})
 	}
+}
+
+// The HTTP/2 transport's errors are unexported, so isConnectionDropped matches
+// their text. This fails if Go changes the wording.
+func TestIsConnectionDropped(t *testing.T) {
+	retried := []string{
+		`Post "https://api.honeycomb.io/1/batch/x": http2: client connection force closed via ClientConn.Close`,
+		`Post "https://api.honeycomb.io/1/batch/x": http2: server sent GOAWAY and closed the connection; LastStreamID=19999, ErrCode=NO_ERROR, debug=""`,
+	}
+	for _, msg := range retried {
+		assert.True(t, isConnectionDropped(errors.New(msg)), msg)
+	}
+	assert.False(t, isConnectionDropped(errors.New("dial tcp 10.0.0.1:443: connect: connection refused")))
+	assert.False(t, isConnectionDropped(nil))
 }
 
 func TestBuildRequestURL(t *testing.T) {
